@@ -1,16 +1,16 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
 import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyBo0DXOWKztyMXUXfPhNyoFo9P_Fu-MEn4",
-  authDomain: "kumon-library.firebaseapp.com",
-  databaseURL: "https://kumon-library-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "kumon-library",
-  storageBucket: "kumon-library.firebasestorage.app",
-  messagingSenderId: "479472870788",
-  appId: "1:479472870788:web:5eeea594b1e48d9cac29d1",
-  measurementId: "G-VTBSRV5GZG"
-};
+  const firebaseConfig = {
+    apiKey: "AIzaSyB1VhQwGotEI8BHt8wp8FvtPpUY5FsI0qA",
+    authDomain: "kumondb-f4377.firebaseapp.com",
+    databaseURL: "https://kumondb-f4377-default-rtdb.firebaseio.com",
+    projectId: "kumondb-f4377",
+    storageBucket: "kumondb-f4377.firebasestorage.app",
+    messagingSenderId: "838725994916",
+    appId: "1:838725994916:web:87326ba7bec87a0e6b5931",
+    measurementId: "G-EY7L54FTS1"
+  };
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
