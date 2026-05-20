@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#87CEEB">
+  <title>Student Form - Kumon DB</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header>
+    <h1>✏️ <span id="formTitle">Add Student</span></h1>
+    <nav><a href="students.html">← Back to Students</a></nav>
+  </header>
+  
+  <main class="form-container">
+    <form id="studentForm">
+      <!-- Basic Info -->
+      <section>
+        <h3>Basic Information</h3>
+        <div class="form-grid">
+          <input type="text" id="studentNumber" placeholder="Student Number *" required>
+          <input type="text" id="nameEn" placeholder="Name (English) *" required>
+          <input type="text" id="nameCn" placeholder="Name (Chinese) *" required>
+          <input type="text" id="grade" placeholder="Grade *" required>
+          <input type="text" id="school" placeholder="School *" required>
+          <input type="text" id="address" placeholder="Address">
+          <input type="text" id="nationality" placeholder="Nationality">
+          <input type="email" id="email" placeholder="Email">
+          <input type="date" id="birthday" placeholder="Birthday">
+        </div>
+      </section>
+      
+      <!-- Contact Info -->
+      <section>
+        <h3>Contact Information</h3>
+        <div class="form-grid">
+          <input type="tel" id="phoneMom" placeholder="Phone (Mom)">
+          <input type="tel" id="phoneDad" placeholder="Phone (Dad)">
+          <input type="tel" id="phoneOwn" placeholder="Phone (Student)">
+        </div>
+      </section>
+      
+      <!-- Subjects (Max 3, ERP/EFL mutually exclusive) -->
+      <section>
+        <h3>Subjects (Max 3)</h3>
+        <div id="subjectsContainer">
+          <!-- Subject entries added dynamically -->
+        </div>
+        <button type="button" id="addSubjectBtn" class="secondary">+ Add Subject</button>
+        <p class="hint">💡 Note: English ERP and English EFL cannot be selected together</p>
+      </section>
+      
+      <div class="form-actions">
+        <button type="submit" class="primary">💾 Save Student</button>
+        <button type="button" id="cancelBtn">Cancel</button>
+      </div>
+    </form>
+  </main>
+
+  <script type="module">
+    import { requireAuth, db } from './js/auth.js';
+    import { getDatabase, ref, push, update, get } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
+    
+    if (!requireAuth()) exit;
+    
+    const SUBJECTS = ['English ERP', 'English EFL', 'Chinese', 'Math'];
+    let subjectCount = 0;
+    const studentId = new URLSearchParams(window.location.search).get('id');
+    
+    document.getElementById('formTitle').textContent = studentId ? 'Edit Student' : 'Add Student';
+    
+    // Add subject field
+    function addSubjectField(data = {}) {
+      if (subjectCount >= 3) {
+        alert('Maximum 3 subjects allowed');
+        return;
+      }
+      
+      const container = document.getElementById('subjectsContainer');
+      const subjectDiv = document.createElement('div');
+      subjectDiv.className = 'subject-entry';
+      subjectDiv.dataset.index = subjectCount;
+      
+      subjectDiv.innerHTML = `
+        <div class="form-grid">
+          <select class="subject-name" required>
+            <option value="">Select Subject *</option>
+            ${SUBJECTS.map(s => `<option value="${s}" ${data.name === s ? 'selected' : ''}>${s}</option>`).join('')}
+          </select>
+          <input type="text" class="start-level" placeholder="Starting Level *" value="${data.startLevel || ''}" required>
+          <input type="date" class="start-date" placeholder="Start Date *" value="${data.startDate || ''}" required>
+          <input type="text" class="timeslot" placeholder="Timeslot (e.g., Mon 4PM)" value="${data.timeslot || ''}" required>
+          <select class="status">
+            <option value="new" ${data.status === 'new' ? 'selected' : ''}>New</option>
+            <option value="current" ${data.status === 'current' ? 'selected' : ''} selected>Current</option>
+            <option value="pause" ${data.status === 'pause' ? 'selected' : ''}>Pause</option>
+            <option value="drop" ${data.status === 'drop' ? 'selected' : ''}>Drop</option>
+          </select>
+        </div>
+        <button type="button" class="remove-subject">🗑️ Remove</button>
+      `;
+      
+      // Subject validation: ERP/EFL mutual exclusion
+      subjectDiv.querySelector('.subject-name').addEventListener('change', (e) => {
+        const selected = e.target.value;
+        const allSelects = document.querySelectorAll('.subject-name');
+        allSelects.forEach((sel, idx) => {
+          if (idx !== subjectCount && (selected === 'English ERP' || selected === 'English EFL')) {
+            if (sel.value === 'English ERP' || sel.value === 'English EFL') {
+              alert('English ERP and English EFL cannot be selected together');
+              e.target.value = '';
+            }
+          }
+        });
+      });
+      
+      subjectDiv.querySelector('.remove-subject').onclick = () => {
+        subjectDiv.remove();
+        subjectCount--;
+        updateSubjectCounters();
+      };
+      
+      container.appendChild(subjectDiv);
+      subjectCount++;
+      updateSubjectCounters();
+    }
+    
+    function updateSubjectCounters() {
+      document.querySelectorAll('.subject-entry').forEach((el, idx) => {
+        el.dataset.index = idx;
+      });
+    }
+    
+    document.getElementById('addSubjectBtn').onclick = () => addSubjectField();
+    
+    // Load existing student data if editing
+    if (studentId) {
+      // Implementation to fetch and populate form
+    }
+    
+    // Form submission
+    document.getElementById('studentForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const centerId = sessionStorage.getItem('selectedCenter');
+      const subjects = [];
+      
+      document.querySelectorAll('.subject-entry').forEach(entry => {
+        subjects.push({
+          name: entry.querySelector('.subject-name').value,
+          startLevel: entry.querySelector('.start-level').value,
+          startDate: entry.querySelector('.start-date').value,
+          timeslot: entry.querySelector('.timeslot').value,
+          status: entry.querySelector('.status').value,
+          progress: [] // Monthly progress array
+        });
+      });
+      
+      const studentData = {
+        studentNumber: document.getElementById('studentNumber').value,
+        nameEn: document.getElementById('nameEn').value,
+        nameCn: document.getElementById('nameCn').value,
+        grade: document.getElementById('grade').value,
+        school: document.getElementById('school').value,
+        address: document.getElementById('address').value,
+        phone: {
+          mom: document.getElementById('phoneMom').value,
+          dad: document.getElementById('phoneDad').value,
+          own: document.getElementById('phoneOwn').value
+        },
+        nationality: document.getElementById('nationality').value,
+        email: document.getElementById('email').value,
+        birthday: document.getElementById('birthday').value,
+        subjects: subjects,
+        centerId: centerId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      try {
+        if (studentId) {
+          await update(ref(db, `centers/${centerId}/students/${studentId}`), studentData);
+        } else {
+          await push(ref(db, `centers/${centerId}/students`), studentData);
+        }
+        window.location.href = 'students.html';
+      } catch (error) {
+        alert('Error saving student: ' + error.message);
+      }
+    });
+    
+    document.getElementById('cancelBtn').onclick = () => window.history.back();
+    
+    // Add one subject field by default
+    addSubjectField();
+  </script>
+</body>
+</html>

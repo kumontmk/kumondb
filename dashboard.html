@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#87CEEB">
+  <title>Select Center - Kumon DB</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header>
+    <h1>📚 Kumon Center DB</h1>
+    <button id="logoutBtn">Logout</button>
+  </header>
+  
+  <main class="dashboard">
+    <h2>Select Your Center</h2>
+    <div class="center-grid" id="centerList">
+      <!-- Centers loaded dynamically -->
+    </div>
+  </main>
+
+  <script type="module">
+    import { requireAuth, db } from './js/auth.js';
+    import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
+    
+    if (!requireAuth()) exit;
+    
+    document.getElementById('logoutBtn').onclick = () => {
+      sessionStorage.removeItem('kumonAuth');
+      window.location.href = 'index.html';
+    };
+    
+    async function loadCenters() {
+      const snapshot = await get(ref(db, 'centers'));
+      const container = document.getElementById('centerList');
+      
+      snapshot.forEach(child => {
+        const center = child.val();
+        const card = document.createElement('div');
+        card.className = 'center-card';
+        card.innerHTML = `<h3>${center.name}</h3><p>Click to manage</p>`;
+        card.onclick = () => {
+          sessionStorage.setItem('selectedCenter', center.id);
+          window.location.href = 'students.html';
+        };
+        container.appendChild(card);
+      });
+    }
+    
+    loadCenters();
+  </script>
+</body>
+</html>

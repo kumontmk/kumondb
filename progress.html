@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#87CEEB">
+  <title>Progress Tracking - Kumon DB</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header>
+    <h1>📈 Progress Tracking</h1>
+    <nav><a href="students.html">← Back</a></nav>
+  </header>
+  
+  <main class="progress-page">
+    <div class="student-selector">
+      <select id="studentSelect"><option>Select Student</option></select>
+      <select id="subjectSelect"><option>Select Subject</option></select>
+    </div>
+    
+    <div id="progressForm" class="hidden">
+      <h3>Monthly Progress Update</h3>
+      <form id="progressUpdateForm">
+        <div class="form-grid">
+          <input type="text" id="prevLevel" placeholder="Previous Level" readonly>
+          <input type="number" id="prevWS" placeholder="Prev Worksheets" readonly>
+          <input type="text" id="currLevel" placeholder="Current Level *" required>
+          <input type="number" id="currWS" placeholder="Current Worksheets *" required>
+        </div>
+        
+        <div id="testSection" class="hidden">
+          <h4>🎯 Test Results (Level Changed)</h4>
+          <div class="form-grid">
+            <input type="text" id="testLevel" placeholder="Test Level">
+            <input type="number" id="testScore" placeholder="Score (0-100)" min="0" max="100">
+            <input type="text" id="testTime" placeholder="Time Taken (e.g., 15min)">
+            <input type="text" id="testGroup" placeholder="Group">
+          </div>
+        </div>
+        
+        <div class="form-actions">
+          <button type="submit" class="primary">💾 Save Progress</button>
+          <button type="button" id="printBtn" class="secondary">🖨️ Print Report</button>
+        </div>
+      </form>
+    </div>
+    
+    <div id="progressChart">
+      <canvas id="levelChart"></canvas>
+    </div>
+  </main>
+
+  <script type="module" src="js/progress.js"></script>
+</body>
+</html>

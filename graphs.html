@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#87CEEB">
+  <title>Analytics - Kumon DB</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header>
+    <h1>📈 Analytics</h1>
+    <nav><a href="dashboard.html">← Centers</a></nav>
+  </header>
+  
+  <main class="graphs-page">
+    <div class="chart-container">
+      <h3>Students per Month by Subject</h3>
+      <canvas id="studentsChart"></canvas>
+    </div>
+    
+    <div class="chart-container">
+      <h3>Student Progress</h3>
+      <div class="student-chart-controls">
+        <select id="progressStudent"><option>Select Student</option></select>
+        <select id="progressSubject"><option>Select Subject</option></select>
+      </div>
+      <canvas id="progressChart"></canvas>
+    </div>
+  </main>
+
+  <script type="module" src="js/graphs.js"></script>
+</body>
+</html>
