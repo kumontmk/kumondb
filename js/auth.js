@@ -16,7 +16,7 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
 // Simple password auth (for demo - use Firebase Auth in production)
-const CORRECT_PASSWORD = "Tpfg6800!";
+const CORRECT_PASSWORD = "1111";
 
 document.getElementById('loginForm')?.addEventListener('submit', async (e) => {
   e.preventDefault();
