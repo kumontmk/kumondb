@@ -6,19 +6,13 @@
   <meta name="theme-color" content="#87CEEB">
   <title>Student Form - Kumon DB</title>
   <link rel="stylesheet" href="style.css">
-  <style>
-    /* Timeslot specific styles */
-    .timeslots-container { background: #f0f8ff; padding: 0.75rem; border-radius: var(--radius); margin: 0.5rem 0; border: 1px solid #cce5ff; }
-    .timeslot-row { display: flex; gap: 0.5rem; align-items: flex-end; margin-bottom: 0.5rem; }
-    .timeslot-row > div { flex: 1; }
-    .timeslot-row label { font-size: 0.8rem; color: var(--text-light); display: block; margin-bottom: 2px; }
-    .remove-ts-btn { background: #dc3545; color: white; border: none; width: 32px; height: 38px; border-radius: var(--radius); cursor: pointer; font-size: 1.2rem; line-height: 1; }
-    .remove-ts-btn:hover { opacity: 0.8; }
-  </style>
 </head>
 <body>
   <div id="loadingOverlay" class="loading-overlay">
-    <div class="loading-container"><div class="spinner"></div><p class="loading-text">Loading student details</p></div>
+    <div class="loading-container">
+      <div class="spinner"></div>
+      <p class="loading-text">Loading student details</p>
+    </div>
   </div>
 
   <header>

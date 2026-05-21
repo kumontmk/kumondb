@@ -11,8 +11,6 @@ const centerId = sessionStorage.getItem('selectedCenter');
 const studentId = new URLSearchParams(window.location.search).get('id');
 const isEdit = !!studentId;
 
-console.log('📝 Form loaded | Center:', centerId, '| Edit mode:', isEdit);
-
 document.getElementById('formTitle').textContent = isEdit ? 'Edit Student' : 'Add Student';
 
 function hideLoader() {
@@ -20,7 +18,6 @@ function hideLoader() {
   if (loader) setTimeout(() => loader.classList.add('hidden'), 300);
 }
 
-// Load existing data if editing
 if (isEdit) {
   loadStudentData();
 } else {
@@ -47,7 +44,6 @@ async function loadStudentData() {
         document.getElementById('phoneDad').value = s.phone.dad || '';
         document.getElementById('phoneOwn').value = s.phone.own || '';
       }
-      
       if (s.subjects) {
         s.subjects.forEach(sub => addSubjectField(sub));
       } else {
@@ -56,13 +52,11 @@ async function loadStudentData() {
     }
   } catch (err) {
     alert('Error loading student: ' + err.message);
-    console.error(err);
   } finally {
     hideLoader();
   }
 }
 
-// Add Subject Field
 function addSubjectField(data = {}) {
   if (subjectCount >= 3) return alert('Maximum 3 subjects allowed');
   
@@ -70,6 +64,7 @@ function addSubjectField(data = {}) {
   const div = document.createElement('div');
   div.className = 'subject-entry';
   
+  // ✅ PROPER TEMPLATE LITERAL - no broken backticks
   div.innerHTML = `
     <div class="form-grid">
       <select class="subject-name" required>
@@ -104,11 +99,11 @@ function addSubjectField(data = {}) {
     <button type="button" class="remove-subject" style="background:#dc3545; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; margin-top:0.5rem;">🗑️ Remove Subject</button>
   `;
 
-  // Initialize existing timeslots if editing
+  const timeslotsList = div.querySelector('.timeslots-list');
   if (data.timeslots && data.timeslots.length > 0) {
-    data.timeslots.forEach(ts => addTimeslotField(div.querySelector('.timeslots-list'), ts));
+    data.timeslots.forEach(ts => addTimeslotField(timeslotsList, ts));
   } else {
-    addTimeslotField(div.querySelector('.timeslots-list'));
+    addTimeslotField(timeslotsList);
   }
 
   div.querySelector('.add-timeslot-btn').onclick = () => addTimeslotField(div.querySelector('.timeslots-list'));
@@ -139,9 +134,18 @@ function addSubjectField(data = {}) {
   subjectCount++;
 }
 
-// Add Timeslot Field
 function addTimeslotField(container, data = {}) {
+  if (!container) {
+    console.error('Container is null');
+    return;
+  }
+  
   const list = container.querySelector('.timeslots-list');
+  if (!list) {
+    console.error('.timeslots-list not found in container');
+    return;
+  }
+  
   if (list.children.length >= 6) return alert('Maximum 6 timeslots per subject');
   
   const row = document.createElement('div');
@@ -149,6 +153,7 @@ function addTimeslotField(container, data = {}) {
   
   const dayOptions = DAYS.map(d => `<option value="${d}" ${data.day === d ? 'selected' : ''}>${d}</option>`).join('');
   
+  // ✅ PROPER TEMPLATE LITERAL - no broken backticks
   row.innerHTML = `
     <div>
       <label>Day</label>
@@ -167,15 +172,11 @@ function addTimeslotField(container, data = {}) {
 
 document.getElementById('addSubjectBtn').onclick = () => addSubjectField();
 
-// Save Student - WITH BETTER ERROR HANDLING
 document.getElementById('studentForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   
-  console.log('💾 Starting save process...');
-  console.log('Center ID:', centerId);
-  
   if (!centerId) {
-    alert('❌ Error: No center selected. Please go back and select a center.');
+    alert('Error: No center selected. Please go back and select a center.');
     return;
   }
   
@@ -226,29 +227,20 @@ document.getElementById('studentForm').addEventListener('submit', async (e) => {
     studentData.createdAt = new Date().toISOString();
   }
 
-  console.log('📦 Student data prepared:', studentData);
-
   try {
     const loader = document.getElementById('loadingOverlay');
     loader.classList.remove('hidden');
 
-    const studentsRef = ref(db, `centers/${centerId}/students`);
-    console.log('📍 Saving to path:', `centers/${centerId}/students`);
-
     if (isEdit) {
       await set(ref(db, `centers/${centerId}/students/${studentId}`), studentData);
-      console.log('✅ Student updated');
       alert('Student updated successfully!');
     } else {
-      const newRef = await push(studentsRef, studentData);
-      console.log('✅ Student added with ID:', newRef.key);
+      await push(ref(db, `centers/${centerId}/students`), studentData);
       alert('Student added successfully!');
     }
-    
     window.location.href = 'students.html';
   } catch (err) {
-    console.error('❌ SAVE ERROR:', err);
-    alert('Error saving student: ' + err.message + '\n\nCheck console for details (F12)');
+    alert('Error saving student: ' + err.message);
   } finally {
     const loader = document.getElementById('loadingOverlay');
     loader.classList.add('hidden');
