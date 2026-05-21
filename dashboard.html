@@ -1,64 +1,72 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta name="theme-color" content="#87CEEB">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Center Dashboard - Kumon DB</title>
   <link rel="stylesheet" href="style.css">
-  <style>
-    .menu-card { cursor: pointer; text-align: center; padding: 2rem 1.5rem; }
-    .menu-card h3 { font-size: 1.3rem; margin-bottom: 0.5rem; color: var(--primary-dark); }
-    .menu-card:hover { transform: translateY(-4px) scale(1.02); }
-  </style>
 </head>
 <body>
-  <div id="loadingOverlay" class="loading-overlay">
-    <div class="loading-container"><div class="spinner"></div><p class="loading-text">Loading menu</p></div>
+  <!-- ✅ LOADER CONTAINER -->
+  <div id="page-loader" class="hidden">
+    <div class="spinner"></div>
   </div>
 
   <header>
-    <h1>📋 Center Menu</h1>
+    <h1>📋 <span id="centerTitle">Center Dashboard</span></h1>
     <nav>
       <a href="centers.html">← Centers</a>
       <button id="logoutBtn">Logout</button>
     </nav>
   </header>
-  
+
   <main class="dashboard">
     <h2>What would you like to do?</h2>
-    <div class="center-grid" id="menuGrid">
-      <div class="center-card menu-card" data-page="students.html">
+    <div class="center-grid">
+      <div class="center-card" onclick="window.location.href='students.html'">
         <h3>👥 Student Management</h3>
         <p>Add, edit, search students & track progress</p>
       </div>
-      <div class="center-card menu-card" data-page="reports.html">
+      <div class="center-card" onclick="window.location.href='reports.html'">
         <h3>📊 Reports</h3>
         <p>Timetables, monthly reports & printables</p>
       </div>
-      <div class="center-card menu-card" data-page="graphs.html">
+      <div class="center-card" onclick="window.location.href='graphs.html'">
         <h3>📈 Graphs</h3>
         <p>Analytics, progress tracking & charts</p>
       </div>
     </div>
   </main>
 
+  <!-- ✅ EMBEDDED SCRIPT -->
   <script type="module">
     import { requireAuth } from './auth.js';
-    if (!requireAuth()) {}
 
+    // 1. Auth Guard
+    if (!requireAuth()) throw new Error("Authentication required");
+
+    // 2. Update title with selected center
+    const centerId = sessionStorage.getItem('selectedCenter');
+    if (centerId) {
+      const friendlyName = centerId
+        .replace('kumon-', '')
+        .split('-')
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
+      document.getElementById('centerTitle').textContent = `${friendlyName} Dashboard`;
+    }
+
+    // 3. Logout Handler
     document.getElementById('logoutBtn').addEventListener('click', () => {
       sessionStorage.removeItem('kumonAuth');
+      sessionStorage.removeItem('selectedCenter');
       window.location.href = 'index.html';
     });
 
-    document.querySelectorAll('.menu-card').forEach(card => {
-      card.addEventListener('click', () => window.location.href = card.dataset.page);
-    });
-
+    // 4. Hide loader on load (fallback if auth.js global listener misses)
     window.addEventListener('DOMContentLoaded', () => {
-      const loader = document.getElementById('loadingOverlay');
-      if (loader) setTimeout(() => loader.classList.add('hidden'), 300);
+      const loader = document.getElementById('page-loader');
+      if (loader) setTimeout(() => loader.classList.add('hidden'), 250);
     });
   </script>
 </body>

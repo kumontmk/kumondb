@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
 import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
 
-// ✅ CORRECT Firebase Config (matching your screenshot)
+// ✅ CORRECT Firebase Config
 const firebaseConfig = {
   apiKey: "AIzaSyB1VhQwGotEI8BHt8wp8FvtPpUY5FsI0qA",
   authDomain: "kumondb-f4377.firebaseapp.com",
@@ -17,9 +17,9 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const CORRECT_PASSWORD = "1111";
 
-// Hide loader
+// ✅ FIX: ID changed to 'page-loader' to match your CSS
 window.addEventListener('DOMContentLoaded', () => {
-  const loader = document.getElementById('loadingOverlay');
+  const loader = document.getElementById('page-loader');
   if (loader) setTimeout(() => loader.classList.add('hidden'), 300);
 });
 
@@ -45,21 +45,13 @@ async function initializeCenters() {
     const snapshot = await get(centersRef);
     if (!snapshot.exists()) {
       await set(centersRef, {
-        'kumon-taipa-mei-keng': { 
-          id: 'kumon-taipa-mei-keng', 
-          name: 'Kumon Taipa Mei Keng', 
-          createdAt: new Date().toISOString() 
-        },
-        'kumon-taipa-pac-tat': { 
-          id: 'kumon-taipa-pac-tat', 
-          name: 'Kumon Taipa Pac Tat', 
-          createdAt: new Date().toISOString() 
-        }
+        'kumon-taipa-mei-keng': { id: 'kumon-taipa-mei-keng', name: 'Kumon Taipa Mei Keng', createdAt: new Date().toISOString() },
+        'kumon-taipa-pac-tat': { id: 'kumon-taipa-pac-tat', name: 'Kumon Taipa Pac Tat', createdAt: new Date().toISOString() }
       });
       console.log('✅ Centers initialized');
     }
-  } catch (err) { 
-    console.error('❌ Center init error:', err); 
+  } catch (err) {
+    console.error('❌ Center init error:', err);
   }
 }
 

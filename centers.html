@@ -1,71 +1,90 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta name="theme-color" content="#87CEEB">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Select Center - Kumon DB</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="loadingOverlay" class="loading-overlay">
-    <div class="loading-container"><div class="spinner"></div><p class="loading-text">Loading centers</p></div>
+
+  <!-- ✅ LOADER ADDED -->
+  <div id="page-loader" class="hidden">
+    <div class="spinner"></div>
   </div>
 
   <header>
     <h1>🏢 Centers</h1>
-    <button id="logoutBtn">Logout</button>
+    <nav>
+      <button id="logoutBtn">Logout</button>
+    </nav>
   </header>
-  
+
   <main class="dashboard">
     <h2>Select Your Center</h2>
-    <div class="center-grid" id="centerList"></div>
+    <div id="centerList" class="center-grid">
+      <p>Loading centers...</p>
+    </div>
   </main>
 
+  <!-- ✅ EMBEDDED SCRIPT -->
   <script type="module">
     import { requireAuth, db } from './auth.js';
     import { ref, get } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
 
-    if (!requireAuth()) {}
+    // 1. Auth Guard
+    if (!requireAuth()) throw new Error("Authentication required");
 
-    document.getElementById('logoutBtn').addEventListener('click', () => {
+    const centerListEl = document.getElementById('centerList');
+    const loader = document.getElementById('page-loader');
+    const logoutBtn = document.getElementById('logoutBtn');
+
+    // 2. Logout
+    logoutBtn.addEventListener('click', () => {
       sessionStorage.removeItem('kumonAuth');
       window.location.href = 'index.html';
     });
 
+    // 3. Load Centers
     async function loadCenters() {
-      const loader = document.getElementById('loadingOverlay');
-      const container = document.getElementById('centerList');
-      
       try {
-        const snapshot = await get(ref(db, 'centers'));
-        container.innerHTML = '';
-        
+        const centersRef = ref(db, 'centers');
+        const snapshot = await get(centersRef);
+        centerListEl.innerHTML = '';
+
         if (!snapshot.exists()) {
-          container.innerHTML = '<p class="error">No centers found. Please contact admin.</p>';
+          centerListEl.innerHTML = '<p>No centers found. Contact support.</p>';
           return;
         }
-        
-        snapshot.forEach(child => {
-          const center = child.val();
+
+        Object.values(snapshot.val()).forEach(center => {
           const card = document.createElement('div');
           card.className = 'center-card';
-          card.innerHTML = `<h3>${center.name}</h3><p>Click to manage center data</p>`;
-          card.addEventListener('click', () => {
-            sessionStorage.setItem('selectedCenter', center.id);
-            window.location.href = 'dashboard.html'; // ✅ Redirects to new menu
-          });
-          container.appendChild(card);
+          card.innerHTML = `<h3>${center.name}</h3><p>Click to enter</p>`;
+          card.addEventListener('click', () => selectCenter(center.id));
+          centerListEl.appendChild(card);
         });
-      } catch (error) {
-        console.error('Error:', error);
-        container.innerHTML = `<p class="error">Failed to load centers.<br><small>${error.message}</small></p>`;
-      } finally {
-        if (loader) setTimeout(() => loader.classList.add('hidden'), 300);
+      } catch (err) {
+        console.error('Error loading centers:', err);
+        centerListEl.innerHTML = '<p class="error">Failed to load centers. Please refresh.</p>';
       }
     }
 
-    document.addEventListener('DOMContentLoaded', loadCenters);
+    // 4. Handle Center Click
+    function selectCenter(centerId) {
+      sessionStorage.setItem('selectedCenter', centerId);
+      
+      // ✅ Show Spinner
+      loader.classList.remove('hidden');
+      
+      // Delay redirect so user sees the spinner
+      setTimeout(() => {
+        window.location.href = 'dashboard.html'; // ⚠️ Change to your actual student page URL
+      }, 300);
+    }
+
+    // Initialize
+    loadCenters();
   </script>
 </body>
 </html>

@@ -9,11 +9,8 @@
 </head>
 <body class="login-page">
   <!-- Loading Overlay -->
-  <div id="loadingOverlay" class="loading-overlay">
-    <div class="loading-container">
-      <div class="spinner"></div>
-      <p class="loading-text">Initializing</p>
-    </div>
+  <div id="page-loader">
+    <div class="spinner"></div>
   </div>
 
   <div class="login-container">
@@ -26,6 +23,19 @@
     </form>
   </div>
 
+  <!-- Loader Controller -->
+  <script>
+    // Hide loader once DOM is ready
+    document.addEventListener('DOMContentLoaded', () => {
+      const loader = document.getElementById('page-loader');
+      if (loader) loader.classList.add('hidden');
+    });
+
+    // Global helpers for async operations (login, data fetches, etc.)
+    window.showLoader = () => document.getElementById('page-loader')?.classList.remove('hidden');
+    window.hideLoader = () => document.getElementById('page-loader')?.classList.add('hidden');
+  </script>
+
   <script type="module" src="auth.js"></script>
 </body>
-</html> 
+</html>
