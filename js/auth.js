@@ -1,11 +1,9 @@
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+// js/auth.js
+// ✅ Use CDN imports for browser modules
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
+import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// ✅ Your Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyB1VhQwGotEI8BHt8wp8FvtPpUY5FsI0qA",
   authDomain: "kumondb-f4377.firebaseapp.com",
@@ -17,48 +15,57 @@ const firebaseConfig = {
   measurementId: "G-EY7L54FTS1"
 };
 
-// Initialize Firebase
+// ✅ Initialize Firebase at module scope
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+const db = getDatabase(app); // ✅ Defined at top level for export
 
-// Simple password auth (for demo - use Firebase Auth in production)
+// ✅ Testing password
 const CORRECT_PASSWORD = "1111";
 
-document.getElementById('loginForm')?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const password = document.getElementById('password').value;
-  const errorMsg = document.getElementById('errorMsg');
-  
-  if (password === CORRECT_PASSWORD) {
-    sessionStorage.setItem('kumonAuth', 'true');
-    // Initialize centers if not exists
-    await initializeCenters();
-    window.location.href = 'dashboard.html';
-  } else {
-    errorMsg.textContent = 'Incorrect password. Please try again.';
-  }
-});
+// ✅ Login handler - only attach if form exists on page
+const loginForm = document.getElementById('loginForm');
+if (loginForm) {
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const password = document.getElementById('password')?.value;
+    const errorMsg = document.getElementById('errorMsg');
+    
+    if (password === CORRECT_PASSWORD) {
+      sessionStorage.setItem('kumonAuth', 'true');
+      await initializeCenters();
+      window.location.href = 'dashboard.html';
+    } else {
+      if (errorMsg) errorMsg.textContent = 'Incorrect password. Please try again.';
+    }
+  });
+}
 
+// ✅ Initialize default centers if they don't exist
 async function initializeCenters() {
-  const centersRef = ref(db, 'centers');
-  const snapshot = await get(centersRef);
-  if (!snapshot.exists()) {
-    await set(centersRef, {
-      'kumon-taipa-mei-keng': {
-        id: 'kumon-taipa-mei-keng',
-        name: 'Kumon Taipa Mei Keng',
-        createdAt: new Date().toISOString()
-      },
-      'kumon-taipa-pac-tat': {
-        id: 'kumon-taipa-pac-tat',
-        name: 'Kumon Taipa Pac Tat',
-        createdAt: new Date().toISOString()
-      }
-    });
+  try {
+    const centersRef = ref(db, 'centers');
+    const snapshot = await get(centersRef);
+    if (!snapshot.exists()) {
+      await set(centersRef, {
+        'kumon-taipa-mei-keng': {
+          id: 'kumon-taipa-mei-keng',
+          name: 'Kumon Taipa Mei Keng',
+          createdAt: new Date().toISOString()
+        },
+        'kumon-taipa-pac-tat': {
+          id: 'kumon-taipa-pac-tat',
+          name: 'Kumon Taipa Pac Tat',
+          createdAt: new Date().toISOString()
+        }
+      });
+      console.log('✅ Default centers initialized');
+    }
+  } catch (error) {
+    console.error('❌ Error initializing centers:', error);
   }
 }
 
-// Auth guard for protected pages
+// ✅ Auth guard - redirects to login if not authenticated
 export function requireAuth() {
   if (sessionStorage.getItem('kumonAuth') !== 'true') {
     window.location.href = 'index.html';
@@ -67,4 +74,8 @@ export function requireAuth() {
   return true;
 }
 
+// ✅ Export db for use in other modules
 export { db };
+
+// ✅ Debug log (remove in production)
+console.log('🔐 auth.js loaded | db:', db ? 'ready' : 'error');
