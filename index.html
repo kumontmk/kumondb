@@ -1,22 +1,40 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta name="theme-color" content="#87CEEB">
-  <title>Kumon Center DB - Login</title>
-  <link rel="stylesheet" href="css/style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#87CEEB">
+    <title>Kumon DB - Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="login-page">
-  <div class="login-container">
-    <h1>📚 Kumon Center DB</h1>
-    <form id="loginForm">
-      <label for="password">Password</label>
-      <input type="password" id="password" required placeholder="Enter password">
-      <button type="submit">Login</button>
-      <p id="errorMsg" class="error"></p>
-    </form>
-  </div>
-  <script type="module" src="js/auth.js"></script>
+<body class="bg-[#87CEEB] min-h-screen flex items-center justify-center p-4">
+
+    <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
+        <h1 class="text-2xl font-bold text-center text-gray-800 mb-6">Kumon Center DB</h1>
+        
+        <form id="loginForm" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">System Password</label>
+                <input type="password" id="passwordInput" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-[#87CEEB] focus:border-[#87CEEB]" required>
+            </div>
+            <p id="errorMsg" class="text-red-500 text-sm hidden">Incorrect password.</p>
+            <button type="submit" class="w-full bg-[#87CEEB] text-white font-bold py-2 px-4 rounded hover:bg-blue-400 transition">
+                Login
+            </button>
+        </form>
+    </div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const pass = document.getElementById('passwordInput').value;
+            if (pass === 'Tpfg6800!') {
+                sessionStorage.setItem('authenticated', 'true');
+                window.location.href = 'centers.html';
+            } else {
+                document.getElementById('errorMsg').classList.remove('hidden');
+            }
+        });
+    </script>
 </body>
 </html>

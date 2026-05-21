@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#87CEEB">
+    <title>Select Center</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen p-4">
+
+    <div class="max-w-lg mx-auto mt-20">
+        <h2 class="text-3xl font-bold text-center mb-8 text-gray-800">Select Center</h2>
+        
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <button onclick="selectCenter('Taipa Mei Keng')" class="p-6 bg-white border-2 border-[#87CEEB] rounded-lg shadow hover:bg-[#87CEEB] hover:text-white transition group">
+                <h3 class="text-xl font-semibold text-gray-800 group-hover:text-white">Kumon Taipa Mei Keng</h3>
+            </button>
+            
+            <button onclick="selectCenter('Taipa Pac Tat')" class="p-6 bg-white border-2 border-[#87CEEB] rounded-lg shadow hover:bg-[#87CEEB] hover:text-white transition group">
+                <h3 class="text-xl font-semibold text-gray-800 group-hover:text-white">Kumon Taipa Pac Tat</h3>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Security check
+        if(sessionStorage.getItem('authenticated') !== 'true') window.location.href = 'index.html';
+
+        function selectCenter(centerName) {
+            sessionStorage.setItem('currentCenter', centerName);
+            window.location.href = 'students.html';
+        }
+    </script>
+</body>
+</html>
