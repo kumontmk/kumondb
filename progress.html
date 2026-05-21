@@ -5,53 +5,71 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <meta name="theme-color" content="#87CEEB">
   <title>Progress Tracking - Kumon DB</title>
-  <link rel="stylesheet" href="css/style.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-container"><div class="spinner"></div><p class="loading-text">Loading</p></div>
+  </div>
+
   <header>
     <h1>📈 Progress Tracking</h1>
     <nav><a href="students.html">← Back</a></nav>
   </header>
   
   <main class="progress-page">
-    <div class="student-selector">
-      <select id="studentSelect"><option>Select Student</option></select>
-      <select id="subjectSelect"><option>Select Subject</option></select>
+    <div class="student-selector form-grid">
+      <select id="studentSelect"><option value="">Select Student</option></select>
+      <select id="subjectSelect"><option value="">Select Subject</option></select>
     </div>
     
-    <div id="progressForm" class="hidden">
+    <div id="progressForm" class="form-container hidden">
       <h3>Monthly Progress Update</h3>
-      <form id="progressUpdateForm">
+      <form id="updateForm">
         <div class="form-grid">
-          <input type="text" id="prevLevel" placeholder="Previous Level" readonly>
-          <input type="number" id="prevWS" placeholder="Prev Worksheets" readonly>
-          <input type="text" id="currLevel" placeholder="Current Level *" required>
-          <input type="number" id="currWS" placeholder="Current Worksheets *" required>
+          <div>
+            <label>Month</label>
+            <input type="month" id="inputMonth" required>
+          </div>
+          <div>
+            <label>Previous Level</label>
+            <input type="text" id="prevLevel" readonly placeholder="Auto-filled">
+          </div>
+          <div>
+            <label>Previous Worksheets</label>
+            <input type="number" id="prevWS" readonly placeholder="Auto-filled">
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div>
+            <label>Current Level *</label>
+            <input type="text" id="currLevel" required>
+          </div>
+          <div>
+            <label>Current Worksheets *</label>
+            <input type="number" id="currWS" required>
+          </div>
         </div>
         
-        <div id="testSection" class="hidden">
-          <h4>🎯 Test Results (Level Changed)</h4>
+        <!-- Test Results (Hidden by default) -->
+        <div id="testSection" class="subject-entry hidden" style="margin-top:1rem; background:#fff3cd;">
+          <h4>🎯 Test Results Required (Level Changed)</h4>
           <div class="form-grid">
             <input type="text" id="testLevel" placeholder="Test Level">
-            <input type="number" id="testScore" placeholder="Score (0-100)" min="0" max="100">
-            <input type="text" id="testTime" placeholder="Time Taken (e.g., 15min)">
+            <input type="number" id="testScore" placeholder="Score">
+            <input type="text" id="testTime" placeholder="Time">
             <input type="text" id="testGroup" placeholder="Group">
           </div>
         </div>
         
         <div class="form-actions">
           <button type="submit" class="primary">💾 Save Progress</button>
-          <button type="button" id="printBtn" class="secondary">🖨️ Print Report</button>
         </div>
       </form>
     </div>
-    
-    <div id="progressChart">
-      <canvas id="levelChart"></canvas>
-    </div>
   </main>
 
-  <script type="module" src="js/progress.js"></script>
+  <script type="module" src="progress.js"></script>
 </body>
 </html>

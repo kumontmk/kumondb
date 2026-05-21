@@ -5,13 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <meta name="theme-color" content="#87CEEB">
   <title>Analytics - Kumon DB</title>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-container"><div class="spinner"></div><p class="loading-text">Loading analytics</p></div>
+  </div>
+
   <header>
     <h1>📈 Analytics</h1>
-    <nav><a href="dashboard.html">← Centers</a></nav>
+    <nav>
+      <a href="dashboard.html">← Back</a>
+      <button id="logoutBtn">Logout</button>
+    </nav>
   </header>
   
   <main class="graphs-page">
@@ -21,15 +28,21 @@
     </div>
     
     <div class="chart-container">
-      <h3>Student Progress</h3>
-      <div class="student-chart-controls">
-        <select id="progressStudent"><option>Select Student</option></select>
-        <select id="progressSubject"><option>Select Subject</option></select>
+      <h3>Individual Progress</h3>
+      <div class="form-grid">
+        <select id="progressStudent"><option value="">Select Student</option></select>
+        <select id="progressSubject"><option value="">Select Subject</option></select>
       </div>
       <canvas id="progressChart"></canvas>
     </div>
   </main>
 
-  <script type="module" src="js/graphs.js"></script>
+  <script type="module" src="graphs.js"></script>
+  <script type="module">
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      sessionStorage.removeItem('kumonAuth');
+      window.location.href = 'index.html';
+    });
+  </script>
 </body>
 </html>
