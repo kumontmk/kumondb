@@ -7,7 +7,6 @@ if (!requireAuth()) {}
 const SUBJECTS = ['Math', 'Chinese', 'English ERP', 'English EFL'];
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 let subjectCount = 0;
-
 const centerId = sessionStorage.getItem('selectedCenter');
 const studentId = new URLSearchParams(window.location.search).get('id');
 const isEdit = !!studentId;
@@ -19,7 +18,7 @@ function hideLoader() {
   if (loader) setTimeout(() => loader.classList.add('hidden'), 300);
 }
 
-// ✅ QR Scanner Variables
+// ✅ QR Scanner Logic
 let html5QrCode = null;
 let scannerActive = false;
 const scanBtn = document.getElementById('startScannerBtn');
@@ -27,7 +26,6 @@ const qrReader = document.getElementById('qr-reader');
 const qrStatus = document.getElementById('qr-status');
 const qrInput = document.getElementById('qrCodeInput');
 
-// ✅ QR Scanner Toggle Logic
 if (scanBtn) {
   scanBtn.addEventListener('click', async () => {
     if (scannerActive) {
@@ -37,12 +35,10 @@ if (scanBtn) {
       scannerActive = false;
       return;
     }
-
     qrReader.style.display = 'block';
     scanBtn.textContent = '⏹ Stop';
     scannerActive = true;
     qrStatus.textContent = 'Point camera at QR code...';
-
     html5QrCode = new Html5Qrcode("qr-reader");
     try {
       await html5QrCode.start(
@@ -56,7 +52,7 @@ if (scanBtn) {
           scanBtn.textContent = '📷 Scan QR';
           scannerActive = false;
         },
-        () => {} // Ignore scan errors (no QR found)
+        () => {}
       );
     } catch (err) {
       qrStatus.textContent = '❌ Camera access denied or not available.';
@@ -67,18 +63,14 @@ if (scanBtn) {
   });
 }
 
-// ✅ Stop scanner when leaving page
 window.addEventListener('beforeunload', () => {
   if (html5QrCode && scannerActive) html5QrCode.stop();
 });
 
-if (isEdit) {
-  loadStudentData();
-} else {
-  addSubjectField();
-  hideLoader();
-}
+if (isEdit) loadStudentData();
+else { addSubjectField(); hideLoader(); }
 
+// ✅ Delete Logic
 const deleteBtn = document.getElementById('deleteBtn');
 if (isEdit) {
   deleteBtn.style.display = 'inline-block';
@@ -104,7 +96,9 @@ async function loadStudentData() {
     if (snap.exists()) {
       const s = snap.val();
       document.getElementById('studentNumber').value = s.studentNumber || '';
-      document.getElementById('nameEn').value = s.nameEn || '';
+      // ✅ REMOVED nameEn - replaced by nickname in your HTML
+      document.getElementById('nickname').value = s.nickname || s.nameEn || ''; // Fallback for old data
+      document.getElementById('namePinyin').value = s.namePinyin || '';
       document.getElementById('nameCn').value = s.nameCn || '';
       document.getElementById('grade').value = s.grade || '';
       document.getElementById('school').value = s.school || '';
@@ -112,9 +106,7 @@ async function loadStudentData() {
       document.getElementById('nationality').value = s.nationality || '';
       document.getElementById('email').value = s.email || '';
       document.getElementById('birthday').value = s.birthday || '';
-      
-      // ✅ Load QR Code if exists
-      qrInput.value = s.qrCode || '';
+      if (s.qrCode) qrInput.value = s.qrCode;
 
       if (s.phone) {
         document.getElementById('phoneMom').value = s.phone.mom || '';
@@ -122,11 +114,8 @@ async function loadStudentData() {
         document.getElementById('phoneOwn').value = s.phone.own || '';
       }
 
-      if (s.subjects) {
-        s.subjects.forEach(sub => addSubjectField(sub));
-      } else {
-        addSubjectField();
-      }
+      if (s.subjects) s.subjects.forEach(sub => addSubjectField(sub));
+      else addSubjectField();
     }
   } catch (err) {
     alert('Error loading student: ' + err.message);
@@ -143,7 +132,6 @@ function getHourOptions(selectedHour) {
   }
   return opts;
 }
-
 function getMinuteOptions(selectedMin) {
   let opts = '';
   for (let i = 0; i < 60; i++) {
@@ -155,48 +143,28 @@ function getMinuteOptions(selectedMin) {
 
 function addSubjectField(data = {}) {
   if (subjectCount >= 3) return alert('Maximum 3 subjects allowed');
-  
   const container = document.getElementById('subjectsContainer');
   const div = document.createElement('div');
   div.className = 'subject-entry';
 
+  // ✅ Clean template literal with Enrol Date field
   div.innerHTML = `
     <div class="form-grid">
-      <div>
-        <label>Select Subject *</label>
-        <select class="subject-name" required>
-          <option value="">Select Subject *</option>
-          ${SUBJECTS.map(s => `<option value="${s}" ${data.name === s ? 'selected' : ''}>${s}</option>`).join('')}
-        </select>
-      </div>
-      <div>
-        <label>Start Level *</label>
-        <input type="text" class="start-level" placeholder="e.g. 7A" value="${data.startLevel || ''}" required>
-      </div>
-      <div>
-        <label>Start WS # *</label>
-        <input type="number" class="start-ws" placeholder="e.g. 10" value="${data.startWS || 0}" required>
-      </div>
-      <div>
-        <label>Status</label>
-        <select class="status">
-          <option value="new" ${data.status === 'new' ? 'selected' : ''}>New</option>
-          <option value="current" ${data.status === 'current' ? 'selected' : ''} selected>Current</option>
-          <option value="pause" ${data.status === 'pause' ? 'selected' : ''}>Pause</option>
-          <option value="drop" ${data.status === 'drop' ? 'selected' : ''}>Drop</option>
-        </select>
-      </div>
+      <div><label>Select Subject *</label><select class="subject-name" required><option value="">Select Subject *</option>${SUBJECTS.map(s => `<option value="${s}" ${data.name === s ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
+      <div><label>Start Level *</label><input type="text" class="start-level" placeholder="e.g. 7A" value="${data.startLevel || ''}" required></div>
+      <div><label>Start WS # *</label><input type="number" class="start-ws" placeholder="e.g. 10" value="${data.startWS || 0}" required></div>
+      <div><label>Enrol Date *</label><input type="date" class="enrol-date" value="${data.enrolDate || ''}" required></div>
+      <div><label>Status</label><select class="status"><option value="new" ${data.status === 'new' ? 'selected' : ''}>New</option><option value="current" ${data.status === 'current' ? 'selected' : ''} selected>Current</option><option value="pause" ${data.status === 'pause' ? 'selected' : ''}>Pause</option><option value="drop" ${data.status === 'drop' ? 'selected' : ''}>Drop</option></select></div>
     </div>
     <div class="timeslots-container">
       <h4 style="font-size:0.9rem; margin:0 0 0.5rem;">Timeslots (Max 6)</h4>
       <div class="timeslots-list"></div>
       <button type="button" class="add-timeslot-btn secondary" style="margin-top:0.5rem; padding:0.4rem 0.8rem; font-size:0.9rem;">+ Add Timeslot</button>
     </div>
-    <button type="button" class="remove-subject" style="background:#dc3545; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; margin-top:0.5rem;">🗑️ Remove Subject</button>
+    <button type="button" class="remove-subject" style="background:#dc3545; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; margin-top:0.5rem;">Remove Subject</button>
   `;
 
   const timeslotsList = div.querySelector('.timeslots-list');
-  
   if (data.timeslots && data.timeslots.length > 0) {
     data.timeslots.forEach(ts => addTimeslotField(timeslotsList, ts));
   } else {
@@ -205,7 +173,7 @@ function addSubjectField(data = {}) {
 
   div.querySelector('.add-timeslot-btn').onclick = () => addTimeslotField(timeslotsList);
   div.querySelector('.remove-subject').onclick = () => { div.remove(); subjectCount--; };
-
+  
   div.querySelector('.subject-name').addEventListener('change', (e) => {
     const selected = e.target.value;
     const allSelects = document.querySelectorAll('.subject-name');
@@ -228,54 +196,38 @@ function addSubjectField(data = {}) {
 function addTimeslotField(timeslotsList, data = {}) {
   if (!timeslotsList) return;
   if (timeslotsList.children.length >= 6) return alert('Maximum 6 timeslots per subject');
-
   let h = '01', m = '00';
   if (data.time) {
     const parts = data.time.split(':');
     if (parts.length === 2) { h = parts[0]; m = parts[1]; }
   }
-
   const row = document.createElement('div');
   row.className = 'timeslot-row';
-  
   const dayOptions = DAYS.map(d => `<option value="${d}" ${data.day === d ? 'selected' : ''}>${d}</option>`).join('');
   const hourOptions = getHourOptions(h);
   const minuteOptions = getMinuteOptions(m);
-
+  
   row.innerHTML = `
-    <div>
-      <label>Day</label>
-      <select class="ts-day" required>${dayOptions}</select>
-    </div>
-    <div>
-      <label>Time (1-24h)</label>
-      <div style="display:flex; gap:0.5rem;">
-        <select class="ts-hour" required>${hourOptions}</select>
-        <span style="align-self:center; font-weight:bold;">:</span>
-        <select class="ts-min" required>${minuteOptions}</select>
-      </div>
-    </div>
+    <div><label>Day</label><select class="ts-day" required>${dayOptions}</select></div>
+    <div><label>Time (1-24h)</label><div style="display:flex; gap:0.5rem;"><select class="ts-hour" required>${hourOptions}</select><span style="align-self:center; font-weight:bold;">:</span><select class="ts-min" required>${minuteOptions}</select></div></div>
     <button type="button" class="remove-ts-btn">×</button>
   `;
-
   row.querySelector('.remove-ts-btn').onclick = () => row.remove();
   timeslotsList.appendChild(row);
 }
 
 document.getElementById('addSubjectBtn').onclick = () => addSubjectField();
 
+// ✅ Form Submit Handler - Fixed validation & field mapping
 document.getElementById('studentForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  if (!centerId) {
-    alert('Error: No center selected. Please go back and select a center.');
-    return;
-  }
-
-  // ✅ Stop scanner if active during save
+  if (!centerId) return alert('Error: No center selected.');
   if (html5QrCode && scannerActive) await html5QrCode.stop();
 
   const subjects = [];
-  document.querySelectorAll('.subject-entry').forEach(entry => {
+  let validationError = false;
+
+  for (const entry of document.querySelectorAll('.subject-entry')) {
     const timeslots = [];
     entry.querySelectorAll('.timeslots-list .timeslot-row').forEach(row => {
       timeslots.push({
@@ -285,22 +237,27 @@ document.getElementById('studentForm').addEventListener('submit', async (e) => {
     });
 
     const subjectName = entry.querySelector('.subject-name').value;
-    if (!subjectName) return alert('Please select a subject.');
-    if (timeslots.length === 0) return alert(`Please add at least one timeslot for ${subjectName}`);
+    if (!subjectName) { alert('Please select a subject.'); validationError = true; break; }
+    if (timeslots.length === 0) { alert(`Please add at least one timeslot for ${subjectName}`); validationError = true; break; }
 
     subjects.push({
       name: subjectName,
       startLevel: entry.querySelector('.start-level').value,
       startWS: parseInt(entry.querySelector('.start-ws').value) || 0,
+      enrolDate: entry.querySelector('.enrol-date').value, // ✅ Saved per subject
       status: entry.querySelector('.status').value,
       timeslots: timeslots,
       progress: [] 
     });
-  });
+  }
+
+  if (validationError || subjects.length === 0) return alert('Please fix form errors before saving.');
 
   const studentData = {
     studentNumber: document.getElementById('studentNumber').value || '',
-    nameEn: document.getElementById('nameEn').value,
+    // ✅ REMOVED nameEn - using nickname instead
+    nickname: document.getElementById('nickname').value || '',
+    namePinyin: document.getElementById('namePinyin').value || '',
     nameCn: document.getElementById('nameCn').value,
     grade: document.getElementById('grade').value,
     school: document.getElementById('school').value,
@@ -313,18 +270,14 @@ document.getElementById('studentForm').addEventListener('submit', async (e) => {
       dad: document.getElementById('phoneDad').value,
       own: document.getElementById('phoneOwn').value
     },
-    qrCode: qrInput.value.trim() || '', // ✅ Save QR Code
+    qrCode: qrInput.value.trim() || '',
     subjects: subjects,
     updatedAt: new Date().toISOString()
   };
-
-  if (!isEdit) {
-    studentData.createdAt = new Date().toISOString();
-  }
+  if (!isEdit) studentData.createdAt = new Date().toISOString();
 
   try {
     document.getElementById('loadingOverlay').classList.remove('hidden');
-    
     if (isEdit) {
       await set(ref(db, `centers/${centerId}/students/${studentId}`), studentData);
       alert('Student updated successfully!');

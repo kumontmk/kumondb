@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Student Form - Kumon DB</title>
   <link rel="stylesheet" href="style.css">
-  <!-- ✅ QR Scanner Library -->
+  <!-- QR Scanner Library -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
@@ -29,9 +29,15 @@
           <label>Student Number</label>
           <input type="text" id="studentNumber" placeholder="e.g. 00123">
         </div>
+        <!-- ✅ Nickname field -->
         <div>
-          <label>Full Name (English) *</label>
-          <input type="text" id="nameEn" required>
+          <label>Nickname</label>
+          <input type="text" id="nickname" placeholder="Enter nickname">
+        </div>
+        <!-- ✅ Pin Yin Name -->
+        <div>
+          <label>Name in Pin Yin (拼音名)</label>
+          <input type="text" id="namePinyin" placeholder="e.g. Zhang San">
         </div>
         <div>
           <label>Full Name (Chinese)</label>
@@ -79,7 +85,7 @@
         </div>
       </div>
 
-      <!-- ✅ NEW: QR Code Scanner Section -->
+      <!-- QR Code Section -->
       <h3>QR Code</h3>
       <div class="form-grid">
         <div style="grid-column: 1 / -1;">
@@ -97,12 +103,12 @@
       <div id="subjectsContainer"></div>
       <button type="button" id="addSubjectBtn" class="secondary" style="margin-top: 1rem;">+ Add Subject</button>
 
-      <div class="hint"> Note: English ERP & EFL cannot be together. Each subject supports up to 6 timeslots.</div>
+      <div class="hint">Note: English ERP & EFL cannot be together. Each subject supports up to 6 timeslots.</div>
 
       <div class="form-actions" style="margin-top: 2rem; display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
         <button type="submit" class="primary">💾 Save Student</button>
         <a href="students.html" class="secondary">Cancel</a>
-        <button type="button" id="deleteBtn" class="danger" style="display: none; margin-left: auto;">️ Delete Student</button>
+        <button type="button" id="deleteBtn" class="danger" style="display: none; margin-left: auto;">🗑️ Delete Student</button>
       </div>
     </form>
   </div>

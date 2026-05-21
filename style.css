@@ -151,3 +151,27 @@ canvas { max-height: 400px; }
 input[type=number]::-webkit-inner-spin-button,
 input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 input[type=number] { -moz-appearance: textfield; }
+
+/* Delete Button Style */
+button.danger {
+  background: #dc3545;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+button.danger:hover {
+  background: #a71d2a;
+}
+
+/* Table Row Styling */
+.student-row { transition: background 0.2s; }
+.student-row:hover { background-color: #e3f2fd; }
+.student-row td { border-bottom: 1px solid #eee; padding: 0.8rem 0.75rem; vertical-align: middle; }
+.student-row:last-child td { border-bottom: none; }
+
+/* Ensure table doesn't collapse on small screens */
+.report-table table { min-width: 900px; }
