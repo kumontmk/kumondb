@@ -5,9 +5,36 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <meta name="theme-color" content="#87CEEB">
   <title>Kumon Center DB - Login</title>
-  <link rel="stylesheet" href="css/style.css">
+  <style>
+    :root { --primary: #87CEEB; --white: #fff; --text: #333; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: linear-gradient(135deg, var(--primary), #4682B4);
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; color: var(--text);
+    }
+    .login-container {
+      background: var(--white); padding: 2rem; border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 100%; max-width: 400px;
+    }
+    h1 { text-align: center; margin-bottom: 1.5rem; color: var(--primary); }
+    label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
+    input {
+      width: 100%; padding: 0.75rem; margin-bottom: 1rem;
+      border: 2px solid #ddd; border-radius: 8px; font-size: 1rem;
+    }
+    input:focus { outline: none; border-color: var(--primary); }
+    button {
+      width: 100%; padding: 0.75rem; background: var(--primary);
+      color: white; border: none; border-radius: 8px; font-size: 1rem;
+      font-weight: 600; cursor: pointer; transition: opacity 0.2s;
+    }
+    button:hover { opacity: 0.9; }
+    .error { color: #dc3545; font-size: 0.9rem; margin-top: 0.5rem; }
+  </style>
 </head>
-<body class="login-page">
+<body>
   <div class="login-container">
     <h1>📚 Kumon Center DB</h1>
     <form id="loginForm">
