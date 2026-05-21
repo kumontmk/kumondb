@@ -1,7 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
 import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
 
-// ✅ Updated Firebase Config
 const firebaseConfig = {
   apiKey: "AIzaSyB1VhQwGotEI8BHt8wp8FvtPpUY5FsI0qA",
   authDomain: "kumondb-f4377.firebaseapp.com",
@@ -17,31 +16,25 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const CORRECT_PASSWORD = "1111";
 
-// ✅ Hide loader when page is ready
 window.addEventListener('DOMContentLoaded', () => {
   const loader = document.getElementById('loadingOverlay');
   if (loader) setTimeout(() => loader.classList.add('hidden'), 300);
 });
 
-// ✅ Login form handler
-const loginForm = document.getElementById('loginForm');
-if (loginForm) {
-  loginForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const password = document.getElementById('password').value;
-    const errorMsg = document.getElementById('errorMsg');
-    
-    if (password === CORRECT_PASSWORD) {
-      sessionStorage.setItem('kumonAuth', 'true');
-      await initializeCenters();
-      window.location.href = 'dashboard.html';
-    } else {
-      if (errorMsg) errorMsg.textContent = 'Incorrect password. Please try again.';
-    }
-  });
-}
+document.getElementById('loginForm')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const password = document.getElementById('password').value;
+  const errorMsg = document.getElementById('errorMsg');
+  
+  if (password === CORRECT_PASSWORD) {
+    sessionStorage.setItem('kumonAuth', 'true');
+    await initializeCenters();
+    window.location.href = 'centers.html'; // ✅ Changed to centers page
+  } else {
+    if (errorMsg) errorMsg.textContent = 'Incorrect password. Please try again.';
+  }
+});
 
-// ✅ Initialize default centers if Firebase is empty
 async function initializeCenters() {
   try {
     const centersRef = ref(db, 'centers');
@@ -52,12 +45,9 @@ async function initializeCenters() {
         'kumon-taipa-pac-tat': { id: 'kumon-taipa-pac-tat', name: 'Kumon Taipa Pac Tat', createdAt: new Date().toISOString() }
       });
     }
-  } catch (err) {
-    console.error('Center init error:', err);
-  }
+  } catch (err) { console.error('Center init error:', err); }
 }
 
-// ✅ Auth guard for protected pages
 export function requireAuth() {
   if (sessionStorage.getItem('kumonAuth') !== 'true') {
     window.location.href = 'index.html';

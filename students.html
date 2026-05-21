@@ -8,20 +8,14 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- ✅ Loading Overlay -->
   <div id="loadingOverlay" class="loading-overlay">
-    <div class="loading-container">
-      <div class="spinner"></div>
-      <p class="loading-text">Loading students</p>
-    </div>
+    <div class="loading-container"><div class="spinner"></div><p class="loading-text">Loading students</p></div>
   </div>
 
   <header>
     <h1>👥 Student Management</h1>
     <nav>
-      <a href="dashboard.html">← Centers</a>
-      <a href="reports.html">📊 Reports</a>
-      <a href="graphs.html">📈 Graphs</a>
+      <a href="dashboard.html">← Back</a>
       <button id="logoutBtn">Logout</button>
     </nav>
   </header>
@@ -32,15 +26,11 @@
       <button id="addStudentBtn" class="primary">+ Add Student</button>
     </div>
     
-    <div class="student-list" id="studentList">
-      <!-- Students loaded dynamically -->
-    </div>
+    <div class="student-list" id="studentList"></div>
   </main>
 
-  <!-- ✅ Module Script -->
   <script type="module" src="students.js"></script>
   <script type="module">
-    // Logout handler (local to this page as well)
     document.getElementById('logoutBtn').addEventListener('click', () => {
       sessionStorage.removeItem('kumonAuth');
       window.location.href = 'index.html';

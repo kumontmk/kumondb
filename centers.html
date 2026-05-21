@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#87CEEB">
+  <title>Select Center - Kumon DB</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-container">
+      <div class="spinner"></div>
+      <p class="loading-text">Loading centers</p>
+    </div>
+  </div>
+
+  <header>
+    <h1>📚 Kumon Center DB</h1>
+    <button id="logoutBtn">Logout</button>
+  </header>
+  
+  <main class="dashboard">
+    <h2>Select Your Center</h2>
+    <div class="center-grid" id="centerList"></div>
+  </main>
+
+  <script type="module">
+    import { requireAuth, db } from './auth.js';
+    import { ref, get } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
+
+    // Auth guard
+    if (!requireAuth()) { /* redirects automatically */ }
+
+    // Logout
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      sessionStorage.removeItem('kumonAuth');
+      window.location.href = 'index.html';
+    });
+
+    // Load Centers
+    async function loadCenters() {
+      const loader = document.getElementById('loadingOverlay');
+      const container = document.getElementById('centerList');
+      
+      try {
+        const snapshot = await get(ref(db, 'centers'));
+        container.innerHTML = '';
+        
+        if (!snapshot.exists()) {
+          container.innerHTML = '<p class="error">No centers found. Please contact admin.</p>';
+          return;
+        }
+        
+        snapshot.forEach(child => {
+          const center = child.val();
+          const card = document.createElement('div');
+          card.className = 'center-card';
+          card.innerHTML = `<h3>${center.name}</h3><p>Click to manage students & reports</p>`;
+          card.addEventListener('click', () => {
+            sessionStorage.setItem('selectedCenter', center.id);
+            window.location.href = 'students.html';
+          });
+          container.appendChild(card);
+        });
+      } catch (error) {
+        console.error('Error:', error);
+        container.innerHTML = `<p class="error">Failed to load centers.<br><small>${error.message}</small></p>`;
+      } finally {
+        if (loader) setTimeout(() => loader.classList.add('hidden'), 300);
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadCenters);
+  </script>
+</body>
+</html>
