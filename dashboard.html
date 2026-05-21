@@ -5,7 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <meta name="theme-color" content="#87CEEB">
   <title>Select Center - Kumon DB</title>
-  <link rel="stylesheet" href="css/style.css">
+  <style>
+    :root { --primary: #87CEEB; --white: #fff; --text: #333; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f0f8ff; color: var(--text); }
+    header {
+      background: var(--primary); color: white; padding: 1rem;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    header button {
+      background: rgba(255,255,255,0.2); border: none; color: white;
+      padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer;
+    }
+    main { padding: 1rem; max-width: 1000px; margin: 0 auto; }
+    h2 { margin-bottom: 1rem; }
+    .center-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+    }
+    .center-card {
+      background: var(--white); padding: 1.5rem; border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1); cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .center-card:hover { transform: translateY(-3px); box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+    .center-card h3 { color: var(--primary); margin-bottom: 0.5rem; }
+    .error { color: #dc3545; padding: 1rem; background: #ffe6e6; border-radius: 8px; }
+  </style>
 </head>
 <body>
   <header>
@@ -16,7 +42,7 @@
   <main class="dashboard">
     <h2>Select Your Center</h2>
     <div class="center-grid" id="centerList">
-      <!-- Centers loaded dynamically -->
+      <p>Loading centers...</p>
     </div>
   </main>
 
@@ -24,28 +50,43 @@
     import { requireAuth, db } from './js/auth.js';
     import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
     
-    if (!requireAuth()) exit;
+    // ✅ Auth guard
+    if (!requireAuth()) { /* redirects automatically */ }
     
+    // ✅ Logout
     document.getElementById('logoutBtn').onclick = () => {
       sessionStorage.removeItem('kumonAuth');
       window.location.href = 'index.html';
     };
     
+    // ✅ Load centers
     async function loadCenters() {
-      const snapshot = await get(ref(db, 'centers'));
-      const container = document.getElementById('centerList');
-      
-      snapshot.forEach(child => {
-        const center = child.val();
-        const card = document.createElement('div');
-        card.className = 'center-card';
-        card.innerHTML = `<h3>${center.name}</h3><p>Click to manage</p>`;
-        card.onclick = () => {
-          sessionStorage.setItem('selectedCenter', center.id);
-          window.location.href = 'students.html';
-        };
-        container.appendChild(card);
-      });
+      try {
+        const snapshot = await get(ref(db, 'centers'));
+        const container = document.getElementById('centerList');
+        container.innerHTML = '';
+        
+        if (!snapshot.exists()) {
+          container.innerHTML = '<p class="error">No centers found. Please contact admin.</p>';
+          return;
+        }
+        
+        snapshot.forEach(child => {
+          const center = child.val();
+          const card = document.createElement('div');
+          card.className = 'center-card';
+          card.innerHTML = `<h3>${center.name}</h3><p>Click to manage students & reports</p>`;
+          card.onclick = () => {
+            sessionStorage.setItem('selectedCenter', center.id);
+            window.location.href = 'students.html';
+          };
+          container.appendChild(card);
+        });
+      } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('centerList').innerHTML = 
+          `<p class="error">Error loading centers: ${error.message}</p>`;
+      }
     }
     
     loadCenters();
