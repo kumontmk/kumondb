@@ -5,112 +5,110 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Student Form - Kumon DB</title>
   <link rel="stylesheet" href="style.css">
-  <!-- QR Scanner Library -->
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 </head>
 <body>
-  <div class="loading-overlay hidden" id="loadingOverlay">
-    <div class="loading-container">
-      <div class="spinner"></div>
-      <div class="loading-text">Loading student details</div>
-    </div>
-  </div>
-
+  <div id="page-loader"><div class="spinner"></div><p>Loading student details...</p></div>
+  
   <header>
-    <a href="students.html" class="back-btn">← Back to Students</a>
-    <h2>✏️ <span id="formTitle">Add Student</span></h2>
+    <a href="students.html">← Back to Students</a>
+    <h1 id="formTitle">✏️ Add Student</h1>
+    <div></div>
   </header>
 
-  <div class="form-container">
-    <form id="studentForm">
-      <h3>Basic Information</h3>
+  <main class="form-container">
+    <!-- 1. Basic Information -->
+    <section class="general-info">
+      <h2>📝 Basic Information</h2>
       <div class="form-grid">
-        <div>
-          <label>Student Number</label>
-          <input type="text" id="studentNumber" placeholder="e.g. 00123">
-        </div>
-        <!-- ✅ Nickname field -->
-        <div>
-          <label>Nickname</label>
-          <input type="text" id="nickname" placeholder="Enter nickname">
-        </div>
-        <!-- ✅ Pin Yin Name -->
-        <div>
-          <label>Name in Pin Yin (拼音名)</label>
-          <input type="text" id="namePinyin" placeholder="e.g. Zhang San">
-        </div>
-        <div>
-          <label>Full Name (Chinese)</label>
-          <input type="text" id="nameCn">
-        </div>
-        <div>
-          <label>Grade</label>
-          <input type="text" id="grade" placeholder="e.g. P4">
-        </div>
-        <div>
-          <label>School</label>
-          <input type="text" id="school">
-        </div>
-        <div>
-          <label>Birthday</label>
-          <input type="date" id="birthday">
-        </div>
-        <div>
-          <label>Nationality</label>
-          <input type="text" id="nationality">
-        </div>
+        <div><label>Student Number</label><input type="text" id="studentNumber"></div>
+        <div><label>Nickname</label><input type="text" id="nickname"></div>
+        <div><label>Name in Pin Yin (拼音名)</label><input type="text" id="namePinyin"></div>
+        <div><label>Full Name (Chinese)</label><input type="text" id="nameCn" required></div>
+        <div><label>Grade</label><input type="text" id="grade"></div>
+        <div><label>School</label><input type="text" id="school"></div>
+        <div><label>Birthday</label><input type="date" id="birthday"></div>
+        <div><label>Age (Auto)</label><input type="text" id="ageDisplay" readonly></div>
+        <div><label>Nationality</label><input type="text" id="nationality"></div>
+        <div><label>Overall Status (Auto)</label><input type="text" id="overallStatus" readonly></div>
       </div>
+    </section>
 
-      <h3>Contact Information</h3>
+    <!-- 2. QR Code (Before Tabs) -->
+    <section class="qr-section" style="margin: 1rem 0; padding: 1rem; background: #f8f9fa; border-radius: var(--radius); border: 1px solid #e2e8f0;">
+      <h3 style="margin: 0 0 0.5rem; font-size: 1rem;">📷 Student QR Code</h3>
+      <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+        <input type="text" id="qrCodeInput" placeholder="Scan or enter manually" style="flex:1; min-width:200px;">
+        <button type="button" id="startScannerBtn" class="secondary">📷 Scan QR</button>
+      </div>
+      <div id="qr-reader" style="margin-top:0.5rem; display:none;"></div>
+      <div id="qr-status" class="hint"></div>
+    </section>
+
+    <!-- 3. Tab Navigation -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="contact">📞 Contact Info</button>
+      <button class="tab-btn" data-tab="subjects">📚 Subjects (Max 3)</button>
+      <button class="tab-btn" data-tab="schedule">📅 Schedule</button>
+    </div>
+
+    <!-- 4. Tab Content: Contact -->
+    <div id="tab-contact" class="tab-content active">
       <div class="form-grid">
-        <div>
-          <label>Email</label>
-          <input type="email" id="email">
-        </div>
-        <div>
-          <label>Phone (Mom)</label>
-          <input type="tel" id="phoneMom">
-        </div>
-        <div>
-          <label>Phone (Dad)</label>
-          <input type="tel" id="phoneDad">
-        </div>
-        <div>
-          <label>Phone (Student)</label>
-          <input type="tel" id="phoneOwn">
-        </div>
-        <div>
-          <label>Address</label>
-          <input type="text" id="address">
-        </div>
+        <div><label>Email</label><input type="email" id="email"></div>
+        <div><label>Phone (Mom)</label><input type="tel" id="phoneMom"></div>
+        <div><label>Phone (Dad)</label><input type="tel" id="phoneDad"></div>
+        <div><label>Phone (Student)</label><input type="tel" id="phoneOwn"></div>
+        <div style="grid-column: 1 / -1;"><label>Address</label><textarea id="address" rows="2"></textarea></div>
       </div>
+    </div>
 
-      <!-- QR Code Section -->
-      <h3>QR Code</h3>
-      <div class="form-grid">
-        <div style="grid-column: 1 / -1;">
-          <label>Student QR Code</label>
-          <div style="display: flex; gap: 0.5rem; align-items: center;">
-            <input type="text" id="qrCodeInput" placeholder="Scan or manually enter QR code" style="flex: 1;">
-            <button type="button" id="startScannerBtn" class="secondary">📷 Scan QR</button>
-          </div>
-          <div id="qr-reader" style="display: none; margin-top: 1rem; width: 100%; max-width: 400px; border-radius: 8px; overflow: hidden;"></div>
-          <div id="qr-status" style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-light);"></div>
-        </div>
-      </div>
-
-      <h3>Subjects (Max 3)</h3>
+    <!-- 5. Tab Content: Subjects -->
+    <div id="tab-subjects" class="tab-content">
+      <p class="hint">⚠️ English ERP & EFL cannot be together unless one is Dropped. Max 6 timeslots per subject.</p>
       <div id="subjectsContainer"></div>
-      <button type="button" id="addSubjectBtn" class="secondary" style="margin-top: 1rem;">+ Add Subject</button>
+      <button type="button" id="addSubjectBtn" class="secondary" style="margin-top:0.5rem;">+ Add Subject</button>
+    </div>
 
-      <div class="hint">Note: English ERP & EFL cannot be together. Each subject supports up to 6 timeslots.</div>
+    <!-- 6. Tab Content: Schedule -->
+    <div id="tab-schedule" class="tab-content">
+      <p class="hint">📅 Schedule auto-generates from subject timeslots. Dropped subjects are hidden.</p>
+      <table class="schedule-table" id="scheduleTable">
+        <thead><tr><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th></tr></thead>
+        <tbody id="scheduleBody">
+          <tr><td colspan="6" style="text-align:center; padding:1.5rem; color:#666;">Add subjects & timeslots to view schedule</td></tr>
+        </tbody>
+      </table>
+    </div>
 
-      <div class="form-actions" style="margin-top: 2rem; display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
-        <button type="submit" class="primary">💾 Save Student</button>
-        <a href="students.html" class="secondary">Cancel</a>
-        <button type="button" id="deleteBtn" class="danger" style="display: none; margin-left: auto;">🗑️ Delete Student</button>
+    <!-- ✅ Actions - Clean Grouped Layout -->
+    <div class="form-actions" style="margin-top:1.5rem; display:flex; gap:1rem; flex-wrap:wrap; align-items:center;">
+      <!-- Left Group: Save & Cancel -->
+      <div style="display:flex; gap:0.75rem;">
+        <button type="submit" id="saveBtn" class="primary" form="studentForm">💾 Save Student</button>
+        <a href="students.html" class="secondary" style="padding:0.75rem 1.5rem; text-decoration:none; color:white; border-radius:var(--radius); display:inline-flex; align-items:center; justify-content:center; background:#6c757d;">Cancel</a>
       </div>
-    </form>
+      
+      <!-- Right Group: Transfer & Delete -->
+      <div style="display:flex; gap:0.75rem; margin-left:auto;">
+        <button type="button" id="transferBtn" class="secondary" style="display:none;">🔄 Transfer</button>
+        <button type="button" id="deleteBtn" class="danger" style="display:none;">🗑️ Delete</button>
+      </div>
+    </div>
+  </main>
+  
+  <!-- Hidden form for submit handler -->
+  <form id="studentForm" style="display:none;"></form>
+
+  <!-- Transfer Modal -->
+  <div id="transferModal" class="modal hidden">
+    <div class="modal-content">
+      <span id="closeTransferModal" style="position:absolute;top:10px;right:15px;font-size:1.8rem;cursor:pointer;color:var(--text-light);">×</span>
+      <h3>🔄 Transfer Student</h3>
+      <p style="margin:0.5rem 0; color:var(--text-light);">Select target center:</p>
+      <select id="targetCenterSelect" style="width:100%; padding:0.75rem; border:1px solid #ddd; border-radius:8px; margin-top:0.5rem;"></select>
+      <button id="confirmTransferBtn" class="primary" style="margin-top:1rem; width:100%;">Confirm Transfer</button>
+    </div>
   </div>
 
   <script type="module" src="student-form.js"></script>

@@ -513,3 +513,26 @@ button.danger:hover {
     font-size: 1.8rem; cursor: pointer; color: var(--text-light);
 }
 .text-center { text-align: center; }
+
+/* === TAB SYSTEM === */
+.tabs { display: flex; gap: 0.5rem; margin: 1.5rem 0 1rem; border-bottom: 2px solid #e2e8f0; }
+.tab-btn { padding: 0.75rem 1.2rem; background: none; border: none; cursor: pointer; font-weight: 500; color: var(--text-light); border-bottom: 3px solid transparent; transition: all 0.2s; }
+.tab-btn:hover { color: var(--primary-dark); }
+.tab-btn.active { color: var(--primary-dark); border-bottom-color: var(--primary-dark); background: rgba(135,206,235,0.1); }
+.tab-content { display: none; animation: fadeIn 0.3s ease; }
+.tab-content.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+/* === READONLY FIELDS === */
+input[readonly], input[disabled] { background: #f1f5f9; color: #64748b; cursor: not-allowed; border-color: #cbd5e1; }
+
+/* === SCHEDULE TABLE & COLOR CODING === */
+.schedule-table { width: 100%; border-collapse: collapse; margin-top: 1rem; background: var(--white); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+.schedule-table th, .schedule-table td { padding: 0.8rem; border: 1px solid #e2e8f0; text-align: center; vertical-align: top; font-size: 0.9rem; }
+.schedule-table th { background: var(--primary); color: var(--white); font-weight: 600; }
+
+.slot-pill { display: inline-flex; align-items: center; justify-content: center; padding: 0.3rem 0.5rem; border-radius: 10px; font-size: 0.75rem; font-weight: 600; margin: 0.2rem; color: white; white-space: nowrap; min-width: 80px; text-align: center; }
+.subj-Math { background: #008B8B; }
+.subj-Chinese { background: #9ACD32; color: #333; }
+.subj-ERP { background: #DC143C; }
+.subj-EFL { background: #FF8C00; }
