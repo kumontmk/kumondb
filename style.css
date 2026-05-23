@@ -153,7 +153,7 @@ button:hover {
 /* ✅ Student List - WIDER CONTAINER */
 .students-page {
   padding: 1.5rem 2rem;
-  max-width: 1400px; /* Increased from 1200px for better breathing room */
+  max-width: 1400px;
   width: 96%;
   margin: 0 auto;
 }
@@ -204,7 +204,6 @@ table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9rem;
-  /* Removed rigid min-width: 900px so it scales naturally with wider container */
 }
 
 th, td {
@@ -272,59 +271,91 @@ canvas {
   border-left: 4px solid var(--primary);
 }
 
-/* Timeslot Row Styling */
+/* ✅ IMPROVED TIMESLOT ROW STYLING */
 .timeslot-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
   align-items: flex-end;
+  gap: 1rem;
   margin-bottom: 1rem;
   padding-bottom: 1rem;
-  border-bottom: 1px dashed #eee;
+  border-bottom: 1px dashed #e2e8f0;
+  flex-wrap: wrap;
 }
-
 .timeslot-row > div {
-  flex: 1;
-  min-width: 120px;
+  flex: 1 1 160px;
+  min-width: 140px;
+}
+.timeslot-row label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-light);
+  margin-bottom: 0.4rem;
+}
+.timeslot-row select {
+  width: 100%;
+  padding: 0.65rem 0.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--radius);
+  background: #fff;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.timeslot-row select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.25);
 }
 
-.custom-time-picker {
+/* Time Picker Group */
+.time-input-group {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 0.5rem;
   width: 100%;
 }
-
-.custom-time-picker input {
-  width: 100%;
+.time-input-group select {
+  flex: 1;
   text-align: center;
-  padding: 0.5rem;
+  padding: 0.65rem 0.2rem;
+}
+.time-separator {
+  font-weight: 700;
+  color: var(--text-light);
+  font-size: 1.1rem;
 }
 
-.time-sep {
-  font-weight: bold;
-  color: #666;
-  font-size: 1.2rem;
+/* Remove Button Wrapper & Styling */
+.remove-timeslot-wrapper {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-end;
 }
-
 .remove-ts-btn {
-  background: #dc3545;
-  color: white;
-  border: none;
-  border-radius: 50%;
-  width: 36px;
-  height: 36px;
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: 1.2rem;
-  flex-shrink: 0;
-  margin-bottom: 0;
+  font-size: 1.3rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  margin: 0;
 }
-
 .remove-ts-btn:hover {
-  background: #b02a37;
+  background: #dc2626;
+  color: #fff;
+  border-color: #dc2626;
+  transform: translateY(-1px);
+}
+.remove-ts-btn:active {
+  transform: translateY(0);
 }
 
 /* Remove number spinners if any text inputs remain */
@@ -413,8 +444,8 @@ button.danger:hover {
   padding: 0.75rem;
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  flex-wrap: nowrap; /* Forces single row on desktop */
-  overflow-x: auto;  /* Safe horizontal scroll if window is narrow */
+  flex-wrap: nowrap;
+  overflow-x: auto;
 }
 
 .sort-group {
@@ -425,7 +456,7 @@ button.danger:hover {
   padding: 0.45rem 0.65rem;
   border-radius: var(--radius);
   border: 1px solid #e2e8f0;
-  flex-shrink: 0; /* Prevents dropdowns from squishing or wrapping */
+  flex-shrink: 0;
 }
 
 .sort-group label {
@@ -468,7 +499,7 @@ button.danger:hover {
 }
 
 #clearSortBtn {
-  margin-left: auto; /* Pushes to far right */
+  margin-left: auto;
   padding: 0.45rem 0.9rem !important;
   font-size: 0.85rem !important;
   white-space: nowrap;
@@ -482,12 +513,12 @@ button.danger:hover {
     overflow-x: visible;
   }
   .sort-group {
-    flex: 1 1 45%; /* 2 per row on tablet */
+    flex: 1 1 45%;
   }
   #clearSortBtn {
     margin-left: 0;
     margin-top: 0.5rem;
-    flex: 1 1 100%; /* Full width on mobile */
+    flex: 1 1 100%;
   }
 }
 
@@ -526,6 +557,14 @@ button.danger:hover {
 /* === READONLY FIELDS === */
 input[readonly], input[disabled] { background: #f1f5f9; color: #64748b; cursor: not-allowed; border-color: #cbd5e1; }
 
+/* Hint text styling */
+label span {
+  font-weight: 400;
+  font-size: 0.8rem;
+  color: #999;
+  margin-left: 0.25rem;
+}
+
 /* === SCHEDULE TABLE & COLOR CODING === */
 .schedule-table { width: 100%; border-collapse: collapse; margin-top: 1rem; background: var(--white); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
 .schedule-table th, .schedule-table td { padding: 0.8rem; border: 1px solid #e2e8f0; text-align: center; vertical-align: top; font-size: 0.9rem; }
@@ -536,3 +575,45 @@ input[readonly], input[disabled] { background: #f1f5f9; color: #64748b; cursor: 
 .subj-Chinese { background: #9ACD32; color: #333; }
 .subj-ERP { background: #DC143C; }
 .subj-EFL { background: #FF8C00; }
+/* Allow horizontal scroll for wide schedule tables */
+#tab-schedule {
+  overflow-x: auto;
+}
+.schedule-table {
+  min-width: 700px; /* Ensures 7 columns have breathing room */
+}
+
+/* Style for disabled subject options */
+.subject-name option:disabled {
+  color: #999;
+  font-style: italic;
+}
+
+/* ✅ Subject Entry Color Coding */
+.subject-entry.subj-Math {
+  background: #e0f7fa;
+  border-left-color: #008B8B;
+}
+.subject-entry.subj-Chinese {
+  background: #f1f8e9;
+  border-left-color: #9ACD32;
+}
+.subject-entry.subj-ERP {
+  background: #ffebee;
+  border-left-color: #DC143C;
+}
+.subject-entry.subj-EFL {
+  background: #fff3e0;
+  border-left-color: #FF8C00;
+}
+
+/* Smooth transition for color changes */
+.subject-entry {
+  transition: background 0.2s ease, border-left-color 0.2s ease;
+}
+
+/* Keep labels readable on colored backgrounds */
+.subject-entry.subj-Chinese label,
+.subject-entry.subj-EFL label {
+  color: #333;
+}

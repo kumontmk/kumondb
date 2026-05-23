@@ -74,9 +74,13 @@
     <div id="tab-schedule" class="tab-content">
       <p class="hint">📅 Schedule auto-generates from subject timeslots. Dropped subjects are hidden.</p>
       <table class="schedule-table" id="scheduleTable">
-        <thead><tr><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th></tr></thead>
+        <thead>
+          <tr id="scheduleHeader">
+            <!-- Dynamic header rendered by JS -->
+          </tr>
+        </thead>
         <tbody id="scheduleBody">
-          <tr><td colspan="6" style="text-align:center; padding:1.5rem; color:#666;">Add subjects & timeslots to view schedule</td></tr>
+          <tr><td colspan="7" style="text-align:center; padding:1.5rem; color:#666;">Add subjects & timeslots to view schedule</td></tr>
         </tbody>
       </table>
     </div>
