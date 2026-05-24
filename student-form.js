@@ -18,7 +18,7 @@ const urlParams = new URLSearchParams(window.location.search);
 const studentId = urlParams.get('id');
 const isEdit = !!studentId;
 
-document.getElementById('formTitle').textContent = isEdit ? 'Edit Student' : 'Add Student';
+document.getElementById('formTitle').textContent = isEdit ? '✏️ Edit Student' : '➕ Add Student';
 
 // ✅ Loader Helpers
 function hideLoader() {
@@ -74,15 +74,13 @@ function renderSchedule() {
   const tbody = document.getElementById('scheduleBody');
   if (!thead || !tbody) return;
   
-  // Render header row with 3-letter abbreviations for compactness
   thead.innerHTML = '';
   DAYS.forEach(day => {
     const th = document.createElement('th');
-    th.textContent = day.substring(0, 3); // "Mon", "Tue", ..., "Sun"
+    th.textContent = day.substring(0, 3);
     thead.appendChild(th);
   });
   
-  // Render body row
   tbody.innerHTML = '';
   const schedule = DAYS.reduce((acc, d) => ({...acc, [d]: []}), {});
 
@@ -173,6 +171,9 @@ function collectFormData() {
       name: entry.querySelector('.subject-name').value,
       startLevel: entry.querySelector('.start-level').value,
       startWS: parseInt(entry.querySelector('.start-ws').value) || 0,
+      diagTest: entry.querySelector('.diag-test')?.value.trim() || '',
+      diagScore: entry.querySelector('.diag-score')?.value.trim() || '',
+      diagTime: entry.querySelector('.diag-time')?.value ? parseInt(entry.querySelector('.diag-time').value) : '',
       currentLevel: entry.querySelector('.current-level').value || '',
       currentWS: parseInt(entry.querySelector('.current-ws').value) || 0,
       enrolDate: entry.querySelector('.enrol-date').value,
@@ -242,15 +243,12 @@ function updateSubjectEntry(entry) {
   const subject = subjectSelect?.value;
   const status = statusSelect?.value;
   
-  // Remove all subject color classes first
   entry.classList.remove('subj-Math', 'subj-Chinese', 'subj-ERP', 'subj-EFL');
   
-  // Add the matching class if a subject is selected
   if (subject && SUBJECT_COLORS[subject]) {
     entry.classList.add(SUBJECT_COLORS[subject]);
   }
   
-  // ✅ Fade out effect when status is 'drop'
   if (status === 'drop') {
     entry.style.opacity = '0.65';
     entry.style.filter = 'grayscale(0.4)';
@@ -260,7 +258,7 @@ function updateSubjectEntry(entry) {
   }
 }
 
-// ✅ SUBJECT MANAGEMENT - Prevent duplicates + visual hints + dynamic dropdowns + color coding + fade on drop
+// ✅ SUBJECT MANAGEMENT
 function addSubjectField(data = {}) {
   if (subjectCount >= 3) return alert('Maximum 3 subjects allowed');
   const container = document.getElementById('subjectsContainer');
@@ -269,9 +267,11 @@ function addSubjectField(data = {}) {
   
   const isPreExistingSubject = isEdit && !!data.name;
   const lockStart = isPreExistingSubject;
-  const lockHint = lockStart ? '<span style="color:#999;font-weight:400;font-size:0.8rem">(Locked)</span>' : '';
+  const lockStartHint = lockStart ? '<span style="color:#999;font-weight:400;font-size:0.8rem">(Locked)</span>' : '';
   
-  // ✅ Get subjects already in use to disable them in dropdown
+  const lockDiagnostic = isPreExistingSubject;
+  const lockDiagHint = lockDiagnostic ? '<span style="color:#999;font-weight:400;font-size:0.8rem">(Locked)</span>' : '';
+  
   const usedSubjects = getUsedSubjects(div);
   
   div.innerHTML = `
@@ -290,12 +290,24 @@ function addSubjectField(data = {}) {
         </select>
       </div>
       <div>
-        <label>Start Level * ${lockHint}</label>
+        <label>Start Level * ${lockStartHint}</label>
         <input type="text" class="start-level" placeholder="e.g. 7A" value="${data.startLevel || ''}" required ${lockStart ? 'readonly' : ''}>
       </div>
       <div>
-        <label>Start WS # * ${lockHint}</label>
+        <label>Start WS # * ${lockStartHint}</label>
         <input type="number" class="start-ws" placeholder="e.g. 10" value="${data.startWS || 0}" required ${lockStart ? 'readonly' : ''}>
+      </div>
+      <div>
+        <label>Diagnostic Test ${lockDiagHint}</label>
+        <input type="text" class="diag-test" placeholder="e.g. K1/K2/P1" value="${data.diagTest || ''}" ${lockDiagnostic ? 'readonly' : ''}>
+      </div>
+      <div>
+        <label>Diagnostic Score ${lockDiagHint}</label>
+        <input type="text" class="diag-score" placeholder="e.g. 85/100" value="${data.diagScore || ''}" ${lockDiagnostic ? 'readonly' : ''}>
+      </div>
+      <div>
+        <label>Time (mins) ${lockDiagHint}</label>
+        <input type="number" class="diag-time" placeholder="e.g. 30" value="${data.diagTime || ''}" ${lockDiagnostic ? 'readonly' : ''}>
       </div>
       <div><label>Current Level</label><input type="text" class="current-level" value="${data.currentLevel || ''}" readonly></div>
       <div><label>Current WS #</label><input type="number" class="current-ws" value="${data.currentWS || 0}" readonly></div>
@@ -319,7 +331,6 @@ function addSubjectField(data = {}) {
   if (data.timeslots?.length) data.timeslots.forEach(ts => addTimeslotField(timeslotsList, ts));
   else addTimeslotField(timeslotsList);
 
-  // ✅ Set initial color + fade effect if loading existing data
   if (data.name || data.status) updateSubjectEntry(div);
 
   div.querySelector('.add-timeslot-btn').onclick = () => addTimeslotField(timeslotsList);
@@ -328,31 +339,26 @@ function addSubjectField(data = {}) {
     subjectCount--; 
     updateOverallStatus(); 
     renderSchedule();
-    // ✅ Re-enable subject options in other dropdowns after removal
     document.querySelectorAll('.subject-entry').forEach(entry => {
       const select = entry.querySelector('.subject-name');
       if (select) refreshSubjectOptions(select);
     });
   };
   
-  // ✅ Refresh other dropdowns + update color/fade when subject changes
   div.querySelector('.subject-name').addEventListener('change', (e) => { 
     validateConflict(e.target); 
     renderSchedule();
-    updateSubjectEntry(div); // ✅ Update background color
-    // Update all other subject dropdowns
+    updateSubjectEntry(div);
     document.querySelectorAll('.subject-entry').forEach(entry => {
       const select = entry.querySelector('.subject-name');
       if (select && select !== e.target) refreshSubjectOptions(select);
     });
   });
   
-  // ✅ Update color/fade when status changes
   div.querySelector('.status').addEventListener('change', () => { 
     updateOverallStatus(); 
     renderSchedule();
-    updateSubjectEntry(div); // ✅ Update fade effect based on status
-    // If status changed to/from 'drop', refresh subject options everywhere
+    updateSubjectEntry(div);
     document.querySelectorAll('.subject-entry').forEach(entry => {
       const select = entry.querySelector('.subject-name');
       if (select) refreshSubjectOptions(select);
@@ -363,7 +369,7 @@ function addSubjectField(data = {}) {
   subjectCount++;
 }
 
-// ✅ Enhanced conflict validation: duplicates + ERP/EFL
+// ✅ Enhanced conflict validation
 function validateConflict(currentSelect) {
   const selected = currentSelect.value;
   if (!selected) return;
@@ -376,14 +382,12 @@ function validateConflict(currentSelect) {
     const otherEntry = s.closest('.subject-entry');
     const otherStatus = otherEntry.querySelector('.status').value;
     
-    // ✅ Exact duplicate subject check (excluding dropped)
     if (s.value === selected && otherStatus !== 'drop' && currentStatus !== 'drop') {
       alert(`⚠️ ${selected} is already added to this student. Please choose a different subject or drop the existing one first.`);
       currentSelect.value = '';
       return;
     }
     
-    // ✅ ERP/EFL conflict check (existing logic)
     if (!['English ERP', 'English EFL'].includes(selected)) continue;
     if (['English ERP', 'English EFL'].includes(s.value)) {
       if (otherStatus !== 'drop' && currentStatus !== 'drop') {
@@ -395,7 +399,7 @@ function validateConflict(currentSelect) {
   }
 }
 
-// ✅ UPDATED: Dynamic hour ranges based on day type
+// ✅ Dynamic hour ranges based on day type
 function getHourOptions(selectedHour, day = 'Monday') {
   const isWeekend = ['Saturday', 'Sunday'].includes(day);
   const startHour = isWeekend ? 9 : 10;
@@ -418,35 +422,47 @@ function getMinuteOptions(selectedMin) {
   return opts;
 }
 
-// ✅ HELPER: Check if a day is already used in this subject (excluding current row)
-function isDayAlreadyUsed(subjectEntry, day, excludeRow = null) {
-  const rows = subjectEntry.querySelectorAll('.timeslots-list .timeslot-row');
+// ✅ HELPER: Check if a specific Day + Time is already used across all active subjects
+function isTimeslotGloballyUsed(day, hour, min, excludeRow = null) {
+  const rows = document.querySelectorAll('.timeslot-row');
   for (const row of rows) {
     if (row === excludeRow) continue;
-    const daySelect = row.querySelector('.ts-day');
-    if (daySelect && daySelect.value === day) return true;
+    const subjectEntry = row.closest('.subject-entry');
+    if (subjectEntry && subjectEntry.querySelector('.status')?.value === 'drop') continue;
+    
+    const d = row.querySelector('.ts-day')?.value;
+    const h = row.querySelector('.ts-hour')?.value;
+    const m = row.querySelector('.ts-min')?.value;
+    
+    if (d === day && h === hour && m === min) {
+      return subjectEntry?.querySelector('.subject-name')?.value || 'another subject';
+    }
   }
   return false;
 }
 
-// ✅ UPDATED: Timeslot field with dynamic hours + day validation
+// ✅ Timeslot field with dynamic hours + global Day+Time validation
 function addTimeslotField(timeslotsList, data = {}) {
   if (!timeslotsList || timeslotsList.children.length >= 6) return alert('Maximum 6 timeslots per subject');
   
-  // If loading preset data with a day, check for conflict first
-  if (data.day) {
-    const subjectEntry = timeslotsList.closest('.subject-entry');
-    if (subjectEntry && isDayAlreadyUsed(subjectEntry, data.day)) {
-      return alert(`⚠️ ${data.day} already has a timeslot for this subject. Only one timeslot per day allowed.`);
-    }
-  }
-  
   let h = '01', m = '00';
-  const day = data.day || 'Monday'; // Default to Monday for hour generation
+  const day = data.day || 'Monday'; 
   if (data.time) {
     const parts = data.time.split(':');
     if (parts.length === 2) { h = parts[0]; m = parts[1]; }
   }
+  
+  // Optional: Warn if loading conflicting data from DB
+  if (data.day && data.time) {
+    const parts = data.time.split(':');
+    if (parts.length === 2) {
+      const conflictSubj = isTimeslotGloballyUsed(data.day, parts[0], parts[1]);
+      if (conflictSubj) {
+        console.warn(`⚠️ Overlapping timeslot loaded: ${data.day} ${data.time} conflicts with ${conflictSubj}.`);
+      }
+    }
+  }
+
   const row = document.createElement('div');
   row.className = 'timeslot-row';
   const dayOptions = DAYS.map(d => `<option value="${d}" ${data.day === d ? 'selected' : ''}>${d}</option>`).join('');
@@ -469,30 +485,43 @@ function addTimeslotField(timeslotsList, data = {}) {
     </div>
   `;
   
-  // ✅ Re-render hour options when day changes + validate uniqueness
   const daySelect = row.querySelector('.ts-day');
   const hourSelect = row.querySelector('.ts-hour');
+  const minSelect = row.querySelector('.ts-min');
   
+  // ✅ Conflict checker
+  function checkConflict() {
+    const d = daySelect.value;
+    const h = hourSelect.value;
+    const m = minSelect.value;
+    if (!d || !h || !m) return;
+    
+    const conflictSubj = isTimeslotGloballyUsed(d, h, m, row);
+    if (conflictSubj) {
+      alert(`⚠️ This timeslot (${d} ${h}:${m}) is already booked for ${conflictSubj}. Please choose a different time.`);
+    }
+  }
+
   daySelect.addEventListener('change', (e) => {
     const selectedDay = e.target.value;
     const currentHour = hourSelect.value;
-    // Update hour dropdown with new range for selected day
     hourSelect.innerHTML = getHourOptions(currentHour, selectedDay);
-    
-    // Validate day uniqueness within subject
-    const subjectEntry = row.closest('.subject-entry');
-    if (subjectEntry && isDayAlreadyUsed(subjectEntry, selectedDay, row)) {
-      alert(`⚠️ ${selectedDay} already has a timeslot for this subject. Please choose a different day.`);
-      e.target.value = '';
-      return;
-    }
+    checkConflict();
+    renderSchedule();
+  });
+  
+  hourSelect.addEventListener('change', () => {
+    checkConflict();
+    renderSchedule();
+  });
+  
+  minSelect.addEventListener('change', () => {
+    checkConflict();
     renderSchedule();
   });
   
   row.querySelector('.remove-ts-btn').onclick = () => { row.remove(); renderSchedule(); };
-  ['ts-hour','ts-min'].forEach(cls => 
-    row.querySelector(`.${cls}`).addEventListener('input', renderSchedule)
-  );
+  
   timeslotsList.appendChild(row);
 }
 
@@ -518,7 +547,6 @@ async function loadStudentData() {
       if (s.subjects) {
         s.subjects.forEach(sub => {
           addSubjectField(sub);
-          // ✅ Apply color + fade effect to loaded subjects
           const entries = document.querySelectorAll('.subject-entry');
           if (entries.length > 0) {
             updateSubjectEntry(entries[entries.length - 1]);
@@ -590,9 +618,7 @@ if(confirmTransferBtn) {
       data.transferredFrom = centerId;
       data.transferredAt = new Date().toISOString();
 
-      // Create in target center
       await push(ref(db, `centers/${targetId}/students`), data);
-      // Remove from source
       await remove(sourceRef);
       
       alert('✅ Student transferred successfully!');
@@ -609,23 +635,31 @@ document.getElementById('studentForm').addEventListener('submit', async (e) => {
   if (!centerId) return alert('Error: No center selected.');
   if (html5QrCode && scannerActive) await html5QrCode.stop();
 
-  // ✅ Final validation: no duplicate days per subject
+  // ✅ Final validation: no duplicate Day + Time across all active subjects
+  const globalTimeslots = new Map(); 
+  let hasConflict = false;
+  
   for (const entry of document.querySelectorAll('.subject-entry')) {
-    const days = new Set();
-    const subjectName = entry.querySelector('.subject-name').value || 'This subject';
-    let hasConflict = false;
+    const status = entry.querySelector('.status')?.value;
+    if (status === 'drop') continue;
+    const subjectName = entry.querySelector('.subject-name').value || 'Unknown Subject';
     
     entry.querySelectorAll('.timeslots-list .timeslot-row').forEach(row => {
       const day = row.querySelector('.ts-day')?.value;
-      if (day) {
-        if (days.has(day)) {
-          alert(`⚠️ ${subjectName} has duplicate timeslots on ${day}. Please fix before saving.`);
+      const hour = row.querySelector('.ts-hour')?.value;
+      const min = row.querySelector('.ts-min')?.value;
+      
+      if (day && hour && min) {
+        const key = `${day}-${hour}:${min}`;
+        if (globalTimeslots.has(key)) {
+          alert(`⚠️ Timeslot conflict: ${subjectName} and ${globalTimeslots.get(key)} both have a class on ${day} at ${hour}:${min}. Please fix before saving.`);
           hasConflict = true;
+        } else {
+          globalTimeslots.set(key, subjectName);
         }
-        days.add(day);
       }
     });
-    if (hasConflict) return; // Stop submission
+    if (hasConflict) return; 
   }
 
   const currentFormData = collectFormData();
