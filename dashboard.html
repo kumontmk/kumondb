@@ -5,72 +5,77 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Center Dashboard - Kumon DB</title>
   <link rel="stylesheet" href="style.css">
+  <style>
+    /* Quick dashboard card typography tweaks to match your existing CSS */
+    .center-card {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      text-decoration: none;
+      color: inherit;
+    }
+    .center-card h3 {
+      margin: 0.5rem 0 0.25rem;
+      font-size: 1.15rem;
+      font-weight: 600;
+    }
+    .center-card p {
+      margin: 0;
+      font-size: 0.9rem;
+      color: var(--text-light);
+      line-height: 1.4;
+    }
+  </style>
 </head>
 <body>
-  <!-- ✅ LOADER CONTAINER -->
-  <div id="page-loader" class="hidden">
-    <div class="spinner"></div>
-  </div>
-
   <header>
-    <h1>📋 <span id="centerTitle">Center Dashboard</span></h1>
+    <h1>📋 Center Dashboard</h1>
     <nav>
       <a href="centers.html">← Centers</a>
       <button id="logoutBtn">Logout</button>
     </nav>
   </header>
 
-  <main class="dashboard">
+  <div class="dashboard">
     <h2>What would you like to do?</h2>
     <div class="center-grid">
-      <div class="center-card" onclick="window.location.href='students.html'">
-        <h3>👥 Student Management</h3>
+      <a href="students.html" class="center-card">
+        <span style="font-size: 2rem;">👥</span>
+        <h3>Student Management</h3>
         <p>Add, edit, search students & track progress</p>
-      </div>
-      <div class="center-card" onclick="window.location.href='reports.html'">
-        <h3>📊 Reports</h3>
-        <p>Timetables, monthly reports & printables</p>
-      </div>
-      <div class="center-card" onclick="window.location.href='graphs.html'">
-        <h3>📈 Graphs</h3>
+      </a>
+      
+      <a href="timetable.html" class="center-card">
+        <span style="font-size: 2rem;">🗓️</span>
+        <h3>Timetable</h3>
+        <p>View & print weekly class schedules</p>
+      </a>
+      
+      <a href="reports.html" class="center-card">
+        <span style="font-size: 2rem;">📊</span>
+        <h3>Monthly Reports</h3>
+        <p>Generate, edit & save monthly progress reports</p>
+      </a>
+      
+      <a href="analytics.html" class="center-card">
+        <span style="font-size: 2rem;">📈</span>
+        <h3>Graphs</h3>
         <p>Analytics, progress tracking & charts</p>
-      </div>
-      <div class="center-card" onclick="window.location.href='attendance.html'">
-        <h3>📅 Attendance</h3>
+      </a>
+      
+      <a href="attendance.html" class="center-card">
+        <span style="font-size: 2rem;">✅</span>
+        <h3>Attendance</h3>
         <p>Scan QR, track check-ins, view late students & daily reports</p>
-      </div>
+      </a>
     </div>
-  </main>
+  </div>
 
-  <!-- ✅ EMBEDDED SCRIPT -->
-  <script type="module">
-    import { requireAuth } from './auth.js';
-
-    // 1. Auth Guard
-    if (!requireAuth()) throw new Error("Authentication required");
-
-    // 2. Update title with selected center
-    const centerId = sessionStorage.getItem('selectedCenter');
-    if (centerId) {
-      const friendlyName = centerId
-        .replace('kumon-', '')
-        .split('-')
-        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(' ');
-      document.getElementById('centerTitle').textContent = `${friendlyName} Dashboard`;
-    }
-
-    // 3. Logout Handler
+  <script src="auth.js"></script>
+  <script>
     document.getElementById('logoutBtn').addEventListener('click', () => {
-      sessionStorage.removeItem('kumonAuth');
       sessionStorage.removeItem('selectedCenter');
-      window.location.href = 'index.html';
-    });
-
-    // 4. Hide loader on load (fallback if auth.js global listener misses)
-    window.addEventListener('DOMContentLoaded', () => {
-      const loader = document.getElementById('page-loader');
-      if (loader) setTimeout(() => loader.classList.add('hidden'), 250);
+      window.location.href = 'login.html';
     });
   </script>
 </body>

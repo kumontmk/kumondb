@@ -1,112 +1,68 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta name="theme-color" content="#87CEEB">
-  <title>Reports - Kumon DB</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monthly Reports - Kumon DB</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="loadingOverlay" class="loading-overlay">
-    <div class="loading-container"><div class="spinner"></div><p class="loading-text">Loading reports</p></div>
-  </div>
-
+  <div id="page-loader" class="hidden"><div class="spinner"></div></div>
   <header>
-    <h1>📋 Reports</h1>
+    <h1>📊 Monthly Reports</h1>
     <nav>
-      <a href="dashboard.html">← Back</a>
+      <a href="dashboard.html">← Dashboard</a>
       <button id="logoutBtn">Logout</button>
     </nav>
   </header>
-  
-  <main class="reports-page">
-    <div class="report-tabs">
-      <button class="tab-btn active" data-tab="timetable">📅 Timetable</button>
-      <button class="tab-btn" data-tab="monthly">📊 Monthly Report</button>
+
+  <div class="form-container">
+    <div class="controls">
+      <div class="control-group" style="flex:1; min-width:180px;">
+        <label class="control-label">📚 Subject</label>
+        <select id="reportSubject" style="width:100%; padding:0.7rem;">
+          <option value="all">All Subjects</option>
+          <option value="Math">Math</option>
+          <option value="Chinese">Chinese</option>
+          <option value="ERP">English ERP</option>
+          <option value="EFL">English EFL</option>
+        </select>
+      </div>
+      <div class="control-group" style="flex:1; min-width:180px;">
+        <label class="control-label">📅 Month</label>
+        <input type="month" id="reportMonth" style="width:100%; padding:0.7rem;">
+      </div>
+      <div class="control-group" style="flex:0 1 auto;">
+        <label class="control-label">&nbsp;</label>
+        <button id="generateReport" class="primary" style="width:100%;">📊 Generate</button>
+      </div>
+      <div class="control-group" style="flex:0 1 auto;">
+        <label class="control-label">&nbsp;</label>
+        <button id="printReport" class="print-btn" style="width:100%;">🖨️ Print</button>
+      </div>
     </div>
-    
-    <!-- Timetable Section -->
-    <section id="timetable" class="report-section active">
-      <div class="timetable-controls">
-        <div class="control-group">
-          <label for="timetableDay" class="control-label">📅 Select Day</label>
-          <select id="timetableDay" class="day-select">
-            <option value="Monday">Monday</option>
-            <option value="Tuesday">Tuesday</option>
-            <option value="Wednesday">Wednesday</option>
-            <option value="Thursday">Thursday</option>
-            <option value="Friday">Friday</option>
-            <option value="Saturday">Saturday</option>
-            <option value="Sunday">Sunday</option>
-          </select>
-        </div>
-        <button id="printTimetable" class="print-btn">
-          <span class="print-icon">🖨️</span>
-          <span class="print-text">Print Timetable</span>
-        </button>
-      </div>
-      <div id="timetableGrid" class="timetable-grid"></div>
-    </section>
-    
-    <!-- Monthly Report Section -->
-    <section id="monthly" class="report-section hidden">
-      <div class="timetable-controls">
-        <div class="control-group">
-          <label for="reportSubject" class="control-label">📚 Subject</label>
-          <select id="reportSubject" class="day-select">
-            <option value="all">All Subjects</option>
-            <option value="English ERP">English ERP</option>
-            <option value="English EFL">English EFL</option>
-            <option value="Chinese">Chinese</option>
-            <option value="Math">Math</option>
-          </select>
-        </div>
-        <div class="control-group">
-          <label for="reportMonth" class="control-label">📅 Month</label>
-          <input type="month" id="reportMonth" class="day-select">
-        </div>
-        <div style="display: flex; gap: 0.5rem; align-items: flex-end; flex-wrap: wrap;">
-          <button id="generateReport" class="print-btn" style="background: var(--primary-dark);">
-            <span class="print-icon">📊</span>
-            <span class="print-text">Generate</span>
-          </button>
-          <button id="printReport" class="print-btn">
-            <span class="print-icon">🖨️</span>
-            <span class="print-text">Print Report</span>
-          </button>
-        </div>
-      </div>
-      <div id="monthlyReport" class="report-table hidden">
-        <table>
+
+    <div id="monthlyReport" class="report-section hidden">
+      <div class="report-table">
+        <table id="reportTable">
           <thead>
             <tr>
-              <th>Student No</th>
-              <th>Chinese Name</th>
-              <th>English Name</th>
-              <th>Grade</th>
-              <th>Prev Level</th>
-              <th>Prev WS</th>
-              <th>Current Level</th>
-              <th>Current WS</th>
-              <th>Test Level</th>
-              <th>Score</th>
-              <th>Time</th>
-              <th>Group</th>
+              <th>Student No</th><th>Chinese Name</th><th>English Name</th><th>Grade</th>
+              <th>Prev Level</th><th>Prev WS</th><th>Current Level</th><th>Current WS</th>
+              <th>Test Level</th><th>Score</th><th>Time</th><th>Group</th>
             </tr>
           </thead>
-          <tbody id="reportBody"></tbody>
+          <tbody id="reportBody">
+            <tr><td colspan="12" style="text-align:center; padding:1.5rem; color:#666;">Loading reports...</td></tr>
+          </tbody>
         </table>
       </div>
-    </section>
-  </main>
+      <div style="margin-top: 1rem; text-align: right;">
+        <button id="saveReportBtn" class="primary" style="display: none;">💾 Save Changes</button>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="reports.js"></script>
-  <script type="module">
-    document.getElementById('logoutBtn').addEventListener('click', () => {
-      sessionStorage.removeItem('kumonAuth');
-      window.location.href = 'index.html';
-    });
-  </script>
 </body>
 </html>

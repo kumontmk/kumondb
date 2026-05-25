@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Timetable - Kumon DB</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="page-loader" class="hidden"><div class="spinner"></div></div>
+  <header>
+    <h1>📅 Class Timetable</h1>
+    <nav>
+      <a href="dashboard.html">← Dashboard</a>
+      <button id="logoutBtn">Logout</button>
+    </nav>
+  </header>
+
+  <div class="form-container" style="max-width: 98%; width: 98%;">
+    <div class="timetable-controls">
+      <div class="control-group">
+        <label class="control-label">Select Day</label>
+        <select id="timetableDay" class="day-select">
+          <option value="Monday">Monday</option>
+          <option value="Tuesday">Tuesday</option>
+          <option value="Wednesday">Wednesday</option>
+          <option value="Thursday">Thursday</option>
+          <option value="Friday">Friday</option>
+          <option value="Saturday">Saturday</option>
+          <option value="Sunday">Sunday</option>
+        </select>
+      </div>
+      <button id="printTimetable" class="print-btn">
+        <span class="print-icon">🖨️</span>
+        <span class="print-text">Print Timetable</span>
+      </button>
+    </div>
+    
+    <div class="table-container" style="overflow-x: auto;">
+      <table id="timetableTable">
+        <thead>
+          <tr>
+            <th style="width: 70px; min-width: 70px;">Time</th>
+            <th colspan="3" class="th-math">Math (6A–E)</th>
+            <th colspan="3" class="th-math-high">Math (F+)</th>
+            <th colspan="3" class="th-english">English</th>
+            <th colspan="3" class="th-chinese">Chinese</th>
+          </tr>
+        </thead>
+        <tbody id="timetableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script type="module" src="timetable.js"></script>
+</body>
+</html>

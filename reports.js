@@ -1,258 +1,239 @@
 // reports.js
 import { requireAuth, db } from './auth.js';
-import { ref, get, onValue, off } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
+import { ref, get, onValue, off, update } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
 
 if (!requireAuth()) {}
-
 const centerId = sessionStorage.getItem('selectedCenter');
-if (!centerId) {
-  console.error('❌ No centerId found in sessionStorage!');
-  alert('No center selected. Redirecting...');
-  window.location.href = 'centers.html';
+if (!centerId) { window.location.href = 'centers.html'; }
+const studentsRef = ref(db, `centers/${centerId}/students`);
+
+let cachedStudents = [];
+let isDataLoaded = false;
+
+const reportMonthInput = document.getElementById('reportMonth');
+const reportSubjectInput = document.getElementById('reportSubject');
+const generateBtn = document.getElementById('generateReport');
+const saveBtn = document.getElementById('saveReportBtn');
+const reportBody = document.getElementById('reportBody');
+const monthlyReportContainer = document.getElementById('monthlyReport');
+
+function showLoader() { document.getElementById('page-loader')?.classList.remove('hidden'); }
+function hideLoader() { document.getElementById('page-loader')?.classList.add('hidden'); }
+
+// 📅 STRICT MONTH RESTRICTION
+const now = new Date();
+const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+if (reportMonthInput) {
+  reportMonthInput.max = currentMonthStr;
+  reportMonthInput.value = currentMonthStr;
+  const blockFuture = (e) => { if (e.target.value > currentMonthStr) e.target.value = currentMonthStr; };
+  reportMonthInput.addEventListener('change', (e) => { blockFuture(e); buildReport(); });
+  reportMonthInput.addEventListener('input', blockFuture);
 }
 
-const studentsRef = ref(db, `centers/${centerId}/students`);
-console.log('📡 Listening to Firebase path:', studentsRef.toString());
+async function loadStudents(forceRefresh = false) {
+  if (isDataLoaded && !forceRefresh) return;
+  showLoader();
+  cachedStudents = [];
+  try {
+    const snap = await get(studentsRef);
+    if (snap.exists()) {
+      snap.forEach(child => {
+        const data = child.val();
+        if (data?.subjects) {
+          if (!Array.isArray(data.subjects)) data.subjects = Object.values(data.subjects);
+        } else { data.subjects = []; }
+        cachedStudents.push({ id: child.key, data });
+      });
+    }
+    isDataLoaded = true;
+  } catch (err) {
+    console.error('❌ Load failed:', err);
+    alert('Failed to load student data.');
+  }
+  hideLoader();
+}
 
-const SUBJECT_COLORS = {
-  'Math': 'subj-Math',
-  'Chinese': 'subj-Chinese',
-  'English ERP': 'subj-ERP',
-  'English EFL': 'subj-EFL'
-};
-
-// ✅ Map to handle "Mon" vs "Monday" mismatches between HTML dropdown and DB
-const DAY_MAP = {
-  'Mon': 'Monday', 'Monday': 'Monday',
-  'Tue': 'Tuesday', 'Tuesday': 'Tuesday',
-  'Wed': 'Wednesday', 'Wednesday': 'Wednesday',
-  'Thu': 'Thursday', 'Thursday': 'Thursday',
-  'Fri': 'Friday', 'Friday': 'Friday',
-  'Sat': 'Saturday', 'Saturday': 'Saturday',
-  'Sun': 'Sunday', 'Sunday': 'Sunday'
-};
-
-// ✅ Tab Switching
-document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.report-section').forEach(s => s.classList.add('hidden'));
-    btn.classList.add('active');
-    const target = document.getElementById(btn.dataset.tab);
-    if (target) target.classList.remove('hidden');
-  });
-});
-
-// ============================================
-// ✅ REAL-TIME TIMETABLE
-// ============================================
-const daySelect = document.getElementById('timetableDay');
-const dayGrid = document.getElementById('timetableGrid');
-let timetableUnsubscribe = null; 
-
-function loadTimetable() {
-  if (!daySelect || !dayGrid) {
-    console.error('❌ HTML elements #timetableDay or #timetableGrid not found!');
+function buildReport() {
+  if (!isDataLoaded) return;
+  const subject = (reportSubjectInput?.value || 'all').trim();
+  const month = reportMonthInput?.value;
+  
+  if (!month) {
+    reportBody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:1.5rem; color:#666;">📅 Please select a month.</td></tr>`;
+    monthlyReportContainer?.classList.remove('hidden');
     return;
   }
+  
+  reportBody.innerHTML = '';
+  monthlyReportContainer?.classList.add('hidden');
+  if (saveBtn) { saveBtn.style.display = 'none'; saveBtn.disabled = false; saveBtn.textContent = '💾 Save Changes'; }
+  
+  let rowCount = 0;
+  cachedStudents.forEach(({ id, data: s }) => {
+    if (!s) return;
+    let subjects = s.subjects || [];
+    if (!Array.isArray(subjects)) subjects = Object.values(subjects);
+    if (subjects.length === 0) return;
 
-  // 🧹 Force hide ALL possible loaders so they don't block the UI
-  const loader1 = document.getElementById('loadingOverlay');
-  const loader2 = document.getElementById('page-loader');
-  if (loader1) loader1.classList.add('hidden');
-  if (loader2) loader2.classList.add('hidden');
+    subjects.forEach(sub => {
+      if (!sub) return;
+      if (subject !== 'all' && (sub.name || '').trim() !== subject) return;
+      if (sub?.status === 'drop') return;
 
-  if (timetableUnsubscribe) {
-    timetableUnsubscribe();
-    timetableUnsubscribe = null;
-  }
+      let progress = sub.progress || [];
+      if (!Array.isArray(progress)) progress = progress ? Object.values(progress) : [];
+      const prog = progress.find(p => p?.month === month);
+      const sorted = [...progress].sort((a, b) => (a?.month || '').localeCompare(b?.month || ''));
+      const prev = sorted.filter(p => p?.month && p.month < month).pop();
 
-  const callback = (snapshot) => {
-    dayGrid.innerHTML = '';
-    const selectedDayRaw = daySelect.value;
-    const targetDay = DAY_MAP[selectedDayRaw] || selectedDayRaw;
-    
-    // 🕵️ Debug logs to see exactly what Firebase is sending
-    console.log('🔥 Firebase Data Received:', snapshot.val());
-    console.log('📅 Selected Day in Dropdown:', selectedDayRaw, '-> Mapped to:', targetDay);
+      const prevLevel = prev?.currLevel || sub.startLevel || '';
+      const prevWS = prev?.currWS ?? sub.startWS ?? 0;
+      const currLevel = prog?.currLevel || sub.currentLevel || '';
+      const currWS = prog?.currWS ?? sub.currentWS ?? 0;
+      const test = prog?.test || {};
 
-    if (!snapshot.exists()) {
-      dayGrid.innerHTML = `<p class="hint" style="grid-column: 1/-1; text-align:center; padding: 2rem;">📭 No students found in this center yet.</p>`;
-      return;
-    }
+      const row = document.createElement('tr');
+      row.dataset.studentId = id;
+      row.dataset.subjectName = sub.name;
 
-    const studentsBySlot = {}; 
-    let totalClasses = 0;
+      const inp = (val, cls, readonly = false, type = 'text') => 
+        `<input type="${type}" value="${val ?? ''}" class="report-input ${cls}" ${readonly ? 'readonly' : ''} autocomplete="off">`;
 
-    snapshot.forEach(child => {
-      const student = child.val();
-      if (!student.subjects) return;
+      row.innerHTML = `
+        <td>${s.studentNumber || '-'}</td>
+        <td>${s.nameCn || '-'}</td>
+        <td>${s.namePinyin || s.nickname || '-'}</td>
+        <td>${s.grade || '-'}</td>
+        <td>${inp(prevLevel, 'prev-level', true)}</td>
+        <td>${inp(prevWS, 'prev-ws', true, 'number')}</td>
+        <td>${inp(currLevel, 'curr-level')}</td>
+        <td>${inp(currWS, 'curr-ws', false, 'number')}</td>
+        <td>${inp(test.level || '', 'test-level', true)}</td>
+        <td>${inp(test.score || '', 'test-score', true)}</td>
+        <td>${inp(test.time || '', 'test-time', true, 'number')}</td>
+        <td>${inp(test.group || '', 'test-group', true)}</td>
+      `;
 
-      const subjects = Array.isArray(student.subjects) ? student.subjects : Object.values(student.subjects);
+      reportBody.appendChild(row);
+      rowCount++;
 
-      subjects.forEach(sub => {
-        if (sub.status === 'drop') return;
-        if (!sub.timeslots) return;
+      const currInput = row.querySelector('.curr-level');
+      const testInputs = row.querySelectorAll('.test-level, .test-score, .test-time, .test-group');
 
-        const timeslots = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots);
-
-        timeslots.forEach(ts => {
-          const slotDay = DAY_MAP[ts.day] || ts.day;
-          
-          if (slotDay === targetDay && ts.time) {
-            if (!studentsBySlot[ts.time]) studentsBySlot[ts.time] = [];
-            studentsBySlot[ts.time].push({
-              nameCn: student.nameCn || '-',
-              nickname: student.nickname || student.namePinyin || '-',
-              grade: student.grade || '-',
-              subject: sub.name || 'Unknown',
-              level: sub.currentLevel || sub.startLevel || '-',
-              color: SUBJECT_COLORS[sub.name] || ''
-            });
-            totalClasses++;
-          }
+      const toggleTests = () => {
+        const curr = (currInput?.value || '').trim();
+        const prev = (row.querySelector('.prev-level')?.value || '').trim();
+        const changed = curr !== '' && prev !== '' && curr !== prev;
+        testInputs.forEach(input => {
+          input.readOnly = !changed;
+          input.style.background = changed ? '#fff' : '#f8f9fa';
+          input.style.color = changed ? 'inherit' : '#999';
+          input.style.cursor = changed ? 'text' : 'not-allowed';
+          if (!changed && input.value) input.value = '';
         });
-      });
+      };
+
+      currInput?.addEventListener('input', toggleTests);
+      toggleTests();
     });
-
-    const sortedSlots = Object.keys(studentsBySlot).sort((a, b) => a.localeCompare(b));
-
-    sortedSlots.forEach(slot => {
-      studentsBySlot[slot].sort((a, b) =>
-        a.subject.localeCompare(b.subject) || a.nameCn.localeCompare(b.nameCn)
-      );
-    });
-
-    if (sortedSlots.length === 0) {
-      dayGrid.innerHTML = `
-        <p class="hint" style="grid-column: 1/-1; text-align:center; padding: 2rem; font-size: 1rem;">
-          📭 No classes scheduled for <strong>${targetDay}</strong>.
-        </p>`;
-      return;
-    }
-
-    const summary = document.createElement('div');
-    summary.style.cssText = 'grid-column: 1/-1; background: #87CEEB; color: #333; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 0.5rem; font-weight: 600; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;';
-    summary.innerHTML = `
-      <span>📅 ${targetDay}</span>
-      <span style="font-size: 0.9rem;">
-        ${totalClasses} class${totalClasses !== 1 ? 'es' : ''} · ${sortedSlots.length} timeslot${sortedSlots.length !== 1 ? 's' : ''}
-      </span>`;
-    dayGrid.appendChild(summary);
-
-    sortedSlots.forEach(slot => {
-      const students = studentsBySlot[slot];
-      const card = document.createElement('div');
-      card.className = 'timeslot-card';
-      card.innerHTML = `
-        <h3 style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem; font-size: 1.1rem; color: #333;">
-          <span>⏰ ${slot}</span>
-          <span style="background: #4682B4; color: white; padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">${students.length}</span>
-        </h3>
-        <ul style="list-style:none; padding:0; margin:0;">
-          ${students.map(s => `
-            <li style="padding: 0.6rem 0; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-              <div style="min-width: 0; flex: 1;">
-                <div style="font-weight: 600; color: #333;">${s.nameCn}</div>
-                <div style="font-size: 0.82rem; color: #666;">
-                  ${s.nickname} · Grade ${s.grade}
-                </div>
-              </div>
-              <span class="slot-pill ${s.color}" style="min-width: 110px; font-size: 0.78rem;">
-                ${s.subject} · ${s.level}
-              </span>
-            </li>
-          `).join('')}
-        </ul>`;
-      dayGrid.appendChild(card);
-    });
-  };
-
-  onValue(studentsRef, callback, (err) => {
-    console.error('❌ Timetable listener error:', err);
-    dayGrid.innerHTML = `<p class="error" style="grid-column:1/-1; text-align:center;">Error loading timetable: ${err.message}</p>`;
   });
 
-  timetableUnsubscribe = () => off(studentsRef, 'value', callback);
+  if (rowCount > 0) {
+    monthlyReportContainer?.classList.remove('hidden');
+    if (saveBtn) saveBtn.style.display = 'inline-flex';
+  } else {
+    reportBody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:1.5rem; color:#666;">📭 No matching active students for ${month}</td></tr>`;
+    monthlyReportContainer?.classList.remove('hidden');
+  }
 }
 
-if (daySelect) {
-  daySelect.addEventListener('change', loadTimetable);
-  loadTimetable();
-} else {
-  console.error('❌ #timetableDay dropdown not found in HTML!');
-}
+if (reportSubjectInput) reportSubjectInput.addEventListener('change', buildReport);
+if (generateBtn) generateBtn.addEventListener('click', buildReport);
 
-window.addEventListener('beforeunload', () => {
-  if (timetableUnsubscribe) timetableUnsubscribe();
-});
-
-// ============================================
-// ✅ MONTHLY REPORT LOGIC
-// ============================================
-const generateBtn = document.getElementById('generateReport');
-if (generateBtn) {
-  generateBtn.addEventListener('click', async () => {
-    const subject = document.getElementById('reportSubject').value;
-    const month = document.getElementById('reportMonth').value;
-    const tbody = document.getElementById('reportBody');
-    const tableContainer = document.getElementById('monthlyReport');
-    const loader1 = document.getElementById('loadingOverlay');
-    const loader2 = document.getElementById('page-loader');
-
-    if (!month) return alert('Please select a month');
-    if (loader1) loader1.classList.remove('hidden');
-    if (loader2) loader2.classList.remove('hidden');
-    tbody.innerHTML = '';
+if (saveBtn) {
+  saveBtn.addEventListener('click', async () => {
+    const rows = reportBody?.querySelectorAll('tr[data-student-id]') || [];
+    if (rows.length === 0) return alert('No data to save.');
+    if (!confirm('💾 Save changes?\n\nPartial saves are supported. Empty fields will be skipped.')) return;
+    
+    showLoader();
+    saveBtn.disabled = true;
+    saveBtn.textContent = '⏳ Saving...';
+    const batchUpdates = {};
+    const month = reportMonthInput?.value;
 
     try {
-      const snapshot = await get(studentsRef);
-      if (snapshot.exists()) {
-        snapshot.forEach(child => {
-          const s = child.val();
-          if (!s.subjects) return;
-          const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects);
-          subjects.forEach(sub => {
-            if (subject !== 'all' && sub.name !== subject) return;
-            const progress = sub.progress ? (Array.isArray(sub.progress) ? sub.progress : Object.values(sub.progress)) : [];
-            const prog = progress.find(p => p.month === month);
-            if (prog) {
-              const row = document.createElement('tr');
-              const t = prog.test || {};
-              row.innerHTML = `
-                <td>${s.studentNumber || '-'}</td>
-                <td>${s.nameCn || '-'}</td>
-                <td>${s.namePinyin || s.nickname || '-'}</td>
-                <td>${s.grade || '-'}</td>
-                <td>${prog.prevLevel || '-'}</td>
-                <td>${prog.prevWS || '-'}</td>
-                <td>${prog.currLevel || '-'}</td>
-                <td>${prog.currWS || '-'}</td>
-                <td>${t.level || '-'}</td>
-                <td>${t.score || '-'}</td>
-                <td>${t.time || '-'}</td>
-                <td>${t.group || '-'}</td>`;
-              tbody.appendChild(row);
-            }
-          });
-        });
+      for (const row of rows) {
+        const studentId = row.dataset.studentId;
+        const subjectName = row.dataset.subjectName;
+        if (!studentId || !subjectName) continue;
+
+        const getVal = (cls) => row.querySelector(`.${cls}`)?.value?.trim() || '';
+        const currLevel = getVal('curr-level');
+        const currWS = parseInt(getVal('curr-ws')) || 0;
+
+        const snap = await get(ref(db, `centers/${centerId}/students/${studentId}`));
+        if (!snap.exists()) continue;
+        const student = snap.val();
+
+        let subjects = student.subjects || {};
+        let subjectKey = null;
+        let subjectData = null;
+
+        if (Array.isArray(subjects)) {
+          subjectKey = subjects.findIndex(s => (s.name || '').trim() === subjectName);
+          subjectData = subjectKey !== -1 ? subjects[subjectKey] : null;
+        } else {
+          for (const key in subjects) {
+            if ((subjects[key]?.name || '').trim() === subjectName) { subjectKey = key; subjectData = subjects[key]; break; }
+          }
+        }
+        if (!subjectData) continue;
+
+        if (currLevel) { subjectData.currentLevel = currLevel; subjectData.currentWS = currWS; }
+
+        let progArr = subjectData.progress || [];
+        if (!Array.isArray(progArr)) progArr = Object.values(progArr);
+
+        const entry = { month };
+        const pL = getVal('prev-level'); if (pL) entry.prevLevel = pL;
+        const pW = getVal('prev-ws'); if (pW) entry.prevWS = parseInt(pW);
+        if (currLevel) entry.currLevel = currLevel;
+        entry.currWS = currWS;
+
+        const tL = getVal('test-level');
+        if (tL) {
+          entry.test = { level: tL, score: getVal('test-score') || '', time: parseInt(getVal('test-time')) || 0, group: getVal('test-group') || '' };
+        }
+
+        const idx = progArr.findIndex(p => p?.month === month);
+        if (idx >= 0) progArr[idx] = { ...progArr[idx], ...entry };
+        else progArr.push(entry);
+
+        subjectData.progress = progArr;
+        batchUpdates[`centers/${centerId}/students/${studentId}/subjects/${subjectKey}`] = subjectData;
       }
-      if (tbody.innerHTML === '') {
-        tbody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding: 1rem;">No data for this period</td></tr>';
+
+      if (Object.keys(batchUpdates).length > 0) {
+        await update(ref(db), batchUpdates);
+        alert('✅ Saved successfully! You can continue later.');
+        isDataLoaded = false;
+        await loadStudents(true);
+        setTimeout(buildReport, 300);
+      } else {
+        alert('ℹ️ No changes detected.');
       }
-      if (tableContainer) tableContainer.classList.remove('hidden');
     } catch (err) {
-      console.error(err);
-      alert('Error generating report: ' + err.message);
+      console.error('Save error:', err);
+      alert('❌ Save failed: ' + err.message);
     } finally {
-      if (loader1) loader1.classList.add('hidden');
-      if (loader2) loader2.classList.add('hidden');
+      hideLoader();
+      saveBtn.disabled = false;
+      saveBtn.textContent = '💾 Save Changes';
     }
   });
 }
 
-const printTimetableBtn = document.getElementById('printTimetable');
-if (printTimetableBtn) printTimetableBtn.onclick = () => window.print();
-
-const printReportBtn = document.getElementById('printReport');
-if (printReportBtn) printReportBtn.onclick = () => window.print();
+document.getElementById('printReport')?.addEventListener('click', () => window.print());
+window.addEventListener('DOMContentLoaded', () => loadStudents(true).then(() => buildReport()));
