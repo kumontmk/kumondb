@@ -24,7 +24,6 @@
     <div class="controls">
         <input type="text" id="searchInput" placeholder="🔍 Search by name, ID, or school..." />
         <button id="addStudentBtn" class="primary">+ Add Student</button>
-        <!-- ✅ NEW: Import Excel Button -->
         <button id="importBtn" class="secondary">📥 Import Excel</button>
         <button id="exportBtn" class="secondary">📤 Export Excel</button>
         <input type="file" id="excelFileInput" accept=".xlsx, .xls" style="display:none;">
@@ -41,10 +40,20 @@
         </div>
     </div>
 
-    <!-- ✅ REQUIRED: SheetJS Library for XLSX Parsing -->
+    <!-- SheetJS Library for XLSX Parsing -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
         <div class="sort-panel">
+            <!-- ✅ NEW: Status Filter (Defaults to Current) -->
+            <div class="sort-group">
+                <label>📋 Status:</label>
+                <select id="filter-status">
+                    <option value="current" selected>Current</option>
+                    <option value="pause">Pause</option>
+                    <option value="drop">Drop</option>
+                    <option value="all">All Statuses</option>
+                </select>
+            </div>
             <div class="sort-group">
                 <label>📚 Filter Subject:</label>
                 <select id="filter-subject">
@@ -60,14 +69,14 @@
                 <select id="sort1-field">
                     <option value="">None</option>
                     <option value="subjectName">Subject</option>
-                    <option value="level">Level</option>
-                    <option value="grade">Grade</option>
-                    <option value="nameCn">Chinese Name</option>
-                    <option value="namePinyin">Pinyin Name</option>
-                    <option value="nickname">Nickname</option>
                     <option value="studentNumber">Student ID</option>
-                    <option value="dob">DOB</option>
-                    <option value="enrolDate">Enrol Date</option>
+                    <option value="namePinyin">Chinese Name (Alphabet)</option>
+                    <option value="nameCn">Chinese Name</option>
+                    <option value="rawDob">DOB</option>
+                    <option value="grade">Grade</option>
+                    <option value="level">Level</option>
+                    <option value="rawEnrolDate">Enrol Date</option>
+                    <option value="nickname">Nickname</option>
                 </select>
                 <select id="sort1-dir"><option value="asc">↑</option><option value="desc">↓</option></select>
             </div>
@@ -76,55 +85,51 @@
                 <select id="sort2-field">
                     <option value="">None</option>
                     <option value="subjectName">Subject</option>
-                    <option value="level">Level</option>
-                    <option value="grade">Grade</option>
-                    <option value="nameCn">Chinese Name</option>
-                    <option value="namePinyin">Pinyin Name</option>
-                    <option value="nickname">Nickname</option>
                     <option value="studentNumber">Student ID</option>
-                    <option value="dob">DOB</option>
-                    <option value="enrolDate">Enrol Date</option>
+                    <option value="namePinyin">Chinese Name (Alphabet)</option>
+                    <option value="nameCn">Chinese Name</option>
+                    <option value="rawDob">DOB</option>
+                    <option value="grade">Grade</option>
+                    <option value="level">Level</option>
+                    <option value="rawEnrolDate">Enrol Date</option>
+                    <option value="nickname">Nickname</option>
                 </select>
                 <select id="sort2-dir"><option value="asc">↑</option><option value="desc">↓</option></select>
-            </div>
-            <div class="sort-group">
-                <label>Tertiary:</label>
-                <select id="sort3-field">
-                    <option value="">None</option>
-                    <option value="subjectName">Subject</option>
-                    <option value="level">Level</option>
-                    <option value="grade">Grade</option>
-                    <option value="nameCn">Chinese Name</option>
-                    <option value="namePinyin">Pinyin Name</option>
-                    <option value="nickname">Nickname</option>
-                    <option value="studentNumber">Student ID</option>
-                    <option value="dob">DOB</option>
-                    <option value="enrolDate">Enrol Date</option>
-                </select>
-                <select id="sort3-dir"><option value="asc">↑</option><option value="desc">↓</option></select>
             </div>
             <button id="clearSortBtn" class="secondary">Reset</button>
         </div>
 
-        <div class="report-table">
+       <div class="table-wrapper">
             <table>
                 <thead>
-                    <tr>
-                        <th>Subject</th>
-                        <th>Student ID</th>
-                        <th>Chinese Name</th>
-                        <th>Nickname</th>
-                        <th>Pinyin Name</th>
-                        <th>DOB</th>
-                        <th>Grade</th>
-                        <th>Level</th>
-                        <th>Enrol Date</th>
-                    </tr>
+                <tr>
+                    <th>Subject</th>
+                    <th>Student ID</th>
+                    <th>Chinese Name (Alphabet)</th>
+                    <th>Chinese Name</th>
+                    <th>DOB</th>
+                    <th>Grade</th>
+                    <th>Level</th>
+                    <th>Enrol Date</th>
+                    <th>Actions</th>
+                </tr>
                 </thead>
                 <tbody id="studentList">
-                    <tr><td colspan="9" class="hint" style="text-align:center;">Loading students...</td></tr>
+                <tr><td colspan="9" class="hint" style="text-align:center;">Loading students...</td></tr>
                 </tbody>
             </table>
+            </div>
+
+            <!-- Pagination Controls -->
+            <div class="pagination-container">
+            <div class="pagination-controls">
+                <button class="pagination-btn" id="firstPage" title="First Page">⏮</button>
+                <button class="pagination-btn" id="prevPage" title="Previous Page">◀</button>
+                <div class="pagination-numbers" id="paginationNumbers"></div>
+                <button class="pagination-btn" id="nextPage" title="Next Page">▶</button>
+                <button class="pagination-btn" id="lastPage" title="Last Page">⏭</button>
+            </div>
+            <div class="pagination-info" id="paginationInfo">0 - 0 of 0 items</div>
         </div>
     </main>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>

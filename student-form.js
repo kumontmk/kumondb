@@ -110,13 +110,18 @@ document.getElementById('birthday')?.addEventListener('input', updateAgeDisplay)
 setInterval(updateAgeDisplay, 60000);
 
 function updateOverallStatus() {
-  const statuses = Array.from(document.querySelectorAll('.status')).map(s => s.value);
-  const overall = document.getElementById('overallStatus');
-  if (!overall) return;
-  if (statuses.length === 0) { overall.value = 'Current'; return; }
-  const allDrop = statuses.every(s => s === 'drop');
-  const hasCurrent = statuses.some(s => s === 'current');
-  overall.value = allDrop ? 'Drop' : (hasCurrent ? 'Current' : 'Pause');
+    const statuses = Array.from(document.querySelectorAll('.status')).map(s => s.value);
+    const overall = document.getElementById('overallStatus');
+    if (!overall) return;
+    
+    if (statuses.length === 0) { 
+        // ✅ Defaults to Drop if no subjects, matching import logic
+        overall.value = 'Drop'; 
+        return; 
+    }
+    const allDrop = statuses.every(s => s === 'drop');
+    const hasCurrent = statuses.some(s => s === 'current');
+    overall.value = allDrop ? 'Drop' : (hasCurrent ? 'Current' : 'Pause');
 }
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
