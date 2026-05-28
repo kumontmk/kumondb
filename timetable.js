@@ -208,6 +208,14 @@ function loadTimetable() {
 }
 
 if (daySelect) {
+    // ✅ Automatically select today's day on page load
+    const today = new Date();
+    const currentDayName = today.toLocaleDateString('en-US', { weekday: 'long' }); // Returns "Monday", "Tuesday", etc.
+
+    // Ensure the returned day name matches an existing <option> value, fallback to Monday if not
+    const hasOption = Array.from(daySelect.options).some(opt => opt.value === currentDayName);
+    daySelect.value = hasOption ? currentDayName : 'Monday';
+
     daySelect.addEventListener('change', loadTimetable);
     loadTimetable();
 }

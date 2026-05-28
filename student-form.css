@@ -1,0 +1,470 @@
+/* ============================================
+   STUDENT FORM SPECIFIC STYLES
+   ============================================ */
+:root {
+  --primary: #87CEEB;
+  --primary-dark: #4682B4;
+  --secondary: #f0f8ff;
+  --text: #333;
+  --text-light: #666;
+  --white: #fff;
+  --shadow: 0 2px 10px rgba(0,0,0,0.1);
+  --radius: 8px;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--secondary);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+/* Header */
+header {
+  background: var(--primary);
+  color: var(--white);
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+header nav {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+header a, header button {
+  color: var(--white);
+  text-decoration: none;
+  background: rgba(255,255,255,0.2);
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  border: none;
+  cursor: pointer;
+}
+
+/* ============================================
+   FORM LAYOUT & GRIDS
+   ============================================ */
+.form-container {
+  padding: 1rem;
+  max-width: 98%;
+  width: 98%;
+  margin: 0 auto;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+/* ============================================
+   INPUTS & BUTTONS
+   ============================================ */
+input, select, textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: var(--radius);
+  font-size: 1rem;
+}
+
+input[readonly], input[disabled] {
+  background: #f1f5f9;
+  color: #64748b;
+  cursor: not-allowed;
+  border-color: #cbd5e1;
+}
+
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type=number] { -moz-appearance: textfield; }
+
+button {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+button.primary { background: var(--primary-dark); color: var(--white); }
+button.secondary { background: #6c757d; color: var(--white); }
+button.danger { background: #dc3545; color: white; }
+button:hover { opacity: 0.9; }
+button.danger:hover { background: #a71d2a; }
+
+label span {
+  font-weight: 400;
+  font-size: 0.8rem;
+  color: #999;
+  margin-left: 0.25rem;
+}
+
+/* ============================================
+   TAB SYSTEM
+   ============================================ */
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1.5rem 0 1rem;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.tab-btn {
+  padding: 0.75rem 1.2rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--text-light);
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s;
+}
+.tab-btn:hover { color: var(--primary-dark); }
+.tab-btn.active {
+  color: var(--primary-dark);
+  border-bottom-color: var(--primary-dark);
+  background: rgba(135,206,235,0.1);
+}
+
+.tab-content { display: none; animation: fadeIn 0.3s ease; }
+.tab-content.active { display: block; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================
+   DROPDOWN & "OTHER" INPUTS
+   ============================================ */
+.select-wrapper { position: relative; width: 100%; }
+.other-input { display: none; margin-top: 0.5rem; animation: fadeIn 0.3s ease; }
+.other-input.visible { display: block; }
+
+/* ============================================
+   SUBJECT ENTRIES & COLOR CODING
+   ============================================ */
+.subject-entry {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: var(--radius);
+  margin: 0.5rem 0;
+  border-left: 4px solid var(--primary);
+  transition: background 0.2s ease, border-left-color 0.2s ease;
+}
+
+.subject-entry.subj-Math { background: #e0f7fa; border-left-color: #008B8B; }
+.subject-entry.subj-Chinese { background: #f1f8e9; border-left-color: #9ACD32; }
+.subject-entry.subj-ERP { background: #ffebee; border-left-color: #DC143C; }
+.subject-entry.subj-EFL { background: #fff3e0; border-left-color: #FF8C00; }
+.subject-entry.subj-Chinese label,
+.subject-entry.subj-EFL label { color: #333; }
+
+/* ============================================
+   TIMESLOT ROWS
+   ============================================ */
+.timeslot-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px dashed #e2e8f0;
+  flex-wrap: wrap;
+}
+
+.timeslot-row > div { flex: 1 1 160px; min-width: 140px; }
+.timeslot-row label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-light);
+  margin-bottom: 0.4rem;
+}
+
+.timeslot-row select {
+  width: 100%;
+  padding: 0.65rem 0.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--radius);
+  background: #fff;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.timeslot-row select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.25);
+}
+
+.time-input-group { display: flex; align-items: center; gap: 0.5rem; width: 100%; }
+.time-input-group select { flex: 1; text-align: center; padding: 0.65rem 0.2rem; }
+.time-separator { font-weight: 700; color: var(--text-light); font-size: 1.1rem; }
+
+.remove-timeslot-wrapper { flex: 0 0 auto; display: flex; align-items: flex-end; }
+.remove-ts-btn {
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.3rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  margin: 0;
+}
+.remove-ts-btn:hover { background: #dc2626; color: #fff; border-color: #dc2626; transform: translateY(-1px); }
+
+/* ============================================
+   SCHEDULE TABLE
+   ============================================ */
+#tab-schedule { overflow-x: auto; }
+.schedule-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+  background: var(--white);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  min-width: 700px;
+}
+
+.schedule-table th, .schedule-table td {
+  padding: 0.8rem;
+  border: 1px solid #e2e8f0;
+  text-align: center;
+  vertical-align: top;
+  font-size: 0.9rem;
+}
+.schedule-table th { background: var(--primary); color: var(--white); font-weight: 600; }
+
+.slot-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin: 0.2rem;
+  color: white;
+  white-space: nowrap;
+  min-width: 80px;
+  text-align: center;
+}
+.subj-Math { background: #008B8B; }
+.subj-Chinese { background: #9ACD32; color: #333; }
+.subj-ERP { background: #DC143C; }
+.subj-EFL { background: #FF8C00; }
+
+/* ============================================
+   MODALS (QR, Error, Transfer)
+   ============================================ */
+.modal {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+.modal-content {
+  background: var(--white);
+  padding: 2rem;
+  border-radius: var(--radius);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+  width: 90%;
+  max-width: 450px;
+  position: relative;
+  text-align: center;
+}
+
+#closeScanModal, #closeErrorModal, #closeTransferModal {
+  position: absolute;
+  top: 10px; right: 15px;
+  font-size: 1.8rem;
+  cursor: pointer;
+  color: var(--text-light);
+}
+
+#qr-reader { width: 100%; max-width: 300px; margin: 1rem auto; }
+
+/* ============================================
+   UTILITIES & LOADERS
+   ============================================ */
+.hidden { display: none !important; }
+.error { color: #dc3545; font-size: 0.9rem; }
+.hint { font-size: 0.85rem; color: var(--text-light); margin: 0.5rem 0; }
+.text-center { text-align: center; }
+
+#page-loader {
+  position: fixed; inset: 0;
+  background: rgba(255, 255, 255, 0.9);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 9999; transition: opacity 0.3s ease;
+}
+#page-loader.hidden { opacity: 0; pointer-events: none; }
+
+.spinner {
+  width: 48px; height: 48px;
+  border: 4px solid #e2e8f0;
+  border-top-color: var(--primary-dark);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ============================================
+   PRINT STYLES
+   ============================================ */
+@media print {
+  .form-container { max-width: 100% !important; width: 100% !important; }
+  .tabs, .tab-btn, .remove-ts-btn, .add-timeslot-btn, .add-pencil-btn,
+  .remove-subject, .remove-pencil-btn, #page-loader, .modal, .hidden { display: none !important; }
+  
+  body { background: white; margin: 0; padding: 0.5cm; }
+  *, *::before, *::after {
+    font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimSun', 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', sans-serif !important;
+    color: #000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  input, select, textarea { border: none; padding: 0; background: transparent; }
+  .subject-entry { box-shadow: none; border: 1px solid #ccc; break-inside: avoid; margin-bottom: 1rem; }
+  .schedule-table { box-shadow: none; border: 1px solid #ccc; }
+  .schedule-table th, .schedule-table td { border-color: #999; }
+}
+
+/* Fix: Error Modal OK Button Spacing & Alignment */
+#closeErrorBtn {
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  min-width: 110px;
+  width: auto;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+#closeErrorBtn:hover {
+  background: #3a6f9a; /* Slightly darker than --primary-dark */
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(70, 130, 180, 0.25);
+}
+
+#closeErrorBtn:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* Optional: Ensure modal content stacks & centers properly */
+#errorModal .modal-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ============================================
+PARENT ORIENTATION LAYOUT (Overrides Grid)
+============================================ */
+.po-layout-wrapper {
+  grid-column: 1 / -1 !important; /* Spans full form width */
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0.5rem 0;
+  width: 100%;
+}
+
+.po-main-row {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-end; /* Aligns inputs to bottom */
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.po-field {
+  flex: 1 1 200px;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.po-field label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-light);
+  margin: 0;
+}
+
+.po-field input,
+.po-field select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: var(--radius);
+  font-size: 1rem;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+/* Hide conditional fields by default */
+.po-date-field,
+.po-reason-field {
+  display: none !important;
+}
+
+/* YES: Date appears inline in the flex row */
+.po-date-field.visible {
+  display: flex !important;
+  flex: 1 1 200px;
+  min-width: 180px;
+  animation: fadeIn 0.3s ease;
+}
+
+/* NO: Reason drops to next line & takes full width */
+.po-reason-field.visible {
+  display: flex !important;
+  width: 100%;
+  flex: 1 1 100%;
+  margin-top: 0.25rem;
+  animation: fadeIn 0.3s ease;
+}
+
+/* Override existing .other-input rules to prevent margin/animation conflicts */
+.other-input.po-date-field,
+.other-input.po-reason-field {
+  margin-top: 0;
+  animation: none;
+}

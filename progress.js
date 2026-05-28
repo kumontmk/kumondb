@@ -1,7 +1,7 @@
 import { requireAuth, db } from './auth.js';
 import { ref, get, update } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
 
-if (!requireAuth()) {}
+if (!requireAuth()) window.location.href = 'login.html';
 
 const centerId = sessionStorage.getItem('selectedCenter');
 const studentsRef = ref(db, `centers/${centerId}/students`);
@@ -11,142 +11,155 @@ let studentsList = [];
 let selectedStudent = null;
 let selectedSubjectIndex = null;
 
-// ✅ Load Students
+// ✅ Load Students with Safe Fallbacks
 async function loadStudents() {
   loader.classList.remove('hidden');
   try {
     const snap = await get(studentsRef);
     studentsList = [];
     const select = document.getElementById('studentSelect');
-    
+    select.innerHTML = '<option value="">Select Student</option>'; // Clear previous
+
+    if (!snap.exists()) {
+      select.innerHTML += '<option value="" disabled>No students found</option>';
+      return;
+    }
+
     snap.forEach(child => {
       const s = child.val();
       s.id = child.key;
       studentsList.push(s);
+
+      // 🔧 FIX: Graceful fallback for missing/undefined properties
+      const name = s.nameEn || s.name || s.fullName || s.studentName || 'Unknown Student';
+      const number = s.studentNumber || s.studentId || s.id?.slice(-4) || 'N/A';
+
       const opt = document.createElement('option');
       opt.value = s.id;
-      opt.textContent = `${s.nameEn} (#${s.studentNumber})`;
+      opt.textContent = `${name} (#${number})`;
       select.appendChild(opt);
     });
-  } catch (err) { console.error(err); }
-  finally { loader.classList.add('hidden'); }
+  } catch (err) {
+    console.error('Failed to load students:', err);
+    alert('Error loading student list. Check console for details.');
+  } finally {
+    loader.classList.add('hidden');
+  }
 }
 
+// ✅ Student Selection Handler
 document.getElementById('studentSelect').addEventListener('change', (e) => {
   const sid = e.target.value;
   selectedStudent = studentsList.find(s => s.id === sid);
   const subSelect = document.getElementById('subjectSelect');
-  subSelect.innerHTML = '<option value="">Select Subject</option>';
   
+  subSelect.innerHTML = '<option value="">Select Subject</option>';
+  subSelect.disabled = true;
+  document.getElementById('updateForm').classList.add('hidden');
+
   if (selectedStudent) {
-    document.getElementById('progressForm').classList.remove('hidden');
-    selectedStudent.subjects.forEach((sub, idx) => {
-      const opt = document.createElement('option');
-      opt.value = idx;
-      opt.textContent = sub.name;
-      subSelect.appendChild(opt);
-    });
-  } else {
-    document.getElementById('progressForm').classList.add('hidden');
+    subSelect.disabled = false;
+    if (selectedStudent.subjects && Array.isArray(selectedStudent.subjects)) {
+      selectedStudent.subjects.forEach((sub, idx) => {
+        const opt = document.createElement('option');
+        opt.value = idx;
+        opt.textContent = sub.name || `Subject ${idx + 1}`;
+        subSelect.appendChild(opt);
+      });
+    }
   }
 });
 
-// ✅ Load Subject Data & Fill Previous Fields
+// ✅ Subject Selection & Data Load
 document.getElementById('subjectSelect').addEventListener('change', (e) => {
   selectedSubjectIndex = e.target.value;
   const testSection = document.getElementById('testSection');
   testSection.classList.add('hidden');
-  
+
   if (selectedSubjectIndex !== "") {
-    const sub = selectedStudent.subjects[selectedSubjectIndex];
+    document.getElementById('updateForm').classList.remove('hidden');
+    const sub = selectedStudent.subjects[parseInt(selectedSubjectIndex)];
     const lastProg = sub.progress?.length ? sub.progress[sub.progress.length - 1] : null;
-    
-    // Logic: If no progress history, previous is the Start Level
-    document.getElementById('prevLevel').value = lastProg ? lastProg.currLevel : sub.startLevel;
+
+    // Safe fallbacks for previous data
+    document.getElementById('prevLevel').value = lastProg ? lastProg.currLevel : (sub.startLevel || '');
     document.getElementById('prevWS').value = lastProg ? lastProg.currWS : 0;
-    
+
     // Clear inputs
-    document.getElementById('currLevel').value = '';
-    document.getElementById('currWS').value = '';
-    document.getElementById('testLevel').value = '';
-    document.getElementById('testScore').value = '';
-    document.getElementById('testTime').value = '';
-    document.getElementById('testGroup').value = '';
-    
+    ['currLevel', 'currWS', 'testLevel', 'testScore', 'testTime', 'testGroup'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+
     // Default Month to current
     const today = new Date();
     document.getElementById('inputMonth').value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  } else {
+    document.getElementById('updateForm').classList.add('hidden');
   }
 });
 
 // ✅ Toggle Test Section if Level Changes
 document.getElementById('currLevel').addEventListener('input', (e) => {
   const prev = document.getElementById('prevLevel').value;
-  const curr = e.target.value;
+  const curr = e.target.value.trim();
   const testSection = document.getElementById('testSection');
-  
+
   if (curr && prev && curr !== prev) {
     testSection.classList.remove('hidden');
   } else {
     testSection.classList.add('hidden');
+    // Clear test fields when hidden
+    ['testLevel', 'testScore', 'testTime', 'testGroup'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
   }
 });
 
 // ✅ Save Progress
 document.getElementById('updateForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  if (selectedSubjectIndex === "") return;
-  
-  const loader = document.getElementById('loadingOverlay');
+  if (selectedSubjectIndex === null || selectedSubjectIndex === "") return;
+
   loader.classList.remove('hidden');
-  
-  const testSection = document.getElementById('testSection');
-  const showTest = !testSection.classList.contains('hidden');
-  
+  const showTest = !document.getElementById('testSection').classList.contains('hidden');
+
   const newProgress = {
     month: document.getElementById('inputMonth').value,
     prevLevel: document.getElementById('prevLevel').value,
     prevWS: parseInt(document.getElementById('prevWS').value) || 0,
-    currLevel: document.getElementById('currLevel').value,
+    currLevel: document.getElementById('currLevel').value.trim(),
     currWS: parseInt(document.getElementById('currWS').value) || 0,
+    timestamp: new Date().toISOString()
   };
 
   if (showTest) {
     newProgress.test = {
-      level: document.getElementById('testLevel').value,
+      level: document.getElementById('testLevel').value.trim(),
       score: parseInt(document.getElementById('testScore').value) || 0,
-      time: document.getElementById('testTime').value,
-      group: document.getElementById('testGroup').value
+      time: document.getElementById('testTime').value.trim(),
+      group: document.getElementById('testGroup').value.trim()
     };
   }
 
   try {
-    // We need to push to the specific subject's progress array
-    const path = `centers/${centerId}/students/${selectedStudent.id}/subjects/${selectedSubjectIndex}/progress`;
-    
-    // To append to array in RTDB, we can just push or set index. 
-    // Easier: fetch, modify, set. Or just set the new index if we know it.
-    // Let's use update with a new index.
-    
-    const subRef = ref(db, path);
-    const snap = await get(subRef);
-    const currentProgress = snap.val() || [];
-    
-    // Add to array
+    const subjectPath = `subjects/${selectedSubjectIndex}/progress`;
+    const snap = await get(ref(db, `centers/${centerId}/students/${selectedStudent.id}/${subjectPath}`));
+    const currentProgress = snap.exists() ? snap.val() : [];
     currentProgress.push(newProgress);
-    
+
     await update(ref(db, `centers/${centerId}/students/${selectedStudent.id}`), {
-      [`subjects/${selectedSubjectIndex}/progress`]: currentProgress
+      [subjectPath]: currentProgress
     });
 
-    alert('Progress saved!');
-    // Reload subject selection to update Previous fields
+    alert('✅ Progress saved successfully!');
     document.getElementById('subjectSelect').dispatchEvent(new Event('change'));
   } catch (err) {
-    alert('Error saving: ' + err.message);
+    console.error('Save error:', err);
+    alert('❌ Error saving progress: ' + err.message);
   } finally {
     loader.classList.add('hidden');
   }
 });
 
+// Initial Load
 loadStudents();

@@ -1,28 +1,38 @@
-// reports.js
 import { requireAuth, db } from './auth.js';
-import { ref, get, onValue, off, update } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
+import { ref, get, update } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
 
-if (!requireAuth()) {}
+if (!requireAuth()) window.location.href = 'login.html';
 const centerId = sessionStorage.getItem('selectedCenter');
-if (!centerId) { window.location.href = 'centers.html'; }
-const studentsRef = ref(db, `centers/${centerId}/students`);
+if (!centerId) window.location.href = 'centers.html';
 
+const studentsRef = ref(db, `centers/${centerId}/students`);
 let cachedStudents = [];
 let isDataLoaded = false;
+let activeSubject = 'all';
 
 const reportMonthInput = document.getElementById('reportMonth');
-const reportSubjectInput = document.getElementById('reportSubject');
 const generateBtn = document.getElementById('generateReport');
 const saveBtn = document.getElementById('saveReportBtn');
-const reportBody = document.getElementById('reportBody');
+const reportOutput = document.getElementById('reportOutput');
 const monthlyReportContainer = document.getElementById('monthlyReport');
+// ✅ REVERTED to match your HTML ID
+const printBtn = document.getElementById('printReport');
 
 function showLoader() { document.getElementById('page-loader')?.classList.remove('hidden'); }
 function hideLoader() { document.getElementById('page-loader')?.classList.add('hidden'); }
 
-// 📅 STRICT MONTH RESTRICTION
+document.querySelectorAll('.subject-card').forEach(card => {
+  card.addEventListener('click', () => {
+    document.querySelectorAll('.subject-card').forEach(c => c.classList.remove('active'));
+    card.classList.add('active');
+    activeSubject = card.dataset.subject;
+    if (isDataLoaded) buildReport();
+  });
+});
+
 const now = new Date();
 const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
 if (reportMonthInput) {
   reportMonthInput.max = currentMonthStr;
   reportMonthInput.value = currentMonthStr;
@@ -40,9 +50,7 @@ async function loadStudents(forceRefresh = false) {
     if (snap.exists()) {
       snap.forEach(child => {
         const data = child.val();
-        if (data?.subjects) {
-          if (!Array.isArray(data.subjects)) data.subjects = Object.values(data.subjects);
-        } else { data.subjects = []; }
+        data.subjects = Array.isArray(data.subjects) ? data.subjects : Object.values(data.subjects || {});
         cachedStudents.push({ id: child.key, data });
       });
     }
@@ -54,106 +62,157 @@ async function loadStudents(forceRefresh = false) {
   hideLoader();
 }
 
+function getGradeOrder(grade) {
+  if (!grade) return 999;
+  const g = String(grade).trim().toUpperCase();
+  if (/^K\d+$/.test(g)) {
+    const n = parseInt(g.slice(1), 10);
+    return (n >= 0 && n <= 3) ? n : 998;
+  }
+  const n = parseInt(g, 10);
+  return (n >= 1 && n <= 13) ? n + 4 : 998;
+}
+
+// ✅ UPDATED HEADER: Added Date, renamed Test Level -> AT
+const theadHTML = `
+<thead>
+  <tr>
+    <th>Student No</th>
+    <th>Chinese Name</th>
+    <th>Pinyin/Nickname</th>
+    <th>Grade</th>
+    <th>Prev Level</th>
+    <th>Prev WS</th>
+    <th>Current Level</th>
+    <th>Current WS</th>
+    <th>Date</th>
+    <th>AT</th>
+    <th>Score</th>
+    <th>Time</th>
+    <th>Group</th>
+  </tr>
+</thead>
+`;
+
+function createInput(val, cls, readonly = false, type = 'text') {
+  return `<input type="${type}" value="${val ?? ''}" class="report-input ${cls}" ${readonly ? 'readonly' : ''} autocomplete="off">`;
+}
+
 function buildReport() {
   if (!isDataLoaded) return;
-  const subject = (reportSubjectInput?.value || 'all').trim();
   const month = reportMonthInput?.value;
-  
-  if (!month) {
-    reportBody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:1.5rem; color:#666;">📅 Please select a month.</td></tr>`;
-    monthlyReportContainer?.classList.remove('hidden');
-    return;
-  }
-  
-  reportBody.innerHTML = '';
+  reportOutput.innerHTML = '';
   monthlyReportContainer?.classList.add('hidden');
   if (saveBtn) { saveBtn.style.display = 'none'; saveBtn.disabled = false; saveBtn.textContent = '💾 Save Changes'; }
   
-  let rowCount = 0;
-  cachedStudents.forEach(({ id, data: s }) => {
-    if (!s) return;
-    let subjects = s.subjects || [];
-    if (!Array.isArray(subjects)) subjects = Object.values(subjects);
-    if (subjects.length === 0) return;
+  if (!month) {
+    reportOutput.innerHTML = `<div class="empty-state">📅 Please select a month.</div>`;
+    monthlyReportContainer?.classList.remove('hidden');
+    return;
+  }
 
-    subjects.forEach(sub => {
-      if (!sub) return;
-      if (subject !== 'all' && (sub.name || '').trim() !== subject) return;
-      if (sub?.status === 'drop') return;
-
-      let progress = sub.progress || [];
-      if (!Array.isArray(progress)) progress = progress ? Object.values(progress) : [];
-      const prog = progress.find(p => p?.month === month);
-      const sorted = [...progress].sort((a, b) => (a?.month || '').localeCompare(b?.month || ''));
-      const prev = sorted.filter(p => p?.month && p.month < month).pop();
-
-      const prevLevel = prev?.currLevel || sub.startLevel || '';
-      const prevWS = prev?.currWS ?? sub.startWS ?? 0;
-      const currLevel = prog?.currLevel || sub.currentLevel || '';
-      const currWS = prog?.currWS ?? sub.currentWS ?? 0;
-      const test = prog?.test || {};
-
-      const row = document.createElement('tr');
-      row.dataset.studentId = id;
-      row.dataset.subjectName = sub.name;
-
-      const inp = (val, cls, readonly = false, type = 'text') => 
-        `<input type="${type}" value="${val ?? ''}" class="report-input ${cls}" ${readonly ? 'readonly' : ''} autocomplete="off">`;
-
-      row.innerHTML = `
-        <td>${s.studentNumber || '-'}</td>
-        <td>${s.nameCn || '-'}</td>
-        <td>${s.namePinyin || s.nickname || '-'}</td>
-        <td>${s.grade || '-'}</td>
-        <td>${inp(prevLevel, 'prev-level', true)}</td>
-        <td>${inp(prevWS, 'prev-ws', true, 'number')}</td>
-        <td>${inp(currLevel, 'curr-level')}</td>
-        <td>${inp(currWS, 'curr-ws', false, 'number')}</td>
-        <td>${inp(test.level || '', 'test-level', true)}</td>
-        <td>${inp(test.score || '', 'test-score', true)}</td>
-        <td>${inp(test.time || '', 'test-time', true, 'number')}</td>
-        <td>${inp(test.group || '', 'test-group', true)}</td>
-      `;
-
-      reportBody.appendChild(row);
-      rowCount++;
-
-      const currInput = row.querySelector('.curr-level');
-      const testInputs = row.querySelectorAll('.test-level, .test-score, .test-time, .test-group');
-
-      const toggleTests = () => {
-        const curr = (currInput?.value || '').trim();
-        const prev = (row.querySelector('.prev-level')?.value || '').trim();
-        const changed = curr !== '' && prev !== '' && curr !== prev;
-        testInputs.forEach(input => {
-          input.readOnly = !changed;
-          input.style.background = changed ? '#fff' : '#f8f9fa';
-          input.style.color = changed ? 'inherit' : '#999';
-          input.style.cursor = changed ? 'text' : 'not-allowed';
-          if (!changed && input.value) input.value = '';
-        });
-      };
-
-      currInput?.addEventListener('input', toggleTests);
-      toggleTests();
-    });
+  const sortedStudents = [...cachedStudents].sort((a, b) => {
+    const orderA = getGradeOrder(a.data.grade);
+    const orderB = getGradeOrder(b.data.grade);
+    if (orderA !== orderB) return orderA - orderB;
+    return (a.data.nameCn || '').localeCompare(b.data.nameCn || '', 'zh-Hans-CN', { sensitivity: 'base' });
   });
 
-  if (rowCount > 0) {
+  let totalRows = 0;
+  const subjectsToRender = activeSubject === 'all'
+    ? ['Math', 'Chinese', 'English ERP', 'English EFL']
+    : [activeSubject];
+
+  subjectsToRender.forEach(subName => {
+    const rowsForSubject = [];
+    sortedStudents.forEach(({ id, data: s }) => {
+      if (!s?.subjects) return;
+      s.subjects.forEach(sub => {
+        if (!sub || (sub.name || '').trim() !== subName || sub.status === 'drop') return;
+        let progress = Array.isArray(sub.progress) ? sub.progress : Object.values(sub.progress || {});
+        const prog = progress.find(p => p?.month === month);
+        const sorted = [...progress].sort((a, b) => (a?.month || '').localeCompare(b?.month || ''));
+        const prev = sorted.filter(p => p?.month && p.month < month).pop();
+        const prevLevel = prev?.currLevel || sub.startLevel || '';
+        const prevWS = prev?.currWS ?? sub.startWS ?? 0;
+        const currLevel = prog?.currLevel || sub.currentLevel || '';
+        const currWS = prog?.currWS ?? sub.currentWS ?? 0;
+        const test = prog?.test || {};
+
+        const row = document.createElement('tr');
+        row.dataset.studentId = id;
+        row.dataset.subjectName = sub.name;
+
+        row.innerHTML = `
+          <td>${s.studentNumber || '-'}</td>
+          <td>${s.nameCn || '-'}</td>
+          <td>${s.namePinyin || s.nickname || '-'}</td>
+          <td>${s.grade || '-'}</td>
+          <td>${createInput(prevLevel, 'prev-level', true)}</td>
+          <td>${createInput(prevWS, 'prev-ws', true, 'number')}</td>
+          <td>${createInput(currLevel, 'curr-level')}</td>
+          <td>${createInput(currWS, 'curr-ws', false, 'number')}</td>
+          <td>${createInput(test.date || '', 'test-date', true, 'date')}</td>
+          <td>${createInput(test.level || '', 'test-level', true)}</td>
+          <td>${createInput(test.score || '', 'test-score', true)}</td>
+          <td>${createInput(test.time || '', 'test-time', true, 'number')}</td>
+          <td>${createInput(test.group || '', 'test-group', true)}</td>
+        `;
+        rowsForSubject.push(row);
+        totalRows++;
+
+        const currInput = row.querySelector('.curr-level');
+        // ✅ Added .test-date to the toggle list
+        const testInputs = row.querySelectorAll('.test-date, .test-level, .test-score, .test-time, .test-group');
+        
+        const toggleTests = () => {
+          const curr = (currInput?.value || '').trim();
+          const prevVal = (row.querySelector('.prev-level')?.value || '').trim();
+          const changed = curr !== '' && prevVal !== '' && curr !== prevVal;
+          
+          testInputs.forEach(input => {
+            input.readOnly = !changed;
+            input.style.background = changed ? '#fff' : '#f8f9fa';
+            input.style.color = changed ? 'inherit' : '#999';
+            input.style.cursor = changed ? 'text' : 'not-allowed';
+            if (!changed && input.value) input.value = '';
+          });
+        };
+        currInput?.addEventListener('input', toggleTests);
+        toggleTests();
+      });
+    });
+
+    if (rowsForSubject.length > 0) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'table-wrapper';
+      const table = document.createElement('table');
+      table.className = 'subject-table report-table report-sticky-table';
+      table.dataset.subject = subName;
+      table.innerHTML = `<caption>${subName} Progress Report - ${month}</caption>${theadHTML}<tbody></tbody>`;
+      const tbody = table.querySelector('tbody');
+      rowsForSubject.forEach(r => tbody.appendChild(r));
+      wrapper.appendChild(table);
+      reportOutput.appendChild(wrapper);
+    }
+  });
+
+  if (totalRows > 0) {
     monthlyReportContainer?.classList.remove('hidden');
     if (saveBtn) saveBtn.style.display = 'inline-flex';
   } else {
-    reportBody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:1.5rem; color:#666;">📭 No matching active students for ${month}</td></tr>`;
+    reportOutput.innerHTML = `<div class="empty-state">📭 No matching active students for ${month}</div>`;
     monthlyReportContainer?.classList.remove('hidden');
   }
 }
 
-if (reportSubjectInput) reportSubjectInput.addEventListener('change', buildReport);
 if (generateBtn) generateBtn.addEventListener('click', buildReport);
+// ✅ FIXED PRINT BUTTON
+if (printBtn) printBtn.addEventListener('click', () => window.print());
 
 if (saveBtn) {
   saveBtn.addEventListener('click', async () => {
-    const rows = reportBody?.querySelectorAll('tr[data-student-id]') || [];
+    const rows = reportOutput?.querySelectorAll('tr[data-student-id]') || [];
     if (rows.length === 0) return alert('No data to save.');
     if (!confirm('💾 Save changes?\n\nPartial saves are supported. Empty fields will be skipped.')) return;
     
@@ -168,7 +227,7 @@ if (saveBtn) {
         const studentId = row.dataset.studentId;
         const subjectName = row.dataset.subjectName;
         if (!studentId || !subjectName) continue;
-
+        
         const getVal = (cls) => row.querySelector(`.${cls}`)?.value?.trim() || '';
         const currLevel = getVal('curr-level');
         const currWS = parseInt(getVal('curr-ws')) || 0;
@@ -176,7 +235,6 @@ if (saveBtn) {
         const snap = await get(ref(db, `centers/${centerId}/students/${studentId}`));
         if (!snap.exists()) continue;
         const student = snap.val();
-
         let subjects = student.subjects || {};
         let subjectKey = null;
         let subjectData = null;
@@ -186,25 +244,37 @@ if (saveBtn) {
           subjectData = subjectKey !== -1 ? subjects[subjectKey] : null;
         } else {
           for (const key in subjects) {
-            if ((subjects[key]?.name || '').trim() === subjectName) { subjectKey = key; subjectData = subjects[key]; break; }
+            if ((subjects[key]?.name || '').trim() === subjectName) {
+              subjectKey = key; subjectData = subjects[key]; break;
+            }
           }
         }
         if (!subjectData) continue;
 
-        if (currLevel) { subjectData.currentLevel = currLevel; subjectData.currentWS = currWS; }
+        if (currLevel) {
+          subjectData.currentLevel = currLevel;
+          subjectData.currentWS = currWS;
+        }
 
-        let progArr = subjectData.progress || [];
-        if (!Array.isArray(progArr)) progArr = Object.values(progArr);
-
+        let progArr = Array.isArray(subjectData.progress) ? subjectData.progress : Object.values(subjectData.progress || {});
         const entry = { month };
         const pL = getVal('prev-level'); if (pL) entry.prevLevel = pL;
-        const pW = getVal('prev-ws'); if (pW) entry.prevWS = parseInt(pW);
+        const pW = getVal('prev-ws');  if (pW) entry.prevWS = parseInt(pW);
         if (currLevel) entry.currLevel = currLevel;
         entry.currWS = currWS;
 
+        // ✅ Capture Date & AT
         const tL = getVal('test-level');
-        if (tL) {
-          entry.test = { level: tL, score: getVal('test-score') || '', time: parseInt(getVal('test-time')) || 0, group: getVal('test-group') || '' };
+        const tD = getVal('test-date');
+        
+        if (tL || tD) {
+          entry.test = {
+            level: tL,
+            date: tD,
+            score: getVal('test-score') || '',
+            time: parseInt(getVal('test-time')) || 0,
+            group: getVal('test-group') || ''
+          };
         }
 
         const idx = progArr.findIndex(p => p?.month === month);
@@ -217,7 +287,7 @@ if (saveBtn) {
 
       if (Object.keys(batchUpdates).length > 0) {
         await update(ref(db), batchUpdates);
-        alert('✅ Saved successfully! You can continue later.');
+        alert('✅ Saved successfully!');
         isDataLoaded = false;
         await loadStudents(true);
         setTimeout(buildReport, 300);
@@ -235,5 +305,4 @@ if (saveBtn) {
   });
 }
 
-document.getElementById('printReport')?.addEventListener('click', () => window.print());
-window.addEventListener('DOMContentLoaded', () => loadStudents(true).then(() => buildReport()));
+window.addEventListener('DOMContentLoaded', () => setTimeout(() => loadStudents(true).then(buildReport), 200));

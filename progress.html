@@ -1,73 +1,90 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta name="theme-color" content="#87CEEB">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Progress Tracking - Kumon DB</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="progress.css">
 </head>
 <body>
-  <div id="loadingOverlay" class="loading-overlay">
-    <div class="loading-container"><div class="spinner"></div><p class="loading-text">Loading</p></div>
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay">
+    <div class="spinner"></div>
+    <p>Loading...</p>
   </div>
 
   <header>
     <h1>📈 Progress Tracking</h1>
-    <nav><a href="students.html">← Back</a></nav>
+    <nav>
+      <a href="dashboard.html">← Back</a>
+    </nav>
   </header>
-  
-  <main class="progress-page">
-    <div class="student-selector form-grid">
-      <select id="studentSelect"><option value="">Select Student</option></select>
-      <select id="subjectSelect"><option value="">Select Subject</option></select>
-    </div>
-    
-    <div id="progressForm" class="form-container hidden">
-      <h3>Monthly Progress Update</h3>
-      <form id="updateForm">
-        <div class="form-grid">
-          <div>
-            <label>Month</label>
-            <input type="month" id="inputMonth" required>
-          </div>
-          <div>
-            <label>Previous Level</label>
-            <input type="text" id="prevLevel" readonly placeholder="Auto-filled">
-          </div>
-          <div>
-            <label>Previous Worksheets</label>
-            <input type="number" id="prevWS" readonly placeholder="Auto-filled">
-          </div>
-        </div>
 
+  <main class="form-container">
+    <div class="form-grid">
+      <div>
+        <label for="studentSelect">Select Student</label>
+        <select id="studentSelect">
+          <option value="">Loading students...</option>
+        </select>
+      </div>
+      <div>
+        <label for="subjectSelect">Select Subject</label>
+        <select id="subjectSelect" disabled>
+          <option value="">Select Subject</option>
+        </select>
+      </div>
+    </div>
+
+    <form id="updateForm" class="hidden">
+      <h2>Monthly Progress Update</h2>
+      <div class="form-grid">
+        <div>
+          <label for="inputMonth">Month</label>
+          <input type="month" id="inputMonth" required>
+        </div>
+        <div>
+          <label for="prevLevel">Previous Level</label>
+          <input type="text" id="prevLevel" readonly>
+        </div>
+        <div>
+          <label for="prevWS">Previous Worksheets</label>
+          <input type="number" id="prevWS" readonly>
+        </div>
+        <div>
+          <label for="currLevel">Current Level *</label>
+          <input type="text" id="currLevel" required>
+        </div>
+        <div>
+          <label for="currWS">Current Worksheets *</label>
+          <input type="number" id="currWS" required>
+        </div>
+      </div>
+
+      <div id="testSection" class="hidden">
+        <h3>🎯 Test Results Required (Level Changed)</h3>
         <div class="form-grid">
           <div>
-            <label>Current Level *</label>
-            <input type="text" id="currLevel" required>
+            <label for="testLevel">Level</label>
+            <input type="text" id="testLevel">
           </div>
           <div>
-            <label>Current Worksheets *</label>
-            <input type="number" id="currWS" required>
+            <label for="testScore">Score</label>
+            <input type="number" id="testScore">
+          </div>
+          <div>
+            <label for="testTime">Time</label>
+            <input type="text" id="testTime" placeholder="MM:SS">
+          </div>
+          <div>
+            <label for="testGroup">Group</label>
+            <input type="text" id="testGroup">
           </div>
         </div>
-        
-        <!-- Test Results (Hidden by default) -->
-        <div id="testSection" class="subject-entry hidden" style="margin-top:1rem; background:#fff3cd;">
-          <h4>🎯 Test Results Required (Level Changed)</h4>
-          <div class="form-grid">
-            <input type="text" id="testLevel" placeholder="Test Level">
-            <input type="number" id="testScore" placeholder="Score">
-            <input type="text" id="testTime" placeholder="Time">
-            <input type="text" id="testGroup" placeholder="Group">
-          </div>
-        </div>
-        
-        <div class="form-actions">
-          <button type="submit" class="primary">💾 Save Progress</button>
-        </div>
-      </form>
-    </div>
+      </div>
+
+      <button type="submit" class="primary">💾 Save Progress</button>
+    </form>
   </main>
 
   <script type="module" src="progress.js"></script>

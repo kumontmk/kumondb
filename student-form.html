@@ -4,14 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Student Form - Kumon DB</title>
-  <link rel="stylesheet" href="style.css">
+  <!-- <link rel="stylesheet" href="style.css"> -->
+  <link rel="stylesheet" href="student-form.css">
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 </head>
 <body>
   <div id="page-loader"><div class="spinner"></div><p>Loading student details...</p></div>
   
   <header>
-    <a href="students.html">← Back to Students</a>
+    <a href="students.html" id="backToStudents">← Back to Students</a>
     <h1 id="formTitle">✏️ Add Student</h1>
     <div></div>
   </header>
@@ -24,7 +25,8 @@
         <div class="form-grid">
           <div><label>Student Number</label><input type="text" id="studentNumber"></div>
           <div><label>Nickname</label><input type="text" id="nickname"></div>
-          <div><label>Chinese Name (Alphabet)</label><input type="text" id="namePinyin" placeholder="e.g. Zhang San"></div>
+          <div><label>Chinese Name (Alphabet)</label>
+          <input type="text" id="namePinyin" placeholder="e.g. Zhang San"></div>
           <div><label>Full Name (Chinese)</label><input type="text" id="nameCn" required></div>
           
           <!-- ✅ UPDATED GRADE DROPDOWN -->
@@ -123,20 +125,58 @@
             </div>
           </div>
 
-          <div><label>Overall Status (Auto)</label><input type="text" id="overallStatus" readonly></div>
-        </div>
+          <!-- OVERALL STATUS & PO FIELDS WITH THIS -->
+          <div class="po-layout-wrapper">
+            <div class="po-main-row">
+              <div class="po-field">
+                <label>Overall Status (Auto)</label>
+                <input type="text" id="overallStatus" value="Current" readonly>
+              </div>
+              <div class="po-field">
+                <label>Parent Orientation *</label>
+                <select id="parentOrientation" required>
+                  <option value="">Select Yes/No *</option>
+                  <option value="Yes">Yes</option>
+                  <option value="No">No</option>
+                </select>
+              </div>
+              <div id="poDateWrapper" class="po-field po-date-field other-input">
+                <label>Orientation Date</label>
+                <input type="date" id="poDate">
+              </div>
+            </div>
+            <div id="poReasonWrapper" class="po-field po-reason-field other-input">
+              <label>Reason for No Orientation</label>
+              <input type="text" id="poReason">
+            </div>
+          </div>
       </section>
 
+
+
       <!-- 2. QR Code (Before Tabs) -->
-      <section class="qr-section" style="margin: 1rem 0; padding: 1rem; background: #f8f9fa; border-radius: var(--radius); border: 1px solid #e2e8f0;">
-        <h3 style="margin: 0 0 0.5rem; font-size: 1rem;">📷 Student QR Code</h3>
-        <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
-          <input type="text" id="qrCodeInput" placeholder="Scan or enter manually" style="flex:1; min-width:200px;">
-          <button type="button" id="startScannerBtn" class="secondary">📷 Scan QR</button>
+        <!-- 📷 QR Button & Input (Flex Layout) -->
+        <div style="margin: 1rem 0;">
+          <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: #2c3e50; font-size: 0.95rem;">📷 Student QR Code</label>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <button type="button" id="startScannerBtn" class="secondary" style="flex-shrink: 0; padding: 0 1rem; height: 40px; border: 1px solid #d1d5db; border-radius: 6px; background: #f8f9fa; color: #374151; cursor: pointer; font-size: 0.9rem; font-weight: 500; white-space: nowrap;">📷 Scan QR</button>
+            <input type="text" id="qrCodeInput" placeholder="Or paste QR code manually..." style="flex: 1; padding: 0 0.75rem; height: 40px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.95rem; box-sizing: border-box; background: #fff;">
+          </div>
         </div>
-        <div id="qr-reader" style="margin-top:0.5rem; display:none;"></div>
-        <div id="qr-status" class="hint"></div>
-      </section>
+
+        <!-- 📷 QR Scanner Modal -->
+        <style>
+          #qr-reader video, #qr-reader canvas { width: 100% !important; height: 100% !important; object-fit: cover; border-radius: 8px; }
+          #qr-reader div[style*="position: absolute"] { display: none !important; }
+        </style>
+        <div id="qrModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.65); z-index: 10000; justify-content: center; align-items: center; backdrop-filter: blur(2px);">
+          <div style="background: #fff; padding: 1.5rem; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.25); text-align: center; max-width: 380px; width: 90%; position: relative; box-sizing: border-box;">
+            <button id="closeQrModal" style="position: absolute; top: 12px; right: 14px; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #888; line-height: 1; padding: 0;">&times;</button>
+            <h3 style="margin: 0 0 1rem; color: #222; font-size: 1.2rem;">📷 Scan QR Code</h3>
+            <div id="qr-reader" style="width: 100%; max-width: 300px; height: 300px; margin: 0 auto; background: #111; border-radius: 8px; overflow: hidden;"></div>
+            <div id="qr-status" style="margin: 0.75rem 0 0; color: #555; font-size: 0.9rem; min-height: 1.3rem;">Point camera at QR code...</div>
+          </div>
+        </div>
 
       <div class="tabs">
         <button type="button" class="tab-btn active" data-tab="contact">📞 Contact Info</button>
@@ -209,9 +249,9 @@
   <!-- ✅ NEW: Validation Error Modal -->
   <div id="errorModal" class="modal hidden">
     <div class="modal-content" style="max-width:400px; text-align:center;">
-      <h3 style="color:#dc3545; margin-bottom:0.5rem;">⚠️ Validation Error</h3>
+      <h3 style="color:#dc3545; margin-bottom:0.5rem; font-size: 2rem;">ERROR</h3>
       <p id="errorMessage" style="margin-bottom:1.5rem; line-height:1.5;"></p>
-      <button id="closeErrorModal" class="primary">OK</button>
+      <button id="closeErrorBtn" class="primary" type="button">OK</button>
     </div>
   </div>
 

@@ -4,65 +4,53 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Monthly Reports - Kumon DB</title>
-  <link rel="stylesheet" href="style.css">
+  <!-- <link rel="stylesheet" href="style.css"> -->
+  <link rel="stylesheet" href="reports.css">
 </head>
 <body>
-  <div id="page-loader" class="hidden"><div class="spinner"></div></div>
   <header>
     <h1>📊 Monthly Reports</h1>
     <nav>
       <a href="dashboard.html">← Dashboard</a>
-      <button id="logoutBtn">Logout</button>
+      <button id="logoutBtn" type="button">Logout</button>
     </nav>
   </header>
 
-  <div class="form-container">
+  <main class="form-container">
+    <!-- 🆕 CARD-BASED SUBJECT SELECTOR -->
+    <div id="subjectSelector" class="center-grid subject-grid">
+      <div class="center-card subject-card active" data-subject="all">📚 All Subjects</div>
+      <div class="center-card subject-card" data-subject="Math">🔢 Math</div>
+      <div class="center-card subject-card" data-subject="Chinese">🀄 Chinese</div>
+      <div class="center-card subject-card" data-subject="English ERP">🔤 English ERP</div>
+      <div class="center-card subject-card" data-subject="English EFL">🌍 English EFL</div>
+    </div>
+
+    <!-- 🛠️ FIXED CONTROLS LAYOUT -->
     <div class="controls">
-      <div class="control-group" style="flex:1; min-width:180px;">
-        <label class="control-label">📚 Subject</label>
-        <select id="reportSubject" style="width:100%; padding:0.7rem;">
-          <option value="all">All Subjects</option>
-          <option value="Math">Math</option>
-          <option value="Chinese">Chinese</option>
-          <option value="ERP">English ERP</option>
-          <option value="EFL">English EFL</option>
-        </select>
+      <div class="control-group">
+        <label for="reportMonth" class="control-label">📅 Month</label>
+        <input type="month" id="reportMonth" required>
       </div>
-      <div class="control-group" style="flex:1; min-width:180px;">
-        <label class="control-label">📅 Month</label>
-        <input type="month" id="reportMonth" style="width:100%; padding:0.7rem;">
-      </div>
-      <div class="control-group" style="flex:0 1 auto;">
-        <label class="control-label">&nbsp;</label>
-        <button id="generateReport" class="primary" style="width:100%;">📊 Generate</button>
-      </div>
-      <div class="control-group" style="flex:0 1 auto;">
-        <label class="control-label">&nbsp;</label>
-        <button id="printReport" class="print-btn" style="width:100%;">🖨️ Print</button>
-      </div>
+      <button id="generateReport" type="button" class="primary action-btn">📊 Generate</button>
+      <button id="printReport" type="button" class="print-btn">
+        <span class="print-icon">🖨️</span>
+        <span class="print-text">Print</span>
+      </button>
     </div>
 
-    <div id="monthlyReport" class="report-section hidden">
-      <div class="report-table">
-        <table id="reportTable">
-          <thead>
-            <tr>
-              <th>Student No</th><th>Chinese Name</th><th>English Name</th><th>Grade</th>
-              <th>Prev Level</th><th>Prev WS</th><th>Current Level</th><th>Current WS</th>
-              <th>Test Level</th><th>Score</th><th>Time</th><th>Group</th>
-            </tr>
-          </thead>
-          <tbody id="reportBody">
-            <tr><td colspan="12" style="text-align:center; padding:1.5rem; color:#666;">Loading reports...</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div style="margin-top: 1rem; text-align: right;">
-        <button id="saveReportBtn" class="primary" style="display: none;">💾 Save Changes</button>
-      </div>
+    <!-- 📊 SCROLLABLE REPORT AREA -->
+    <div id="monthlyReport" class="hidden">
+      <div id="reportOutput"></div>
     </div>
-  </div>
+    
+    <!-- 💾 STICKY SAVE BAR -->
+    <div class="save-bar">
+      <button id="saveReportBtn" type="button" class="primary" style="display:none;">💾 Save Changes</button>
+    </div>
+  </main>
 
+  <div id="page-loader" class="hidden"><div class="spinner"></div></div>
   <script type="module" src="reports.js"></script>
 </body>
 </html>
