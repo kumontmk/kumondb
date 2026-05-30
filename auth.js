@@ -75,7 +75,10 @@ onAuthStateChanged(auth, async (user) => {
       uid: user.uid, email: user.email, name: user.displayName || user.email.split('@')[0], photo: user.photoURL 
     }));
     await initializeCenters();
-    if (window.location.pathname.includes('index.html') || window.location.pathname === '/') {
+    
+    // Check if the current page is the login page regardless of subfolders
+    const path = window.location.pathname;
+    if (path.endsWith('/') || path.endsWith('index.html')) {
       window.location.href = 'centers.html';
     }
   } else {
