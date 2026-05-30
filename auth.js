@@ -1,3 +1,5 @@
+
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { 
@@ -15,17 +17,6 @@ const firebaseConfig = {
   appId: "1:838725994916:web:87326ba7bec87a0e6b5931",
   measurementId: "G-EY7L54FTS1"
 };
-
-// Add this right after firebaseConfig
-try {
-  const app = initializeApp(firebaseConfig);
-  export const db = getDatabase(app);
-  export const auth = getAuth(app);
-} catch (err) {
-  console.error("Firebase Init Failed:", err);
-  alert("Database connection failed. Check console for details.");
-  throw err;
-}
 
 const app = initializeApp(firebaseConfig);
 export const db = getDatabase(app);
@@ -52,41 +43,24 @@ window.addEventListener('DOMContentLoaded', () => {
     finally { setLoading(googleBtn, false, 'Continue with Google'); }
   });
 
-// Replace your emailForm submit listener with this:
-emailForm?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  errorMsg.textContent = '';
-  const email = emailInput.value.trim();
-  const password = passInput.value;
-
-  if (!email || !password) {
-    showError("Please enter both email and password.");
-    return;
-  }
-
-  try {
-    setLoading(submitBtn, true, isLoginMode ? 'Signing in...' : 'Creating account...');
-    console.log("Attempting auth..."); // Debug log
-    
-    if (isLoginMode) {
-      await signInWithEmailAndPassword(auth, email, password);
-    } else {
-      await createUserWithEmailAndPassword(auth, email, password);
-    }
-    console.log("Auth successful!");
-  } catch (error) {
-    console.error("Auth Error:", error); // This will show the real reason in F12
-    let msg = error.message || "Authentication failed.";
-    if (msg.includes('auth/user-not-found') || msg.includes('auth/wrong-password') || msg.includes('auth/invalid-credential')) msg = 'Invalid email or password.';
-    else if (msg.includes('auth/email-already-in-use')) msg = 'Email already registered.';
-    else if (msg.includes('auth/invalid-email')) msg = 'Please enter a valid email.';
-    else if (msg.includes('auth/weak-password')) msg = 'Password must be at least 6 characters.';
-    else if (msg.includes('auth/network-request-failed')) msg = 'Network error. Check authorized domains in Firebase.';
-    showError(msg);
-  } finally {
-    setLoading(submitBtn, false, isLoginMode ? 'Sign In' : 'Sign Up');
-  }
-});
+  emailForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorMsg.textContent = '';
+    const email = emailInput.value.trim();
+    const password = passInput.value;
+    try {
+      setLoading(submitBtn, true, isLoginMode ? 'Signing in...' : 'Creating account...');
+      if (isLoginMode) await signInWithEmailAndPassword(auth, email, password);
+      else await createUserWithEmailAndPassword(auth, email, password);
+    } catch (error) {
+      let msg = error.message;
+      if (msg.includes('auth/user-not-found') || msg.includes('auth/wrong-password') || msg.includes('auth/invalid-credential')) msg = 'Invalid email or password.';
+      else if (msg.includes('auth/email-already-in-use')) msg = 'Email already registered.';
+      else if (msg.includes('auth/invalid-email')) msg = 'Please enter a valid email.';
+      else if (msg.includes('auth/weak-password')) msg = 'Password must be at least 6 characters.';
+      showError(msg);
+    } finally { setLoading(submitBtn, false, isLoginMode ? 'Sign In' : 'Sign Up'); }
+  });
 
   toggleBtn?.addEventListener('click', () => {
     isLoginMode = !isLoginMode;
