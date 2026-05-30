@@ -1,0 +1,233 @@
+:root {
+  --primary: #87CEEB;
+  --primary-dark: #4682B4;
+  --secondary: #f0f8ff;
+  --text: #333;
+  --text-light: #666;
+  --white: #fff;
+  --shadow: 0 2px 10px rgba(0,0,0,0.1);
+  --radius: 8px;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--secondary);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+/* Header */
+header {
+  background: var(--primary);
+  color: var(--white);
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+header nav {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+header a, header button {
+  color: var(--white);
+  text-decoration: none;
+  background: rgba(255,255,255,0.2);
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  border: none;
+  cursor: pointer;
+}
+
+/* Forms & Table Containers */
+.form-container {
+  padding: 1rem;
+  max-width: 98%; /* ✅ WIDER: Use almost full screen width */
+  width: 98%;
+  margin: 0 auto;
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+input, select, textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: var(--radius);
+  font-size: 1rem;
+}
+button {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+button.primary { background: var(--primary-dark); color: var(--white); }
+button.secondary { background: #6c757d; color: var(--white); }
+button:hover { opacity: 0.9; }
+
+
+/* Inherits :root variables from student-form.css */
+.po-container {
+    padding: 1.5rem;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.controls {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+#searchInput {
+    flex: 1;
+    min-width: 220px;
+    padding: 0.75rem;
+    border: 1px solid #cbd5e1;
+    border-radius: var(--radius);
+    font-size: 1rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+#searchInput:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.25);
+}
+
+.table-wrapper {
+    overflow-x: auto;
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 850px;
+}
+
+th, td {
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 0.95rem;
+    vertical-align: middle;
+}
+
+th {
+    background: var(--primary);
+    color: var(--white);
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+tr:hover { background-color: #f8fafc; }
+
+/* Subject Level Pills */
+.subj-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.35rem 0.6rem;
+    border-radius: 14px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin: 0.2rem 0.1rem;
+    color: white;
+    white-space: nowrap;
+}
+.pill-Math { background: #008B8B; }
+.pill-Chinese { background: #9ACD32; color: #333; }
+.pill-ERP { background: #DC143C; }
+.pill-EFL { background: #FF8C00; }
+
+.action-btn {
+    padding: 0.5rem 0.9rem;
+    background: var(--primary-dark);
+    color: var(--white);
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 0.85rem;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    transition: all 0.2s ease;
+}
+
+.action-btn:hover {
+    background: #3a6f9a;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(70, 130, 180, 0.25);
+}
+
+.empty-state {
+    display: none;
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-light);
+    font-size: 1.1rem;
+}
+.empty-state.visible {
+    display: block;
+}
+
+/* ✅ LOADER OVERLAY STYLES */
+.loader-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.85);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    border-radius: var(--radius);
+    backdrop-filter: blur(2px);
+    transition: opacity 0.2s ease;
+}
+.loader-overlay.hidden { display: none !important; }
+
+.loader-overlay .spinner {
+    width: 48px; height: 48px;
+    border: 4px solid #e2e8f0;
+    border-top-color: var(--primary-dark);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loader-overlay p {
+    margin-top: 1rem;
+    font-weight: 500;
+    color: var(--text-light);
+}
+
+@media print {
+    .controls, .action-btn { display: none !important; }
+    body { background: white; margin: 0; padding: 1cm; }
+    table { box-shadow: none; }
+    th, td { border-color: #999; }
+}

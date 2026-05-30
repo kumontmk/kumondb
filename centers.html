@@ -7,84 +7,71 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-  <!-- ✅ LOADER ADDED -->
-  <div id="page-loader" class="hidden">
-    <div class="spinner"></div>
-  </div>
-
+  <div id="page-loader"><div class="spinner"></div></div>
   <header>
     <h1>🏢 Centers</h1>
     <nav>
+      <span id="userDisplay" style="font-size:0.9rem; opacity:0.9;"></span>
       <button id="logoutBtn">Logout</button>
     </nav>
   </header>
-
   <main class="dashboard">
     <h2>Select Your Center</h2>
-    <div id="centerList" class="center-grid">
-      <p>Loading centers...</p>
+    <div id="centersList" class="center-grid">
+      <p style="grid-column: 1/-1; text-align:center; color: var(--text-light);">Loading centers...</p>
     </div>
   </main>
 
-  <!-- ✅ EMBEDDED SCRIPT -->
   <script type="module">
-    import { requireAuth, db } from './auth.js';
-    import { ref, get } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
+    import { auth, db, logout } from './auth.js';
+    import { ref, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-    // 1. Auth Guard
-    if (!requireAuth()) throw new Error("Authentication required");
+    let hasRendered = false;
 
-    const centerListEl = document.getElementById('centerList');
-    const loader = document.getElementById('page-loader');
-    const logoutBtn = document.getElementById('logoutBtn');
+    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    
+    onAuthStateChanged(auth, (user) => {
+      if (!user) { window.location.href = 'index.html'; return; }
+      if (hasRendered) return;
+      hasRendered = true;
 
-    // 2. Logout
-    logoutBtn.addEventListener('click', () => {
-      sessionStorage.removeItem('kumonAuth');
-      window.location.href = 'index.html';
+      const userObj = JSON.parse(sessionStorage.getItem('kumonUser') || '{}');
+      if (userObj.name) document.getElementById('userDisplay').textContent = `👤 ${userObj.name}`;
+      document.getElementById('logoutBtn').addEventListener('click', logout);
+
+      loadCenters();
     });
 
-    // 3. Load Centers
     async function loadCenters() {
       try {
         const centersRef = ref(db, 'centers');
         const snapshot = await get(centersRef);
-        centerListEl.innerHTML = '';
+        const list = document.getElementById('centersList');
+        list.innerHTML = '';
 
-        if (!snapshot.exists()) {
-          centerListEl.innerHTML = '<p>No centers found. Contact support.</p>';
-          return;
+        if (snapshot.exists()) {
+          Object.values(snapshot.val()).forEach(center => {
+            const card = document.createElement('div');
+            card.className = 'center-card';
+            // ✅ Structured HTML instead of raw text
+            card.innerHTML = `
+              <h3>${center.name}</h3>
+              <p>Click to manage students & reports</p>
+            `;
+            card.onclick = () => {
+              sessionStorage.setItem('selectedCenter', center.id);
+              window.location.href = `dashboard.html?center=${center.id}`;
+            };
+            list.appendChild(card);
+          });
+        } else {
+          list.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:var(--text-light);padding:2rem;">No centers found. Contact admin.</p>';
         }
-
-        Object.values(snapshot.val()).forEach(center => {
-          const card = document.createElement('div');
-          card.className = 'center-card';
-          card.innerHTML = `<h3>${center.name}</h3><p>Click to enter</p>`;
-          card.addEventListener('click', () => selectCenter(center.id));
-          centerListEl.appendChild(card);
-        });
       } catch (err) {
-        console.error('Error loading centers:', err);
-        centerListEl.innerHTML = '<p class="error">Failed to load centers. Please refresh.</p>';
+        console.error('Failed to load centers:', err);
+        document.getElementById('centersList').innerHTML = '<p style="grid-column:1/-1;color:#dc3545;text-align:center;">Error loading centers.</p>';
       }
     }
-
-    // 4. Handle Center Click
-    function selectCenter(centerId) {
-      sessionStorage.setItem('selectedCenter', centerId);
-      
-      // ✅ Show Spinner
-      loader.classList.remove('hidden');
-      
-      // Delay redirect so user sees the spinner
-      setTimeout(() => {
-        window.location.href = 'dashboard.html'; // ⚠️ Change to your actual student page URL
-      }, 300);
-    }
-
-    // Initialize
-    loadCenters();
   </script>
 </body>
 </html>

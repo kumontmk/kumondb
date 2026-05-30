@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parent Orientation - Kumon DB</title>
+    <!-- Reuse your existing CSS variables & base styles -->
+    <link rel="stylesheet" href="parent-orientation.css">
+</head>
+<body>
+    <header>
+        <h1>📋 Pending Parent Orientation</h1>
+        <nav>
+            <a href="dashboard.html">← Dashboard</a>
+        </nav>
+    </header>
+
+    <main class="po-container">
+        <!-- ✅ LOADING SPINNER OVERLAY -->
+        <div id="poLoader" class="loader-overlay hidden">
+            <div class="spinner"></div>
+            <p>Loading students...</p>
+        </div>
+
+        <div class="controls">
+            <input type="text" id="searchInput" placeholder="🔍 Search by name, grade, or reason...">
+            <button id="refreshBtn" class="primary">🔄 Refresh</button>
+        </div>
+
+        <div class="table-wrapper">
+            <table id="poTable">
+                <thead>
+                    <tr>
+                        <th>Student Name</th>
+                        <th>Grade</th>
+                        <th>Subjects & Levels</th>
+                        <th>Enrol Date</th>
+                        <th>Reason / Notes</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="poTableBody">
+                    <!-- Rows injected by JS -->
+                </tbody>
+            </table>
+        </div>
+        <p id="noResults" class="empty-state">No students pending orientation.</p>
+    </main>
+
+    <script type="module" src="parent-orientation.js"></script>
+</body>
+</html>
