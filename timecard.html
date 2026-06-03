@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Timecard - Kumon DB</title>
+  <link rel="stylesheet" href="timecard.css">
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+</head>
+<body>
+  <div id="page-loader"><div class="spinner"></div></div>
+  
+  <header>
+    <h1>⏱️ Employee Timecard</h1>
+    <nav>
+      <a href="dashboard.html">← Dashboard</a>
+      <button id="logoutBtn">Logout</button>
+    </nav>
+  </header>
+
+  <main class="students-page">
+    <div class="attendance-controls">
+      <div class="control-group">
+        <label class="control-label">Date</label>
+        <input type="date" id="datePicker" class="day-select">
+      </div>
+      <div class="control-group search-group">
+        <label class="control-label">Search / Filter</label>
+        <div class="search-wrapper">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="searchInput" placeholder="Name or position...">
+          <select id="positionFilter">
+            <option value="">All Positions</option>
+            <option value="English teacher">English Teacher</option>
+            <option value="Math teacher">Math Teacher</option>
+            <option value="Chinese teacher">Chinese Teacher</option>
+            <option value="Admin">Admin</option>
+            <option value="Manager">Manager</option>
+          </select>
+        </div>
+      </div>
+      <button id="startScanBtn" class="scan-btn">📷 Start QR Scan</button>
+      <button id="exportCsvBtn" class="export-csv-btn">📥 Export CSV</button>
+    </div>
+
+    <div class="table-wrapper">
+      <table id="timecardTable">
+        <thead>
+          <tr>
+            <th>Chinese Name</th>
+            <th>English Name</th>
+            <th>Position</th>
+            <th>Latest Time In</th>
+            <th>Latest Time Out</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="timecardBody">
+          <tr><td colspan="6" class="empty-state">Select a date to view attendance</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- Scanner Modal -->
+  <div id="scanModal" class="modal hidden">
+    <div class="modal-content" style="max-width: 400px;">
+      <span id="closeScan" class="close-btn">&times;</span>
+      <h3>📷 Scan Employee QR</h3>
+      <div id="reader"></div>
+      <p id="scanStatus" class="hint">Position QR in the frame</p>
+      <button id="stopScanBtn" class="danger" style="width:100%; margin-top:1rem;">Stop Scanner</button>
+    </div>
+  </div>
+
+  <script type="module" src="timecard.js"></script>
+</body>
+</html>

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Employees - Kumon DB</title>
+  <link rel="stylesheet" href="employees.css">
+  
+<!-- ✅ ADD THIS INSTEAD (qrcodejs - attaches to window.QRCode reliably) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <!-- ✅ html5-qrcode can be deferred (used later for auth) -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
+</head>
+<body>
+  <div id="page-loader"><div class="spinner"></div></div>
+  
+  <header>
+    <h1>👥 Employee Management</h1>
+    <nav>
+      <a href="dashboard.html">← Dashboard</a>
+      <button id="logoutBtn">Logout</button>
+    </nav>
+  </header>
+
+  <!-- 🔐 MANAGER AUTH OVERLAY -->
+  <div id="managerAuthModal" class="modal">
+    <div class="modal-content">
+      <h2 id="authTitle">🔐 Manager Authentication</h2>
+      <p class="hint" id="authHint">No managers configured. Use default PIN (1111).</p>
+      
+      <div id="pinAuthFallback">
+        <input type="password" id="initialPinInput" class="pin-input" placeholder="••••" maxlength="4">
+        <button id="verifyInitialPinBtn" class="primary" style="width:100%; margin-top:0.5rem;">Verify PIN (1111)</button>
+      </div>
+
+      <div id="managerScannerWrapper">
+        <div id="managerReader"></div>
+        <p id="managerScanStatus" class="hint">Position manager QR in frame</p>
+        <button id="startManagerScanBtn" class="secondary" style="width:100%; margin-top:0.5rem;">📷 Start Camera</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 📋 MAIN CONTENT -->
+  <main class="students-page" id="mainContent" style="opacity: 0.3; pointer-events: none;">
+    <div class="controls">
+      <input type="text" id="searchEmployee" placeholder="🔍 Search by English/Chinese name or position...">
+      <button class="primary" id="addEmployeeBtn">+ Add Employee</button>
+    </div>
+
+    <div class="table-wrapper">
+      <table id="employeeTable">
+        <thead>
+          <tr><th>English Name</th><th>Chinese Name</th><th>Position</th><th>Terms</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="employeeTableBody">
+          <tr><td colspan="5" class="empty-state">Loading employees...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- ➕ EMPLOYEE ADD/EDIT MODAL -->
+  <div id="employeeModal" class="modal">
+    <div class="modal-content wide">
+      <span id="closeModal" class="close-btn">&times;</span>
+      <h2 id="modalTitle">Add Employee</h2>
+      
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="details">Details & QR</button>
+        <button class="tab-btn" data-tab="timeclock">Timeclock Records</button>
+      </div>
+
+      <div id="tab-details" class="tab-content active">
+        <form id="employeeForm" class="form-grid">
+          <input type="hidden" id="empId">
+          <div><label>English Name</label><input type="text" id="empEnglish" required></div>
+          <div><label>Chinese Name</label><input type="text" id="empChinese"></div>
+          <div>
+            <label>Nationality</label>
+            <select id="empNationality" required>
+              <option value="Filipino">Filipino</option><option value="Chinese">Chinese</option>
+              <option value="Portuguese">Portuguese</option><option value="Others">Others</option>
+            </select>
+            <input type="text" id="empNationalityOther" class="other-input" placeholder="Specify nationality...">
+          </div>
+          <div>
+            <label>Position</label>
+            <select id="empPosition" required>
+              <option value="English teacher">English Teacher</option><option value="Math teacher">Math Teacher</option>
+              <option value="Chinese teacher">Chinese Teacher</option><option value="Admin">Admin</option>
+              <option value="Manager">Manager</option>
+            </select>
+          </div>
+          <div><label>Employment Date</label><input type="date" id="empDate" required></div>
+          <div><label>Employment Terms</label>
+            <select id="empTerms"><option value="Full-time">Full-time</option><option value="Part-time">Part-time</option></select>
+          </div>
+        </form>
+        
+        <!-- ✅ FIX #2: Ensure this img has the exact ID your JS expects -->
+        <div id="qrContainer">
+            <img id="empQrImg" src="" alt="Employee QR Code" style="max-width: 200px; opacity: 0.5; display: block; margin: 0 auto;">
+        </div>
+        <button id="downloadQrBtn" class="secondary" style="margin-top: 0.5rem;">⬇ Download QR Code</button>
+      </div>
+      
+      <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
+        <button id="cancelModal" class="secondary">Cancel</button>
+        <button id="saveEmployee" class="primary">Save Employee</button>
+      </div>
+
+      <div id="tab-timeclock" class="tab-content">
+        <p class="hint">Edit time in/out records manually. Changes apply immediately.</p>
+        <div class="table-wrapper" style="max-height: 400px;">
+          <table class="timeclock-edit-table">
+            <thead><tr><th>Date</th><th>Time In</th><th>Time Out</th><th>Action</th></tr></thead>
+            <tbody id="timeclockHistoryBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ✅ FIX #3: Module loads LAST, after libraries are ready -->
+  <script type="module" src="employees.js"></script>
+  
+  <!-- ✅ DEBUG: Optional console check (remove in production) -->
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      if (typeof window.QRCode === 'function') {
+        console.log('✅ QR Library loaded:', window.QRCode);
+      } else {
+        console.error('❌ QR Library FAILED to attach to window.QRCode');
+      }
+    });
+  </script>
+</body>
+</html>
