@@ -1,425 +1,377 @@
-// attendance.js
+// attendance.js - FIXED: Date filter issue + better debugging
 import { requireAuth, db } from './auth.js';
-import { ref, get, onValue, set, remove, update } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
+import { ref, get, push, remove, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
 
-if (!requireAuth()) {}
+if (!requireAuth()) window.location.href = 'index.html';
 const centerId = sessionStorage.getItem('selectedCenter');
-if (!centerId) {
-    alert('No center selected. Please log in again.');
-    window.location.href = 'centers.html';
-}
+if (!centerId) { console.error('❌ No center selected'); window.location.href = 'dashboard.html'; }
 
-const dateInput = document.getElementById('attendanceDate');
-const attendanceBody = document.getElementById('attendanceBody');
-const scanBtn = document.getElementById('scanBtn');
-const scanModal = document.getElementById('scanModal');
-const confirmModal = document.getElementById('confirmModal');
-const closeScanModal = document.getElementById('closeScanModal');
-const qrReader = document.getElementById('qr-reader');
-const scanStatus = document.getElementById('scanStatus');
-const studentInfoDiv = document.getElementById('studentInfo');
-const subjectCheckboxesDiv = document.getElementById('subjectCheckboxes');
-const confirmBtn = document.getElementById('confirmAttendanceBtn');
-const cancelConfirmBtn = document.getElementById('cancelConfirmBtn');
+const attendanceRef = ref(db, `centers/${centerId}/attendance`);
+const studentsRef = ref(db, `centers/${centerId}/students`);
 
-// 🆕 SEARCH & FILTER ELEMENTS
-const searchInput = document.getElementById('attendanceSearch');
-const clearSearchBtn = document.getElementById('clearSearch');
-const searchResultsCount = document.getElementById('searchResultsCount');
-const subjectFilter = document.getElementById('subjectFilter'); // 🆕 New Element
-
-let searchTerm = '';
-let selectedSubject = ''; // 🆕 Store current subject filter
-
-dateInput.value = new Date().toISOString().split('T')[0];
-
+let allAttendanceData = [];
+let filteredAttendanceData = [];
 let html5QrCode = null;
-let currentStudent = null;
-let studentsCache = {};
-let attendanceListener = null;
-let currentAttendanceData = {}; // Stores latest snapshot for instant re-renders
+let scannerActive = false;
+let scannedStudentData = null;
 
-// 🔄 INIT: Pre-load all students
-async function initApp() {
-    try {
-        const snap = await get(ref(db, `centers/${centerId}/students`));
-        snap.forEach(child => studentsCache[child.key] = child.val());
-        console.log(`✅ Cached ${Object.keys(studentsCache).length} students`);
-        
-        // 🆕 Populate Subject Filter after caching
-        populateSubjectFilter();
-        
-    } catch (e) {
-        console.error('Failed to cache students:', e);
-    }
-    setupAttendanceListener();
-}
-initApp();
-
-// 🆕 Helper to populate subject dropdown dynamically
-function populateSubjectFilter() {
-    if (!subjectFilter) return;
-    
-    const subjects = new Set();
-    // Extract all unique subject names from cached students
-    Object.values(studentsCache).forEach(student => {
-        if (student.subjects && Array.isArray(student.subjects)) {
-            student.subjects.forEach(sub => {
-                if (sub.name) subjects.add(sub.name);
-            });
-        }
-    });
-
-    // Clear existing options except "All Subjects"
-    subjectFilter.innerHTML = '<option value="">All Subjects</option>';
-    
-    // Sort and append options
-    Array.from(subjects).sort().forEach(subj => {
-        const option = document.createElement('option');
-        option.value = subj;
-        option.textContent = subj;
-        subjectFilter.appendChild(option);
-    });
+// 📷 SCANNER LIFECYCLE
+async function cleanupScanner() {
+  if (html5QrCode) {
+    try { await html5QrCode.stop(); } catch(e) { console.warn('⚠️ Scanner stop warning:', e); }
+    html5QrCode = null;
+  }
+  const readerDiv = document.getElementById('qr-reader');
+  if (readerDiv) readerDiv.innerHTML = '';
+  scannerActive = false;
 }
 
-// 📊 DYNAMIC STATUS CALCULATOR
-function calculateStatus(scheduledTime, checkInISO) {
-    if (!scheduledTime) return 'Not Today';
-    const [sH, sM] = scheduledTime.split(':').map(Number);
-    const cDate = new Date(checkInISO);
-    const cH = cDate.getHours();
-    const cM = cDate.getMinutes();
-    const diff = (cH * 60 + cM) - (sH * 60 + sM);
-    
-    if (diff < -5) return 'Early';       // >5 mins before schedule
-    if (diff > 10) return 'Late';       // >10 mins after schedule
-    return 'On Time';                   // Within grace window
+function hideScanModal() {
+  const sm = document.getElementById('scanModal');
+  if (sm) { sm.classList.add('hidden'); sm.style.display = 'none'; }
 }
 
-// 📅 REAL-TIME LISTENER
-function setupAttendanceListener() {
-    const date = dateInput.value;
-    if (attendanceListener) attendanceListener();
-    attendanceBody.innerHTML = '<tr><td colspan="9" class="text-center">Loading attendance...</td></tr>';
-
-    attendanceListener = onValue(ref(db, `centers/${centerId}/attendance/${date}`), (snapshot) => {
-        currentAttendanceData = snapshot.exists() ? snapshot.val() : {};
-        renderTable();
-    });
+function hideConfirmModal() {
+  const cm = document.getElementById('confirmModal');
+  if (cm) { cm.classList.add('hidden'); cm.style.display = 'none'; }
 }
-
-// 🎨 RENDER FUNCTION (Separates data from DOM for instant cache-sync updates)
-function renderTable() {
-    attendanceBody.innerHTML = '';
-    
-    if (Object.keys(currentAttendanceData).length === 0) {
-        attendanceBody.innerHTML = '<tr><td colspan="9" class="text-center">No attendance records for this day.</td></tr>';
-        if (searchResultsCount) searchResultsCount.classList.add('hidden');
-        return;
-    }
-
-    let rowsHtml = '';
-    let totalRows = 0;
-    let matchedRows = 0;
-
-    for (const [studentId, subjects] of Object.entries(currentAttendanceData)) {
-        const student = studentsCache[studentId];
-        if (!student || typeof subjects !== 'object') continue;
-
-        for (const [subjectName, record] of Object.entries(subjects)) {
-            
-            // 🆕 Apply Subject Filter
-            if (selectedSubject && subjectName !== selectedSubject) {
-                continue; // Skip this row if it doesn't match the selected subject
-            }
-
-            totalRows++;
-            
-            // 🔍 SEARCH FILTER
-            if (searchTerm) {
-                const searchableText = [
-                    student.nameCn,
-                    student.nickname,
-                    student.namePinyin,
-                    student.grade,
-                    student.school,
-                    subjectName
-                ].filter(Boolean).join(' ').toLowerCase();
-                
-                if (!searchableText.includes(searchTerm)) continue;
-            }
-            
-            matchedRows++;
-            rowsHtml += createAttendanceRowHtml(studentId, subjectName, record, searchTerm);
-        }
-    }
-    
-    if (matchedRows === 0 && totalRows > 0) {
-        attendanceBody.innerHTML = `<tr><td colspan="9" class="text-center">
-            🔍 No students match "<strong>${escapeHtml(searchTerm)}</strong>"
-        </td></tr>`;
-    } else if (matchedRows === 0) {
-        attendanceBody.innerHTML = '<tr><td colspan="9" class="text-center">No records for selected subjects.</td></tr>';
-    } else {
-        attendanceBody.innerHTML = rowsHtml;
-    }
-    
-    // 📊 Show results count when searching or filtering
-    if (searchResultsCount) {
-        if (searchTerm || selectedSubject) {
-            searchResultsCount.classList.remove('hidden');
-            let msg = `Showing ${matchedRows} of ${totalRows} record${totalRows !== 1 ? 's' : ''}`;
-            if (selectedSubject) msg += ` for ${selectedSubject}`;
-            searchResultsCount.textContent = msg;
-        } else {
-            searchResultsCount.classList.add('hidden');
-        }
-    }
-}
-
-// 📝 GENERATES ROW HTML (Uses CURRENT timeslots for status calculation)
-function createAttendanceRowHtml(studentId, subjectName, record, highlight = '') {
-    const student = studentsCache[studentId];
-    if (!student) return '';
-
-    const subjObj = student.subjects?.find(s => s.name === subjectName);
-    const scheduledTimes = subjObj?.timeslots?.map(t => `${t.day} ${t.time}`).join(', ') || 'N/A';
-    const checkInTime = new Date(record.checkInTime).toLocaleTimeString();
-    
-    // 🔍 DYNAMIC STATUS: Calculate based on ACTUAL check-in day & CURRENT student timeslot
-    const checkInDate = new Date(record.checkInTime);
-    // ✅ FIX: Use full day names to match how they are saved in the database ('Monday', 'Tuesday', etc.)
-    const checkInDayFull = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][checkInDate.getDay()];
-    const daySlots = subjObj?.timeslots?.filter(t => t.day === checkInDayFull) || [];
-    const scheduledTimeForDay = daySlots.length > 0 ? daySlots[0].time : '';
-    const status = calculateStatus(scheduledTimeForDay, record.checkInTime);
-    
-    const statusConfig = {
-        'Early': { color: '#28a745', icon: '⏩' },
-        'On Time': { color: '#17a2b8', icon: '✅' },
-        'Late': { color: '#dc3545', icon: '⚠️' },
-        'Not Today': { color: '#ffc107', icon: '📅' }
-    };
-    const { color, icon } = statusConfig[status] || statusConfig['On Time'];
-
-    // 🎨 Highlight matching text
-    const hl = (text) => {
-        if (!highlight || !text) return text || '-';
-        const regex = new RegExp(`(${escapeRegex(highlight)})`, 'gi');
-        return String(text).replace(regex, '<span class="highlight">$1</span>');
-    };
-
-    return `
-        <tr class="student-row">
-            <td>${hl(subjectName)}</td>
-            <td>${hl(student.nameCn)}</td>
-            <td>${hl(student.nickname)}</td>
-            <td>${hl(student.grade)}</td>
-            <td>${hl(student.school)}</td>
-            <td>${scheduledTimes}</td>
-            <td>${checkInTime}</td>
-            <td style="color: ${color}; font-weight:600;">${icon} ${status}</td>
-            <td>
-                <button class="delete-att-btn" data-student-id="${studentId}" data-subject="${subjectName}" 
-                    style="background:#dc3545; color:white; border:none; padding:5px 10px; border-radius:6px; cursor:pointer; font-size:0.85rem;">
-                    🗑️ Delete
-                </button>
-            </td>
-        </tr>
-    `;
-}
-
-// Helper: escape HTML to prevent XSS in search display
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-function escapeRegex(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-dateInput.addEventListener('change', setupAttendanceListener);
-
-// 🔍 SEARCH EVENT LISTENERS
-if (searchInput) {
-    searchInput.addEventListener('input', (e) => {
-        searchTerm = e.target.value.trim().toLowerCase();
-        if (clearSearchBtn) clearSearchBtn.classList.toggle('hidden', searchTerm === '');
-        renderTable();
-    });
-}
-
-if (clearSearchBtn) {
-    clearSearchBtn.addEventListener('click', () => {
-        searchInput.value = '';
-        searchTerm = '';
-        clearSearchBtn.classList.add('hidden');
-        searchInput.focus();
-        renderTable();
-    });
-}
-
-// 🆕 SUBJECT FILTER EVENT LISTENER
-if (subjectFilter) {
-    subjectFilter.addEventListener('change', (e) => {
-        selectedSubject = e.target.value;
-        renderTable();
-    });
-}
-
-// 🔄 CROSS-TAB SYNC: Refreshes student cache & recalculates statuses when you switch tabs
-window.addEventListener('focus', async () => {
-    try {
-        const snap = await get(ref(db, `centers/${centerId}/students`));
-        snap.forEach(child => studentsCache[child.key] = child.val());
-        
-        // 🆕 Re-populate filter in case new subjects were added elsewhere
-        populateSubjectFilter();
-        
-        renderTable(); // Instantly reflects edited timeslots
-    } catch (e) { console.error('Cache refresh failed:', e); }
-});
-
-// 🗑️ DELETE ATTENDANCE
-attendanceBody.addEventListener('click', async (e) => {
-    const btn = e.target.closest('.delete-att-btn');
-    if (!btn) return;
-
-    const studentId = btn.dataset.studentId;
-    const subject = btn.dataset.subject;
-    const date = dateInput.value;
-    const path = `centers/${centerId}/attendance/${date}/${studentId}/${subject}`;
-
-    if (confirm(`Delete attendance for ${subject}?`)) {
-        btn.disabled = true; btn.style.opacity = '0.5'; btn.textContent = '...';
-        try {
-            await remove(ref(db, path));
-        } catch (err) {
-            alert('Error: ' + err.message);
-            btn.disabled = false; btn.style.opacity = '1'; btn.textContent = '🗑️ Delete';
-        }
-    }
-});
-
-// 📷 QR SCANNER LOGIC
-scanBtn.addEventListener('click', () => { scanModal.classList.remove('hidden'); startScanner(); });
-closeScanModal.addEventListener('click', stopScannerAndClose);
 
 async function startScanner() {
-    if (!window.Html5Qrcode) return alert('QR Library not loaded');
+  const modal = document.getElementById('scanModal');
+  const status = document.getElementById('qr-status') || document.getElementById('scanStatus');
+  const readerDiv = document.getElementById('qr-reader');
+  
+  if (!modal || !status || !readerDiv) { console.error('❌ Missing Scanner UI elements'); return; }
+  if (typeof Html5Qrcode === 'undefined') {
+    status.innerHTML = `<span style="color:#dc3545">❌ html5-qrcode library not loaded</span>`;
+    modal.classList.remove('hidden'); return;
+  }
+
+  await cleanupScanner();
+  modal.classList.remove('hidden');
+  modal.style.display = 'flex';
+  status.textContent = '📷 Starting camera...';
+  
+  try {
     html5QrCode = new Html5Qrcode("qr-reader");
-    try {
-        await html5QrCode.start(
-            { facingMode: "environment" },
-            { fps: 10, qrbox: { width: 250, height: 250 } },
-            (decodedText) => { stopScannerAndClose(); handleScan(decodedText); },
-            () => {}
-        );
-        scanStatus.textContent = 'Point camera at QR code...';
-    } catch (err) {
-        scanStatus.textContent = '❌ Camera error: ' + err.message;
-    }
-}
-
-function stopScannerAndClose() {
-    if (html5QrCode) { html5QrCode.stop(); html5QrCode = null; }
-    scanModal.classList.add('hidden');
-}
-
-async function handleScan(qrCode) {
-    const scanned = qrCode.trim();
-    let found = null, sid = null;
-
-    for (const [key, val] of Object.entries(studentsCache)) {
-        if (val.qrCode && val.qrCode.trim() === scanned) { found = val; sid = key; break; }
-    }
-
-    if (!found) {
-        scanStatus.textContent = '⏳ Searching database...';
-        try {
-            const studentsSnap = await get(ref(db, `centers/${centerId}/students`));
-            studentsSnap.forEach(child => {
-                const data = child.val();
-                if (data && data.qrCode && data.qrCode.trim() === scanned) {
-                    found = data; sid = child.key;
-                    studentsCache[sid] = data;
-                }
-            });
-        } catch (err) { console.error('DB fallback failed:', err); }
-    }
-    scanStatus.textContent = 'Point camera at QR code...';
-
-    if (!found) return alert('Student not found in this center!');
-    currentStudent = { id: sid, ...found };
-    showConfirmationModal();
-}
-
-// ✅ CONFIRMATION MODAL
-function showConfirmationModal() {
-    confirmModal.classList.remove('hidden');
-    studentInfoDiv.innerHTML = `<h3>${currentStudent.nameCn} (${currentStudent.nickname})<br>Grade ${currentStudent.grade} | ${currentStudent.school}</h3>`;
-    subjectCheckboxesDiv.innerHTML = '';
-
-    const activeSubjects = (currentStudent.subjects || []).filter(s => s.status === 'current' || s.status === 'new');
-    if (activeSubjects.length === 0) {
-        subjectCheckboxesDiv.innerHTML = '<p style="color:#dc3545;">No active subjects found.</p>';
-        return;
-    }
-
-    activeSubjects.forEach(sub => {
-        const label = document.createElement('label');
-        label.style.display = 'block'; label.style.padding = '0.5rem'; label.style.borderBottom = '1px solid #eee';
-        label.innerHTML = `
-            <input type="checkbox" value="${sub.name}" checked> <strong>${sub.name}</strong> (Level: ${sub.startLevel})
-            <br><small style="color:#666;">Timeslots: ${sub.timeslots.map(t => `${t.day} ${t.time}`).join(', ')}</small>
-        `;
-        subjectCheckboxesDiv.appendChild(label);
-    });
-}
-
-confirmBtn.addEventListener('click', async () => {
-    const selected = Array.from(subjectCheckboxesDiv.querySelectorAll('input:checked')).map(cb => cb.value);
-    if (selected.length === 0) return alert('Select at least one subject.');
-
-    const date = dateInput.value;
-    const now = new Date();
-    const currentTime = now.toTimeString().slice(0, 5);
-    // ✅ FIX: Use full day names to match database
-    const todayDay = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][now.getDay()];
-
-    confirmBtn.disabled = true; confirmBtn.textContent = 'Saving...';
-    try {
-        const updates = {};
-        for (const subject of selected) {
-            const subj = currentStudent.subjects.find(s => s.name === subject);
-            const todaySlots = subj?.timeslots.filter(t => t.day === todayDay) || [];
-            const scheduledTime = todaySlots.length > 0 ? todaySlots[0].time : '';
-            const status = calculateStatus(scheduledTime, now.toISOString());
-
-            updates[`centers/${centerId}/attendance/${date}/${currentStudent.id}/${subject}`] = {
-                subject,
-                checkInTime: now.toISOString(),
-                scheduledTime,
-                status
-            };
-        }
+    await html5QrCode.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
+      async (decodedText) => {
+        const cleanValue = decodedText.trim();
+        await cleanupScanner();
+        hideScanModal();
         
-        await update(ref(db), updates);
-        alert(`✅ Attendance confirmed for ${selected.length} subject(s)!`);
-        confirmModal.classList.add('hidden');
-        currentStudent = null;
-    } catch (err) {
-        alert('Error: ' + err.message);
-    } finally {
-        confirmBtn.disabled = false; confirmBtn.textContent = 'Confirm Attendance';
+        const confirmModal = document.getElementById('confirmModal');
+        if (confirmModal) { confirmModal.classList.remove('hidden'); confirmModal.style.display = 'flex'; }
+        
+        const infoDiv = document.getElementById('studentInfo');
+        const subDiv = document.getElementById('subjectCheckboxes');
+        const btn = document.getElementById('confirmAttendanceBtn');
+        
+        if (infoDiv) infoDiv.textContent = '🔍 Looking up student...';
+        if (subDiv) subDiv.innerHTML = '';
+        if (btn) { btn.style.display = 'none'; btn.disabled = true; }
+        
+        try { await processScanResult(cleanValue, infoDiv, subDiv, btn); } 
+        catch (err) {
+          console.error('❌ Scan processing failed:', err);
+          if (infoDiv) infoDiv.innerHTML = `<span style="color:#dc3545">❌ ${err.message}</span>`;
+        }
+      },
+      () => {}
+    );
+    status.textContent = '✅ Camera ready. Point at QR...';
+    scannerActive = true;
+  } catch (err) {
+    console.error('❌ Scanner init failed:', err);
+    status.innerHTML = `<span style="color:#dc3545">❌ Camera: ${err.message}</span>`;
+  }
+}
+
+async function stopScanner() {
+  await cleanupScanner();
+  hideScanModal();
+}
+
+// 🔍 CORE SCAN PROCESSOR
+async function processScanResult(scannedValue, infoDiv, subDiv, confirmBtn) {
+  console.log('🚀 Fetching student data...');
+  const snapshot = await get(studentsRef);
+  let student = null;
+  
+  snapshot.forEach(child => {
+    const s = child.val();
+    if (child.key === scannedValue || s.studentNumber === scannedValue || s.qrCode === scannedValue) {
+      student = { ...s, id: child.key };
     }
+  });
+
+  if (!student) throw new Error('Student not found in database');
+  console.log('👤 Student found:', student.nameCn);
+
+  scannedStudentData = student;
+  const activeSubjects = (student.subjects || []).filter(s => s && s.status === 'current' && s.name);
+  
+  if (activeSubjects.length === 0) throw new Error('No active subjects for this student.');
+
+  const now = new Date();
+  const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const todayDay = dayNames[now.getDay()];
+
+  if (infoDiv) {
+    infoDiv.innerHTML = `
+      <div style="background:#f8fafc; padding:0.85rem; border-radius:8px; border:1px solid #e2e8f0;">
+        <h3 style="margin:0 0 0.4rem; font-size:1.15rem; font-weight:700;">👤 ${student.nameCn || 'N/A'}</h3>
+        <div style="display:flex; flex-wrap:wrap; gap:0.3rem 1rem; font-size:0.88rem; color:#475569;">
+          <span><strong>Nickname:</strong> ${student.nickname || '-'}</span>
+          <span><strong>Grade:</strong> ${student.grade || '-'}</span>
+          <span><strong>School:</strong> ${student.school || '-'}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  let html = '<div style="border:1px solid #e2e8f0; border-radius:8px; max-height:260px; overflow-y:auto; background:#fff; padding:2px;">';
+  
+  for (let i = 0; i < activeSubjects.length; i++) {
+    const sub = activeSubjects[i];
+    try {
+      const slots = Array.isArray(sub.timeslots) ? sub.timeslots : [];
+      const fullSchedule = slots.length > 0 
+        ? slots.map(t => `${t.day?.substring(0,3) || '???'} ${t.time || '--:--'}`).join(', ') 
+        : 'No schedule set';
+      
+      const todaySlot = slots.find(t => t.day?.toLowerCase() === todayDay.toLowerCase());
+      const todayTime = todaySlot?.time || 'N/A';
+      const status = calculateStatus(todayTime, now);
+      const color = getStatusColor(status);
+      const isLast = i === activeSubjects.length - 1;
+
+      html += `
+        <label style="display:flex; align-items:center; gap:0.6rem; padding:0.55rem 0.75rem; border-bottom:${isLast ? 'none' : '1px solid #f1f5f9'}; cursor:pointer;">
+          <input type="checkbox" class="att-subject-check" value="${sub.name.trim()}" data-status="${status}" data-scheduled="${fullSchedule}" checked style="transform:scale(1.1); accent-color:#4682B4; margin:0; flex-shrink:0;">
+          <div style="flex:1; min-width:0; line-height:1.35;">
+            <div style="font-weight:600; color:#1e293b; font-size:0.9rem;">
+              ${sub.name} <span style="color:#64748b; font-weight:400;">(${sub.currentLevel || sub.startLevel || '?'})</span>
+            </div>
+            <div style="font-size:0.78rem; color:#64748b; margin-top:2px;">
+              🕒 ${fullSchedule}<br>
+              Today: ${todayDay} ${todayTime} | Status: <span style="color:${color}; font-weight:600;">${status}</span>
+            </div>
+          </div>
+        </label>
+      `;
+    } catch (err) {
+      console.error(`❌ Failed to render subject "${sub?.name}":`, err);
+    }
+  }
+  
+  html += '</div>';
+  if (subDiv) subDiv.innerHTML = html;
+  if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.style.display = 'inline-flex'; }
+}
+
+// ⏱️ STATUS LOGIC
+function calculateStatus(timeStr, now) {
+  if (!timeStr || timeStr === 'N/A' || timeStr === 'No schedule set') return 'Not Today';
+  const parts = timeStr.split(':');
+  if (parts.length < 2) return 'Not Today';
+  const h = parseInt(parts[0], 10), m = parseInt(parts[1], 10);
+  if (isNaN(h) || isNaN(m)) return 'Not Today';
+  const sched = new Date(now); sched.setHours(h, m, 0, 0);
+  const diff = (now - sched) / 60000;
+  if (diff < -15) return 'Early';
+  if (diff > 15) return 'Late';
+  return 'On Time';
+}
+
+function getStatusColor(s) { 
+  return { 'On Time':'#10b981', 'Early':'#f59e0b', 'Late':'#ef4444', 'Not Today':'#6b7280' }[s] || '#666'; 
+}
+
+// ✅ RECORD ATTENDANCE
+async function recordAttendance() {
+  const checks = document.querySelectorAll('.att-subject-check:checked');
+  if (checks.length === 0) return alert('⚠️ Select at least one subject.');
+  
+  const btn = document.getElementById('confirmAttendanceBtn');
+  const orig = btn?.textContent || 'Confirm';
+  if(btn) { btn.disabled = true; btn.textContent = '⏳ Saving...'; }
+  
+  const now = new Date();
+  const dateStr = now.toISOString().split('T')[0];
+  const checkInTime = now.toISOString();
+  
+  try {
+    const saves = Array.from(checks).map(cb => push(attendanceRef, {
+      studentId: String(scannedStudentData.id || ''),
+      studentNumber: String(scannedStudentData.studentNumber || ''),
+      nameCn: String(scannedStudentData.nameCn || '-'),
+      nickname: String(scannedStudentData.nickname || '-'),
+      grade: String(scannedStudentData.grade || '-'),
+      school: String(scannedStudentData.school || '-'),
+      subject: String(cb.value.trim()),
+      scheduledTime: String(cb.dataset.scheduled || 'No schedule set'),
+      checkInTime: String(checkInTime),
+      date: String(dateStr),
+      status: String(cb.dataset.status || ''),
+      timestamp: serverTimestamp()
+    }));
+
+    await Promise.all(saves);
+    console.log('✅ Successfully saved all selected subjects.');
+
+    hideConfirmModal(); hideScanModal(); scannedStudentData = null;
+    await loadAttendanceData();
+  } catch (err) {
+    console.error('❌ Save failed:', err);
+    alert('❌ Failed: ' + err.message);
+  } finally {
+    if(btn) { btn.disabled = false; btn.textContent = orig; }
+  }
+}
+
+// 📊 DATA & RENDERING - WITH BETTER DEBUGGING
+async function loadAttendanceData() {
+  try {
+    const snap = await get(attendanceRef);
+    allAttendanceData = [];
+    if (snap.exists()) {
+      snap.forEach(c => {
+        const record = { ...c.val(), id: c.key };
+        allAttendanceData.push(record);
+        console.log(`📋 Loaded record:`, {
+          id: c.key,
+          date: record.date,
+          subject: record.subject,
+          student: record.nameCn
+        });
+      });
+    }
+    console.log(`📊 Total records loaded: ${allAttendanceData.length}`);
+    
+    // Show what dates are available
+    const availableDates = [...new Set(allAttendanceData.map(r => r.date))];
+    console.log(`📅 Available dates in database:`, availableDates);
+    
+    populateSubjectFilter();
+    filterAndRender();
+  } catch (err) { 
+    console.error('❌ Load error:', err); 
+  }
+}
+
+function populateSubjectFilter() {
+  const sel = document.getElementById('attendanceSubject');
+  if (!sel) return;
+  const curVal = sel.value || 'All';
+  sel.innerHTML = '';
+  const subs = new Set(['All', 'Math', 'Chinese (Trad)', 'Chinese (Simp)', 'English ERP', 'English EFL']);
+  allAttendanceData.forEach(r => { if (r.subject) subs.add(r.subject.trim()); });
+  Array.from(subs).sort().forEach(s => {
+    const o = document.createElement('option'); o.value = s; o.textContent = s;
+    if (s === curVal) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+
+function filterAndRender() {
+  const dateInput = document.getElementById('attendanceDate');
+  const d = dateInput?.value || new Date().toISOString().split('T')[0];
+  const s = (document.getElementById('attendanceSubject')?.value || 'All').trim();
+  const q = document.getElementById('searchStudent')?.value?.toLowerCase() || '';
+
+  console.log(`🔍 Filtering: date="${d}", subject="${s}", search="${q}"`);
+  
+  filteredAttendanceData = allAttendanceData.filter(r => {
+    if (r.date !== d) return false;
+    const rSubject = (r.subject || '').trim();
+    if (s !== 'All' && rSubject !== s) return false;
+    if (q) {
+      const searchable = [r.nameCn, r.nickname, r.studentNumber, r.grade, r.school, rSubject].filter(v => v).join(' ').toLowerCase();
+      return searchable.includes(q);
+    }
+    return true;
+  });
+  
+  console.log(`✅ Filtered to ${filteredAttendanceData.length} records`);
+  if (filteredAttendanceData.length === 0) {
+    console.warn(`⚠️ No records match the filter! Check:`);
+    console.warn(`   - Selected date: "${d}"`);
+    console.warn(`   - Records in DB have dates:`, [...new Set(allAttendanceData.map(r => r.date))]);
+  }
+  
+  renderTable();
+}
+
+function renderTable() {
+  const tbody = document.getElementById('attendanceBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  
+  if (!filteredAttendanceData.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:1rem; color:#666;">No records found for this date.</td></tr>';
+    return;
+  }
+
+  filteredAttendanceData.sort((a,b) => b.checkInTime.localeCompare(a.checkInTime));
+  const colors = { 'On Time':'#dcfce7,#166534', 'Early':'#fef3c7,#92400e', 'Late':'#fee2e2,#991b1b', 'Not Today':'#f3f4f6,#374151' };
+
+  filteredAttendanceData.forEach(r => {
+    const [bg, txt] = (colors[r.status] || ['#eee','#333']).split(',');
+    const schedDisplay = r.scheduledTime && r.scheduledTime !== 'N/A' ? r.scheduledTime : '<span style="color:#999;font-style:italic">No schedule set</span>';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.subject || '-'}</td>
+      <td>${r.nameCn || '-'}</td>
+      <td>${r.nickname || '-'}</td>
+      <td>${r.grade || '-'}</td>
+      <td>${r.school || '-'}</td>
+      <td style="font-weight:600; font-size:0.85rem;">${schedDisplay}</td>
+      <td>${formatTime(r.checkInTime)}</td>
+      <td><span style="background:${bg};color:${txt};padding:0.25rem 0.5rem;border-radius:4px;font-weight:600;font-size:0.85rem;">${r.status || '-'}</span></td>
+      <td><button type="button" class="delete-att-btn" data-id="${r.id}" style="cursor:pointer; background:none; border:none; font-size:1.2rem;">🗑️</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function formatTime(iso) { 
+  try { return new Date(iso).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); } 
+  catch { return '-'; } 
+}
+
+// 🔌 EVENT LISTENERS
+document.addEventListener('DOMContentLoaded', async () => {
+  console.log('✅ Attendance JS loaded');
+  const d = document.getElementById('attendanceDate');
+  if (d) d.value = new Date().toISOString().split('T')[0];
+  
+  await loadAttendanceData();
+
+  d?.addEventListener('change', () => filterAndRender());
+  document.getElementById('attendanceSubject')?.addEventListener('change', filterAndRender);
+  document.getElementById('searchStudent')?.addEventListener('input', filterAndRender);
+  document.getElementById('scanQrBtn')?.addEventListener('click', startScanner);
+  document.getElementById('closeScanModal')?.addEventListener('click', stopScanner);
+  document.getElementById('confirmAttendanceBtn')?.addEventListener('click', recordAttendance);
+  document.getElementById('cancelConfirmBtn')?.addEventListener('click', () => { hideConfirmModal(); hideScanModal(); scannedStudentData = null; });
+
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.delete-att-btn');
+    if (btn) {
+      const id = btn.dataset.id;
+      if (!id) return console.warn('⚠️ Missing data-id');
+      if (confirm('Delete this record?')) {
+        btn.disabled = true; btn.innerHTML = '⏳';
+        try { await remove(ref(db, `centers/${centerId}/attendance/${id}`)); await loadAttendanceData(); } 
+        catch(err) { alert('Delete failed: ' + err.message); btn.disabled = false; btn.innerHTML = '🗑️'; }
+      }
+    }
+  });
+
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { stopScanner(); hideConfirmModal(); } });
 });
 
-cancelConfirmBtn.addEventListener('click', () => { confirmModal.classList.add('hidden'); currentStudent = null; });
-
-window.addEventListener('beforeunload', () => {
-    if (attendanceListener) attendanceListener();
-    if (html5QrCode) html5QrCode.stop();
-});
+window.addEventListener('beforeunload', async () => { await cleanupScanner(); });
