@@ -5,56 +5,59 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Timecard - Kumon DB</title>
   <link rel="stylesheet" href="timecard.css">
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 </head>
 <body>
-  <div id="page-loader"><div class="spinner"></div></div>
-  
   <header>
-    <h1>⏱️ Employee Timecard</h1>
+    <div class="logo">⏱️ Employee Timecard</div>
     <nav>
       <a href="dashboard.html">← Dashboard</a>
       <button id="logoutBtn">Logout</button>
     </nav>
   </header>
 
-  <main class="students-page">
+  <main class="dashboard">
     <div class="attendance-controls">
       <div class="control-group">
         <label class="control-label">Date</label>
         <input type="date" id="datePicker" class="day-select">
       </div>
+
       <div class="control-group search-group">
         <label class="control-label">Search / Filter</label>
         <div class="search-wrapper">
           <span class="search-icon">🔍</span>
-          <input type="text" id="searchInput" placeholder="Name or position...">
-          <select id="positionFilter">
-            <option value="">All Positions</option>
-            <option value="English teacher">English Teacher</option>
-            <option value="Math teacher">Math Teacher</option>
-            <option value="Chinese teacher">Chinese Teacher</option>
-            <option value="Admin">Admin</option>
-            <option value="Manager">Manager</option>
-          </select>
+          <input type="text" id="searchInput" placeholder="Search by name...">
         </div>
       </div>
+
+      <div class="control-group">
+        <label class="control-label">Position</label>
+        <select id="positionFilter">
+          <option value="">All Positions</option>
+          <option value="English Teacher">English Teacher</option>
+          <option value="Math Teacher">Math Teacher</option>
+          <option value="Chinese Teacher">Chinese Teacher</option>
+          <option value="Admin">Admin</option>
+          <option value="Manager">Manager</option>
+        </select>
+      </div>
+
       <button id="startScanBtn" class="scan-btn">📷 Start QR Scan</button>
       <button id="exportCsvBtn" class="export-csv-btn">📥 Export CSV</button>
     </div>
 
     <div class="table-wrapper">
       <table id="timecardTable">
-        <thead>
-          <tr>
-            <th>Chinese Name</th>
-            <th>English Name</th>
-            <th>Position</th>
-            <th>Latest Time In</th>
-            <th>Latest Time Out</th>
-            <th>Status</th>
-          </tr>
-        </thead>
+          <thead>
+            <tr>
+              <th>Chinese Name</th>
+              <th>English Name</th>
+              <th>Position</th>
+              <th>Time</th>
+              <th>Center</th>
+              <th>Status</th>
+            </tr>
+          </thead>
         <tbody id="timecardBody">
           <tr><td colspan="6" class="empty-state">Select a date to view attendance</td></tr>
         </tbody>
@@ -64,15 +67,25 @@
 
   <!-- Scanner Modal -->
   <div id="scanModal" class="modal hidden">
-    <div class="modal-content" style="max-width: 400px;">
-      <span id="closeScan" class="close-btn">&times;</span>
+    <div class="modal-content">
+      <button id="closeScan" class="close-btn">×</button>
       <h3>📷 Scan Employee QR</h3>
+      <p id="scanStatus">Position QR in the frame</p>
       <div id="reader"></div>
-      <p id="scanStatus" class="hint">Position QR in the frame</p>
-      <button id="stopScanBtn" class="danger" style="width:100%; margin-top:1rem;">Stop Scanner</button>
+      <button id="stopScanBtn" class="secondary-btn" style="margin-top: 1rem; background: #6c757d; color: white;">Stop Scanner</button>
     </div>
   </div>
 
-  <script type="module" src="timecard.js"></script>
+  <!-- External QR Library -->
+<!-- ✅ SCAN RESULT MODAL -->
+<div id="scanResultModal" class="result-modal hidden">
+  <div class="result-content">
+    <div id="resultIcon" class="result-icon">✅</div>
+    <div id="resultMessage" class="result-text">Processing...</div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<script src="timecard.js" type="module"></script>
 </body>
 </html>
