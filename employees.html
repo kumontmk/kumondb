@@ -15,7 +15,18 @@
     </nav>
   </header>
 
-  <main id="mainContent" class="students-page" style="opacity: 0.5; pointer-events: none;">
+  <!-- 🔐 Access Denied Message (shown if email doesn't match) -->
+  <div id="accessDenied" class="access-denied hidden">
+    <div class="access-denied-content">
+      <h2>🔐 Access Restricted</h2>
+      <p>This page is only accessible to <strong>kumonchamps@gmail.com</strong>.</p>
+      <p>Please log in with the authorized account or contact your administrator.</p>
+      <button id="backToDashboard" class="primary">← Back to Dashboard</button>
+    </div>
+  </div>
+
+  <!-- Main Content (shown only if authorized) -->
+  <main id="mainContent" class="students-page hidden">
     <div class="controls">
       <input type="text" id="searchEmployee" placeholder="🔍 Search employees by name, position...">
       <button id="addEmployeeBtn" class="primary">+ Add Employee</button>
@@ -38,33 +49,6 @@
       </table>
     </div>
   </main>
-
-  <!-- 🔐 Manager Authentication Modal -->
-  <div id="managerAuthModal" class="modal">
-    <div class="modal-content">
-      <h3>🔐 Manager Authentication</h3>
-      <p id="authHint" style="margin: 0.5rem 0; color: var(--text-light); font-size: 0.9rem;">Checking system...</p>
-
-      <!-- PIN Fallback -->
-      <div id="pinAuthFallback" style="display: none;">
-        <input type="password" id="initialPinInput" class="pin-input" placeholder="Enter PIN" maxlength="4">
-        <button id="verifyInitialPinBtn" class="primary" style="width: 100%;">Verify PIN (1111)</button>
-      </div>
-
-      <!-- QR Scanner + Manual Input -->
-      <div id="managerScannerWrapper" style="display: none;">
-        <button id="startManagerScanBtn" class="secondary" style="width: 100%; margin-top: 0.5rem;">📷 Start Camera</button>
-        <div id="managerScanStatus" style="margin: 0.5rem 0; font-size: 0.9rem; color: var(--text-light);">Position manager QR in frame</div>
-        <div id="managerReader"></div>
-        
-        <!-- ✅ NEW: Manual QR Input -->
-        <div class="manual-qr-group">
-          <input type="text" id="managerManualQrInput" placeholder="Or type Manager QR code..." autocomplete="off">
-          <button id="managerManualQrBtn" class="secondary">🔍 Verify</button>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <!-- Employee Modal -->
   <div id="employeeModal" class="modal hidden">
@@ -150,7 +134,6 @@
   </div>
 
   <!-- External Libraries -->
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <script type="module" src="employees.js"></script>
 </body>
