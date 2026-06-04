@@ -8,30 +8,30 @@
 </head>
 <body>
   <header>
-    <div class="logo">⏱️ Employee Timecard</div>
+    <h1>⏱️ Employee Timecard</h1>
     <nav>
       <a href="dashboard.html">← Dashboard</a>
       <button id="logoutBtn">Logout</button>
     </nav>
   </header>
 
-  <main class="dashboard">
+  <main class="container">
     <div class="attendance-controls">
       <div class="control-group">
-        <label class="control-label">Date</label>
+        <label class="control-label" for="datePicker">Date</label>
         <input type="date" id="datePicker" class="day-select">
       </div>
 
       <div class="control-group search-group">
-        <label class="control-label">Search / Filter</label>
+        <label class="control-label" for="searchInput">Search</label>
         <div class="search-wrapper">
           <span class="search-icon">🔍</span>
-          <input type="text" id="searchInput" placeholder="Search by name...">
+          <input type="text" id="searchInput" placeholder="Name...">
         </div>
       </div>
 
       <div class="control-group">
-        <label class="control-label">Position</label>
+        <label class="control-label" for="positionFilter">Position</label>
         <select id="positionFilter">
           <option value="">All Positions</option>
           <option value="English Teacher">English Teacher</option>
@@ -44,20 +44,26 @@
 
       <button id="startScanBtn" class="scan-btn">📷 Start QR Scan</button>
       <button id="exportCsvBtn" class="export-csv-btn">📥 Export CSV</button>
+      
+      <!-- ✅ NEW: Manual QR Entry -->
+      <div class="manual-qr-group">
+        <input type="text" id="manualQrInput" class="day-select" placeholder="Or type QR code..." autocomplete="off">
+        <button id="manualQrBtn" class="scan-btn">🔍 Submit</button>
+      </div>
     </div>
 
     <div class="table-wrapper">
-      <table id="timecardTable">
-          <thead>
-            <tr>
-              <th>Chinese Name</th>
-              <th>English Name</th>
-              <th>Position</th>
-              <th>Time</th>
-              <th>Center</th>
-              <th>Status</th>
-            </tr>
-          </thead>
+      <table>
+        <thead>
+          <tr>
+            <th>Chinese Name</th>
+            <th>English Name</th>
+            <th>Position</th>
+            <th>Time</th>
+            <th>Center</th>
+            <th>Status</th>
+          </tr>
+        </thead>
         <tbody id="timecardBody">
           <tr><td colspan="6" class="empty-state">Select a date to view attendance</td></tr>
         </tbody>
@@ -65,27 +71,19 @@
     </div>
   </main>
 
-  <!-- Scanner Modal -->
+  <!-- Scan Modal -->
   <div id="scanModal" class="modal hidden">
     <div class="modal-content">
-      <button id="closeScan" class="close-btn">×</button>
+      <button id="closeScan" class="close-btn">&times;</button>
       <h3>📷 Scan Employee QR</h3>
-      <p id="scanStatus">Position QR in the frame</p>
+      <p>Position QR in the frame</p>
       <div id="reader"></div>
-      <button id="stopScanBtn" class="secondary-btn" style="margin-top: 1rem; background: #6c757d; color: white;">Stop Scanner</button>
+      <button id="stopScanBtn" class="scan-btn" style="margin-top: 1rem;">Stop Scanner</button>
     </div>
   </div>
 
-  <!-- External QR Library -->
-<!-- ✅ SCAN RESULT MODAL -->
-<div id="scanResultModal" class="result-modal hidden">
-  <div class="result-content">
-    <div id="resultIcon" class="result-icon">✅</div>
-    <div id="resultMessage" class="result-text">Processing...</div>
-  </div>
-</div>
-
-<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-<script src="timecard.js" type="module"></script>
+  <!-- Script -->
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <script type="module" src="timecard.js"></script>
 </body>
 </html>

@@ -1,37 +1,42 @@
 import { db, logout, requireAuth } from './auth.js';
 import { ref, get, update, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-// 🔒 Auth Guard
 if (!requireAuth()) throw new Error("Auth required");
 document.getElementById('logoutBtn').addEventListener('click', logout);
 
-// 📍 Location Configuration
 const CENTERS = [
   { name: "Kumon Taipa Mei Keng", lat: 22.15680419404832, lng: 113.55310261763758 },
   { name: "Kumon Taipa Pac Tat", lat: 22.15864298997591, lng: 113.54896029627456 },
   { name: "Kumon Champs", lat: 22.202188413699155, lng: 113.54954818278166 },
   { name: "Kumon Tap Siac", lat: 22.19974168219132, lng: 113.54570239996973 }
 ];
-const MAX_DIST_KM = 0.2; // ✅ Strict 200m radius
+const MAX_DIST_KM = 0.2;
 
-// 🧠 State
 let employees = {};
 let html5QrCode = null;
 let isScanning = false;
 let lastScannedCode = '';
 let lastScanTimestamp = 0;
-const SCAN_COOLDOWN_MS = 3000; // Prevent rapid double-scans
+const SCAN_COOLDOWN_MS = 3000;
 
-// 🖥️ DOM References
 const datePicker = document.getElementById('datePicker');
 const searchInput = document.getElementById('searchInput');
 const posFilter = document.getElementById('positionFilter');
 const startScanBtn = document.getElementById('startScanBtn');
 const exportCsvBtn = document.getElementById('exportCsvBtn');
 const scanModal = document.getElementById('scanModal');
+const manualQrInput = document.getElementById('manualQrInput');
+const manualQrBtn = document.getElementById('manualQrBtn');
 
-//  Initialization
+// 🔐 Secure context check (required for geolocation)
+function isSecureContext() {
+  return window.isSecureContext || location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+}
+
 window.addEventListener('DOMContentLoaded', () => {
+  if (!isSecureContext()) {
+    console.warn('⚠️ Geolocation requires HTTPS or localhost. Current protocol:', location.protocol);
+  }
   datePicker.value = new Date().toISOString().split('T')[0];
   loadEmployees();
 });
@@ -43,7 +48,6 @@ function loadEmployees() {
   });
 }
 
-//  Render Table (Shows ALL records, not just latest)
 function renderTimecardTable() {
   const date = datePicker.value;
   const filterTxt = searchInput.value.toLowerCase();
@@ -61,8 +65,6 @@ function renderTimecardTable() {
     const p = get(ref(db, `timecards/${date}/${id}`)).then(snap => {
       const tc = snap.val() || {};
       if (!tc.logs || tc.logs.length === 0) return;
-
-      // ✅ Flatten every log entry into the master list
       tc.logs.forEach(log => {
         allLogs.push({
           chineseName: e.chineseName || '-',
@@ -78,7 +80,7 @@ function renderTimecardTable() {
   });
 
   Promise.all(promises).then(() => {
-    allLogs.sort((a, b) => b.time.localeCompare(a.time)); // Newest first
+    allLogs.sort((a, b) => b.time.localeCompare(a.time));
     renderRows(allLogs);
   });
 }
@@ -86,12 +88,10 @@ function renderTimecardTable() {
 function renderRows(logs) {
   const tbody = document.getElementById('timecardBody');
   tbody.innerHTML = '';
-
   if (logs.length === 0) {
     tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No attendance records for this date</td></tr>';
     return;
   }
-
   logs.forEach(log => {
     const statusClass = log.type === 'in' ? 'status-in' : log.type === 'out' ? 'status-out' : 'status-none';
     const tr = document.createElement('tr');
@@ -108,12 +108,10 @@ function renderRows(logs) {
   });
 }
 
-// 🔍 Filter Listeners
 datePicker.addEventListener('change', renderTimecardTable);
 searchInput.addEventListener('input', renderTimecardTable);
 posFilter.addEventListener('change', renderTimecardTable);
 
-// 📷 Scanner Lifecycle
 async function closeScanner() {
   if (html5QrCode) {
     try { await html5QrCode.stop(); } catch(e) {}
@@ -126,6 +124,52 @@ async function closeScanner() {
   startScanBtn.disabled = false;
 }
 
+// 🔍 Helper: Find employee by QR code
+function findEmployeeByQR(qrValue) {
+  for (const [firebaseKey, emp] of Object.entries(employees)) {
+    if ((emp.qrCode || '').trim() === qrValue) {
+      return { key: firebaseKey, emp };
+    }
+  }
+  return null;
+}
+
+// ✅ NEW: Handle manual QR submission
+async function handleManualQrSubmission() {
+  const qrValue = manualQrInput.value.trim();
+  if (!qrValue) {
+    showResultModal(false, '❌ Please enter a QR code.');
+    return;
+  }
+
+  const now = Date.now();
+  if (qrValue === lastScannedCode && (now - lastScanTimestamp) < SCAN_COOLDOWN_MS) {
+    showResultModal(false, '⏳ Please wait before submitting the same code.');
+    return;
+  }
+  lastScannedCode = qrValue;
+  lastScanTimestamp = now;
+
+  if (Object.keys(employees).length === 0) {
+    showResultModal(false, '⏳ Employee database still loading...');
+    return;
+  }
+
+  const match = findEmployeeByQR(qrValue);
+  if (!match) {
+    showResultModal(false, `❌ Unknown QR Code: ${qrValue}`);
+    return;
+  }
+
+  manualQrInput.value = '';
+  await processAttendance(match.key, match.emp);
+}
+
+manualQrBtn.addEventListener('click', handleManualQrSubmission);
+manualQrInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') handleManualQrSubmission();
+});
+
 startScanBtn.addEventListener('click', async () => {
   scanModal.classList.remove('hidden');
   if (isScanning) return;
@@ -133,7 +177,6 @@ startScanBtn.addEventListener('click', async () => {
     showResultModal(false, '❌ Scanner library not loaded.');
     return;
   }
-
   try {
     html5QrCode = new Html5Qrcode("reader");
     await html5QrCode.start(
@@ -142,8 +185,6 @@ startScanBtn.addEventListener('click', async () => {
       async (decodedText) => {
         const scanned = decodedText.trim();
         const now = Date.now();
-
-        // 🛡️ Cooldown
         if (scanned === lastScannedCode && (now - lastScanTimestamp) < SCAN_COOLDOWN_MS) return;
         lastScannedCode = scanned;
         lastScanTimestamp = now;
@@ -154,26 +195,15 @@ startScanBtn.addEventListener('click', async () => {
           return;
         }
 
-        // 🔍 Match by qrCode field, not Firebase key
-        let matchedKey = null;
-        let matchedEmp = null;
-        for (const [firebaseKey, emp] of Object.entries(employees)) {
-          if ((emp.qrCode || '').trim() === scanned) {
-            matchedKey = firebaseKey;
-            matchedEmp = emp;
-            break;
-          }
-        }
-
-        if (!matchedEmp) {
+        const match = findEmployeeByQR(scanned);
+        if (!match) {
           await closeScanner();
           showResultModal(false, `❌ Unknown QR Code: ${scanned}`);
           return;
         }
 
-        // ✅ Close scanner immediately, then process
         await closeScanner();
-        await processAttendance(matchedKey, matchedEmp);
+        await processAttendance(match.key, match.emp);
       },
       () => {}
     );
@@ -191,34 +221,84 @@ document.getElementById('closeScan').onclick = document.getElementById('stopScan
   await closeScanner();
 };
 
-//  Core Attendance Logic (Strict Geolocation)
+// ✅ ROBUST GEOLOCATION WITH RETRY LOGIC
+async function getLocationWithRetry(maxAttempts = 2) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const options = attempt === 1 
+        ? { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+        : { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 };
+      
+      const pos = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, options);
+      });
+      
+      console.log(`✅ Location obtained (attempt ${attempt}):`, pos.coords);
+      return pos;
+    } catch (err) {
+      console.warn(`⚠️ Location attempt ${attempt} failed:`, err.message);
+      if (attempt === maxAttempts) throw err;
+      await new Promise(res => setTimeout(res, 500));
+    }
+  }
+}
+
 async function processAttendance(empId, emp) {
-  // ⚠️ Browsers BLOCK geolocation on http:// (except localhost). Must use https:// or localhost.
   if (!navigator.geolocation) {
     showResultModal(false, '❌ Geolocation not supported by this browser.');
     return;
   }
 
+  if (!isSecureContext()) {
+    showResultModal(false, '❌ Location requires HTTPS or localhost.<br>Please serve this page via <code>http://localhost</code> or <code>https://</code>');
+    return;
+  }
+
+  let latitude, longitude;
+  
   try {
-    const pos = await new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
-      });
-    });
+    console.log('📍 Requesting location...');
+    const pos = await getLocationWithRetry();
+    latitude = pos.coords.latitude;
+    longitude = pos.coords.longitude;
+  } catch (err) {
+    console.error('🚨 Geolocation failed:', err);
+    const messages = {
+      1: '❌ Location permission denied. Please allow location access for this site.',
+      2: '❌ Location unavailable. Ensure GPS/Wi‑Fi is enabled.',
+      3: '❌ Location request timed out. Please try again.',
+    };
+    const msg = messages[err.code] || `❌ Location error: ${err.message}`;
+    showResultModal(false, msg);
+    return;
+  }
 
-    const { latitude, longitude } = pos.coords;
-    console.log(`📍 GPS Received: ${latitude}, ${longitude}`);
-
-    // 📏 Verify distance
-    const matchedCenter = CENTERS.find(c => getDistance(c.lat, c.lng, latitude, longitude) <= MAX_DIST_KM);
+  try {
+    const matchedCenter = CENTERS.find(c => 
+      getDistance(c.lat, c.lng, latitude, longitude) <= MAX_DIST_KM
+    );
+    
     if (!matchedCenter) {
-      showResultModal(false, `🚫 Outside 200m range. Scan rejected.`);
-      return; // ✅ STRICT: No DB write if outside radius
+      const distances = CENTERS.map(c => ({
+        name: c.name,
+        dist: getDistance(c.lat, c.lng, latitude, longitude)
+      })).sort((a, b) => a.dist - b.dist);
+      
+      showResultModal(false, `🚫 Outside 200m range. Closest: ${distances[0].name} (${distances[0].dist.toFixed(3)}km)`);
+      return;
     }
 
-    //  Update Firebase
+    console.log(`✅ Location verified at: ${matchedCenter.name}`);
+    await saveAttendance(empId, matchedCenter.name);
+
+  } catch (err) {
+    console.error('💥 Processing error:', err);
+    showResultModal(false, `❌ Processing error: ${err.message}`);
+  }
+}
+
+async function saveAttendance(empId, locationName) {
+  try {
     const date = datePicker.value;
     const tcRef = ref(db, `timecards/${date}/${empId}`);
     const snap = await get(tcRef);
@@ -228,30 +308,17 @@ async function processAttendance(empId, emp) {
     const nextType = (!lastLog || lastLog.type === 'out') ? 'in' : 'out';
 
     await update(tcRef, {
-      logs: [...current.logs, { type: nextType, time: now, location: matchedCenter.name }]
+      logs: [...current.logs, { type: nextType, time: now, location: locationName }]
     });
 
     renderTimecardTable();
-    showResultModal(true, `✅ ${nextType.toUpperCase()} at ${matchedCenter.name}`);
-
+    showResultModal(true, `✅ ${nextType.toUpperCase()} at ${locationName}`);
   } catch (err) {
-    // 🚨 Precise error mapping
-    let msg = '❌ Location check failed.';
-    if (err.code === 1) {
-      msg = '❌ Permission denied. Please allow location access in your browser/site settings.';
-    } else if (err.code === 2) {
-      msg = '❌ Position unavailable. Check if GPS/Location is enabled on your device.';
-    } else if (err.code === 3) {
-      msg = '❌ Location request timed out. Please try again.';
-    } else {
-      msg = `❌ Location error: ${err.message}`;
-    }
-    console.error('Geolocation Error:', err);
-    showResultModal(false, msg);
+    console.error('💥 Firebase update failed:', err);
+    showResultModal(false, `❌ Failed to save: ${err.message}`);
   }
 }
 
-// 🪟 Result Toast Modal
 function showResultModal(success, message) {
   let modal = document.getElementById('scanResultModal');
   if (!modal) {
@@ -261,26 +328,21 @@ function showResultModal(success, message) {
     modal.innerHTML = `<div class="result-content"><div id="resultIcon" class="result-icon"></div><div id="resultMessage" class="result-text"></div></div>`;
     document.body.appendChild(modal);
   }
-
   const icon = document.getElementById('resultIcon');
   const text = document.getElementById('resultMessage');
   icon.textContent = success ? '✅' : '❌';
   icon.className = success ? 'result-icon success' : 'result-icon error';
-  text.innerHTML = message;
-
+  text.innerHTML = message.replace(/\n/g, '<br>');
   modal.classList.remove('hidden');
-  setTimeout(() => modal.classList.add('hidden'), 3000);
+  setTimeout(() => modal.classList.add('hidden'), 4000);
 }
 
-// 📥 CSV Export
 exportCsvBtn.addEventListener('click', async () => {
   const date = datePicker.value;
   const filterPos = posFilter.value;
   let csv = "Date,Employee ID,English Name,Chinese Name,Position,Type,Time,Location\n";
-
   const snap = await get(ref(db, `timecards/${date}`));
   const dayData = snap.val() || {};
-
   Object.entries(dayData).forEach(([empId, data]) => {
     if (!employees[empId] || (filterPos && employees[empId].position !== filterPos)) return;
     const emp = employees[empId];
@@ -288,7 +350,6 @@ exportCsvBtn.addEventListener('click', async () => {
       csv += `${date},${empId},${emp.englishName},${emp.chineseName || ''},${emp.position},${log.type.toUpperCase()},${log.time},${log.location}\n`;
     });
   });
-
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
@@ -296,11 +357,12 @@ exportCsvBtn.addEventListener('click', async () => {
   link.click();
 });
 
-// 📐 Haversine Distance
 function getDistance(lat1, lon1, lat2, lon2) {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const a = Math.sin(dLat / 2) ** 2 + 
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+            Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }

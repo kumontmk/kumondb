@@ -39,6 +39,8 @@ const startManagerScanBtn = document.getElementById('startManagerScanBtn');
 const mainContent = document.getElementById('mainContent');
 const managerAuthModal = document.getElementById('managerAuthModal');
 const authHint = document.getElementById('authHint');
+const managerManualQrInput = document.getElementById('managerManualQrInput');
+const managerManualQrBtn = document.getElementById('managerManualQrBtn');
 
 document.getElementById('logoutBtn').addEventListener('click', logout);
 
@@ -51,10 +53,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     managerAuthModal.style.display = 'flex';
     managerAuthModal.classList.remove('hidden');
   }
-  
   await setupManagerAuth();
-  
-  // ✅ ATTACH SAVE BUTTON HANDLER
+
   saveBtn.addEventListener('click', saveEmployee);
 });
 
@@ -64,7 +64,7 @@ async function setupManagerAuth() {
     const snap = await get(ref(db, 'employees'));
     const data = snap.val() || {};
     const managers = Object.values(data).filter(e => e.position === 'Manager');
-
+    
     if (managers.length === 0) {
       if (pinFallback) { pinFallback.style.display = 'block'; pinFallback.classList.remove('hidden'); }
       if (managerScannerWrapper) managerScannerWrapper.style.display = 'none';
@@ -72,7 +72,7 @@ async function setupManagerAuth() {
     } else {
       if (pinFallback) pinFallback.style.display = 'none';
       if (managerScannerWrapper) { managerScannerWrapper.style.display = 'block'; managerScannerWrapper.classList.remove('hidden'); }
-      if (authHint) authHint.textContent = "Scan a manager QR code to proceed";
+      if (authHint) authHint.textContent = "Scan or type a manager QR code to proceed";
     }
   } catch (err) {
     console.error("Auth setup error:", err);
@@ -92,6 +92,32 @@ document.getElementById('verifyInitialPinBtn').addEventListener('click', () => {
   }
 });
 
+// ✅ NEW: Manual QR Verification for Managers
+async function handleManagerManualQr() {
+  const qrValue = managerManualQrInput.value.trim();
+  if (!qrValue) {
+    managerScanStatus.innerHTML = '<span style="color:#dc3545">❌ Please enter a QR code.</span>';
+    return;
+  }
+  
+  managerScanStatus.textContent = '🔍 Verifying...';
+  const emp = Object.values(employees).find(e => (e.qrCode || '').trim() === qrValue);
+  
+  if (emp && emp.position === 'Manager') {
+    managerScanStatus.innerHTML = '<span style="color:#28a745">✅ Manager Verified</span>';
+    managerManualQrInput.value = '';
+    setTimeout(() => grantManagerAccess(), 500);
+  } else {
+    managerScanStatus.innerHTML = '<span style="color:#dc3545">❌ Invalid or non-Manager QR</span>';
+    setTimeout(() => { managerScanStatus.textContent = "Position/Type Manager QR"; }, 1500);
+  }
+}
+
+managerManualQrBtn.addEventListener('click', handleManagerManualQr);
+managerManualQrInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') handleManagerManualQr();
+});
+
 async function cleanupManagerScanner() {
   if (managerQrScanner) { try { await managerQrScanner.stop(); } catch(e) {} managerQrScanner = null; }
   const readerDiv = document.getElementById('managerReader');
@@ -105,7 +131,6 @@ startManagerScanBtn.addEventListener('click', async () => {
     managerScanStatus.innerHTML = '<span style="color:#dc3545">❌ Scanner library not loaded</span>';
     return;
   }
-
   await cleanupManagerScanner();
   managerScanStatus.textContent = '📷 Initializing camera...';
   
@@ -114,22 +139,20 @@ startManagerScanBtn.addEventListener('click', async () => {
     await managerQrScanner.start(
       { facingMode: "environment" },
       { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
-    async (decodedText) => {
-    await cleanupManagerScanner();
-    managerScanStatus.textContent = '🔍 Verifying...';
-    
-    // ✅ FIX: Search for employee by qrCode field, not by ID
-    const scannedQR = decodedText.trim();
-    const emp = Object.values(employees).find(e => e.qrCode === scannedQR);
-    
-    if (emp && emp.position === 'Manager') {
-        managerScanStatus.innerHTML = '<span style="color:#28a745">✅ Manager Verified</span>';
-        setTimeout(() => grantManagerAccess(), 500);
-    } else {
-        managerScanStatus.innerHTML = '<span style="color:#dc3545">❌ Not a valid Manager QR</span>';
-        setTimeout(() => managerScanStatus.textContent = "Position manager QR in frame", 1500);
-    }
-    },
+      async (decodedText) => {
+        await cleanupManagerScanner();
+        managerScanStatus.textContent = '🔍 Verifying...';
+        const scannedQR = decodedText.trim();
+        const emp = Object.values(employees).find(e => (e.qrCode || '').trim() === scannedQR);
+
+        if (emp && emp.position === 'Manager') {
+          managerScanStatus.innerHTML = '<span style="color:#28a745">✅ Manager Verified</span>';
+          setTimeout(() => grantManagerAccess(), 500);
+        } else {
+          managerScanStatus.innerHTML = '<span style="color:#dc3545">❌ Not a valid Manager QR</span>';
+          setTimeout(() => managerScanStatus.textContent = "Position manager QR in frame", 1500);
+        }
+      },
       () => {}
     );
     managerScanStatus.textContent = '✅ Camera ready. Point at QR...';
@@ -157,11 +180,12 @@ function loadEmployees() {
 
 function renderTable(filter = '') {
   const lower = filter.toLowerCase();
-  const filtered = Object.entries(employees).filter(([_, e]) => 
-    e.englishName.toLowerCase().includes(lower) || 
-    (e.chineseName||'').toLowerCase().includes(lower) || 
+  const filtered = Object.entries(employees).filter(([_, e]) =>
+    e.englishName.toLowerCase().includes(lower) ||
+    (e.chineseName||'').toLowerCase().includes(lower) ||
     e.position.toLowerCase().includes(lower)
   );
+  
   tableBody.innerHTML = filtered.length === 0 ? '<tr><td colspan="5" class="empty-state">No employees found</td></tr>' : '';
   
   filtered.forEach(([id, e]) => {
@@ -186,7 +210,7 @@ function openEmployeeModal(id) {
   openModal('employeeModal');
   document.getElementById('modalTitle').textContent = id ? 'Edit Employee' : 'Add Employee';
   saveBtn.textContent = id ? 'Update Employee' : 'Save Employee';
-  form.reset(); 
+  form.reset();
   natOther.classList.remove('visible');
   
   if (id) {
@@ -207,86 +231,79 @@ function openEmployeeModal(id) {
     currentQrData = `EMP_${crypto.randomUUID().slice(0,8)}`;
   }
   
-  // Clear old QR elements before generating new
   const qrContainer = document.getElementById('qrContainer');
   if (qrContainer) {
     qrContainer.querySelectorAll('canvas, img.qrcode').forEach(el => {
       if (el.id !== 'empQrImg') el.remove();
     });
   }
-  
   generateQR(currentQrData);
 }
 
-// ✅ QR GENERATION - Single QR, no duplicates (uses hidden temp container)
+// ✅ QR GENERATION
 function generateQR(text) {
-    const qrImg = document.getElementById('empQrImg');
-    if (!qrImg || !text) return;
-    
-    qrImg.style.opacity = '0.5';
-    qrImg.alt = 'Generating...';
-    qrImg.src = '';
+  const qrImg = document.getElementById('empQrImg');
+  if (!qrImg || !text) return;
+  qrImg.style.opacity = '0.5';
+  qrImg.alt = 'Generating...';
+  qrImg.src = '';
 
-    if (typeof window.QRCode === 'undefined') {
-        console.error('❌ qrcodejs library not loaded');
-        qrImg.alt = 'Library Missing';
-        return;
-    }
+  if (typeof window.QRCode === 'undefined') {
+    console.error('❌ qrcodejs library not loaded');
+    qrImg.alt = 'Library Missing';
+    return;
+  }
 
-    try {
-        const tempDiv = document.createElement('div');
-        tempDiv.style.cssText = 'position:absolute;left:-9999px;top:-9999px;visibility:hidden;';
-        document.body.appendChild(tempDiv);
+  try {
+    const tempDiv = document.createElement('div');
+    tempDiv.style.cssText = 'position:absolute;left:-9999px;top:-9999px;visibility:hidden;';
+    document.body.appendChild(tempDiv);
 
-        new window.QRCode(tempDiv, {
-            text: text,
-            width: 200,
-            height: 200,
-            correctLevel: window.QRCode.CorrectLevel.H
-        });
+    new window.QRCode(tempDiv, {
+      text: text,
+      width: 200,
+      height: 200,
+      correctLevel: window.QRCode.CorrectLevel.H
+    });
 
-        setTimeout(() => {
-            const generated = tempDiv.querySelector('canvas') || tempDiv.querySelector('img.qrcode');
-            if (generated) {
-                if (generated.tagName === 'CANVAS') {
-                    qrImg.src = generated.toDataURL('image/png');
-                } else {
-                    qrImg.src = generated.src;
-                }
-                qrImg.style.opacity = '1';
-                qrImg.alt = 'Employee QR Code';
-            }
-            tempDiv.remove();
-        }, 100);
-    } catch (e) {
-        console.error('QR Generation Error:', e);
-        qrImg.alt = 'Generation Failed';
-    }
+    setTimeout(() => {
+      const generated = tempDiv.querySelector('canvas') || tempDiv.querySelector('img.qrcode');
+      if (generated) {
+        qrImg.src = generated.tagName === 'CANVAS' ? generated.toDataURL('image/png') : generated.src;
+        qrImg.style.opacity = '1';
+        qrImg.alt = 'Employee QR Code';
+      }
+      tempDiv.remove();
+    }, 100);
+  } catch (e) {
+    console.error('QR Generation Error:', e);
+    qrImg.alt = 'Generation Failed';
+  }
 }
 
 // ✅ DOWNLOAD BUTTON
 downloadQrBtn.addEventListener('click', () => {
-    const qrImg = document.getElementById('empQrImg');
-    if (!qrImg || !qrImg.src || qrImg.src.includes(window.location.href)) {
-        const container = document.getElementById('qrContainer');
-        const generated = container.querySelector('img.qrcode') || container.querySelector('canvas');
-        if (generated) {
-            const url = generated.tagName === 'CANVAS' ? generated.toDataURL('image/png') : generated.src;
-            const link = document.createElement('a');
-            link.download = `qr_${currentQrData}.png`;
-            link.href = url;
-            link.click();
-            return;
-        }
-        return alert('QR not ready yet.');
+  const qrImg = document.getElementById('empQrImg');
+  if (!qrImg || !qrImg.src || qrImg.src.includes(window.location.href)) {
+    const container = document.getElementById('qrContainer');
+    const generated = container.querySelector('img.qrcode') || container.querySelector('canvas');
+    if (generated) {
+      const url = generated.tagName === 'CANVAS' ? generated.toDataURL('image/png') : generated.src;
+      const link = document.createElement('a');
+      link.download = `qr_${currentQrData}.png`;
+      link.href = url;
+      link.click();
+      return;
     }
-    const link = document.createElement('a');
-    link.download = `qr_${currentQrData}.png`;
-    link.href = qrImg.src;
-    link.click();
+    return alert('QR not ready yet.');
+  }
+  const link = document.createElement('a');
+  link.download = `qr_${currentQrData}.png`;
+  link.href = qrImg.src;
+  link.click();
 });
 
-// ✅ SAVE EMPLOYEE - THE MISSING PIECE!
+// ✅ SAVE EMPLOYEE
 async function saveEmployee() {
   const empId = document.getElementById('empId').value;
   const englishName = document.getElementById('empEnglish').value.trim();
@@ -296,11 +313,11 @@ async function saveEmployee() {
   const position = document.getElementById('empPosition').value;
   const employmentDate = document.getElementById('empDate').value;
   const terms = document.getElementById('empTerms').value;
-
+  
   if (!englishName || !nationality || !position || !employmentDate) {
     return alert('Please fill in all required fields.');
   }
-
+  
   const employeeData = {
     englishName,
     chineseName: chineseName || '',
@@ -311,17 +328,14 @@ async function saveEmployee() {
     qrCode: currentQrData,
     updatedAt: new Date().toISOString()
   };
-
+  
   try {
     const empRef = empId ? ref(db, `employees/${empId}`) : push(ref(db, 'employees'));
     const saveId = empId || empRef.key;
-    
     await set(empRef, employeeData);
-    
-    // Update local cache
+
     employees[saveId] = { ...employeeData, id: saveId };
     renderTable(searchInput.value);
-    
     closeModal('employeeModal');
     alert(`✅ Employee ${empId ? 'updated' : 'added'} successfully!`);
   } catch (err) {
@@ -337,14 +351,18 @@ function loadTimeclock(empId) {
     const all = snap.val() || {};
     timeclockBody.innerHTML = '';
     const records = [];
+    
     Object.entries(all).forEach(([date, dayData]) => {
       if (dayData[empId]?.logs?.length) records.push({ date, logs: dayData[empId].logs });
     });
+    
     records.sort((a, b) => b.date.localeCompare(a.date));
-    if (records.length === 0) { 
-      timeclockBody.innerHTML = '<tr><td colspan="4" class="empty-state">No records found</td></tr>'; 
-      return; 
+    
+    if (records.length === 0) {
+      timeclockBody.innerHTML = '<tr><td colspan="4" class="empty-state">No records found</td></tr>';
+      return;
     }
+    
     records.forEach(r => {
       const row = document.createElement('tr');
       row.innerHTML = `
@@ -354,17 +372,18 @@ function loadTimeclock(empId) {
         <td><button class="save-log-btn" data-date="${r.date}">💾 Save</button></td>`;
       timeclockBody.appendChild(row);
     });
+    
     document.querySelectorAll('.save-log-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
         const date = btn.dataset.date;
         const inputs = btn.closest('tr').querySelectorAll('input[type="time"]');
-        await update(ref(db, `timecards/${date}/${empId}`), { 
+        await update(ref(db, `timecards/${date}/${empId}`), {
           logs: [
-            { type: 'in', time: inputs[0].value || '', location: 'Manual' }, 
+            { type: 'in', time: inputs[0].value || '', location: 'Manual' },
             { type: 'out', time: inputs[1].value || '', location: 'Manual' }
-          ] 
+          ]
         });
-        btn.textContent = '✅ Saved'; 
+        btn.textContent = '✅ Saved';
         setTimeout(() => btn.textContent = '💾 Save', 1500);
       });
     });
@@ -381,6 +400,3 @@ function setupTabs() {
     });
   });
 }
-
-// ✅ Make functions globally accessible for inline onclick handlers
-window.editEmp = (id) => openEmployeeModal(id);

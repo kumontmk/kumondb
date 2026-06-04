@@ -9,7 +9,6 @@
   --shadow: 0 2px 10px rgba(0,0,0,0.1);
   --radius: 8px;
 }
-
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -71,6 +70,7 @@ th { background: var(--primary); color: var(--white); font-weight: 600; }
 .hidden { display: none !important; }
 .text-center { text-align: center; }
 .empty-state { text-align: center; padding: 2.5rem; color: var(--text-light); background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow); }
+.container { max-width: 1200px; margin: 0 auto; padding: 1rem; }
 
 /* Modal */
 .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(2px); }
@@ -89,7 +89,6 @@ th { background: var(--primary); color: var(--white); font-weight: 600; }
 .control-label { font-size: 0.85rem; font-weight: 600; color: var(--text-light); }
 .day-select { padding: 0.7rem 0.9rem; font-size: 1rem; font-weight: 500; border: 1px solid #cbd5e1; border-radius: var(--radius); background: #fff; cursor: pointer; transition: all 0.2s ease; color: var(--text); }
 .day-select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.25); }
-
 .search-wrapper { position: relative; display: flex; align-items: center; }
 .search-wrapper .search-icon { position: absolute; left: 0.85rem; font-size: 0.95rem; color: var(--text-light); pointer-events: none; }
 .search-wrapper input { padding: 0.7rem 2.5rem 0.7rem 2.5rem; font-size: 0.95rem; border: 1px solid #cbd5e1; border-radius: var(--radius); width: 100%; transition: all 0.2s ease; }
@@ -105,6 +104,12 @@ th { background: var(--primary); color: var(--white); font-weight: 600; }
 .scan-btn:active, .export-csv-btn:active { transform: translateY(0); }
 .export-csv-btn { background: #28a745; }
 .export-csv-btn:hover { background: #218838; }
+
+/* ✅ NEW: Manual QR Group */
+.manual-qr-group {
+  display: flex; gap: 0.5rem; align-items: flex-end; flex: 1 1 260px; min-width: 240px;
+}
+.manual-qr-group input { margin-bottom: 0; }
 
 #reader { width: 300px; height: 300px; background: #000; border-radius: 8px; margin: 1rem auto; position: relative; overflow: hidden; }
 #reader video, #reader img { width: 100% !important; height: 100% !important; object-fit: cover; position: absolute; top: 0; left: 0; }
@@ -122,7 +127,7 @@ th { background: var(--primary); color: var(--white); font-weight: 600; }
 
 @media (max-width: 768px) {
   .attendance-controls { flex-direction: column; align-items: stretch; }
-  .attendance-controls .control-group { min-width: 100%; }
+  .attendance-controls .control-group, .manual-qr-group { min-width: 100%; }
   .scan-btn, .export-csv-btn { justify-content: center; width: 100%; }
   #reader { width: 100%; max-width: 300px; height: 250px; }
 }
@@ -152,6 +157,5 @@ th { background: var(--primary); color: var(--white); font-weight: 600; }
 .result-icon.success { color: #28a745; }
 .result-icon.error { color: #dc3545; }
 .result-text { font-size: 1.1rem; font-weight: 600; color: #333; }
-
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
