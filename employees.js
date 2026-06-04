@@ -298,7 +298,24 @@ function initApp() {
   // ✅ MODAL CLOSE HANDLERS
   cancelBtn.onclick = closeBtn.onclick = () => closeModal('employeeModal');
 
-  // ✅ LOAD TIMECLOCK HISTORY
+  // ✅ HELPER: Convert "HH:MM" to total minutes from midnight
+  function timeToMinutes(timeStr) {
+    if (!timeStr) return null;
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    return (hours * 60) + minutes;
+  }
+
+  // ✅ HELPER: Format minutes cleanly (e.g., "45 mins", "1h 30m")
+  function formatDuration(minutes) {
+    if (minutes === null || minutes < 0) return '-';
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    if (h === 0) return `${m} mins`;
+    if (m === 0) return `${h}h`;
+    return `${h}h ${m}m`;
+  }
+
+  // ✅ LOAD TIMECLOCK HISTORY (UPDATED FOR MULTIPLE CYCLES)
   function loadTimeclock(empId) {
     get(ref(db, 'timecards')).then(snap => {
       const all = snap.val() || {};
@@ -306,13 +323,51 @@ function initApp() {
       const records = [];
       
       Object.entries(all).forEach(([date, dayData]) => {
-        if (dayData[empId]?.logs?.length) records.push({ date, logs: dayData[empId].logs });
+        if (dayData[empId]?.logs?.length) {
+          const logs = dayData[empId].logs;
+          
+          // 1. Sort all logs chronologically
+          const sortedLogs = [...logs].sort((a, b) => a.time.localeCompare(b.time));
+          
+          // 2. Get the FIRST time in and LAST time out for display
+          const inLogs = sortedLogs.filter(l => l.type === 'in');
+          const outLogs = sortedLogs.filter(l => l.type === 'out');
+          const firstIn = inLogs.length > 0 ? inLogs[0].time : '';
+          const lastOut = outLogs.length > 0 ? outLogs[outLogs.length - 1].time : '';
+          
+          // 3. Calculate total duration by summing ALL valid in/out cycles
+          let totalMinutes = 0;
+          let hasValidCycle = false;
+          let currentIn = null;
+
+          for (const log of sortedLogs) {
+            if (log.type === 'in') {
+              currentIn = timeToMinutes(log.time);
+            } else if (log.type === 'out') {
+              if (currentIn !== null) {
+                const outMins = timeToMinutes(log.time);
+                if (outMins !== null && outMins >= currentIn) {
+                  totalMinutes += (outMins - currentIn);
+                  hasValidCycle = true;
+                }
+                currentIn = null; // Reset for the next cycle
+              }
+            }
+          }
+          
+          let durationText = '-';
+          if (hasValidCycle) {
+            durationText = formatDuration(totalMinutes);
+          }
+          
+          records.push({ date, firstIn, lastOut, durationText });
+        }
       });
       
       records.sort((a, b) => b.date.localeCompare(a.date));
       
       if (records.length === 0) {
-        timeclockBody.innerHTML = '<tr><td colspan="4" class="empty-state">No records found</td></tr>';
+        timeclockBody.innerHTML = '<tr><td colspan="5" class="empty-state">No records found</td></tr>';
         return;
       }
       
@@ -320,26 +375,79 @@ function initApp() {
         const row = document.createElement('tr');
         row.innerHTML = `
           <td>${r.date}</td>
-          <td><input type="time" value="${r.logs[0]?.time || ''}"></td>
-          <td><input type="time" value="${r.logs[1]?.time || ''}"></td>
+          <td><input type="time" value="${r.firstIn}"></td>
+          <td><input type="time" value="${r.lastOut}"></td>
+          <td style="font-weight: 600; color: #4682B4; text-align: center;">${r.durationText}</td>
           <td><button class="save-log-btn" data-date="${r.date}">💾 Save</button></td>`;
         timeclockBody.appendChild(row);
       });
       
+      // ✅ SAVE HANDLER (Preserves middle cycles)
       document.querySelectorAll('.save-log-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
           const date = btn.dataset.date;
           const inputs = btn.closest('tr').querySelectorAll('input[type="time"]');
-          await update(ref(db, `timecards/${date}/${empId}`), {
-            logs: [
-              { type: 'in', time: inputs[0].value || '', location: 'Manual' },
-              { type: 'out', time: inputs[1].value || '', location: 'Manual' }
-            ]
-          });
-          btn.textContent = '✅ Saved';
-          setTimeout(() => btn.textContent = '💾 Save', 1500);
+          const newIn = inputs[0].value;
+          const newOut = inputs[1].value;
+          
+          try {
+            // Fetch current logs to preserve middle cycles
+            const daySnap = await get(ref(db, `timecards/${date}/${empId}`));
+            let currentLogs = daySnap.val()?.logs || [];
+            
+            // Ensure it's an array (Firebase might return an object if keys are not sequential)
+            if (!Array.isArray(currentLogs)) {
+              currentLogs = Object.values(currentLogs);
+            }
+            
+            if (currentLogs.length === 0) {
+              // If somehow empty, just create the two logs
+              if (newIn) currentLogs.push({ type: 'in', time: newIn, location: 'Manual' });
+              if (newOut) currentLogs.push({ type: 'out', time: newOut, location: 'Manual' });
+            } else {
+              // Find the earliest 'in' and latest 'out' to update without deleting others
+              let earliestInIdx = -1;
+              let latestOutIdx = -1;
+              let earliestInTime = '99:99';
+              let latestOutTime = '00:00';
+              
+              for (let i = 0; i < currentLogs.length; i++) {
+                if (currentLogs[i].type === 'in' && currentLogs[i].time < earliestInTime) {
+                  earliestInTime = currentLogs[i].time;
+                  earliestInIdx = i;
+                }
+                if (currentLogs[i].type === 'out' && currentLogs[i].time > latestOutTime) {
+                  latestOutTime = currentLogs[i].time;
+                  latestOutIdx = i;
+                }
+              }
+              
+              if (earliestInIdx !== -1 && newIn) {
+                currentLogs[earliestInIdx].time = newIn;
+              }
+              if (latestOutIdx !== -1 && newOut) {
+                currentLogs[latestOutIdx].time = newOut;
+              }
+            }
+            
+            await update(ref(db, `timecards/${date}/${empId}`), {
+              logs: currentLogs
+            });
+            
+            btn.textContent = '✅ Saved';
+            setTimeout(() => {
+              btn.textContent = '💾 Save';
+              loadTimeclock(empId); // Reload to recalculate duration
+            }, 1500);
+          } catch (err) {
+            console.error("Error saving timeclock:", err);
+            alert("Failed to save. Check console.");
+          }
         });
       });
+    }).catch(err => {
+      console.error("Error loading timeclock:", err);
+      timeclockBody.innerHTML = '<tr><td colspan="5" class="empty-state">Error loading records</td></tr>';
     });
   }
 
