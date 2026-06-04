@@ -32,8 +32,7 @@ function checkAuthorization(user) {
 
   if (actualEmail !== requiredEmail) {
     showAccessDenied('🔐 Access Restricted', `
-      <p><strong>${user.email || 'Not available'}</strong></p>
-      <p><strong>is not authorized to access this page.</strong></p>
+      <p><strong>${user.email || 'Not available'} is not authorized to access this page.</strong></p>
       <p style="margin-top:1rem;color:#666;font-size:0.9rem">
         Please log in with an authorized account or contact your administrator if you believe this is an error.
       </p>

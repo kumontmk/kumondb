@@ -21,6 +21,80 @@ export const db = getDatabase(app);
 export const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 
+// ============================================
+// AUTO-LOGOUT AFTER INACTIVITY
+// ============================================
+const AUTO_LOGOUT_TIMEOUT = 1 * 60 * 1000; // ⏱️ 1 minute for testing (change to 5 * 60 * 1000 for 5 minutes)
+let logoutTimer;
+let isAutoLogoutInitialized = false;
+
+function resetLogoutTimer() {
+  clearTimeout(logoutTimer);
+  
+  logoutTimer = setTimeout(() => {
+    performAutoLogout();
+  }, AUTO_LOGOUT_TIMEOUT);
+  
+  console.log('🔄 Auto-logout timer reset. Logout in', AUTO_LOGOUT_TIMEOUT / 1000, 'seconds');
+}
+
+function performAutoLogout() {
+  console.log('🚪 Auto-logout triggered due to inactivity');
+  
+  // Clear session storage
+  sessionStorage.removeItem('kumonUser');
+  
+  // Sign out from Firebase
+  signOut(auth).catch(err => console.log('Sign out error:', err));
+  
+  // Redirect to login page with inactivity flag
+  window.location.href = 'index.html?reason=inactive';
+}
+
+function initAutoLogout() {
+  if (isAutoLogoutInitialized) return;
+  
+  const user = auth.currentUser;
+  const stored = sessionStorage.getItem('kumonUser');
+  
+  if (!user && !stored) {
+    console.log('⚠️ Auto-logout: User not authenticated, skipping');
+    return;
+  }
+  
+  console.log('✅ Auto-logout: Initializing for authenticated user');
+  isAutoLogoutInitialized = true;
+  
+  // ✅ FIXED: Removed 'mousemove' and 'wheel' - they fire too often and prevent logout
+  const activityEvents = ['mousedown', 'keypress', 'scroll', 'touchstart', 'click'];
+  
+  activityEvents.forEach(event => {
+    document.addEventListener(event, resetLogoutTimer, { passive: true, capture: true });
+  });
+  
+  // Start the timer
+  resetLogoutTimer();
+  console.log('⏰ Auto-logout timer started');
+}
+
+// ============================================
+// SHOW INACTIVITY MESSAGE ON LOGIN PAGE
+// ============================================
+window.addEventListener('DOMContentLoaded', () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('reason') === 'inactive') {
+    const errorMsg = document.getElementById('errorMsg');
+    if (errorMsg) {
+      errorMsg.textContent = 'You have been logged out due to inactivity.';
+      errorMsg.style.color = '#dc3545';
+      errorMsg.style.fontWeight = '500';
+    }
+    
+    // Clean up the URL
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+});
+
 let isLoginMode = true;
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -76,6 +150,9 @@ onAuthStateChanged(auth, async (user) => {
     }));
     await initializeCenters();
     
+    // Initialize auto-logout for authenticated users
+    initAutoLogout();
+    
     // Check if the current page is the login page regardless of subfolders
     const path = window.location.pathname;
     if (path.endsWith('/') || path.endsWith('index.html')) {
@@ -83,6 +160,9 @@ onAuthStateChanged(auth, async (user) => {
     }
   } else {
     sessionStorage.removeItem('kumonUser');
+    // Clear timers when user logs out
+    clearTimeout(logoutTimer);
+    isAutoLogoutInitialized = false;
   }
 });
 
@@ -98,6 +178,10 @@ async function initializeCenters() {
 }
 
 export async function logout() {
+  // Clear timers on manual logout
+  clearTimeout(logoutTimer);
+  isAutoLogoutInitialized = false;
+  
   await signOut(auth);
   sessionStorage.removeItem('kumonUser');
   window.location.href = 'index.html';
