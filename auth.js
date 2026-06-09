@@ -24,7 +24,7 @@ const provider = new GoogleAuthProvider();
 // ============================================
 // AUTO-LOGOUT AFTER INACTIVITY
 // ============================================
-const AUTO_LOGOUT_TIMEOUT = 5 * 60 * 1000; // ⏱️ 1 minute for testing (change to 5 * 60 * 1000 for 5 minutes)
+const AUTO_LOGOUT_TIMEOUT = 20 * 60 * 1000; // ⏱️ 20 minute for testing (change to 5 * 60 * 1000 for 20 minutes)
 let logoutTimer;
 let isAutoLogoutInitialized = false;
 

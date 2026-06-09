@@ -16,6 +16,7 @@ const CENTERS = [
     { name: "Kumon Tap Siac", lat: 22.19974168219132, lng: 113.54570239996973 }
 ];
 const MAX_DIST_KM = 0.2;
+
 let employees = {};
 let html5QrCode = null;
 let isScanning = false;
@@ -29,6 +30,8 @@ const posFilter = document.getElementById('positionFilter');
 const startScanBtn = document.getElementById('startScanBtn');
 const exportCsvBtn = document.getElementById('exportCsvBtn');
 const scanModal = document.getElementById('scanModal');
+const closeScanBtn = document.getElementById('closeScan');
+const stopScanBtn = document.getElementById('stopScanBtn');
 
 window.addEventListener('DOMContentLoaded', () => {
     if (datePicker) datePicker.value = new Date().toISOString().split('T')[0];
@@ -50,10 +53,10 @@ function renderTimecardTable() {
     const tbody = document.getElementById('timecardBody');
     
     if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Loading records...</td></tr>';
-    
+
     const allLogs = [];
     const promises = [];
-    
+
     Object.entries(employees).forEach(([id, e]) => {
         if (filterTxt && !e.englishName.toLowerCase().includes(filterTxt) && !(e.chineseName || '').toLowerCase().includes(filterTxt)) return;
         if (filterPos && e.position !== filterPos) return;
@@ -74,7 +77,7 @@ function renderTimecardTable() {
         });
         promises.push(p);
     });
-    
+
     Promise.all(promises).then(() => {
         allLogs.sort((a, b) => b.time.localeCompare(a.time));
         renderRows(allLogs);
@@ -90,8 +93,7 @@ function renderRows(logs) {
         tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No attendance records for this date</td></tr>';
         return;
     }
-    
-    // ✅ FIX: Corrected arrow function syntax and template literals
+
     logs.forEach(log => {
         const statusClass = log.type === 'in' ? 'status-in' : log.type === 'out' ? 'status-out' : 'status-none';
         const tr = document.createElement('tr');
@@ -114,8 +116,12 @@ if (posFilter) posFilter.addEventListener('change', renderTimecardTable);
 
 async function closeScanner() {
     if (html5QrCode) {
-        try { await html5QrCode.stop(); } catch(e) {}
-        html5QrCode.clear();
+        try { 
+            if (isScanning) await html5QrCode.stop(); 
+            html5QrCode.clear(); 
+        } catch(e) { 
+            console.warn("Scanner clear warning:", e); 
+        }
         html5QrCode = null;
     }
     isScanning = false;
@@ -126,76 +132,171 @@ async function closeScanner() {
     }
 }
 
+// ✅ ROBUST SCANNER INITIALIZATION FOR CROSS-BROWSER COMPATIBILITY
 if (startScanBtn) {
     startScanBtn.addEventListener('click', async () => {
         if (scanModal) scanModal.classList.remove('hidden');
         if (isScanning) return;
-        if (typeof Html5Qrcode === 'undefined') {
-            showResultModal(false, '❌ Scanner library not loaded.');
+        
+        if (!window.isSecureContext) {
+            showResultModal(false, '❌ Camera requires HTTPS. Please ensure the site is loaded over a secure connection.');
             return;
         }
+         
+        if (typeof Html5Qrcode === 'undefined') {
+            showResultModal(false, '❌ Scanner library not loaded. Please check your internet connection.');
+            return;
+        }
+        
         try {
             html5QrCode = new Html5Qrcode("reader");
-            await html5QrCode.start(
-                { facingMode: "environment" },
-                { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
-                async (decodedText) => {
-                    const scanned = decodedText.trim();
-                    const now = Date.now();
-                    if (scanned === lastScannedCode && (now - lastScanTimestamp) < SCAN_COOLDOWN_MS) return;
-                    lastScannedCode = scanned;
-                    lastScanTimestamp = now;
-                    
-                    if (Object.keys(employees).length === 0) {
-                        await closeScanner();
-                        showResultModal(false, '⏳ Employee database still loading...');
-                        return;
-                    }
+            const config = {
+                fps: 10,
+                qrbox: { width: 250, height: 250 },
+                aspectRatio: 1.0,
+                disableFlip: false
+            };
 
-                    let matchedKey = null;
-                    let matchedEmp = null;
-                    for (const [firebaseKey, emp] of Object.entries(employees)) {
-                        if ((emp.qrCode || '').trim() === scanned) {
-                            matchedKey = firebaseKey;
-                            matchedEmp = emp;
-                            break;
-                        }
-                    }
+            let started = false;
 
-                    if (!matchedEmp) {
-                        await closeScanner();
-                        showResultModal(false, `❌ Unknown QR Code: ${scanned}`);
-                        return;
-                    }
+            try {
+                const devices = await Html5Qrcode.getCameras();
+                if (devices && devices.length > 0) {
+                    const rearCam = devices.find(d => 
+                        d.label.toLowerCase().includes('back') || 
+                        d.label.toLowerCase().includes('environment') || 
+                        d.label.toLowerCase().includes('rear')
+                    );
+                    const camId = rearCam ? rearCam.id : devices[0].id;
+                    await html5QrCode.start(camId, config, handleScanSuccess, handleScanFailure);
+                    started = true;
+                }
+            } catch (e) {
+                console.warn("Camera enumeration failed, falling back to facingMode constraints", e);
+            }
 
-                    await closeScanner();
-                    await processAttendance(matchedKey, matchedEmp);
-                },
-                () => {}
-            );
-            isScanning = true;
-            startScanBtn.textContent = "📷 Scanning Active";
-            startScanBtn.disabled = true;
+            if (!started) {
+                try {
+                    await html5QrCode.start({ facingMode: "environment" }, config, handleScanSuccess, handleScanFailure);
+                    started = true;
+                } catch (e) {
+                    console.warn("Environment camera failed, trying user/front camera", e);
+                    await html5QrCode.start({ facingMode: "user" }, config, handleScanSuccess, handleScanFailure);
+                    started = true;
+                }
+            }
+
+            if (started) {
+                isScanning = true;
+                startScanBtn.textContent = "📷 Scanning Active";
+                startScanBtn.disabled = true;
+            } else {
+                throw new Error("Could not start any available camera.");
+            }
+
         } catch (err) {
             console.error('Scanner init failed:', err);
             await closeScanner();
-            showResultModal(false, `❌ Camera error: ${err.message}`);
+            showResultModal(false, `❌ Camera error: ${err.message}. Please ensure you have granted camera permissions in your browser settings.`);
         }
     });
 }
 
-const closeScanBtn = document.getElementById('closeScan');
-const stopScanBtn = document.getElementById('stopScanBtn');
+async function handleScanSuccess(decodedText) {
+    const scanned = decodedText.trim();
+    const now = Date.now();
+    if (scanned === lastScannedCode && (now - lastScanTimestamp) < SCAN_COOLDOWN_MS) return;
+    lastScannedCode = scanned;
+    lastScanTimestamp = now;
+
+    if (Object.keys(employees).length === 0) {
+        await closeScanner();
+        showResultModal(false, '⏳ Employee database still loading...');
+        return;
+    }
+
+    let matchedKey = null;
+    let matchedEmp = null;
+    for (const [firebaseKey, emp] of Object.entries(employees)) {
+        if ((emp.qrCode || '').trim() === scanned) {
+            matchedKey = firebaseKey;
+            matchedEmp = emp;
+            break;
+        }
+    }
+
+    if (!matchedEmp) {
+        await closeScanner();
+        showResultModal(false, `❌ Unknown QR Code: ${scanned}`);
+        return;
+    }
+
+    await closeScanner();
+    await processAttendance(matchedKey, matchedEmp);
+}
+
+function handleScanFailure(errorMessage) {
+    // Intentionally left empty to prevent console spam
+}
+
 if (closeScanBtn) closeScanBtn.onclick = async () => { await closeScanner(); };
 if (stopScanBtn) stopScanBtn.onclick = async () => { await closeScanner(); };
+
+// ✅ FIXED: Manual QR Code Submission Logic
+const manualQrInput = document.getElementById('manualQrInput');
+const submitManualQrBtn = document.getElementById('manualQrBtn'); // 🔥 FIXED ID TO MATCH YOUR HTML!
+
+if (submitManualQrBtn && manualQrInput) {
+    submitManualQrBtn.addEventListener('click', async () => {
+        const scanned = manualQrInput.value.trim();
+        if (!scanned) {
+            showResultModal(false, '❌ Please enter a QR code.');
+            return;
+        }
+        
+        if (Object.keys(employees).length === 0) {
+            showResultModal(false, '⏳ Employee database still loading...');
+            return;
+        }
+
+        let matchedKey = null;
+        let matchedEmp = null;
+        for (const [firebaseKey, emp] of Object.entries(employees)) {
+            if ((emp.qrCode || '').trim() === scanned) {
+                matchedKey = firebaseKey;
+                matchedEmp = emp;
+                break;
+            }
+        }
+
+        if (!matchedEmp) {
+            showResultModal(false, `❌ Unknown QR Code: ${scanned}`);
+            return;
+        }
+
+        // Clear the input for the next use
+        manualQrInput.value = '';
+        
+        // Stop scanner if it's currently running in the background
+        await closeScanner();
+        await processAttendance(matchedKey, matchedEmp);
+    });
+
+    // Allow pressing "Enter" key in the input field to submit
+    manualQrInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            submitManualQrBtn.click();
+        }
+    });
+}
 
 // ✅ ROBUST GEOLOCATION WITH RETRY LOGIC
 async function getLocationWithRetry(maxAttempts = 2) {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
             const options = attempt === 1
-                ? { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
-                : { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 };
+                ? { enableHighAccuracy: true, timeout: 4000, maximumAge: 60000 }
+                : { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 };
             
             const pos = await new Promise((resolve, reject) => {
                 navigator.geolocation.getCurrentPosition(resolve, reject, options);
@@ -220,10 +321,10 @@ async function processAttendance(empId, emp) {
         console.log('📍 Requesting location...');
         const pos = await getLocationWithRetry();
         const { latitude, longitude } = pos.coords;
-        const matchedCenter = CENTERS.find(c => 
+        const matchedCenter = CENTERS.find(c =>
             getDistance(c.lat, c.lng, latitude, longitude) <= MAX_DIST_KM
         );
-
+        
         if (!matchedCenter) {
             const distances = CENTERS.map(c => ({
                 name: c.name,
@@ -274,15 +375,9 @@ function showResultModal(success, message) {
     let modal = document.getElementById('scanResultModal');
     if (!modal) {
         modal = document.createElement('div');
-        // ✅ FIX: Corrected ID typo (was 'scanResultModa l')
         modal.id = 'scanResultModal';
         modal.className = 'result-modal hidden';
-        modal.innerHTML = `
-            <div class="result-content">
-                <div id="resultIcon" class="result-icon"></div>
-                <div id="resultMessage" class="result-text"></div>
-            </div>
-        `;
+        modal.innerHTML = `<div class="result-content"><div id="resultIcon" class="result-icon"></div><div id="resultMessage" class="result-text"></div></div>`;
         document.body.appendChild(modal);
     }
     const icon = document.getElementById('resultIcon');
@@ -290,11 +385,9 @@ function showResultModal(success, message) {
     if (icon && text) {
         icon.textContent = success ? '✅' : '❌';
         icon.className = success ? 'result-icon success' : 'result-icon error';
-        // ✅ FIX: Corrected replace string (was ' <br >')
         text.innerHTML = message.replace(/\n/g, '<br>');
     }
     modal.classList.remove('hidden');
-    // ✅ FIX: Corrected arrow function syntax (was '() = >')
     setTimeout(() => modal.classList.add('hidden'), 4000);
 }
 
@@ -326,7 +419,6 @@ function getDistance(lat1, lon1, lat2, lon2) {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    // ✅ FIX: Corrected math syntax (added missing '*' operators between variables and Math.PI)
     const a = Math.sin(dLat/2)**2 + Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLon/2)**2;
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
