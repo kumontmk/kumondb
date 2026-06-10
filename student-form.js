@@ -7,36 +7,35 @@ if (!requireAuth()) {}
 const SUBJECTS = ['Math', 'Chinese (Trad)', 'Chinese (Simp)', 'English ERP', 'English EFL'];
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const SUBJECT_COLORS = {
-  'Math': 'subj-Math',
-  'Chinese (Trad)': 'subj-Chinese',
-  'Chinese (Simp)': 'subj-Chinese',
-  'English ERP': 'subj-ERP',
-  'English EFL': 'subj-EFL'
+    'Math': 'subj-Math',
+    'Chinese (Trad)': 'subj-Chinese',
+    'Chinese (Simp)': 'subj-Chinese',
+    'English ERP': 'subj-ERP',
+    'English EFL': 'subj-EFL'
 };
 
-// ✅ DISABLE NATIVE BROWSER VALIDATION
 document.getElementById('studentForm')?.setAttribute('novalidate', '');
 
-// ✅ GRADE PROGRESSION LOGIC
 const GRADE_ORDER = ['K0', 'K1', 'K2', 'K3', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13'];
 function getNextGrade(grade) {
-  const idx = GRADE_ORDER.indexOf(String(grade));
-  return (idx !== -1 && idx < GRADE_ORDER.length - 1) ? GRADE_ORDER[idx + 1] : grade;
+    const idx = GRADE_ORDER.indexOf(String(grade));
+    return (idx !== -1 && idx < GRADE_ORDER.length - 1) ? GRADE_ORDER[idx + 1] : grade;
 }
 
 function checkSeptemberGradeUpdate(studentData) {
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const isSeptOrLater = now.getMonth() >= 8;
-  const academicYear = isSeptOrLater ? currentYear : currentYear - 1;
-  if (isSeptOrLater && (!studentData.lastGradeUpdateYear || studentData.lastGradeUpdateYear < academicYear)) {
-    const oldGrade = studentData.grade;
-    studentData.grade = getNextGrade(oldGrade);
-    studentData.lastGradeUpdateYear = academicYear;
-    studentData.updatedAt = new Date().toISOString();
-    return oldGrade !== studentData.grade;
-  }
-  return false;
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const isSeptOrLater = now.getMonth() >= 8;
+    const academicYear = isSeptOrLater ? currentYear : currentYear - 1;
+    
+    if (isSeptOrLater && (!studentData.lastGradeUpdateYear || studentData.lastGradeUpdateYear < academicYear)) {
+        const oldGrade = studentData.grade;
+        studentData.grade = getNextGrade(oldGrade);
+        studentData.lastGradeUpdateYear = academicYear;
+        studentData.updatedAt = new Date().toISOString();
+        return oldGrade !== studentData.grade;
+    }
+    return false;
 }
 
 let subjectCount = 0;
@@ -48,177 +47,207 @@ const urlParams = new URLSearchParams(window.location.search);
 const studentId = urlParams.get('id');
 const isEdit = !!studentId;
 
-// ✅ NULL-SAFE TITLE SETTER
 const formTitleEl = document.getElementById('formTitle');
 if (formTitleEl) formTitleEl.textContent = isEdit ? '✏️ Edit Student' : '➕ Add Student';
 
-// ✅ ERROR HANDLER
 function showError(msg) {
-  const modal = document.getElementById('errorModal');
-  if (modal) {
-    const msgEl = document.getElementById('errorMessage');
-    if (msgEl) msgEl.textContent = msg;
-    modal.classList.remove('hidden');
-    modal.style.display = 'flex';
-    modal.style.zIndex = '10000';
-    const closeBtn = document.getElementById('closeErrorModal');
-    if (closeBtn) closeBtn.focus();
-  } else {
-    alert(msg);
-  }
+    const modal = document.getElementById('errorModal');
+    if (modal) {
+        const msgEl = document.getElementById('errorMessage');
+        if (msgEl) msgEl.textContent = msg;
+        modal.classList.remove('hidden');
+        modal.style.display = 'flex';
+        modal.style.zIndex = '10000';
+    } else {
+        alert(msg);
+    }
 }
 
 function hideErrorModal() {
-  const modal = document.getElementById('errorModal');
-  if (modal) {
-    modal.classList.add('hidden');
-    modal.style.display = 'none';
-  }
+    const modal = document.getElementById('errorModal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+    }
 }
 
-document.getElementById('closeErrorModal')?.addEventListener('click', hideErrorModal);
 document.getElementById('closeErrorBtn')?.addEventListener('click', hideErrorModal);
 document.getElementById('errorModal')?.addEventListener('click', (e) => {
-  if (e.target.id === 'errorModal') hideErrorModal();
+    if (e.target.id === 'errorModal') hideErrorModal();
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideErrorModal(); });
 
 function hideLoader() {
-  const loader = document.getElementById('page-loader');
-  if (loader) setTimeout(() => loader.classList.add('hidden'), 300);
+    const loader = document.getElementById('page-loader');
+    if (loader) setTimeout(() => loader.classList.add('hidden'), 300);
 }
+
 function showLoader() {
-  document.getElementById('page-loader')?.classList.remove('hidden');
+    document.getElementById('page-loader')?.classList.remove('hidden');
 }
 
 function getWSDropdownOptions(currentValue = '') {
-  let opts = '<option value="">Select WS</option>';
-  const currentStr = String(currentValue);
-  for (let i = 1; i <= 191; i += 10) {
-    const val = i.toString();
-    opts += `<option value="${val}" ${val === currentStr ? 'selected' : ''}>${val}</option>`;
-  }
-  return opts;
+    let opts = '<option value="">Select WS</option>';
+    const currentStr = String(currentValue);
+    for (let i = 1; i <= 191; i += 10) {
+        const val = i.toString();
+        opts += `<option value="${val}" ${val === currentStr ? 'selected' : ''}>${val}</option>`;
+    }
+    return opts;
 }
 
 function initOtherInputs() {
-  const fields = ['grade', 'school', 'nationality'];
-  fields.forEach(fieldId => {
-    const select = document.getElementById(fieldId);
-    const otherInput = document.getElementById(fieldId + 'Other');
-    if (select && otherInput) {
-      if (select.value === 'Other') {
-        otherInput.classList.add('visible');
-        otherInput.required = true;
-        select.required = false;
-      } else {
-        otherInput.classList.remove('visible');
-        otherInput.required = false;
-        select.required = true;
-      }
-      select.addEventListener('change', () => {
-        if (select.value === 'Other') {
-          otherInput.classList.add('visible');
-          otherInput.focus();
-          otherInput.required = true;
-          select.required = false;
-        } else {
-          otherInput.classList.remove('visible');
-          otherInput.required = false;
-          select.required = true;
+    const fields = ['grade', 'school', 'nationality'];
+    fields.forEach(fieldId => {
+        const select = document.getElementById(fieldId);
+        const otherInput = document.getElementById(fieldId + 'Other');
+        if (select && otherInput) {
+            if (select.value === 'Other') {
+                otherInput.classList.add('visible');
+                otherInput.required = true;
+                select.required = false;
+            } else {
+                otherInput.classList.remove('visible');
+                otherInput.required = false;
+                select.required = true;
+            }
+            select.addEventListener('change', () => {
+                if (select.value === 'Other') {
+                    otherInput.classList.add('visible');
+                    otherInput.focus();
+                    otherInput.required = true;
+                    select.required = false;
+                } else {
+                    otherInput.classList.remove('visible');
+                    otherInput.required = false;
+                    select.required = true;
+                }
+            });
         }
-      });
-    }
-  });
+    });
 }
 
 function updateAgeDisplay() {
-  const bdayEl = document.getElementById('birthday');
-  const ageEl = document.getElementById('ageDisplay');
-  if (!ageEl) return;
-  const bday = bdayEl?.value;
-  if (!bday) { ageEl.value = ''; return; }
-  const today = new Date();
-  const birth = new Date(bday);
-  let age = today.getFullYear() - birth.getFullYear();
-  const m = today.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
-  ageEl.value = age >= 0 ? `${age} yr` : '';
+    const bdayEl = document.getElementById('birthday');
+    const ageEl = document.getElementById('ageDisplay');
+    if (!ageEl) return;
+    const bday = bdayEl?.value;
+    if (!bday) { ageEl.value = ''; return; }
+    const today = new Date();
+    const birth = new Date(bday);
+    let age = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+    ageEl.value = age >= 0 ? `${age} yr` : '';
 }
+
 document.getElementById('birthday')?.addEventListener('input', updateAgeDisplay);
 setInterval(updateAgeDisplay, 60000);
 
-// ✅ OVERALL STATUS LOGIC (Handles Inquiry Priority)
 function updateOverallStatus() {
-  const statuses = Array.from(document.querySelectorAll('.subject-entry')).map(e => e.querySelector('.status')?.value || 'drop');
-  const overall = document.getElementById('overallStatus');
-  if (!overall) return;
-  if (statuses.length === 0) { overall.value = 'Drop'; return; }
+    const statuses = Array.from(document.querySelectorAll('.subject-entry')).map(e => e.querySelector('.status')?.value || 'drop');
+    const overall = document.getElementById('overallStatus');
+    if (!overall) return;
+    if (statuses.length === 0) { overall.value = 'Drop'; return; }
+    const hasCurrent = statuses.some(s => s === 'current');
+    const hasInquiry = statuses.some(s => s === 'inquiry');
+    const allDrop = statuses.every(s => s === 'drop');
+    if (hasCurrent) overall.value = 'Current';
+    else if (hasInquiry) overall.value = 'Inquiry';
+    else if (allDrop) overall.value = 'Drop';
+    else overall.value = 'Pause';
+}
 
-  const hasCurrent = statuses.some(s => s === 'current');
-  const hasInquiry = statuses.some(s => s === 'inquiry');
-  const allDrop = statuses.every(s => s === 'drop');
-
-  if (hasCurrent) overall.value = 'Current';
-  else if (hasInquiry) overall.value = 'Inquiry';
-  else if (allDrop) overall.value = 'Drop';
-  else overall.value = 'Pause';
+// ✅ UPDATE CURRENT LEVELS SUMMARY (Reads directly from DB value)
+function updateCurrentLevelsSummary() {
+    const summaryContainer = document.getElementById('currentLevelsSummary');
+    if (!summaryContainer) return;
+    
+    const entries = document.querySelectorAll('.subject-entry');
+    let hasSubjects = false;
+    let html = '';
+    
+    entries.forEach(entry => {
+        const status = entry.querySelector('.status')?.value;
+        if (status === 'drop') return;
+        
+        const subjectName = entry.querySelector('.subject-name')?.value || 'Unknown';
+        // Read from the read-only display field
+        const currentLevel = entry.querySelector('.current-level-display')?.value || 'Not Set';
+        
+        hasSubjects = true;
+        let colorClass = 'subj-Math';
+        if (subjectName.includes('Chinese')) colorClass = 'subj-Chinese';
+        else if (subjectName.includes('ERP')) colorClass = 'subj-ERP';
+        else if (subjectName.includes('EFL')) colorClass = 'subj-EFL';
+        
+        html += `
+            <div style="background:#f8f9fa; padding:0.75rem; border-radius:8px; border-left:4px solid var(--primary);">
+                <div style="font-size:0.85rem; color:var(--text-light); margin-bottom:0.25rem;">${subjectName}</div>
+                <div class="slot-pill ${colorClass}" style="margin:0; min-width:auto; padding:0.4rem 0.8rem; font-size:0.9rem; display:inline-block;">
+                    ${currentLevel}
+                </div>
+            </div>
+        `;
+    });
+    
+    summaryContainer.innerHTML = hasSubjects ? html : '<p class="hint" style="grid-column: 1 / -1; margin:0;">Add subjects to view their current levels.</p>';
 }
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    btn.classList.add('active');
-    const targetId = `tab-${btn.dataset.tab}`;
-    document.getElementById(targetId)?.classList.add('active');
-    if (btn.dataset.tab === 'schedule') renderSchedule();
-  });
+    btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        const targetId = `tab-${btn.dataset.tab}`;
+        document.getElementById(targetId)?.classList.add('active');
+        if (btn.dataset.tab === 'schedule') renderSchedule();
+    });
 });
 
 function renderSchedule() {
-  const thead = document.getElementById('scheduleHeader');
-  const tbody = document.getElementById('scheduleBody');
-  if (!thead || !tbody) return;
-  thead.innerHTML = '';
-  DAYS.forEach(day => {
-    const th = document.createElement('th');
-    th.textContent = day.substring(0, 3);
-    thead.appendChild(th);
-  });
-  tbody.innerHTML = '';
-  const schedule = DAYS.reduce((acc, d) => ({...acc, [d]: []}), {});
-  document.querySelectorAll('.subject-entry').forEach(entry => {
-    const nameEl = entry.querySelector('.subject-name');
-    const statusEl = entry.querySelector('.status');
-    const name = nameEl?.value;
-    const status = statusEl?.value;
-    if (!name || status === 'drop') return;
-    entry.querySelectorAll('.timeslot-row').forEach(row => {
-      const day = row.querySelector('.ts-day')?.value;
-      const h = row.querySelector('.ts-hour')?.value;
-      const m = row.querySelector('.ts-min')?.value;
-      if (day && h && m) schedule[day].push({ name, time: `${h}:${m}`, color: SUBJECT_COLORS[name] });
+    const thead = document.getElementById('scheduleHeader');
+    const tbody = document.getElementById('scheduleBody');
+    if (!thead || !tbody) return;
+    thead.innerHTML = '';
+    DAYS.forEach(day => {
+        const th = document.createElement('th');
+        th.textContent = day.substring(0, 3);
+        thead.appendChild(th);
     });
-  });
-  const tr = document.createElement('tr');
-  DAYS.forEach(day => {
-    const td = document.createElement('td');
-    schedule[day].sort((a,b) => a.time.localeCompare(b.time)).forEach(slot => {
-      const pill = document.createElement('span');
-      pill.className = `slot-pill ${slot.color}`;
-      pill.textContent = `${slot.name.substring(0,3)} ${slot.time}`;
-      td.appendChild(pill);
+    tbody.innerHTML = '';
+    const schedule = DAYS.reduce((acc, d) => ({...acc, [d]: []}), {});
+    document.querySelectorAll('.subject-entry').forEach(entry => {
+        const nameEl = entry.querySelector('.subject-name');
+        const statusEl = entry.querySelector('.status');
+        const name = nameEl?.value;
+        const status = statusEl?.value;
+        if (!name || status === 'drop') return;
+        entry.querySelectorAll('.timeslot-row').forEach(row => {
+            const day = row.querySelector('.ts-day')?.value;
+            const h = row.querySelector('.ts-hour')?.value;
+            const m = row.querySelector('.ts-min')?.value;
+            if (day && h && m) schedule[day].push({ name, time: `${h}:${m}`, color: SUBJECT_COLORS[name] });
+        });
     });
-    if (schedule[day].length === 0) td.innerHTML = '<span style="color:#999;">-</span>';
-    tr.appendChild(td);
-  });
-  tbody.appendChild(tr);
+    const tr = document.createElement('tr');
+    DAYS.forEach(day => {
+        const td = document.createElement('td');
+        schedule[day].sort((a,b) => a.time.localeCompare(b.time)).forEach(slot => {
+            const pill = document.createElement('span');
+            pill.className = `slot-pill ${slot.color}`;
+            pill.textContent = `${slot.name.substring(0,3)} ${slot.time}`;
+            td.appendChild(pill);
+        });
+        if (schedule[day].length === 0) td.innerHTML = '<span style="color:#999;">-</span>';
+        tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
 }
 
-// ✅ QR SCANNER
+// QR SCANNER
 const scanBtn = document.getElementById('startScannerBtn');
 const qrModal = document.getElementById('qrModal');
 const closeQrModal = document.getElementById('closeQrModal');
@@ -226,295 +255,242 @@ const qrStatus = document.getElementById('qr-status');
 const qrInput = document.getElementById('qrCodeInput');
 
 if (scanBtn && qrModal) {
-  scanBtn.addEventListener('click', async () => {
-    if (scannerActive) { await stopScanner(); return; }
-    qrModal.style.display = 'flex';
-    qrStatus.textContent = 'Initializing camera...';
-    try {
-      if (!html5QrCode) html5QrCode = new Html5Qrcode("qr-reader");
-      await html5QrCode.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
-        (decodedText) => {
-          if (qrInput) qrInput.value = decodedText;
-          qrStatus.innerHTML = `<span style="color:#28a745">✅ Scanned: <strong>${decodedText}</strong></span>`;
-          stopScanner();
-        },
-        () => {}
-      );
-      qrStatus.textContent = 'Point camera at QR code...';
-      scannerActive = true;
-      scanBtn.textContent = '⏹ Stop';
-    } catch (err) {
-      qrStatus.innerHTML = `<span style="color:#dc3545">❌ Camera error: ${err.message}</span>`;
-      qrModal.style.display = 'none';
-      scannerActive = false;
+    scanBtn.addEventListener('click', async () => {
+        if (scannerActive) { await stopScanner(); return; }
+        qrModal.style.display = 'flex';
+        qrStatus.textContent = 'Initializing camera...';
+        try {
+            if (!html5QrCode) html5QrCode = new Html5Qrcode("qr-reader");
+            await html5QrCode.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
+                (decodedText) => {
+                    if (qrInput) qrInput.value = decodedText;
+                    qrStatus.innerHTML = `<span style="color:#28a745">✅ Scanned: <strong>${decodedText}</strong></span>`;
+                    stopScanner();
+                },
+                () => {}
+            );
+            qrStatus.textContent = 'Point camera at QR code...';
+            scannerActive = true;
+            scanBtn.textContent = '⏹ Stop';
+        } catch (err) {
+            qrStatus.innerHTML = `<span style="color:#dc3545">❌ Camera error: ${err.message}</span>`;
+            qrModal.style.display = 'none';
+            scannerActive = false;
+        }
+    });
+
+    async function stopScanner() {
+        if (html5QrCode && scannerActive) { try { await html5QrCode.stop(); } catch(e) {} }
+        scannerActive = false;
+        qrModal.style.display = 'none';
+        scanBtn.textContent = '📷 Scan QR';
+        qrStatus.textContent = 'Point camera at QR code...';
     }
-  });
-
-  async function stopScanner() {
-    if (html5QrCode && scannerActive) { try { await html5QrCode.stop(); } catch(e) {} }
-    scannerActive = false;
-    qrModal.style.display = 'none';
-    scanBtn.textContent = '📷 Scan QR';
-    qrStatus.textContent = 'Point camera at QR code...';
-  }
-
-  closeQrModal?.addEventListener('click', stopScanner);
-  qrModal?.addEventListener('click', (e) => { if (e.target === qrModal) stopScanner(); });
+    closeQrModal?.addEventListener('click', stopScanner);
+    qrModal?.addEventListener('click', (e) => { if (e.target === qrModal) stopScanner(); });
 }
 window.addEventListener('beforeunload', async () => { if (html5QrCode && scannerActive) await html5QrCode.stop(); });
 
 function getLevelOptions(subject, currentValue = '') {
-  let levels = [];
-  if (subject === 'Math' || subject === 'English EFL') {
-    for (let i = 6; i >= 2; i--) levels.push(`${i}A`);
-    levels = levels.concat(['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O']);
-  } else if (subject.includes('Chinese') || subject === 'English ERP') {
-    for (let i = 7; i >= 2; i--) levels.push(`${i}A`);
-    ['A','B','C','D','E','F','G','H'].forEach(l => { levels.push(`${l}I`); levels.push(`${l}II`); });
-    levels.push('II', 'III', 'J', 'K', 'L');
-  }
-  let optionsHTML = '<option value="">Select Level</option>';
-  levels.forEach(lvl => { optionsHTML += `<option value="${lvl}" ${lvl === currentValue ? 'selected' : ''}>${lvl}</option>`; });
-  return optionsHTML;
+    let levels = [];
+    if (subject === 'Math' || subject === 'English EFL') {
+        for (let i = 6; i >= 2; i--) levels.push(`${i}A`);
+        levels = levels.concat(['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O']);
+    } else if (subject.includes('Chinese') || subject === 'English ERP') {
+        for (let i = 7; i >= 2; i--) levels.push(`${i}A`);
+        ['A','B','C','D','E','F','G','H'].forEach(l => { levels.push(`${l}I`); levels.push(`${l}II`); });
+        levels.push('II', 'III', 'J', 'K', 'L');
+    }
+    let optionsHTML = '<option value="">Select Level</option>';
+    levels.forEach(lvl => { optionsHTML += `<option value="${lvl}" ${lvl === currentValue ? 'selected' : ''}>${lvl}</option>`; });
+    return optionsHTML;
 }
 
-// ✅ UI TOGGLER LOGIC
 function applySubjectUI(entry) {
-  const statusEl = entry.querySelector('.status');
-  const dtToggleEl = entry.querySelector('.dt-toggle');
-  if (!statusEl || !dtToggleEl) return;
-  
-  const status = statusEl.value;
-  const dtToggle = dtToggleEl.value;
-  const isDrop = status === 'drop';
+    const statusEl = entry.querySelector('.status');
+    const dtToggleEl = entry.querySelector('.dt-toggle');
+    if (!statusEl || !dtToggleEl) return;
+    const status = statusEl.value;
+    const dtToggle = dtToggleEl.value;
+    const isDrop = status === 'drop';
 
-  // Field References
-  const inquiryDate = entry.querySelector('.fld-inquiry-date');
-  const dtFieldsContainer = entry.querySelector('.dt-fields-container');
-  const startLevel = entry.querySelector('.fld-start-level');
-  const startWS = entry.querySelector('.fld-start-ws');
-  const enrolDate = entry.querySelector('.fld-enrol-date');
-  const timeslots = entry.querySelector('.timeslots-container');
+    const inquiryDate = entry.querySelector('.fld-inquiry-date');
+    const dtFieldsContainer = entry.querySelector('.dt-fields-container');
+    const startLevel = entry.querySelector('.fld-start-level');
+    const startWS = entry.querySelector('.fld-start-ws');
+    const enrolDate = entry.querySelector('.fld-enrol-date');
+    const timeslots = entry.querySelector('.timeslots-container');
 
-  // Reset visibility & required
-  [inquiryDate, dtFieldsContainer, enrolDate].forEach(el => { if(el) el.style.display = 'none'; });
-  [startLevel, startWS].forEach(el => { if(el) el.style.display = 'none'; });
+    [inquiryDate, dtFieldsContainer, enrolDate].forEach(el => { if(el) el.style.display = 'none'; });
+    [startLevel, startWS].forEach(el => { if(el) el.style.display = 'none'; });
 
-  // 1. Inquiry Date
-  if (status === 'inquiry') {
-    if (inquiryDate) {
-      inquiryDate.style.display = 'block';
-      const input = inquiryDate.querySelector('input');
-      if (input) input.required = true;
+    if (status === 'inquiry') {
+        if (inquiryDate) { inquiryDate.style.display = 'block'; const input = inquiryDate.querySelector('input'); if (input) input.required = true; }
+        if (enrolDate) { enrolDate.style.display = 'none'; const input = enrolDate.querySelector('input'); if (input) input.required = false; }
+        if (timeslots) timeslots.style.display = 'none';
+    } else {
+        if (inquiryDate) { inquiryDate.style.display = 'none'; const input = inquiryDate.querySelector('input'); if (input) input.required = false; }
+        if (enrolDate) { enrolDate.style.display = 'block'; const input = enrolDate.querySelector('input'); if (input) input.required = true; }
+        if (timeslots) timeslots.style.display = 'block';
     }
-  } else {
-    if (inquiryDate) {
-      inquiryDate.style.display = 'none';
-      const input = inquiryDate.querySelector('input');
-      if (input) input.required = false;
-    }
-  }
 
-  // 2. Enrol Date & Timeslots (Visible ONLY for Current/Pause)
-  if (status === 'inquiry') {
-    if (enrolDate) {
-      enrolDate.style.display = 'none';
-      const input = enrolDate.querySelector('input');
-      if (input) input.required = false;
+    if (dtToggle === 'yes') {
+        if (dtFieldsContainer) { dtFieldsContainer.style.display = 'block'; dtFieldsContainer.querySelectorAll('input').forEach(inp => inp.required = true); }
+    } else {
+        if (dtFieldsContainer) { dtFieldsContainer.style.display = 'none'; dtFieldsContainer.querySelectorAll('input').forEach(inp => inp.required = false); }
     }
-    if (timeslots) timeslots.style.display = 'none';
-  } else {
-    if (enrolDate) {
-      enrolDate.style.display = 'block';
-      const input = enrolDate.querySelector('input');
-      if (input) input.required = true;
-    }
-    if (timeslots) timeslots.style.display = 'block';
-  }
 
-  // 3. DT Fields (Date, Test, Score, Time) - Visible if DT=Yes
-  if (dtToggle === 'yes') {
-    if (dtFieldsContainer) {
-      dtFieldsContainer.style.display = 'block';
-      dtFieldsContainer.querySelectorAll('input').forEach(inp => inp.required = true);
+    if (status === 'inquiry' && dtToggle === 'no') {
+        if (startLevel) { startLevel.style.display = 'none'; const sel = startLevel.querySelector('select'); if (sel) sel.required = false; }
+        if (startWS) { startWS.style.display = 'none'; const sel = startWS.querySelector('select'); if (sel) sel.required = false; }
+    } else {
+        if (startLevel) { startLevel.style.display = 'block'; const sel = startLevel.querySelector('select'); if (sel) sel.required = true; }
+        if (startWS) { startWS.style.display = 'block'; const sel = startWS.querySelector('select'); if (sel) sel.required = true; }
     }
-  } else {
-    if (dtFieldsContainer) {
-      dtFieldsContainer.style.display = 'none';
-      dtFieldsContainer.querySelectorAll('input').forEach(inp => inp.required = false);
-    }
-  }
 
-  // 4. Start Level & WS
-  if (status === 'inquiry' && dtToggle === 'no') {
-    if (startLevel) {
-      startLevel.style.display = 'none';
-      const sel = startLevel.querySelector('select');
-      if (sel) sel.required = false;
+    if (isDrop) {
+        entry.style.opacity = '0.65'; entry.style.filter = 'grayscale(0.4)';
+        entry.querySelectorAll('select, input').forEach(el => el.disabled = true);
+    } else {
+        entry.style.opacity = '1'; entry.style.filter = 'none';
+        entry.querySelectorAll('select, input').forEach(el => el.disabled = false);
     }
-    if (startWS) {
-      startWS.style.display = 'none';
-      const sel = startWS.querySelector('select');
-      if (sel) sel.required = false;
-    }
-  } else {
-    if (startLevel) {
-      startLevel.style.display = 'block';
-      const sel = startLevel.querySelector('select');
-      if (sel) sel.required = true;
-    }
-    if (startWS) {
-      startWS.style.display = 'block';
-      const sel = startWS.querySelector('select');
-      if (sel) sel.required = true;
-    }
-  }
-
-  // 5. Drop state styling
-  if (isDrop) {
-    entry.style.opacity = '0.65'; entry.style.filter = 'grayscale(0.4)';
-    entry.querySelectorAll('select, input').forEach(el => el.disabled = true);
-  } else {
-    entry.style.opacity = '1'; entry.style.filter = 'none';
-    entry.querySelectorAll('select, input').forEach(el => el.disabled = false);
-  }
-
-  updateOverallStatus();
-  renderSchedule();
-  updateSubjectEntry(entry);
+    
+    updateOverallStatus();
+    renderSchedule();
+    updateSubjectEntry(entry);
+    updateCurrentLevelsSummary(); // ✅ Update summary
 }
 
-// ✅ NULL-SAFE FORM DATA COLLECTOR
 function collectFormData() {
-  const subjects = [];
-  for (const entry of document.querySelectorAll('.subject-entry')) {
-    const statusEl = entry.querySelector('.status');
-    const status = statusEl?.value || 'drop';
-    const timeslots = [];
-    if (status !== 'inquiry') {
-      entry.querySelectorAll('.timeslots-list .timeslot-row').forEach(row => {
-        const dayEl = row.querySelector('.ts-day');
-        const hourEl = row.querySelector('.ts-hour');
-        const minEl = row.querySelector('.ts-min');
-        timeslots.push({
-          day: dayEl?.value || '',
-          time: `${hourEl?.value || '00'}:${minEl?.value || '00'}`
+    const subjects = [];
+    for (const entry of document.querySelectorAll('.subject-entry')) {
+        const statusEl = entry.querySelector('.status');
+        const status = statusEl?.value || 'drop';
+        const timeslots = [];
+        if (status !== 'inquiry') {
+            entry.querySelectorAll('.timeslots-list .timeslot-row').forEach(row => {
+                const dayEl = row.querySelector('.ts-day');
+                const hourEl = row.querySelector('.ts-hour');
+                const minEl = row.querySelector('.ts-min');
+                timeslots.push({
+                    day: dayEl?.value || '',
+                    time: `${hourEl?.value || '00'}:${minEl?.value || '00'}`
+                });
+            });
+        }
+        const pencilEntry = entry.querySelector('.pencil-skill-entry');
+        const pencilVisible = pencilEntry && pencilEntry.style.display !== 'none';
+        let pencilData = null;
+        if (pencilVisible) {
+            const pencilLevel = entry.querySelector('.pencil-level');
+            const pencilWs = entry.querySelector('.pencil-ws');
+            pencilData = { level: pencilLevel?.value || '', ws: pencilWs?.value || '' };
+        }
+        subjects.push({
+            name: entry.querySelector('.subject-name')?.value || '',
+            diagTestYesNo: entry.querySelector('.dt-toggle')?.value || 'no',
+            startLevel: entry.querySelector('.start-level')?.value || '',
+            startWS: parseInt(entry.querySelector('.start-ws')?.value) || 0,
+            inquiryDate: entry.querySelector('.inquiry-date')?.value || '',
+            diagDate: entry.querySelector('.diag-date')?.value || '',
+            diagTest: entry.querySelector('.diag-test')?.value?.trim() || '',
+            diagScore: entry.querySelector('.diag-score')?.value?.trim() || '',
+            diagTime: entry.querySelector('.diag-time')?.value ? parseInt(entry.querySelector('.diag-time').value) : '',
+            // ✅ Read from hidden DB field to prevent overwriting on save
+            currentLevel: entry.querySelector('.current-level-db')?.value || '', 
+            enrolDate: entry.querySelector('.enrol-date')?.value || '',
+            status,
+            timeslots,
+            progress: [],
+            pencilSkill: pencilData
         });
-      });
     }
-    const pencilEntry = entry.querySelector('.pencil-skill-entry');
-    const pencilVisible = pencilEntry && pencilEntry.style.display !== 'none';
-    let pencilData = null;
-    if (pencilVisible) {
-      const pencilLevel = entry.querySelector('.pencil-level');
-      const pencilWs = entry.querySelector('.pencil-ws');
-      pencilData = { level: pencilLevel?.value || '', ws: pencilWs?.value || '' };
-    }
-    subjects.push({
-      name: entry.querySelector('.subject-name')?.value || '',
-      diagTestYesNo: entry.querySelector('.dt-toggle')?.value || 'no',
-      startLevel: entry.querySelector('.start-level')?.value || '',
-      startWS: parseInt(entry.querySelector('.start-ws')?.value) || 0,
-      inquiryDate: entry.querySelector('.inquiry-date')?.value || '',
-      diagDate: entry.querySelector('.diag-date')?.value || '',
-      diagTest: entry.querySelector('.diag-test')?.value?.trim() || '',
-      diagScore: entry.querySelector('.diag-score')?.value?.trim() || '',
-      diagTime: entry.querySelector('.diag-time')?.value ? parseInt(entry.querySelector('.diag-time').value) : '',
-      currentLevel: entry.querySelector('.current-level')?.value || '',
-      currentWS: parseInt(entry.querySelector('.current-ws')?.value) || 0,
-      enrolDate: entry.querySelector('.enrol-date')?.value || '',
-      status,
-      timeslots,
-      progress: [],
-      pencilSkill: pencilData
-    });
-  }
-  
-  // ✅ NULL-SAFE HELPER FOR "OTHER" DROPDOWNS
-  const getVal = (id) => {
-    const select = document.getElementById(id);
-    const other = document.getElementById(id + 'Other');
-    if (!select) return '';
-    if (select.value === 'Other' && other) return other.value?.trim() || '';
-    return select.value?.trim() || '';
-  };
-  
-  return {
-    studentNumber: document.getElementById('studentNumber')?.value?.trim() || '',
-    nickname: document.getElementById('nickname')?.value?.trim() || '',
-    namePinyin: document.getElementById('namePinyin')?.value?.trim() || '',
-    nameCn: document.getElementById('nameCn')?.value?.trim() || '',
-    grade: getVal('grade'),
-    school: getVal('school'),
-    address: document.getElementById('address')?.value?.trim() || '',
-    nationality: getVal('nationality'),
-    email: document.getElementById('email')?.value?.trim() || '',
-    birthday: document.getElementById('birthday')?.value || '',
-    parentOrientation: document.getElementById('parentOrientation')?.value || '',
-    poDate: document.getElementById('poDate')?.value || '',
-    poReason: document.getElementById('poReason')?.value?.trim() || '',
-    phone: {
-      mom: document.getElementById('phoneMom')?.value?.trim() || '',
-      dad: document.getElementById('phoneDad')?.value?.trim() || '',
-      own: document.getElementById('phoneOwn')?.value?.trim() || ''
-    },
-    qrCode: document.getElementById('qrCodeInput')?.value?.trim() || '',
-    subjects
-  };
+
+    const getVal = (id) => {
+        const select = document.getElementById(id);
+        const other = document.getElementById(id + 'Other');
+        if (!select) return '';
+        if (select.value === 'Other' && other) return other.value?.trim() || '';
+        return select.value?.trim() || '';
+    };
+
+    return {
+        gender: document.getElementById('gender')?.value || '', // ✅ Added Gender
+        studentNumber: document.getElementById('studentNumber')?.value?.trim() || '',
+        nickname: document.getElementById('nickname')?.value?.trim() || '',
+        namePinyin: document.getElementById('namePinyin')?.value?.trim() || '',
+        nameCn: document.getElementById('nameCn')?.value?.trim() || '',
+        grade: getVal('grade'),
+        school: getVal('school'),
+        address: document.getElementById('address')?.value?.trim() || '',
+        nationality: getVal('nationality'),
+        email: document.getElementById('email')?.value?.trim() || '',
+        birthday: document.getElementById('birthday')?.value || '',
+        parentOrientation: document.getElementById('parentOrientation')?.value || '',
+        poDate: document.getElementById('poDate')?.value || '',
+        poReason: document.getElementById('poReason')?.value?.trim() || '',
+        phone: {
+            mom: document.getElementById('phoneMom')?.value?.trim() || '',
+            dad: document.getElementById('phoneDad')?.value?.trim() || '',
+            own: document.getElementById('phoneOwn')?.value?.trim() || ''
+        },
+        qrCode: document.getElementById('qrCodeInput')?.value?.trim() || '',
+        subjects
+    };
 }
 
 function getUsedSubjects(excludeEntry = null) {
-  const used = new Set();
-  document.querySelectorAll('.subject-entry').forEach(entry => {
-    if (entry === excludeEntry) return;
-    const subjectSelect = entry.querySelector('.subject-name');
-    const statusSelect = entry.querySelector('.status');
-    const subject = subjectSelect?.value;
-    const status = statusSelect?.value;
-    if (subject && status !== 'drop') used.add(subject);
-  });
-  return used;
+    const used = new Set();
+    document.querySelectorAll('.subject-entry').forEach(entry => {
+        if (entry === excludeEntry) return;
+        const subjectSelect = entry.querySelector('.subject-name');
+        const statusSelect = entry.querySelector('.status');
+        const subject = subjectSelect?.value;
+        const status = statusSelect?.value;
+        if (subject && status !== 'drop') used.add(subject);
+    });
+    return used;
 }
 
 function refreshSubjectOptions(subjectSelect) {
-  if (!subjectSelect) return;
-  const currentValue = subjectSelect.value;
-  const entry = subjectSelect.closest('.subject-entry');
-  const usedSubjects = getUsedSubjects(entry);
-  let optionsHTML = '<option value="">Select Subject *</option>';
-  SUBJECTS.forEach(s => {
-    const isSelected = s === currentValue;
-    const isUsed = usedSubjects.has(s) && !isSelected;
-    const disabled = isUsed ? 'disabled' : '';
-    const hint = isUsed ? ' (Added)' : '';
-    optionsHTML += `<option value="${s}" ${isSelected ? 'selected' : ''} ${disabled}>${s}${hint}</option>`;
-  });
-  subjectSelect.innerHTML = optionsHTML;
+    if (!subjectSelect) return;
+    const currentValue = subjectSelect.value;
+    const entry = subjectSelect.closest('.subject-entry');
+    const usedSubjects = getUsedSubjects(entry);
+    let optionsHTML = '<option value="">Select Subject *</option>';
+    SUBJECTS.forEach(s => {
+        const isSelected = s === currentValue;
+        const isUsed = usedSubjects.has(s) && !isSelected;
+        const disabled = isUsed ? 'disabled' : '';
+        const hint = isUsed ? ' (Added)' : '';
+        optionsHTML += `<option value="${s}" ${isSelected ? 'selected' : ''} ${disabled}>${s}${hint}</option>`;
+    });
+    subjectSelect.innerHTML = optionsHTML;
 }
 
 function updateSubjectEntry(entry) {
-  const subjectSelect = entry.querySelector('.subject-name');
-  const subject = subjectSelect?.value;
-  entry.classList.remove('subj-Math', 'subj-Chinese', 'subj-ERP', 'subj-EFL');
-  if (subject && SUBJECT_COLORS[subject]) entry.classList.add(SUBJECT_COLORS[subject]);
+    const subjectSelect = entry.querySelector('.subject-name');
+    const subject = subjectSelect?.value;
+    entry.classList.remove('subj-Math', 'subj-Chinese', 'subj-ERP', 'subj-EFL');
+    if (subject && SUBJECT_COLORS[subject]) entry.classList.add(SUBJECT_COLORS[subject]);
 }
 
 function addSubjectField(data = {}) {
-  if (subjectCount >= 3) return showError('Maximum 3 subjects allowed');
-  const container = document.getElementById('subjectsContainer');
-  if (!container) return;
-  
-  const div = document.createElement('div');
-  div.className = 'subject-entry';
-  const usedSubjects = getUsedSubjects(div);
-  const initialSubject = data.name || 'Math';
-  const levelOptionsHTML = getLevelOptions(initialSubject, data.startLevel);
-  const dtStatus = data.diagTestYesNo || 'no';
-
-  div.innerHTML = `
-    <div class="form-grid"> 
+    if (subjectCount >= 3) return showError('Maximum 3 subjects allowed');
+    const container = document.getElementById('subjectsContainer');
+    if (!container) return;
+    const div = document.createElement('div');
+    div.className = 'subject-entry';
+    const usedSubjects = getUsedSubjects(div);
+    const initialSubject = data.name || 'Math';
+    const levelOptionsHTML = getLevelOptions(initialSubject, data.startLevel);
+    const dtStatus = data.diagTestYesNo || 'no';
+    
+    div.innerHTML = `
+    <div class="form-grid">
       <div><label>Status</label><select class="status">
         <option value="inquiry" ${data.status === 'inquiry' ? 'selected' : ''}>Inquiry</option>
         <option value="current" ${data.status === 'current' ? 'selected' : ''} ${!data.status ? 'selected' : ''}>Current</option>
@@ -523,23 +499,21 @@ function addSubjectField(data = {}) {
       </select></div>
       <div><label>Select Subject *</label><select class="subject-name" required>
         <option value="">Select Subject *</option>
-        ${SUBJECTS.map(s => { 
-          const isSelected = data.name === s; 
-          const isUsed = usedSubjects.has(s) && !isSelected; 
-          return `<option value="${s}" ${isSelected ? 'selected' : ''} ${isUsed ? 'disabled' : ''}>${s}${isUsed ? ' (Added)' : ''}</option>`; 
+        ${SUBJECTS.map(s => {
+            const isSelected = data.name === s;
+            const isUsed = usedSubjects.has(s) && !isSelected;
+            return `<option value="${s}" ${isSelected ? 'selected' : ''} ${isUsed ? 'disabled' : ''}>${s}${isUsed ? ' (Added)' : ''}</option>`;
         }).join('')}
       </select></div>
       <div><label>Diagnostic Test</label><select class="dt-toggle">
         <option value="no" ${dtStatus === 'no' ? 'selected' : ''}>No</option>
         <option value="yes" ${dtStatus === 'yes' ? 'selected' : ''}>Yes</option>
       </select></div>
-
-      <!-- Inquiry Date -->
+      
       <div class="fld-inquiry-date" style="display:${data.status === 'inquiry' ? 'block' : 'none'}">
         <label>Inquiry Date *</label><input type="date" class="inquiry-date" value="${data.inquiryDate || ''}">
       </div>
 
-      <!-- DT Fields Wrapper -->
       <div class="dt-fields-container" style="display:${dtStatus === 'yes' ? 'block' : 'none'}">
         <div class="fld-diag-date"><label>Diagnostic Date *</label><input type="date" class="diag-date" value="${data.diagDate || ''}"></div>
         <div class="fld-diag-test"><label>Diagnostic Test *</label><input type="text" class="diag-test" placeholder="e.g. K1/K2/P1" value="${data.diagTest || ''}"></div>
@@ -547,7 +521,6 @@ function addSubjectField(data = {}) {
         <div class="fld-diag-time"><label>Time (mins) *</label><input type="number" class="diag-time" placeholder="e.g. 30" value="${data.diagTime || ''}"></div>
       </div>
 
-      <!-- Start Level / WS -->
       <div class="fld-start-level" style="display:${(data.status === 'inquiry' && dtStatus === 'no') ? 'none' : 'block'}">
         <label>Start Level *</label><select class="start-level subject-level-select">${levelOptionsHTML}</select>
       </div>
@@ -555,7 +528,13 @@ function addSubjectField(data = {}) {
         <label>Start WS # *</label><select class="start-ws"><option value="">Select WS</option>${getWSDropdownOptions(data.startWS)}</select>
       </div>
 
-      <!-- Enrol Date -->
+      <!-- ✅ CURRENT LEVEL FROM DATABASE (Read-only) -->
+      <input type="hidden" class="current-level-db" value="${data.currentLevel || ''}">
+      <div class="fld-current-level-readonly" style="display:block;">
+        <label>Current Level <span style="color:#999; font-weight:400;">(From Database)</span></label>
+        <input type="text" class="current-level-display" readonly value="${data.currentLevel || 'Not Set'}" style="background:#f1f5f9; color:#64748b; cursor:not-allowed;">
+      </div>
+
       <div class="fld-enrol-date" style="display:${data.status === 'inquiry' ? 'none' : 'block'}">
         <label>Enrol Date *</label><input type="date" class="enrol-date" value="${data.enrolDate || ''}">
       </div>
@@ -571,506 +550,485 @@ function addSubjectField(data = {}) {
         <div><label>Pencil Start WS</label><select class="pencil-ws">${getWSDropdownOptions(data.pencilSkill?.ws)}</select></div>
       </div>
     </div>
-    <div class="timeslots-container" style="display:${data.status === 'inquiry' ? 'none' : 'block'}"> 
-      <h4 style="font-size:0.9rem; margin:0 0 0.5rem;">Timeslots (Max 6)</h4> 
-      <div class="timeslots-list"></div> 
-      <button type="button" class="add-timeslot-btn secondary" style="margin-top:0.5rem; padding:0.4rem 0.8rem; font-size:0.9rem;">+ Add Timeslot</button> 
-    </div> 
+    <div class="timeslots-container" style="display:${data.status === 'inquiry' ? 'none' : 'block'}">
+      <h4 style="font-size:0.9rem; margin:0 0 0.5rem;">Timeslots (Max 6)</h4>
+      <div class="timeslots-list"></div>
+      <button type="button" class="add-timeslot-btn secondary" style="margin-top:0.5rem; padding:0.4rem 0.8rem; font-size:0.9rem;">+ Add Timeslot</button>
+    </div>
     <button type="button" class="remove-subject" style="background:#dc3545; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; margin-top:0.5rem;">Remove Subject</button>`;
-  
-  const timeslotsList = div.querySelector('.timeslots-list');
-  if (data.timeslots?.length) data.timeslots.forEach(ts => addTimeslotField(timeslotsList, ts));
-  else addTimeslotField(timeslotsList);
 
-  const addPencilBtn = div.querySelector('.add-pencil-btn');
-  const pencilEntry = div.querySelector('.pencil-skill-entry');
-  if (data.pencilSkill) {
-    pencilEntry.style.display = 'block'; addPencilBtn.style.display = 'none';
-    const pencilLevel = pencilEntry.querySelector('.pencil-level');
-    const pencilWs = pencilEntry.querySelector('.pencil-ws');
-    if (pencilLevel) pencilLevel.required = true;
-    if (pencilWs) pencilWs.required = true;
-  }
-  if (addPencilBtn) {
-    addPencilBtn.onclick = () => {
-      const anyVisible = Array.from(document.querySelectorAll('.pencil-skill-entry')).some(el => el.style.display !== 'none');
-      if (anyVisible) return showError('⚠️ Only one Pencil Skill can be added per student.');
-      pencilEntry.style.display = 'block'; addPencilBtn.style.display = 'inline-block';
-      const pencilLevel = pencilEntry.querySelector('.pencil-level');
-      const pencilWs = pencilEntry.querySelector('.pencil-ws');
-      if (pencilLevel) pencilLevel.required = true;
-      if (pencilWs) pencilWs.required = true;
-    };
-  }
-  const removePencilBtn = div.querySelector('.remove-pencil-btn');
-  if (removePencilBtn) {
-    removePencilBtn.onclick = () => {
-      pencilEntry.style.display = 'none'; 
-      if (addPencilBtn) addPencilBtn.style.display = 'inline-block';
-      const pencilLevel = pencilEntry.querySelector('.pencil-level');
-      const pencilWs = pencilEntry.querySelector('.pencil-ws');
-      if (pencilLevel) { pencilLevel.value = ''; pencilLevel.required = false; }
-      if (pencilWs) { pencilWs.value = ''; pencilWs.required = false; }
-    };
-  }
+    const timeslotsList = div.querySelector('.timeslots-list');
+    if (data.timeslots?.length) data.timeslots.forEach(ts => addTimeslotField(timeslotsList, ts));
+    else addTimeslotField(timeslotsList);
 
-  const addTimeslotBtn = div.querySelector('.add-timeslot-btn');
-  if (addTimeslotBtn) addTimeslotBtn.onclick = () => addTimeslotField(timeslotsList);
-  
-  const removeSubjectBtn = div.querySelector('.remove-subject');
-  if (removeSubjectBtn) {
-    removeSubjectBtn.onclick = () => {
-      div.remove(); subjectCount--; updateOverallStatus(); renderSchedule();
-      document.querySelectorAll('.subject-entry').forEach(entry => {
-        const select = entry.querySelector('.subject-name'); if (select) refreshSubjectOptions(select);
-      });
-    };
-  }
-
-  const subjectNameSelect = div.querySelector('.subject-name');
-  if (subjectNameSelect) {
-    subjectNameSelect.addEventListener('change', (e) => {
-      const startLevelSelect = div.querySelector('.start-level');
-      if (startLevelSelect) startLevelSelect.innerHTML = getLevelOptions(e.target.value, '');
-      validateConflict(e.target); renderSchedule(); updateSubjectEntry(div);
-      document.querySelectorAll('.subject-entry').forEach(entry => {
-        const select = entry.querySelector('.subject-name'); if (select && select !== e.target) refreshSubjectOptions(select);
-      });
-    });
-  }
-
-  const statusSelect = div.querySelector('.status');
-  const dtToggleSelect = div.querySelector('.dt-toggle');
-  if (statusSelect) statusSelect.addEventListener('change', () => applySubjectUI(div));
-  if (dtToggleSelect) dtToggleSelect.addEventListener('change', () => applySubjectUI(div));
-
-  container.appendChild(div);
-  subjectCount++;
-  applySubjectUI(div); // Initialize UI state
+    const addPencilBtn = div.querySelector('.add-pencil-btn');
+    const pencilEntry = div.querySelector('.pencil-skill-entry');
+    if (data.pencilSkill) {
+        pencilEntry.style.display = 'block'; addPencilBtn.style.display = 'none';
+        const pencilLevel = pencilEntry.querySelector('.pencil-level');
+        const pencilWs = pencilEntry.querySelector('.pencil-ws');
+        if (pencilLevel) pencilLevel.required = true;
+        if (pencilWs) pencilWs.required = true;
+    }
+    if (addPencilBtn) {
+        addPencilBtn.onclick = () => {
+            const anyVisible = Array.from(document.querySelectorAll('.pencil-skill-entry')).some(el => el.style.display !== 'none');
+            if (anyVisible) return showError('⚠️ Only one Pencil Skill can be added per student.');
+            pencilEntry.style.display = 'block'; addPencilBtn.style.display = 'inline-block';
+            const pencilLevel = pencilEntry.querySelector('.pencil-level');
+            const pencilWs = pencilEntry.querySelector('.pencil-ws');
+            if (pencilLevel) pencilLevel.required = true;
+            if (pencilWs) pencilWs.required = true;
+        };
+    }
+    const removePencilBtn = div.querySelector('.remove-pencil-btn');
+    if (removePencilBtn) {
+        removePencilBtn.onclick = () => {
+            pencilEntry.style.display = 'none';
+            if (addPencilBtn) addPencilBtn.style.display = 'inline-block';
+            const pencilLevel = pencilEntry.querySelector('.pencil-level');
+            const pencilWs = pencilEntry.querySelector('.pencil-ws');
+            if (pencilLevel) { pencilLevel.value = ''; pencilLevel.required = false; }
+            if (pencilWs) { pencilWs.value = ''; pencilWs.required = false; }
+        };
+    }
+    const addTimeslotBtn = div.querySelector('.add-timeslot-btn');
+    if (addTimeslotBtn) addTimeslotBtn.onclick = () => addTimeslotField(timeslotsList);
+    
+    const removeSubjectBtn = div.querySelector('.remove-subject');
+    if (removeSubjectBtn) {
+        removeSubjectBtn.onclick = () => {
+            div.remove(); subjectCount--; updateOverallStatus(); renderSchedule(); updateCurrentLevelsSummary();
+            document.querySelectorAll('.subject-entry').forEach(entry => {
+                const select = entry.querySelector('.subject-name'); if (select) refreshSubjectOptions(select);
+            });
+        };
+    }
+    
+    const subjectNameSelect = div.querySelector('.subject-name');
+    if (subjectNameSelect) {
+        subjectNameSelect.addEventListener('change', (e) => {
+            const startLevelSelect = div.querySelector('.start-level');
+            if (startLevelSelect) startLevelSelect.innerHTML = getLevelOptions(e.target.value, '');
+            validateConflict(e.target); renderSchedule(); updateSubjectEntry(div); updateCurrentLevelsSummary();
+            document.querySelectorAll('.subject-entry').forEach(entry => {
+                const select = entry.querySelector('.subject-name'); if (select && select !== e.target) refreshSubjectOptions(select);
+            });
+        });
+    }
+    
+    const statusSelect = div.querySelector('.status');
+    const dtToggleSelect = div.querySelector('.dt-toggle');
+    if (statusSelect) statusSelect.addEventListener('change', () => applySubjectUI(div));
+    if (dtToggleSelect) dtToggleSelect.addEventListener('change', () => applySubjectUI(div));
+    
+    container.appendChild(div);
+    subjectCount++;
+    applySubjectUI(div);
 }
 
 function validateConflict(currentSelect) {
-  if (!currentSelect) return;
-  const selected = currentSelect.value;
-  if (!selected) return;
-  const entry = currentSelect.closest('.subject-entry');
-  const currentStatusEl = entry?.querySelector('.status');
-  const currentStatus = currentStatusEl?.value;
-  const others = Array.from(document.querySelectorAll('.subject-name')).filter(s => s !== currentSelect);
-  for (const s of others) {
-    const otherEntry = s.closest('.subject-entry');
-    const otherStatusEl = otherEntry?.querySelector('.status');
-    const otherStatus = otherStatusEl?.value;
-    if (s.value === selected && otherStatus !== 'drop' && currentStatus !== 'drop') {
-      showError(`⚠️ ${selected} is already added. Please choose a different subject or drop the existing one.`);
-      currentSelect.value = ''; return;
+    if (!currentSelect) return;
+    const selected = currentSelect.value;
+    if (!selected) return;
+    const entry = currentSelect.closest('.subject-entry');
+    const currentStatusEl = entry?.querySelector('.status');
+    const currentStatus = currentStatusEl?.value;
+    const others = Array.from(document.querySelectorAll('.subject-name')).filter(s => s !== currentSelect);
+    for (const s of others) {
+        const otherEntry = s.closest('.subject-entry');
+        const otherStatusEl = otherEntry?.querySelector('.status');
+        const otherStatus = otherStatusEl?.value;
+        if (s.value === selected && otherStatus !== 'drop' && currentStatus !== 'drop') {
+            showError(`⚠️ ${selected} is already added. Please choose a different subject or drop the existing one.`);
+            currentSelect.value = ''; return;
+        }
+        if (['English ERP', 'English EFL'].includes(selected) && ['English ERP', 'English EFL'].includes(s.value)) {
+            if (otherStatus !== 'drop' && currentStatus !== 'drop') {
+                showError('English ERP & EFL cannot be together unless one is Dropped.');
+                currentSelect.value = ''; return;
+            }
+        }
+        if (selected.includes('Chinese') && s.value.includes('Chinese')) {
+            if (otherStatus !== 'drop' && currentStatus !== 'drop') {
+                showError('Please select only one type of Chinese (Traditional or Simplified).');
+                currentSelect.value = ''; return;
+            }
+        }
     }
-    if (['English ERP', 'English EFL'].includes(selected) && ['English ERP', 'English EFL'].includes(s.value)) {
-      if (otherStatus !== 'drop' && currentStatus !== 'drop') {
-        showError('English ERP & EFL cannot be together unless one is Dropped.');
-        currentSelect.value = ''; return;
-      }
-    }
-    if (selected.includes('Chinese') && s.value.includes('Chinese')) {
-      if (otherStatus !== 'drop' && currentStatus !== 'drop') {
-        showError('Please select only one type of Chinese (Traditional or Simplified).');
-        currentSelect.value = ''; return;
-      }
-    }
-  }
 }
 
 function getHourOptions(selectedHour, day = 'Monday') {
-  const isWeekend = ['Saturday', 'Sunday'].includes(day);
-  let opts = '';
-  for (let i = isWeekend ? 9 : 10; i <= (isWeekend ? 18 : 21); i++) {
-    const val = String(i).padStart(2, '0');
-    opts += `<option value="${val}" ${val === selectedHour ? 'selected' : ''}>${val}</option>`;
-  }
-  return opts;
-}
-function getMinuteOptions(selectedMin) {
-  let opts = '';
-  for (let i = 0; i < 60; i++) {
-    const val = String(i).padStart(2, '0');
-    opts += `<option value="${val}" ${val === selectedMin ? 'selected' : ''}>${val}</option>`;
-  }
-  return opts;
-}
-function isTimeslotGloballyUsed(day, hour, min, excludeRow = null) {
-  for (const row of document.querySelectorAll('.timeslot-row')) {
-    if (row === excludeRow) continue;
-    const subjectEntry = row.closest('.subject-entry');
-    if (subjectEntry?.querySelector('.status')?.value === 'drop') continue;
-    if (row.querySelector('.ts-day')?.value === day && row.querySelector('.ts-hour')?.value === hour && row.querySelector('.ts-min')?.value === min) {
-      return subjectEntry?.querySelector('.subject-name')?.value || 'another subject';
+    const isWeekend = ['Saturday', 'Sunday'].includes(day);
+    let opts = '';
+    for (let i = isWeekend ? 9 : 10; i <= (isWeekend ? 18 : 21); i++) {
+        const val = String(i).padStart(2, '0');
+        opts += `<option value="${val}" ${val === selectedHour ? 'selected' : ''}>${val}</option>`;
     }
-  }
-  return false;
+    return opts;
 }
+
+function getMinuteOptions(selectedMin) {
+    let opts = '';
+    for (let i = 0; i < 60; i++) {
+        const val = String(i).padStart(2, '0');
+        opts += `<option value="${val}" ${val === selectedMin ? 'selected' : ''}>${val}</option>`;
+    }
+    return opts;
+}
+
+function isTimeslotGloballyUsed(day, hour, min, excludeRow = null) {
+    for (const row of document.querySelectorAll('.timeslot-row')) {
+        if (row === excludeRow) continue;
+        const subjectEntry = row.closest('.subject-entry');
+        if (subjectEntry?.querySelector('.status')?.value === 'drop') continue;
+        if (row.querySelector('.ts-day')?.value === day && row.querySelector('.ts-hour')?.value === hour && row.querySelector('.ts-min')?.value === min) {
+            return subjectEntry?.querySelector('.subject-name')?.value || 'another subject';
+        }
+    }
+    return false;
+}
+
 function addTimeslotField(timeslotsList, data = {}) {
-  if (!timeslotsList || timeslotsList.children.length >= 6) return showError('Maximum 6 timeslots per subject');
-  let h = '01', m = '00', day = data.day || 'Monday';
-  if (data.time) { const p = data.time.split(':'); if(p.length===2) { h =p[0]; m=p[1]; } }
-  const row = document.createElement('div');
-  row.className = 'timeslot-row';
-  row.innerHTML = `<div><label>Day</label><select class="ts-day" required>${DAYS.map(d => `<option value="${d}" ${data.day === d ? 'selected' : ''}>${d}</option>`).join('')}</select></div>
-  <div><label>Time (24h)</label><div class="time-input-group"><select class="ts-hour" required>${getHourOptions(h, day)}</select><span class="time-separator">:</span><select class="ts-min" required>${getMinuteOptions(m)}</select></div></div>
-  <div class="remove-timeslot-wrapper"><button type="button" class="remove-ts-btn" title="Remove">×</button></div>`;
-  
-  const daySel = row.querySelector('.ts-day'), hourSel = row.querySelector('.ts-hour'), minSel = row.querySelector('.ts-min');
-  const checkConflict = () => {
-    if (!daySel?.value || !hourSel?.value || !minSel?.value) return;
-    const conflict = isTimeslotGloballyUsed(daySel.value, hourSel.value, minSel.value, row);
-    if (conflict) showError(`⚠️ Timeslot conflict: ${daySel.value} ${hourSel.value}:${minSel.value} booked for ${conflict}.`);
-  };
-  if (daySel) daySel.addEventListener('change', e => { 
-    if (hourSel) hourSel.innerHTML = getHourOptions(hourSel.value, e.target.value); 
-    checkConflict(); renderSchedule(); 
-  });
-  if (hourSel) hourSel.addEventListener('change', () => { checkConflict(); renderSchedule(); });
-  if (minSel) minSel.addEventListener('change', () => { checkConflict(); renderSchedule(); });
-  const removeBtn = row.querySelector('.remove-ts-btn');
-  if (removeBtn) removeBtn.onclick = () => { row.remove(); renderSchedule(); };
-  timeslotsList.appendChild(row);
+    if (!timeslotsList || timeslotsList.children.length >= 6) return showError('Maximum 6 timeslots per subject');
+    let h = '01', m = '00', day = data.day || 'Monday';
+    if (data.time) { const p = data.time.split(':'); if(p.length===2) { h=p[0]; m=p[1]; } }
+    const row = document.createElement('div');
+    row.className = 'timeslot-row';
+    row.innerHTML = `
+    <div><label>Day</label><select class="ts-day" required>${DAYS.map(d => `<option value="${d}" ${data.day === d ? 'selected' : ''}>${d}</option>`).join('')}</select></div>
+    <div><label>Time (24h)</label><div class="time-input-group"><select class="ts-hour" required>${getHourOptions(h, day)}</select><span class="time-separator">:</span><select class="ts-min" required>${getMinuteOptions(m)}</select></div></div>
+    <div class="remove-timeslot-wrapper"><button type="button" class="remove-ts-btn" title="Remove">×</button></div>`;
+    
+    const daySel = row.querySelector('.ts-day'), hourSel = row.querySelector('.ts-hour'), minSel = row.querySelector('.ts-min');
+    const checkConflict = () => {
+        if (!daySel?.value || !hourSel?.value || !minSel?.value) return;
+        const conflict = isTimeslotGloballyUsed(daySel.value, hourSel.value, minSel.value, row);
+        if (conflict) showError(`⚠️ Timeslot conflict: ${daySel.value} ${hourSel.value}:${minSel.value} booked for ${conflict}.`);
+    };
+    if (daySel) daySel.addEventListener('change', e => {
+        if (hourSel) hourSel.innerHTML = getHourOptions(hourSel.value, e.target.value);
+        checkConflict(); renderSchedule();
+    });
+    if (hourSel) hourSel.addEventListener('change', () => { checkConflict(); renderSchedule(); });
+    if (minSel) minSel.addEventListener('change', () => { checkConflict(); renderSchedule(); });
+    const removeBtn = row.querySelector('.remove-ts-btn');
+    if (removeBtn) removeBtn.onclick = () => { row.remove(); renderSchedule(); };
+    timeslotsList.appendChild(row);
 }
 
 document.getElementById('addSubjectBtn')?.addEventListener('click', () => addSubjectField());
 
-// ✅ NULL-SAFE LOAD STUDENT DATA
 async function loadStudentData() {
-  try {
-    if (!centerId || !studentId) {
-      showError('Missing center or student ID');
-      hideLoader();
-      return;
-    }
-    
-    const snap = await get(ref(db, `centers/${centerId}/students/${studentId}`));
-    if (snap.exists()) {
-      let s = snap.val();
-      
-      // ✅ Check for September grade update
-      if (checkSeptemberGradeUpdate(s)) {
-        await set(ref(db, `centers/${centerId}/students/${studentId}`), s);
-        console.log(`🍂 Grade auto-updated for Sept: ${s.grade}`);
-      }
-
-      // ✅ NULL-SAFE HELPER TO SET VALUES
-      const setVal = (id, val) => {
-        const el = document.getElementById(id);
-        if (el) el.value = val || '';
-      };
-
-      // ✅ NULL-SAFE HELPER FOR DROPDOWNS + OTHER INPUTS
-      const setFieldWithOther = (id, value) => {
-        const select = document.getElementById(id);
-        const otherInput = document.getElementById(id + 'Other');
-        
-        if (!select) {
-          console.warn(`⚠️ Element #${id} not found`);
-          return;
+    try {
+        if (!centerId || !studentId) {
+            showError('Missing center or student ID');
+            hideLoader();
+            return;
         }
-        
-        let found = false;
-        // Safe iteration over options
-        if (select.options) {
-          for (let i = 0; i < select.options.length; i++) {
-            if (select.options[i].value === value) { found = true; break; }
-          }
-        }
-        
-        if (found) {
-          select.value = value;
-          if (otherInput) otherInput.classList.remove('visible');
+        const snap = await get(ref(db, `centers/${centerId}/students/${studentId}`));
+        if (snap.exists()) {
+            let s = snap.val();
+            
+            if (checkSeptemberGradeUpdate(s)) {
+                await set(ref(db, `centers/${centerId}/students/${studentId}`), s);
+                console.log(`🍂 Grade auto-updated for Sept: ${s.grade}`);
+            }
+
+            const setVal = (id, val) => {
+                const el = document.getElementById(id);
+                if (el) el.value = val || '';
+            };
+
+            const setFieldWithOther = (id, value) => {
+                const select = document.getElementById(id);
+                const otherInput = document.getElementById(id + 'Other');
+                
+                if (!select) return;
+                
+                let found = false;
+                if (select.options) {
+                    for (let i = 0; i < select.options.length; i++) {
+                        if (select.options[i].value === value) { found = true; break; }
+                    }
+                }
+                
+                if (found) {
+                    select.value = value;
+                    if (otherInput) otherInput.classList.remove('visible');
+                } else {
+                    select.value = 'Other';
+                    if (otherInput) {
+                        otherInput.value = value || '';
+                        otherInput.classList.add('visible');
+                    }
+                }
+            };
+
+            // Basic fields (Added 'gender')
+            ['studentNumber','nickname','namePinyin','nameCn','email','address','gender'].forEach(id => setVal(id, s[id]));
+            
+            if (s.grade) setFieldWithOther('grade', s.grade);
+            if (s.school) setFieldWithOther('school', s.school);
+            if (s.nationality) setFieldWithOther('nationality', s.nationality);
+               
+            setVal('birthday', s.birthday);
+            updateAgeDisplay();
+            
+            if (s.qrCode && qrInput) qrInput.value = s.qrCode;
+            
+            if (s.phone) {
+                ['mom','dad','own'].forEach(k => {
+                    const el = document.getElementById(`phone${k.charAt(0).toUpperCase()+k.slice(1)}`);
+                    if (el) el.value = s.phone[k] || '';
+                });
+            }
+
+            if (s.subjects?.length) {
+                s.subjects.forEach(sub => { 
+                    addSubjectField(sub); 
+                    const entries = document.querySelectorAll('.subject-entry');
+                    if (entries.length) applySubjectUI(entries[entries.length - 1]);
+                });
+            } else {
+                addSubjectField();
+            }
+            
+            setVal('parentOrientation', s.parentOrientation);
+            setVal('poDate', s.poDate);
+            setVal('poReason', s.poReason);
+            
+            if (typeof togglePO === 'function') togglePO();
+            
+            updateOverallStatus(); 
+            updateCurrentLevelsSummary(); // ✅ Update summary
+            originalFormData = collectFormData();
+            
         } else {
-          select.value = 'Other';
-          if (otherInput) {
-            otherInput.value = value || '';
-            otherInput.classList.add('visible');
-          }
+            showError('Student not found in database.');
+            setTimeout(() => window.location.href = 'students.html', 1500);
         }
-      };
-
-      // Basic fields
-      ['studentNumber','nickname','namePinyin','nameCn','email','address'].forEach(id => setVal(id, s[id]));
-      
-      // Dropdowns with "Other"
-      if (s.grade) setFieldWithOther('grade', s.grade);
-      if (s.school) setFieldWithOther('school', s.school);
-      if (s.nationality) setFieldWithOther('nationality', s.nationality);
-      
-      // Birthday + Age
-      setVal('birthday', s.birthday);
-      updateAgeDisplay();
-      
-      // QR Code (null-safe)
-      if (s.qrCode && qrInput) qrInput.value = s.qrCode;
-      
-      // Phone numbers
-      if (s.phone) {
-        ['mom','dad','own'].forEach(k => {
-          const el = document.getElementById(`phone${k.charAt(0).toUpperCase()+k.slice(1)}`);
-          if (el) el.value = s.phone[k] || '';
-        });
-      }
-
-      // Subjects
-      if (s.subjects?.length) {
-        s.subjects.forEach(sub => { 
-          addSubjectField(sub); 
-          const entries = document.querySelectorAll('.subject-entry');
-          if (entries.length) applySubjectUI(entries[entries.length - 1]);
-        });
-      } else {
-        addSubjectField();
-      }
-      
-      // Parent Orientation fields (null-safe)
-      setVal('parentOrientation', s.parentOrientation);
-      setVal('poDate', s.poDate);
-      setVal('poReason', s.poReason);
-      
-      // Re-trigger PO visibility toggle if function exists
-      if (typeof togglePO === 'function') togglePO();
-      
-      // Finalize
-      updateOverallStatus(); 
-      originalFormData = collectFormData();
-      
-    } else {
-      showError('Student not found in database.');
-      setTimeout(() => window.location.href = 'students.html', 1500);
+    } catch (err) {
+        console.error('Load Error:', err);
+        showError('Error loading student: ' + err.message);
+    } finally {
+        hideLoader();
     }
-  } catch (err) { 
-    console.error('Load Error:', err);
-    showError('Error loading student: ' + err.message); 
-  } finally { 
-    hideLoader(); 
-  }
 }
 
 const deleteBtn = document.getElementById('deleteBtn');
 if(isEdit && deleteBtn) {
-  deleteBtn.style.display = '';
-  deleteBtn.onclick = async () => {
-    if(confirm('Permanently delete this student?')) {
-      try { showLoader(); await remove(ref(db, `centers/${centerId}/students/${studentId}`)); alert('Deleted!'); window.location.href='students.html'; }
-      catch(err) { showError('Error: '+err.message); } finally { hideLoader(); }
-    }
-  };
+    deleteBtn.style.display = '';
+    deleteBtn.onclick = async () => {
+        if(confirm('Permanently delete this student?')) {
+            try { showLoader(); await remove(ref(db, `centers/${centerId}/students/${studentId}`)); alert('Deleted!'); window.location.href='students.html'; }
+            catch(err) { showError('Error: '+err.message); } finally { hideLoader(); }
+        }
+    };
 }
 
 const transferBtn = document.getElementById('transferBtn');
 const transferModal = document.getElementById('transferModal');
 const targetCenterSelect = document.getElementById('targetCenterSelect');
 if(isEdit && transferBtn) {
-  transferBtn.style.display = '';
-  transferBtn.onclick = async () => {
-    transferModal.classList.remove('hidden');
-    targetCenterSelect.innerHTML = '<option value="">Loading centers...</option>';
-    try {
-      const snap = await get(ref(db, 'centers'));
-      if (snap.exists()) {
-        let opts = '';
-        Object.keys(snap.val()).forEach(k => { if(k !== centerId) opts += `<option value="${k}">${snap.val()[k].name || k}</option>`; });
-        targetCenterSelect.innerHTML = opts || '<option value="">No centers available</option>';
-      }
-    } catch { targetCenterSelect.innerHTML = '<option value="">Error loading</option>'; }
-  };
+    transferBtn.style.display = '';
+    transferBtn.onclick = async () => {
+        transferModal.classList.remove('hidden');
+        targetCenterSelect.innerHTML = '<option value="">Loading centers...</option>';
+        try {
+            const snap = await get(ref(db, 'centers'));
+            if (snap.exists()) {
+                let opts = '';
+                Object.keys(snap.val()).forEach(k => { if(k !== centerId) opts += `<option value="${k}">${snap.val()[k].name || k}</option>`; });
+                targetCenterSelect.innerHTML = opts || '<option value="">No centers available</option>';
+            }
+        } catch { targetCenterSelect.innerHTML = '<option value="">Error loading</option>'; }
+    };
 }
+
 document.getElementById('closeTransferModal')?.addEventListener('click', () => transferModal.classList.add('hidden'));
 document.getElementById('confirmTransferBtn')?.addEventListener('click', async () => {
-  const targetId = targetCenterSelect?.value;
-  if (!targetId || targetId === centerId) return showError('Please select a valid target center.');
-  if (!confirm(`Transfer student to ${targetId.replace(/kumon-/g,'').replace(/-/g,' ').toUpperCase()}?`)) return;
-  transferModal.classList.add('hidden'); showLoader();
-  try {
-    const sourceRef = ref(db, `centers/${centerId}/students/${studentId}`);
-    const snap = await get(sourceRef);
-    if(!snap.exists()) throw new Error('Student not found.');
-    const data = snap.val(); data.transferredFrom = centerId; data.transferredAt = new Date().toISOString();
-    await push(ref(db, `centers/${targetId}/students`), data);
-    await remove(sourceRef);
-    alert('✅ Transferred!'); window.location.href = 'students.html';
-  } catch(err) { showError('Transfer failed: ' + err.message); } finally { hideLoader(); }
+    const targetId = targetCenterSelect?.value;
+    if (!targetId || targetId === centerId) return showError('Please select a valid target center.');
+    if (!confirm(`Transfer student to ${targetId.replace(/kumon-/g,'').replace(/-/g,' ').toUpperCase()}?`)) return;
+    transferModal.classList.add('hidden'); showLoader();
+    try {
+        const sourceRef = ref(db, `centers/${centerId}/students/${studentId}`);
+        const snap = await get(sourceRef);
+        if(!snap.exists()) throw new Error('Student not found.');
+        const data = snap.val(); data.transferredFrom = centerId; data.transferredAt = new Date().toISOString();
+        await push(ref(db, `centers/${targetId}/students`), data);
+        await remove(sourceRef);
+        alert('✅ Transferred!'); window.location.href = 'students.html';
+    } catch(err) { showError('Transfer failed: ' + err.message); } finally { hideLoader(); }
 });
 
-// ✅ ENHANCED FORM SUBMIT
 document.getElementById('studentForm')?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  if (!centerId) return showError('Error: No center selected.');
-  if (html5QrCode && scannerActive) await html5QrCode.stop();
-
-  const contactChecks = [
-    { id: 'nameCn', label: 'Full Name (Chinese)' }, { id: 'birthday', label: 'Birthday' },
-    { id: 'grade', label: 'Grade' }, { id: 'school', label: 'School' }, { id: 'nationality', label: 'Nationality' }
-  ];
-  for (const check of contactChecks) {
-    const el = document.getElementById(check.id);
-    const otherEl = document.getElementById(check.id + 'Other');
-    const val = el?.value === 'Other' ? otherEl?.value?.trim() : el?.value?.trim();
-    if (!val) return showError(`⚠️ "${check.label}" is required.`);
-  }
-  const phoneMom = document.getElementById('phoneMom')?.value?.trim();
-  const phoneDad = document.getElementById('phoneDad')?.value?.trim();
-  const phoneOwn = document.getElementById('phoneOwn')?.value?.trim();
-  if (!phoneMom && !phoneDad && !phoneOwn) return showError('⚠️ At least one Phone Number is required.');
-
-  const poSelect = document.getElementById('parentOrientation');
-  const poVal = poSelect?.value;
-  if (!poVal) return showError('⚠️ "Parent Orientation" is required.');
-  if (poVal === 'Yes') {
-    const poDateEl = document.getElementById('poDate');
-    if (poDateEl && !poDateEl.value) return showError('⚠️ Please select a Parent Orientation date.');
-  }
-  if (poVal === 'No') {
-    const poReasonEl = document.getElementById('poReason');
-    if (poReasonEl && !poReasonEl.value?.trim()) return showError('⚠️ Please provide a reason for no Parent Orientation.');
-  }
-
-  const pencilCount = Array.from(document.querySelectorAll('.pencil-skill-entry')).filter(el => el.style.display !== 'none').length;
-  if (pencilCount > 1) return showError('⚠️ Only one Pencil Skill can be added per student.');
-
-  let subIdx = 1;
-  for (const entry of document.querySelectorAll('.subject-entry')) {
-    if (entry.style.display === 'none' || entry.querySelector('.status')?.value === 'drop') continue;
-    const status = entry.querySelector('.status')?.value;
-    const dtToggle = entry.querySelector('.dt-toggle')?.value;
-    const subject = entry.querySelector('.subject-name');
-    const startLevel = entry.querySelector('.start-level');
-    const startWS = entry.querySelector('.start-ws');
-    const enrolDate = entry.querySelector('.enrol-date');
-    const inquiryDate = entry.querySelector('.inquiry-date');
-    const diagTest = entry.querySelector('.diag-test');
-    const diagScore = entry.querySelector('.diag-score');
-    const diagTime = entry.querySelector('.diag-time');
-    const diagDate = entry.querySelector('.diag-date');
-
-    if (!subject?.value) return showError(`⚠️ Subject #${subIdx}: Please select a Subject.`);
-
-    if (status === 'inquiry') {
-      // ✅ Inquiry Validation
-      if (!inquiryDate?.value) return showError(`⚠️ Subject #${subIdx}: Inquiry Date is required.`);
-      
-      if (dtToggle === 'yes') {
-        // DT Fields are required if Yes
-        if (!diagDate?.value) return showError(`⚠️ Subject #${subIdx}: Diagnostic Date is required.`);
-        if (!diagTest?.value) return showError(`⚠️ Subject #${subIdx}: Diagnostic Test is required.`);
-        if (!diagScore?.value) return showError(`⚠️ Subject #${subIdx}: Diagnostic Score is required.`);
-        if (!diagTime?.value) return showError(`⚠️ Subject #${subIdx}: Diagnostic Time is required.`);
-        // Level/WS are required for Inquiry if DT is Yes
-        if (!startLevel?.value) return showError(`⚠️ Subject #${subIdx}: Start Level is required.`);
-        if (!startWS?.value) return showError(`⚠️ Subject #${subIdx}: Start WS # is required.`);
-      }
-    } else {
-      // ✅ Current / Pause Validation
-      if (!enrolDate?.value) return showError(`⚠️ Subject #${subIdx}: Enrol Date is required.`);
-      if (entry.querySelectorAll('.timeslots-list .timeslot-row').length === 0) return showError(`⚠️ Subject #${subIdx}: Add at least one timeslot.`);
-      
-      // Level/WS always required for Current
-      if (!startLevel?.value) return showError(`⚠️ Subject #${subIdx}: Please select a Start Level.`);
-      if (!startWS?.value) return showError(`⚠️ Subject #${subIdx}: Please select a Start WS #.`);
-      
-      if (dtToggle === 'yes') {
-        // DT Fields are required if Yes
-        if (!diagDate?.value) return showError(`⚠️ Subject #${subIdx}: Diagnostic Date is required.`);
-        if (!diagTest?.value) return showError(`⚠️ Subject #${subIdx}: Diagnostic Test is required.`);
-        if (!diagScore?.value) return showError(`⚠️ Subject #${subIdx}: Diagnostic Score is required.`);
-        if (!diagTime?.value) return showError(`⚠️ Subject #${subIdx}: Diagnostic Time is required.`);
-      }
+    e.preventDefault();
+    if (!centerId) return showError('Error: No center selected.');
+    if (html5QrCode && scannerActive) await html5QrCode.stop();
+    
+    const contactChecks = [
+        { id: 'nameCn', label: 'Full Name (Chinese)' }, { id: 'birthday', label: 'Birthday' },
+        { id: 'grade', label: 'Grade' }, { id: 'school', label: 'School' }, { id: 'nationality', label: 'Nationality' }
+    ];
+    for (const check of contactChecks) {
+        const el = document.getElementById(check.id);
+        const otherEl = document.getElementById(check.id + 'Other');
+        const val = el?.value === 'Other' ? otherEl?.value?.trim() : el?.value?.trim();
+        if (!val) return showError(`⚠️ "${check.label}" is required.`);
     }
-    subIdx++;
-  }
-  if (subIdx === 1) return showError('⚠️ Please add at least one subject.');
-
-  // Conflict check
-  const globalTimeslots = new Map();
-  let hasConflict = false;
-  for (const entry of document.querySelectorAll('.subject-entry')) {
-    if (entry.querySelector('.status')?.value === 'drop') continue;
-    const subjectName = entry.querySelector('.subject-name')?.value || 'Unknown';
-    entry.querySelectorAll('.timeslots-list .timeslot-row').forEach(row => {
-      const day = row.querySelector('.ts-day')?.value, hour = row.querySelector('.ts-hour')?.value, min = row.querySelector('.ts-min')?.value;
-      if (day && hour && min) {
-        const key = `${day}-${hour}:${min}`;
-        if (globalTimeslots.has(key)) { showError(`⚠️ Timeslot conflict: ${subjectName} & ${globalTimeslots.get(key)} on ${day} at ${hour}:${min}`); hasConflict = true; }
-        else globalTimeslots.set(key, subjectName);
-      }
-    });
-    if (hasConflict) return;
-  }
-
-  const currentFormData = collectFormData();
-  for (const sub of currentFormData.subjects) {
-    if (sub.pencilSkill && !sub.pencilSkill.ws) return showError('⚠️ Please select a Pencil Start WS.');
-  }
-
-  if (isEdit && JSON.stringify(currentFormData) === JSON.stringify(originalFormData)) return showError('ℹ️ No changes made.');
-
-  const studentData = { ...currentFormData, updatedAt: new Date().toISOString() };
-  if (isEdit) {
-    const snap = await get(ref(db, `centers/${centerId}/students/${studentId}`));
-    if (snap.exists()) {
-      const existingData = snap.val();
-      const oldSubjects = Array.isArray(existingData.subjects) ? existingData.subjects : Object.values(existingData.subjects || {});
-      studentData.subjects = studentData.subjects.map(newSub => {
-        const oldSub = oldSubjects.find(s => s.name === newSub.name);
-        if (oldSub && Array.isArray(oldSub.progress)) return { ...newSub, progress: oldSub.progress };
-        return newSub;
-      });
+    
+    const phoneMom = document.getElementById('phoneMom')?.value?.trim();
+    const phoneDad = document.getElementById('phoneDad')?.value?.trim();
+    const phoneOwn = document.getElementById('phoneOwn')?.value?.trim();
+    if (!phoneMom && !phoneDad && !phoneOwn) return showError('⚠️ At least one Phone Number is required.');
+    
+    const poSelect = document.getElementById('parentOrientation');
+    const poVal = poSelect?.value;
+    if (!poVal) return showError('⚠️ "Parent Orientation" is required.');
+    if (poVal === 'Yes') {
+        const poDateEl = document.getElementById('poDate');
+        if (poDateEl && !poDateEl.value) return showError('⚠️ Please select a Parent Orientation date.');
     }
-  }
+    if (poVal === 'No') {
+        const poReasonEl = document.getElementById('poReason');
+        if (poReasonEl && !poReasonEl.value?.trim()) return showError('⚠️ Please provide a reason for no Parent Orientation.');
+    }
+    
+    const pencilCount = Array.from(document.querySelectorAll('.pencil-skill-entry')).filter(el => el.style.display !== 'none').length;
+    if (pencilCount > 1) return showError('⚠️ Only one Pencil Skill can be added per student.');
+    
+    let subIdx = 1;
+    for (const entry of document.querySelectorAll('.subject-entry')) {
+        if (entry.style.display === 'none' || entry.querySelector('.status')?.value === 'drop') continue;
+        const status = entry.querySelector('.status')?.value;
+        const dtToggle = entry.querySelector('.dt-toggle')?.value;
+        const subject = entry.querySelector('.subject-name');
+        const startLevel = entry.querySelector('.start-level');
+        const startWS = entry.querySelector('.start-ws');
+        const enrolDate = entry.querySelector('.enrol-date');
+        const inquiryDate = entry.querySelector('.inquiry-date');
+        const diagTest = entry.querySelector('.diag-test');
+        const diagScore = entry.querySelector('.diag-score');
+        const diagTime = entry.querySelector('.diag-time');
+        const diagDate = entry.querySelector('.diag-date');
+        
+        if (!subject?.value) return showError(`⚠️ Subject #${subIdx}: Please select a Subject.`);
 
-  try {
-    showLoader();
-    if (isEdit) await set(ref(db, `centers/${centerId}/students/${studentId}`), studentData);
-    else await push(ref(db, `centers/${centerId}/students`), studentData);
-    alert(isEdit ? '✅ Updated!' : '✅ Added!');
-    window.location.href = 'students.html';
-  } catch (err) { showError('Error saving: ' + err.message); } finally { hideLoader(); }
+        if (status === 'inquiry') {
+            if (!inquiryDate?.value) return showError(`⚠️ Subject #${subIdx}: Inquiry Date is required.`);
+            if (dtToggle === 'yes') {
+                if (!diagDate?.value) return showError(`⚠️ Subject #${subIdx}: Diagnostic Date is required.`);
+                if (!diagTest?.value) return showError(`⚠️ Subject #${subIdx}: Diagnostic Test is required.`);
+                if (!diagScore?.value) return showError(`⚠️ Subject #${subIdx}: Diagnostic Score is required.`);
+                if (!diagTime?.value) return showError(`⚠️ Subject #${subIdx}: Diagnostic Time is required.`);
+                if (!startLevel?.value) return showError(`⚠️ Subject #${subIdx}: Start Level is required.`);
+                if (!startWS?.value) return showError(`⚠️ Subject #${subIdx}: Start WS # is required.`);
+            }
+        } else {
+            if (!enrolDate?.value) return showError(`⚠️ Subject #${subIdx}: Enrol Date is required.`);
+            if (entry.querySelectorAll('.timeslots-list .timeslot-row').length === 0) return showError(`⚠️ Subject #${subIdx}: Add at least one timeslot.`);
+            if (!startLevel?.value) return showError(`⚠️ Subject #${subIdx}: Please select a Start Level.`);
+            if (!startWS?.value) return showError(`⚠️ Subject #${subIdx}: Please select a Start WS #.`);
+            if (dtToggle === 'yes') {
+                if (!diagDate?.value) return showError(`⚠️ Subject #${subIdx}: Diagnostic Date is required.`);
+                if (!diagTest?.value) return showError(`⚠️ Subject #${subIdx}: Diagnostic Test is required.`);
+                if (!diagScore?.value) return showError(`⚠️ Subject #${subIdx}: Diagnostic Score is required.`);
+                if (!diagTime?.value) return showError(`⚠️ Subject #${subIdx}: Diagnostic Time is required.`);
+            }
+        }
+        subIdx++;
+    }
+    if (subIdx === 1) return showError('⚠️ Please add at least one subject.');
+    
+    const globalTimeslots = new Map();
+    let hasConflict = false;
+    for (const entry of document.querySelectorAll('.subject-entry')) {
+        if (entry.querySelector('.status')?.value === 'drop') continue;
+        const subjectName = entry.querySelector('.subject-name')?.value || 'Unknown';
+        entry.querySelectorAll('.timeslots-list .timeslot-row').forEach(row => {
+            const day = row.querySelector('.ts-day')?.value, hour = row.querySelector('.ts-hour')?.value, min = row.querySelector('.ts-min')?.value;
+            if (day && hour && min) {
+                const key = `${day}-${hour}:${min}`;
+                if (globalTimeslots.has(key)) { showError(`⚠️ Timeslot conflict: ${subjectName} & ${globalTimeslots.get(key)} on ${day} at ${hour}:${min}`); hasConflict = true; }
+                else globalTimeslots.set(key, subjectName);
+            }
+        });
+        if (hasConflict) return;
+    }
+    
+    const currentFormData = collectFormData();
+    for (const sub of currentFormData.subjects) {
+        if (sub.pencilSkill && !sub.pencilSkill.ws) return showError('⚠️ Please select a Pencil Start WS.');
+    }
+    if (isEdit && JSON.stringify(currentFormData) === JSON.stringify(originalFormData)) return showError('ℹ️ No changes made.');
+    
+    const studentData = { ...currentFormData, updatedAt: new Date().toISOString() };
+    if (isEdit) {
+        const snap = await get(ref(db, `centers/${centerId}/students/${studentId}`));
+        if (snap.exists()) {
+            const existingData = snap.val();
+            const oldSubjects = Array.isArray(existingData.subjects) ? existingData.subjects : Object.values(existingData.subjects || {});
+            studentData.subjects = studentData.subjects.map(newSub => {
+                const oldSub = oldSubjects.find(s => s.name === newSub.name);
+                if (oldSub && Array.isArray(oldSub.progress)) return { ...newSub, progress: oldSub.progress };
+                return newSub;
+            });
+        }
+    }
+    
+    try {
+        showLoader();
+        if (isEdit) await set(ref(db, `centers/${centerId}/students/${studentId}`), studentData);
+        else await push(ref(db, `centers/${centerId}/students`), studentData);
+        alert(isEdit ? '✅ Updated!' : '✅ Added!');
+        window.location.href = 'students.html';
+    } catch (err) { showError('Error saving: ' + err.message); } finally { hideLoader(); }
 });
 
 document.getElementById('cancelBtn')?.addEventListener('click', () => { if (confirm('Discard changes?')) window.location.href = 'students.html'; });
 document.getElementById('backToStudents')?.addEventListener('click', (e) => {
-  e.preventDefault();
-  if (!originalFormData) { window.location.href = 'students.html'; return; }
-  if (JSON.stringify(collectFormData()) !== JSON.stringify(originalFormData)) {
-    if (confirm('You have unsaved changes. Are you sure you want to leave?')) window.location.href = 'students.html';
-  } else { window.location.href = 'students.html'; }
+    e.preventDefault();
+    if (!originalFormData) { window.location.href = 'students.html'; return; }
+    if (JSON.stringify(collectFormData()) !== JSON.stringify(originalFormData)) {
+        if (confirm('You have unsaved changes. Are you sure you want to leave?')) window.location.href = 'students.html';
+    } else { window.location.href = 'students.html'; }
 });
 
 function initParentOrientation() {
-  const poSelect = document.getElementById('parentOrientation');
-  if (!poSelect) return;
-  const dateWrapper = document.getElementById('poDateWrapper');
-  const reasonWrapper = document.getElementById('poReasonWrapper');
-  const dateInput = document.getElementById('poDate');
-  const reasonInput = document.getElementById('poReason');
-  function togglePOFields() {
-    const val = poSelect.value;
-    if (val === 'Yes') { 
-      if (dateWrapper) dateWrapper.classList.add('visible'); 
-      if (reasonWrapper) reasonWrapper.classList.remove('visible'); 
-      if (dateInput) { dateInput.required = true; } 
-      if (reasonInput) { reasonInput.required = false; reasonInput.value = ''; } 
+    const poSelect = document.getElementById('parentOrientation');
+    if (!poSelect) return;
+    const dateWrapper = document.getElementById('poDateWrapper');
+    const reasonWrapper = document.getElementById('poReasonWrapper');
+    const dateInput = document.getElementById('poDate');
+    const reasonInput = document.getElementById('poReason');
+    
+    function togglePOFields() {
+        const val = poSelect.value;
+        if (val === 'Yes') {
+            if (dateWrapper) dateWrapper.classList.add('visible');
+            if (reasonWrapper) reasonWrapper.classList.remove('visible');
+            if (dateInput) { dateInput.required = true; }
+            if (reasonInput) { reasonInput.required = false; reasonInput.value = ''; }
+        }
+        else if (val === 'No') {
+            if (dateWrapper) dateWrapper.classList.remove('visible');
+            if (reasonWrapper) reasonWrapper.classList.add('visible');
+            if (dateInput) { dateInput.required = false; dateInput.value = ''; }
+            if (reasonInput) { reasonInput.required = true; }
+        }
+        else {
+            if (dateWrapper) dateWrapper.classList.remove('visible');
+            if (reasonWrapper) reasonWrapper.classList.remove('visible');
+            if (dateInput) dateInput.required = false;
+            if (reasonInput) reasonInput.required = false;
+        }
     }
-    else if (val === 'No') { 
-      if (dateWrapper) dateWrapper.classList.remove('visible'); 
-      if (reasonWrapper) reasonWrapper.classList.add('visible'); 
-      if (dateInput) { dateInput.required = false; dateInput.value = ''; } 
-      if (reasonInput) { reasonInput.required = true; } 
-    }
-    else { 
-      if (dateWrapper) dateWrapper.classList.remove('visible'); 
-      if (reasonWrapper) reasonWrapper.classList.remove('visible'); 
-      if (dateInput) dateInput.required = false; 
-      if (reasonInput) reasonInput.required = false; 
-    }
-  }
-  poSelect.addEventListener('change', togglePOFields);
-  return togglePOFields;
+    poSelect.addEventListener('change', togglePOFields);
+    return togglePOFields;
 }
+
 const togglePO = initParentOrientation();
 initOtherInputs();
 if (isEdit) loadStudentData(); else { addSubjectField(); hideLoader(); }

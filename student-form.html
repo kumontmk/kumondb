@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Student Form - Kumon DB</title>
-  <!-- <link rel="stylesheet" href="style.css"> -->
   <link rel="stylesheet" href="student-form.css">
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 </head>
@@ -29,42 +28,27 @@
           <input type="text" id="namePinyin" placeholder="e.g. Zhang San"></div>
           <div><label>Full Name (Chinese)</label><input type="text" id="nameCn" required></div>
           
-          <!-- ✅ UPDATED GRADE DROPDOWN -->
           <div>
             <label>Grade</label>
             <div class="select-wrapper">
               <select id="grade" required>
                 <option value="">Select Grade</option>
-                <option value="K0">K0</option>
-                <option value="K1">K1</option>
-                <option value="K2">K2</option>
-                <option value="K3">K3</option>
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-                <option value="6">6</option>
-                <option value="7">7</option>
-                <option value="8">8</option>
-                <option value="9">9</option>
-                <option value="10">10</option>
-                <option value="11">11</option>
-                <option value="12">12</option>
+                <option value="K0">K0</option><option value="K1">K1</option><option value="K2">K2</option><option value="K3">K3</option>
+                <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option>
+                <option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option>
+                <option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option>
                 <option value="13">13</option>
               </select>
               <input type="text" id="gradeOther" class="other-input" placeholder="Enter Grade">
             </div>
           </div>
 
-          <!-- ✅ UPDATED SCHOOL DROPDOWN -->
           <div>
             <label>School</label>
             <div class="select-wrapper">
               <select id="school" required>
                 <option value="">Select School</option>
-                <option value="聯國SON">聯國 SON</option>
-                <option value="培華PUI WA">培華 PUI WA</option>
+                <option value="聯國SON">聯國 SON</option><option value="培華PUI WA">培華 PUI WA</option>
                 <option value="培道幼稚園POOI TO">培道幼稚園 POOI TO</option>
                 <option value="婦聯小白兔托兒所Creche da Associacao Geral">婦聯小白兔托兒所 Creche</option>
                 <option value="氹仔坊衆學校 FONG CHONG">氹仔坊衆學校 FONG CHONG</option>
@@ -101,31 +85,35 @@
           <div><label>Birthday</label><input type="date" id="birthday"></div>
           <div><label>Age (Auto)</label><input type="text" id="ageDisplay" readonly></div>
           
-          <!-- ✅ UPDATED NATIONALITY DROPDOWN -->
           <div>
             <label>Nationality</label>
             <div class="select-wrapper">
               <select id="nationality" required>
                 <option value="">Select Nationality</option>
-                <option value="Chinese 中國籍">Chinese 中國籍</option>
-                <option value="Portuguese 葡萄牙籍">Portuguese 葡萄牙籍</option>
-                <option value="British 英國籍">British 英國籍</option>
-                <option value="USA 美國籍">USA 美國籍</option>
-                <option value="Canadian 加拿大籍">Canadian 加拿大籍</option>
-                <option value="French 法國籍">French 法國籍</option>
-                <option value="Japanese 日本籍">Japanese 日本籍</option>
-                <option value="Korean 韓國籍">Korean 韓國籍</option>
-                <option value="Philippines 菲律賓籍">Philippines 菲律賓籍</option>
-                <option value="Irish 愛爾蘭籍">Irish 愛爾蘭籍</option>
-                <option value="Taiwan 台灣籍">Taiwan 台灣籍</option>
-                <option value="Brazil 巴西籍">Brazil 巴西籍</option>
+                <option value="Chinese 中國籍">Chinese 中國籍</option><option value="Portuguese 葡萄牙籍">Portuguese 葡萄牙籍</option>
+                <option value="British 英國籍">British 英國籍</option><option value="USA 美國籍">USA 美國籍</option>
+                <option value="Canadian 加拿大籍">Canadian 加拿大籍</option><option value="French 法國籍">French 法國籍</option>
+                <option value="Japanese 日本籍">Japanese 日本籍</option><option value="Korean 韓國籍">Korean 韓國籍</option>
+                <option value="Philippines 菲律賓籍">Philippines 菲律賓籍</option><option value="Irish 愛爾蘭籍">Irish 愛爾蘭籍</option>
+                <option value="Taiwan 台灣籍">Taiwan 台灣籍</option><option value="Brazil 巴西籍">Brazil 巴西籍</option>
                 <option value="Other">Other...</option>
               </select>
               <input type="text" id="nationalityOther" class="other-input" placeholder="Enter Nationality">
             </div>
           </div>
 
-          <!-- OVERALL STATUS & PO FIELDS WITH THIS -->
+          <!-- ✅ ADDED: GENDER DROPDOWN -->
+          <div>
+            <label>Gender</label>
+            <select id="gender">
+              <option value="">Select Gender</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <!-- OVERALL STATUS & PO FIELDS -->
           <div class="po-layout-wrapper">
             <div class="po-main-row">
               <div class="po-field">
@@ -150,12 +138,17 @@
               <input type="text" id="poReason" placeholder="Example: Parent refused, student transferred, parents busy, need weekend, no response, etc.">
             </div>
           </div>
+
+          <!-- ✅ ADDED: CURRENT LEVELS SUMMARY (Reads directly from DB) -->
+          <div style="grid-column: 1 / -1; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e2e8f0;">
+            <label style="font-weight: 600; color: #2c3e50; margin-bottom: 0.5rem; display: block;">📊 Current Level(s)</label>
+            <div id="currentLevelsSummary" class="form-grid" style="margin: 0;">
+              <p class="hint" style="grid-column: 1 / -1; margin: 0;">Add subjects below to view their current levels.</p>
+            </div>
+          </div>
       </section>
 
-
-
-      <!-- 2. QR Code (Before Tabs) -->
-        <!-- 📷 QR Button & Input (Flex Layout) -->
+      <!-- 2. QR Code -->
         <div style="margin: 1rem 0;">
           <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: #2c3e50; font-size: 0.95rem;">📷 Student QR Code</label>
           <div style="display: flex; gap: 0.5rem; align-items: center;">
@@ -164,7 +157,6 @@
           </div>
         </div>
 
-        <!-- 📷 QR Scanner Modal -->
         <style>
           #qr-reader video, #qr-reader canvas { width: 100% !important; height: 100% !important; object-fit: cover; border-radius: 8px; }
           #qr-reader div[style*="position: absolute"] { display: none !important; }
@@ -207,9 +199,7 @@
         <p class="hint">📅 Schedule auto-generates from subject timeslots. Dropped subjects are hidden.</p>
         <table class="schedule-table" id="scheduleTable">
           <thead>
-            <tr id="scheduleHeader">
-              <!-- Dynamic header rendered by JS -->
-            </tr>
+            <tr id="scheduleHeader"></tr>
           </thead>
           <tbody id="scheduleBody">
             <tr><td colspan="7" style="text-align:center; padding:1.5rem; color:#666;">Add subjects & timeslots to view schedule</td></tr>
@@ -217,16 +207,12 @@
         </table>
       </div>
 
-      <!-- ✅ Actions - Clean Grouped Layout -->
+      <!-- ✅ Actions -->
       <div class="form-actions" style="margin-top:1.5rem; display:flex; gap:1rem; flex-wrap:wrap; align-items:center;">
-        <!-- Left Group: Save & Cancel -->
         <div style="display:flex; gap:0.75rem;">
           <button type="submit" id="saveBtn" class="primary">💾 Save Student</button>
-          <!-- Changed from <a> to <button> to allow JS confirmation -->
           <button type="button" id="cancelBtn" class="secondary" style="padding:0.75rem 1.5rem; text-decoration:none; color:white; border-radius:var(--radius); display:inline-flex; align-items:center; justify-content:center; background:#6c757d; border:none; cursor:pointer;">Cancel</button>
         </div>
-        
-        <!-- Right Group: Transfer & Delete -->
         <div style="display:flex; gap:0.75rem; margin-left:auto;">
           <button type="button" id="transferBtn" class="secondary" style="display:none;">🔄 Transfer</button>
           <button type="button" id="deleteBtn" class="danger" style="display:none;">🗑️ Delete</button>
@@ -246,7 +232,7 @@
     </div>
   </div>
 
-  <!-- ✅ NEW: Validation Error Modal -->
+  <!-- ✅ Validation Error Modal -->
   <div id="errorModal" class="modal hidden">
     <div class="modal-content" style="max-width:400px; text-align:center;">
       <h3 style="color:#dc3545; margin-bottom:0.5rem; font-size: 2rem;">ERROR</h3>
