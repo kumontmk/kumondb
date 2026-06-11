@@ -4,10 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Monthly Reports - Kumon DB</title>
-  <!-- <link rel="stylesheet" href="style.css"> -->
   <link rel="stylesheet" href="reports.css">
 </head>
 <body>
+  <div id="page-loader" class="hidden">
+    <div class="spinner"></div>
+  </div>
+
   <header>
     <nav>
       <a href="dashboard.html">← Dashboard</a>
@@ -16,40 +19,33 @@
   </header>
 
   <main class="form-container">
-    <!-- 🆕 CARD-BASED SUBJECT SELECTOR -->
-    <div id="subjectSelector" class="center-grid subject-grid">
-      <div class="center-card subject-card active" data-subject="all">📚 All Subjects</div>
-      <div class="center-card subject-card" data-subject="Math">🔢 Math</div>
-      <div class="center-card subject-card" data-subject="Chinese">🀄 Chinese</div>
-      <div class="center-card subject-card" data-subject="English ERP">🔤 English ERP</div>
-      <div class="center-card subject-card" data-subject="English EFL">🌍 English EFL</div>
+    <div class="subject-grid">
+      <div class="subject-card active" data-subject="all">📚 All Subjects</div>
+      <div class="subject-card" data-subject="Math">🔢 Math</div>
+      <div class="subject-card" data-subject="Chinese">🀄 Chinese</div>
+      <div class="subject-card" data-subject="English ERP">🔤 English ERP</div>
+      <div class="subject-card" data-subject="English EFL">🌍 English EFL</div>
+      <div class="subject-card" data-subject="Pencil">✏️ ZI/ZII Pencil</div>
     </div>
 
-    <!-- 🛠️ FIXED CONTROLS LAYOUT -->
     <div class="controls">
       <div class="control-group">
-        <label for="reportMonth" class="control-label">📅 Month</label>
+        <label class="control-label" for="reportMonth">📅 Month</label>
         <input type="month" id="reportMonth" required>
       </div>
-      <button id="generateReport" type="button" class="primary action-btn">📊 Generate</button>
-      <button id="printReport" type="button" class="print-btn">
-        <span class="print-icon">🖨️</span>
-        <span class="print-text">Print</span>
-      </button>
+      <button id="generateReport" class="primary">📊 Generate</button>
+      <button id="printReport" class="print-btn">🖨️ Print</button>
     </div>
 
-    <!-- 📊 SCROLLABLE REPORT AREA -->
     <div id="monthlyReport" class="hidden">
       <div id="reportOutput"></div>
     </div>
-    
-    <!-- 💾 STICKY SAVE BAR -->
-    <div class="save-bar">
-      <button id="saveReportBtn" type="button" class="primary" style="display:none;">💾 Save Changes</button>
-    </div>
   </main>
 
-  <div id="page-loader" class="hidden"><div class="spinner"></div></div>
+  <div class="save-bar hidden" id="saveBar">
+    <button id="saveReportBtn" class="primary">💾 Save Changes</button>
+  </div>
+
   <script type="module" src="reports.js"></script>
 </body>
 </html>

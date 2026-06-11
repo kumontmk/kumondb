@@ -174,6 +174,8 @@
         <button type="button" class="tab-btn active" data-tab="contact">📞 Contact Info</button>
         <button type="button" class="tab-btn" data-tab="subjects">📚 Subjects (Max 3)</button>
         <button type="button" class="tab-btn" data-tab="schedule">📅 Schedule</button>
+        <!-- ✅ NEW TAB BUTTON -->
+        <button type="button" class="tab-btn" data-tab="dt-at">📝 DT & AT</button>
       </div>
 
       <!-- 4. Tab Content: Contact -->
@@ -205,6 +207,50 @@
             <tr><td colspan="7" style="text-align:center; padding:1.5rem; color:#666;">Add subjects & timeslots to view schedule</td></tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- ✅ NEW TAB CONTENT: DT & AT -->
+      <div id="tab-dt-at" class="tab-content">
+        <h3 style="margin-bottom: 1rem; color: var(--primary-dark);">Diagnostic Tests (DT) - Manual Entry</h3>
+        <div class="table-wrapper" style="overflow-x: auto; margin-bottom: 1.5rem;">
+          <table class="schedule-table" id="dtTable" style="min-width: 900px;">
+            <thead>
+              <tr>
+                <th>Subject *</th>
+                <th>Diagnostic Date *</th>
+                <th>Test Name/Level *</th>
+                <th>Score *</th>
+                <th>Time (mins) *</th>
+                <th>Suggested Start</th>
+                <th>Actual Start</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="dtTableBody">
+              <!-- Rows injected via JS -->
+            </tbody>
+          </table>
+        </div>
+        <button type="button" class="secondary" id="addDTBtn" style="padding: 0.5rem 1rem; font-size: 0.9rem;">+ Add Diagnostic Test</button>
+
+        <h3 style="margin-top: 2.5rem; margin-bottom: 1rem; color: var(--primary-dark);">Achievement Tests (AT) - Auto-filled from Reports</h3>
+        <div class="table-wrapper" style="overflow-x: auto;">
+          <table class="schedule-table" id="atTable" style="min-width: 700px;">
+            <thead>
+              <tr>
+                <th>Subject</th>
+                <th>AT</th>
+                <th>Date</th>
+                <th>Score</th>
+                <th>Time (mins)</th>
+                <th>Group</th>
+              </tr>
+            </thead>
+            <tbody id="atTableBody">
+              <!-- Rows injected via JS -->
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <!-- ✅ Actions -->

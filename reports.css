@@ -2,79 +2,81 @@
 📊 REPORTS TAB STYLES (Isolated)
 ========================================== */
 :root {
---primary: #87CEEB;
---primary-dark: #4682B4;
---secondary: #f0f8ff;
---text: #333;
---text-light: #666;
---white: #fff;
---shadow: 0 2px 10px rgba(0,0,0,0.1);
---radius: 8px;
+  --primary: #87CEEB;
+  --primary-dark: #4682B4;
+  --secondary: #f0f8ff;
+  --text: #333;
+  --text-light: #666;
+  --white: #fff;
+  --shadow: 0 2px 10px rgba(0,0,0,0.1);
+  --radius: 8px;
 }
-*, *::before, *::after {
-box-sizing: border-box;
-margin: 0;
-padding: 0;
+*, *::before, ::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 body {
-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-background: var(--secondary);
-color: var(--text);
-line-height: 1.6;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--secondary);
+  color: var(--text);
+  line-height: 1.6;
 }
+
 /* Header */
 header {
-background: var(--primary);
-color: var(--white);
-padding: 1rem;
-display: flex;
-justify-content: space-between;
-align-items: center;
-flex-wrap: wrap;
-gap: 0.5rem;
+  background: var(--primary);
+  color: var(--white);
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 header nav {
-display: flex;
-gap: 1rem;
-align-items: center;
-flex-wrap: wrap;
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
 }
 header a, header button {
-color: var(--white);
-text-decoration: none;
-background: rgba(255,255,255,0.2);
-padding: 0.5rem 1rem;
-border-radius: var(--radius);
-border: none;
-cursor: pointer;
+  color: var(--white);
+  text-decoration: none;
+  background: rgba(255,255,255,0.2);
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  border: none;
+  cursor: pointer;
 }
+
 /* Forms & Table Containers */
 .form-container {
-padding: 1rem;
-max-width: 98%;
-width: 98%;
-margin: 0 auto;
+  padding: 1rem;
+  max-width: 98%;
+  width: 98%;
+  margin: 0 auto;
 }
 .form-grid {
-display: grid;
-grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-gap: 1rem;
-margin: 1rem 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
 }
 input, select, textarea {
-width: 100%;
-padding: 0.75rem;
-border: 1px solid #ddd;
-border-radius: var(--radius);
-font-size: 1rem;
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: var(--radius);
+  font-size: 1rem;
 }
 button {
-padding: 0.75rem 1.5rem;
-border: none;
-border-radius: var(--radius);
-cursor: pointer;
-font-weight: 500;
-transition: background 0.2s;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
 }
 button.primary { background: var(--primary-dark); color: var(--white); }
 button.secondary { background: #6c757d; color: var(--white); }
@@ -91,40 +93,46 @@ button:hover { opacity: 0.9; }
 .subject-card[data-subject="Chinese"].active { border-color: #9DC183; background: #f4f9f1; color: #6b8f5c; box-shadow: 0 3px 8px rgba(157, 193, 131, 0.3); }
 .subject-card[data-subject="English ERP"].active { border-color: #E63946; background: #fde8e9; color: #b32d38; box-shadow: 0 3px 8px rgba(230, 57, 70, 0.3); }
 .subject-card[data-subject="English EFL"].active { border-color: #F4A261; background: #fef3ea; color: #c97a3e; box-shadow: 0 3px 8px rgba(244, 162, 97, 0.3); }
+.subject-card[data-subject="Pencil"].active { border-color: #8B5CF6; background: #f3e8ff; color: #6d28d9; box-shadow: 0 3px 8px rgba(139, 92, 246, 0.3); }
+
 .subject-card[data-subject="Math"]:hover { border-color: rgba(42, 157, 143, 0.3); }
 .subject-card[data-subject="Chinese"]:hover { border-color: rgba(157, 193, 131, 0.3); }
 .subject-card[data-subject="English ERP"]:hover { border-color: rgba(230, 57, 70, 0.3); }
 .subject-card[data-subject="English EFL"]:hover { border-color: rgba(244, 162, 97, 0.3); }
+.subject-card[data-subject="Pencil"]:hover { border-color: rgba(139, 92, 246, 0.3); }
 
 /* 🛠️ Report Controls & Buttons */
 .controls { display: flex; align-items: flex-end; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
 .control-group { display: flex; flex-direction: column; gap: 0.4rem; flex: 1; min-width: 200px; max-width: 280px; }
 .control-label { font-size: 0.85rem; font-weight: 600; color: var(--text-light); }
 .controls button, .action-btn { height: 42px; align-self: flex-end; white-space: nowrap; }
-input, select { width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: var(--radius); font-size: 1rem; }
-button { padding: 0.75rem 1.5rem; border: none; border-radius: var(--radius); cursor: pointer; font-weight: 500; transition: background 0.2s; }
 .print-btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.7rem 1.4rem; background: var(--primary-dark); color: var(--white); border: none; border-radius: var(--radius); font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 2px 4px rgba(70, 130, 180, 0.2); height: fit-content; }
 .print-btn:hover { background: #3a6f94; transform: translateY(-1px); }
-.print-btn .print-icon { font-size: 1.1rem; }
 
 /* 📈 Report Tables & Scrollable Container */
 #reportOutput { display: flex; flex-direction: column; gap: 1.5rem; padding-bottom: 80px; }
 .empty-state { text-align: center; padding: 2.5rem; color: var(--text-light); background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow); }
 .table-wrapper { max-height: calc(100vh - 280px); overflow-y: auto; overflow-x: auto; background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow); position: relative; margin-bottom: 1rem; }
 
+/* ✅ FIXED: Force table to fill container width & remove double borders */
+.subject-table, .report-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
 /* 🔑 FIXED STICKY HEADER (Base Fallback) */
 .report-sticky-table thead th {
-position: -webkit-sticky;
-position: sticky;
-top: 0;
-z-index: 20;
-background: var(--primary);
-color: var(--white);
-font-weight: 600;
-padding: 0.75rem 0.6rem;
-text-align: left;
-border-bottom: 2px solid var(--primary-dark);
-box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+  position: -webkit-sticky;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--primary);
+  color: var(--white);
+  font-weight: 600;
+  padding: 0.75rem 0.6rem;
+  text-align: left;
+  border-bottom: 2px solid var(--primary-dark);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.15);
 }
 .subject-table caption { position: static; font-weight: 700; font-size: 1.1rem; padding: 0.85rem; text-align: left; z-index: 11; border-bottom: 2px solid var(--primary-dark); background: var(--secondary); color: var(--primary-dark); }
 th, td { padding: 0.75rem 0.6rem; text-align: left; border-bottom: 1px solid #eee; white-space: nowrap; vertical-align: middle; }
@@ -132,30 +140,29 @@ th, td { padding: 0.75rem 0.6rem; text-align: left; border-bottom: 1px solid #ee
 /* 🎨 Subject-Specific Table Colors (Lighter Hues) */
 .subject-table[data-subject="Math"] caption { background: #e0f4f1; color: #1d7065; border-bottom-color: #2A9D8F; }
 .subject-table[data-subject="Math"] thead th { background: #d4f0eb; color: #1d7065; border-bottom-color: #2A9D8F; }
-
 .subject-table[data-subject="Chinese"] caption { background: #f4f9f1; color: #6b8f5c; border-bottom-color: #9DC183; }
 .subject-table[data-subject="Chinese"] thead th { background: #e8f5e0; color: #6b8f5c; border-bottom-color: #9DC183; }
-
 .subject-table[data-subject="English ERP"] caption { background: #fde8e9; color: #b32d38; border-bottom-color: #E63946; }
 .subject-table[data-subject="English ERP"] thead th { background: #fceaea; color: #b32d38; border-bottom-color: #E63946; }
-
 .subject-table[data-subject="English EFL"] caption { background: #fef3ea; color: #c97a3e; border-bottom-color: #F4A261; }
 .subject-table[data-subject="English EFL"] thead th { background: #fdf0e5; color: #c97a3e; border-bottom-color: #F4A261; }
+.subject-table[data-subject="Pencil"] caption { background: #f3e8ff; color: #6d28d9; border-bottom-color: #8B5CF6; }
+.subject-table[data-subject="Pencil"] thead th { background: #e9d5ff; color: #6d28d9; border-bottom-color: #8B5CF6; }
 
 /* 💾 FIXED SAVE BAR */
 .save-bar {
-position: fixed;
-bottom: 0;
-left: 0;
-right: 0;
-background: var(--white);
-padding: 0.8rem 1rem;
-text-align: center;
-box-shadow: 0 -4px 12px rgba(0,0,0,0.15);
-z-index: 100;
-border-top: 1px solid #e2e8f0;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--white);
+  padding: 0.8rem 1rem;
+  text-align: center;
+  box-shadow: 0 -4px 12px rgba(0,0,0,0.15);
+  z-index: 100;
+  border-top: 1px solid #e2e8f0;
 }
-#saveReportBtn { min-width: 130px; padding: 0.3rem 1rem; font-size: 0.85rem; height: auto; margin: 0; }
+#saveReportBtn { min-width: 130px; padding: 0.5rem 1.5rem; font-size: 0.95rem; height: auto; margin: 0; }
 
 /* ✅ Report Table Inputs */
 .report-table input { width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.9rem; transition: all 0.2s; }
@@ -174,13 +181,12 @@ border-top: 1px solid #e2e8f0;
 
 /* 🖨️ Print Styles (Reports Only) */
 @media print {
-.controls, .save-bar, header, #page-loader, .subject-card, #generateReport, .print-btn { display: none !important; }
-.table-wrapper { display: block !important; box-shadow: none !important; border: none !important; max-height: none !important; overflow: visible !important; background: transparent !important; padding: 0cm !important; margin: 1rem !important; }
-body { background: white; margin: 0; padding: 0cm; font-size: 24pt; }
-*, *::before, *::after { font-family: 'Noto Sans SC', 'Microsoft YaHei', 'Segoe UI', sans-serif !important; color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-.subject-table, .report-table { width: 100% !important; border: 3px solid #333 !important; table-layout: auto !important; break-inside: avoid; margin-bottom: 1rem; }
-.subject-table th, .subject-table td, .subject-table caption, .report-table th, .report-table td { border: 1px solid #333 !important; padding: 0.3rem !important; white-space: normal !important; font-size: 0.75rem !important; }
-/* Removed #eee overrides so subject tints print correctly */
-.subject-table thead th { text-align: center; position: static !important; color: #000 !important; box-shadow: none !important; }
-.report-table input { border: none !important; padding: 0rem !important; background: transparent !important; width: 100% !important; color: #000 !important; }
+  .controls, .save-bar, header, #page-loader, .subject-card, #generateReport, .print-btn { display: none !important; }
+  .table-wrapper { display: block !important; box-shadow: none !important; border: none !important; max-height: none !important; overflow: visible !important; background: transparent !important; padding: 0cm !important; margin: 1rem !important; }
+  body { background: white; margin: 0; padding: 0cm; font-size: 24pt; }
+  *, *::before, ::after { font-family: 'Noto Sans SC', 'Microsoft YaHei', 'Segoe UI', sans-serif !important; color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .subject-table, .report-table { width: 100% !important; border: 3px solid #333 !important; table-layout: auto !important; break-inside: avoid; margin-bottom: 1rem; }
+  .subject-table th, .subject-table td, .subject-table caption, .report-table th, .report-table td { border: 1px solid #333 !important; padding: 0.3rem !important; white-space: normal !important; font-size: 0.75rem !important; }
+  .subject-table thead th { text-align: center; position: static !important; color: #000 !important; box-shadow: none !important; }
+  .report-table input { border: none !important; padding: 0rem !important; background: transparent !important; width: 100% !important; color: #000 !important; }
 }

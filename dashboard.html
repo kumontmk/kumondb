@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Center Dashboard - Kumon DB</title>
+  <title><span id="docTitle">Center</span> Dashboard - Kumon DB</title>
   <link rel="stylesheet" href="style.css">
   <style>
     /* Quick dashboard card typography tweaks to match your existing CSS */
@@ -32,7 +32,7 @@
     <nav>
       <a href="centers.html">← Centers</a>
     </nav>
-    <h1>📋 Center Dashboard</h1>
+    <h1>📋 <span id="centerNameDisplay">Center</span> Dashboard</h1>
   </header>
 
   <div class="dashboard">
@@ -88,6 +88,46 @@
     </div>
   </div>
 
-  <script type="module" src="auth.js"></script>
+  <script type="module">
+    import { requireAuth } from './auth.js';
+
+    // 1. Ensure user is authenticated
+    requireAuth();
+
+    // 2. Helper to format center names (removes hyphens, Title Cases)
+    function formatCenterName(str) {
+      if (!str) return 'Center';
+      // Replaces hyphens with spaces and capitalizes the first letter of each word
+      return str.replace(/-/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+    }
+
+    // 3. Dynamically update the Center Name on load
+    document.addEventListener('DOMContentLoaded', () => {
+      let centerName = 'Center'; // Default fallback
+
+      // Try to get the center from sessionStorage
+      const storedCenter = sessionStorage.getItem('selectedCenter');
+      if (storedCenter) {
+        try {
+          const center = JSON.parse(storedCenter);
+          centerName = center.name || center.id || 'Center';
+        } catch (e) {
+          centerName = storedCenter; // Fallback if saved as plain string
+        }
+      } else {
+        // Fallback to URL parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        centerName = urlParams.get('centerName') || 'Center';
+      }
+
+      // Format and update the DOM
+      const formattedName = formatCenterName(centerName);
+      const nameDisplay = document.getElementById('centerNameDisplay');
+      const docTitle = document.getElementById('docTitle');
+      
+      if (nameDisplay) nameDisplay.textContent = formattedName;
+      if (docTitle) docTitle.textContent = formattedName;
+    });
+  </script>
 </body>
 </html>
