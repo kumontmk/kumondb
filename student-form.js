@@ -192,6 +192,8 @@ if (btn.dataset.tab === 'schedule') renderSchedule();
 if (btn.dataset.tab === 'dt-at') renderATTable(); // NEW: Render AT table when tab is clicked
 });
 });
+
+// ✅ UPDATED: Exclude inquiry, drop, and pause from schedule rendering
 function renderSchedule() {
 const thead = document.getElementById('scheduleHeader');
 const tbody = document.getElementById('scheduleBody');
@@ -209,7 +211,8 @@ const nameEl = entry.querySelector('.subject-name');
 const statusEl = entry.querySelector('.status');
 const name = nameEl?.value;
 const status = statusEl?.value;
-if (!name || status === 'drop') return;
+// ✅ EXCLUDE inquiry, drop, and pause from schedule
+if (!name || status === 'drop' || status === 'pause' || status === 'inquiry') return;
 entry.querySelectorAll('.timeslot-row').forEach(row => {
 const day = row.querySelector('.ts-day')?.value;
 const h = row.querySelector('.ts-hour')?.value;
@@ -231,6 +234,7 @@ tr.appendChild(td);
 });
 tbody.appendChild(tr);
 }
+
 // QR SCANNER
 const scanBtn = document.getElementById('startScannerBtn');
 const qrModal = document.getElementById('qrModal');
@@ -310,7 +314,7 @@ if (inquiryDate) { inquiryDate.style.display = 'none'; const input = inquiryDate
 
 if (status === 'inquiry') {
 if (enrolDate) { enrolDate.style.display = 'none'; const input = enrolDate.querySelector('input'); if (input) input.required = false; }
-if (timeslots) timeslots.style.display = 'none';
+if (timeslots) timeslots.style.display = 'none'; // ✅ Hides timeslots for inquiry
 } else {
 if (enrolDate) { enrolDate.style.display = 'block'; const input = enrolDate.querySelector('input'); if (input) input.required = true; }
 if (timeslots) timeslots.style.display = 'block';
@@ -951,6 +955,7 @@ if (!subject?.value) return showError(`⚠️ Subject #${subIdx}: Please select 
 
 if (status === 'inquiry') {
   if (!inquiryDate?.value) return showError(`⚠️ Subject #${subIdx}: Inquiry Date is required.`);
+  // ✅ No timeslot required for inquiry subjects
 } else {
   if (!enrolDate?.value) return showError(`⚠️ Subject #${subIdx}: Enrol Date is required.`);
   if (entry.querySelectorAll('.timeslots-list .timeslot-row').length === 0) return showError(`⚠️ Subject #${subIdx}: Add at least one timeslot.`);

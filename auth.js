@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-import { 
+import {
   getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
   signInWithEmailAndPassword, createUserWithEmailAndPassword
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -24,63 +24,45 @@ const provider = new GoogleAuthProvider();
 // ============================================
 // AUTO-LOGOUT AFTER INACTIVITY
 // ============================================
-const AUTO_LOGOUT_TIMEOUT = 20 * 60 * 1000; // ⏱️ 20 minute for testing (change to 5 * 60 * 1000 for 20 minutes)
+const AUTO_LOGOUT_TIMEOUT = 20 * 60 * 1000; // 20 minutes
 let logoutTimer;
 let isAutoLogoutInitialized = false;
 
 function resetLogoutTimer() {
   clearTimeout(logoutTimer);
-  
   logoutTimer = setTimeout(() => {
     performAutoLogout();
   }, AUTO_LOGOUT_TIMEOUT);
-  
-  console.log('🔄 Auto-logout timer reset. Logout in', AUTO_LOGOUT_TIMEOUT / 1000, 'seconds');
 }
 
 function performAutoLogout() {
-  console.log('🚪 Auto-logout triggered due to inactivity');
-  
-  // Clear session storage
   sessionStorage.removeItem('kumonUser');
-  
-  // Sign out from Firebase
   signOut(auth).catch(err => console.log('Sign out error:', err));
-  
-  // Redirect to login page with inactivity flag
   window.location.href = 'index.html?reason=inactive';
 }
 
 function initAutoLogout() {
   if (isAutoLogoutInitialized) return;
-  
   const user = auth.currentUser;
   const stored = sessionStorage.getItem('kumonUser');
+  if (!user && !stored) return;
   
-  if (!user && !stored) {
-    console.log('⚠️ Auto-logout: User not authenticated, skipping');
-    return;
-  }
-  
-  console.log('✅ Auto-logout: Initializing for authenticated user');
   isAutoLogoutInitialized = true;
-  
-  // ✅ FIXED: Removed 'mousemove' and 'wheel' - they fire too often and prevent logout
   const activityEvents = ['mousedown', 'keypress', 'scroll', 'touchstart', 'click'];
-  
   activityEvents.forEach(event => {
     document.addEventListener(event, resetLogoutTimer, { passive: true, capture: true });
   });
-  
-  // Start the timer
   resetLogoutTimer();
-  console.log('⏰ Auto-logout timer started');
 }
 
 // ============================================
 // SHOW INACTIVITY MESSAGE ON LOGIN PAGE
 // ============================================
 window.addEventListener('DOMContentLoaded', () => {
+  // Hide initial page loader after a brief moment so the login form is visible
+  const loader = document.getElementById('page-loader');
+  if (loader) setTimeout(() => loader.classList.add('hidden'), 300);
+
   const urlParams = new URLSearchParams(window.location.search);
   if (urlParams.get('reason') === 'inactive') {
     const errorMsg = document.getElementById('errorMsg');
@@ -89,8 +71,6 @@ window.addEventListener('DOMContentLoaded', () => {
       errorMsg.style.color = '#dc3545';
       errorMsg.style.fontWeight = '500';
     }
-    
-    // Clean up the URL
     window.history.replaceState({}, document.title, window.location.pathname);
   }
 });
@@ -98,9 +78,6 @@ window.addEventListener('DOMContentLoaded', () => {
 let isLoginMode = true;
 
 window.addEventListener('DOMContentLoaded', () => {
-  const loader = document.getElementById('page-loader');
-  if (loader) setTimeout(() => loader.classList.add('hidden'), 300);
-
   const googleBtn = document.getElementById('googleSignInBtn');
   const emailForm = document.getElementById('emailAuthForm');
   const submitBtn = document.getElementById('submitBtn');
@@ -110,9 +87,15 @@ window.addEventListener('DOMContentLoaded', () => {
   const passInput = document.getElementById('password');
 
   googleBtn?.addEventListener('click', async () => {
-    try { setLoading(googleBtn, true, 'Connecting...'); await signInWithPopup(auth, provider); } 
-    catch (error) { showError(error.message); } 
-    finally { setLoading(googleBtn, false, 'Continue with Google'); }
+    try { 
+      setLoading(googleBtn, true, 'Connecting...'); 
+      await signInWithPopup(auth, provider); 
+      // ✅ SUCCESS: Do NOT hide loader. Let the redirect happen seamlessly.
+    } catch (error) { 
+      showError(error.message); 
+      // ✅ ERROR: Hide loader so user can try again
+      setLoading(googleBtn, false, 'Continue with Google', true); 
+    }
   });
 
   emailForm?.addEventListener('submit', async (e) => {
@@ -120,10 +103,12 @@ window.addEventListener('DOMContentLoaded', () => {
     errorMsg.textContent = '';
     const email = emailInput.value.trim();
     const password = passInput.value;
+    
     try {
       setLoading(submitBtn, true, isLoginMode ? 'Signing in...' : 'Creating account...');
       if (isLoginMode) await signInWithEmailAndPassword(auth, email, password);
       else await createUserWithEmailAndPassword(auth, email, password);
+      // ✅ SUCCESS: Do NOT hide loader. Let the redirect happen seamlessly.
     } catch (error) {
       let msg = error.message;
       if (msg.includes('auth/user-not-found') || msg.includes('auth/wrong-password') || msg.includes('auth/invalid-credential')) msg = 'Invalid email or password.';
@@ -131,7 +116,9 @@ window.addEventListener('DOMContentLoaded', () => {
       else if (msg.includes('auth/invalid-email')) msg = 'Please enter a valid email.';
       else if (msg.includes('auth/weak-password')) msg = 'Password must be at least 6 characters.';
       showError(msg);
-    } finally { setLoading(submitBtn, false, isLoginMode ? 'Sign In' : 'Sign Up'); }
+      // ✅ ERROR: Hide loader so user can try again
+      setLoading(submitBtn, false, isLoginMode ? 'Sign In' : 'Sign Up', true); 
+    }
   });
 
   toggleBtn?.addEventListener('click', () => {
@@ -145,22 +132,18 @@ window.addEventListener('DOMContentLoaded', () => {
 
 onAuthStateChanged(auth, async (user) => {
   if (user) {
-    sessionStorage.setItem('kumonUser', JSON.stringify({ 
-      uid: user.uid, email: user.email, name: user.displayName || user.email.split('@')[0], photo: user.photoURL 
+    sessionStorage.setItem('kumonUser', JSON.stringify({
+      uid: user.uid, email: user.email, name: user.displayName || user.email.split('@')[0], photo: user.photoURL
     }));
     await initializeCenters();
-    
-    // Initialize auto-logout for authenticated users
     initAutoLogout();
-    
-    // Check if the current page is the login page regardless of subfolders
+
     const path = window.location.pathname;
     if (path.endsWith('/') || path.endsWith('index.html')) {
-      window.location.href = 'centers.html';
+      window.location.href = 'centers.html'; // Redirects while loader is still visible!
     }
   } else {
     sessionStorage.removeItem('kumonUser');
-    // Clear timers when user logs out
     clearTimeout(logoutTimer);
     isAutoLogoutInitialized = false;
   }
@@ -178,10 +161,8 @@ async function initializeCenters() {
 }
 
 export async function logout() {
-  // Clear timers on manual logout
   clearTimeout(logoutTimer);
   isAutoLogoutInitialized = false;
-  
   await signOut(auth);
   sessionStorage.removeItem('kumonUser');
   window.location.href = 'index.html';
@@ -197,11 +178,25 @@ export function requireAuth() {
   return true;
 }
 
-function setLoading(btn, isLoading, text) {
+// ✅ UPDATED: Added 'forceHideLoader' parameter
+function setLoading(btn, isLoading, text, forceHideLoader = false) {
   btn.disabled = isLoading;
   btn.style.opacity = isLoading ? '0.7' : '1';
-  if (!btn.querySelector('svg')) btn.textContent = text;
+  
+  if (!btn.querySelector('svg')) {
+    btn.textContent = text;
+  }
+
+  const pageLoader = document.getElementById('page-loader');
+  if (pageLoader) {
+    if (isLoading) {
+      pageLoader.classList.remove('hidden'); // Show spinner & block clicks
+    } else if (forceHideLoader) {
+      pageLoader.classList.add('hidden'); // Only hide spinner on ERROR, not on success
+    }
+  }
 }
+
 function showError(msg) {
   const el = document.getElementById('errorMsg');
   if (el) el.textContent = msg;
