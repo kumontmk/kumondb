@@ -872,3 +872,24 @@ label span { font-weight: 400; font-size: 0.8rem; color: #999; margin-left: 0.25
   margin-left: auto;
   margin-right: auto;
 }
+
+/* ============================================
+✅ FORCE TIGHT CHECKBOX SPACING IN MODAL
+============================================ */
+#subjectCheckboxes label {
+    padding: 0.35rem 0.5rem !important;
+    gap: 0.4rem !important;
+    margin: 0 !important;
+}
+
+#subjectCheckboxes input[type="checkbox"] {
+    margin: 0 !important;
+    padding: 0 !important;
+    vertical-align: middle;
+    width: 16px;
+    height: 16px;
+}
+
+#subjectCheckboxes .att-subject-check {
+    margin: 0 !important;
+}

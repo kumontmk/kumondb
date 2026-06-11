@@ -1,110 +1,100 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta name="theme-color" content="#87CEEB">
-  <title>Attendance - Kumon DB</title>
-  <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance - Kumon DB</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 </head>
 <body>
-  <div id="page-loader">
-    <div class="spinner"></div>
-  </div>
+    <header>
+        <h2>📅 Attendance Management</h2>
+        <nav>
+            <a href="dashboard.html">← Dashboard</a>
+        </nav>
+    </header>
 
-  <header>
-    <nav>
-      <a href="dashboard.html">← Dashboard</a>
-    <!-- <button id="logoutBtn">Logout</button>-->
-    </nav>
-    <h1>📅 Attendance Management</h1>
-  </header>
+    <div class="students-page">
+        <div class="attendance-controls">
+            <div class="control-group">
+                <label class="control-label" for="attendanceDate">📅 Date</label>
+                <input type="date" id="attendanceDate" class="day-select">
+            </div>
+            
+            <div class="control-group">
+                <label class="control-label" for="attendanceSubject">📚 Subject</label>
+                <select id="attendanceSubject" class="day-select">
+                    <option value="All">All Subjects</option>
+                </select>
+            </div>
 
-  <main class="students-page">
-    <!-- 🆕 ATTENDANCE CONTROLS - Inline Layout -->
-    <div class="attendance-controls">
-      <div class="control-group">
-        <label for="attendanceDate" class="control-label">📅 Date</label>
-        <input type="date" id="attendanceDate" class="day-select">
-      </div>
+            <div class="control-group search-group">
+                <label class="control-label" for="searchStudent">🔍 Search Student</label>
+                <div class="search-wrapper">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="searchStudent" placeholder="Name, Nickname, or Number...">
+                    <button class="clear-search" id="clearSearchBtn">×</button>
+                </div>
+            </div>
 
-    <div class="control-group">
-      <label class="control-label" for="subjectFilter">📚 Subject</label>
-      <select id="subjectFilter" class="day-select">
-          <option value="">All Subjects</option>
-          <!-- Options will be populated dynamically by JS -->
-      </select>
-    </div>
-
-      <div class="control-group search-group">
-        <label for="attendanceSearch" class="control-label">🔍 Search Student</label>
-        <div class="search-wrapper">
-          <span class="search-icon">🔍</span>
-          <input type="text" id="attendanceSearch" placeholder="Name, nickname, subject, grade...">
-          <button type="button" class="clear-search hidden" id="clearSearch" title="Clear">×</button>
+            <button id="scanQrBtn" class="scan-btn">
+                <span class="scan-icon">📷</span>
+                <span>Scan QR</span>
+            </button>
         </div>
-      </div>
 
-      <button id="scanBtn" class="scan-btn">
-        <span class="scan-icon">📷</span>
-        <span class="scan-text">Scan QR</span>
-      </button>
+        <div class="table-container">
+            <table id="attendanceTable">
+                <thead>
+                    <tr>
+                        <th>Subject</th>
+                        <th>Chinese Name</th>
+                        <th>Nickname</th>
+                        <th>Grade</th>
+                        <th>School</th>
+                        <th>Scheduled Time</th>
+                        <th>Check-in Time</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="attendanceBody">
+                    <tr>
+                        <td colspan="9" style="text-align:center; padding:1rem; color:#666;">Loading attendance...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 
-    <div class="report-table">
-      <table>
-        <thead>
-          <tr>
-            <th>Subject</th>
-            <th>Chinese Name</th>
-            <th>Nickname</th>
-            <th>Grade</th>
-            <th>School</th>
-            <th>Scheduled Time</th>
-            <th>Check-in Time</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="attendanceBody">
-          <tr><td colspan="9" class="text-center">Loading attendance...</td></tr>
-        </tbody>
-      </table>
+    <!-- 📷 Scan Modal -->
+    <div id="scanModal" class="modal hidden" style="display: none;">
+        <div class="modal-content">
+            <span id="closeScanModal">×</span>
+            <h3 style="text-align: center; margin-bottom: 1rem;">📷 Scan Student QR</h3>
+            <p style="text-align: center; color: #64748b;">Point camera at QR code...</p>
+            <div id="qr-reader" style="width: 100%; max-width: 300px; margin: 1rem auto;"></div>
+            <p id="qr-status" style="margin-top: 1rem; font-weight: 500; text-align: center;"></p>
+        </div>
     </div>
 
-    <p id="searchResultsCount" class="hint hidden" style="margin-top: 0.75rem; text-align: center;"></p>
-  </main>
-
-  <!-- Scan Modal -->
-  <div id="scanModal" class="modal hidden">
-    <div class="modal-content">
-      <span id="closeScanModal">×</span>
-      <h2>📷 Scan Student QR</h2>
-      <div id="qr-reader" style="width: 100%; margin: 1rem 0;"></div>
-      <p id="scanStatus" class="text-center">Point camera at QR code...</p>
+    <!-- ✅ Confirm Attendance Modal (Cleanly Formatted) -->
+    <div id="confirmModal" class="modal hidden" style="display: none;">
+        <div class="modal-content">
+            <span id="closeConfirmModal">×</span>
+            <h3 style="text-align: center; margin-bottom: 1rem; color: #1e293b;">✅ Confirm Attendance</h3>
+            
+            <div id="studentInfo" style="margin-bottom: 1rem;"></div>
+            <div id="subjectCheckboxes" style="margin-bottom: 1.5rem;"></div>
+            
+            <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+                <button id="cancelConfirmBtn" class="secondary">Cancel</button>
+                <button id="confirmAttendanceBtn" class="primary" style="display: none;">Confirm Attendance</button>
+            </div>
+        </div>
     </div>
-  </div>
 
-  <!-- Confirm Modal -->
-  <div id="confirmModal" class="modal hidden">
-    <div class="modal-content">
-      <h2>✅ Confirm Attendance</h2>
-      <div id="studentInfo" style="margin: 1rem 0;"></div>
-      <div id="subjectCheckboxes" style="text-align: left; margin: 1rem 0;"></div>
-      <div style="display: flex; gap: 0.5rem; justify-content: center; margin-top: 1rem;">
-        <button id="confirmAttendanceBtn" class="primary">Confirm Attendance</button>
-        <button id="cancelConfirmBtn" class="secondary">Cancel</button>
-      </div>
-    </div>
-  </div>
-
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-  <script type="module" src="attendance.js"></script>
-  <script type="module">
-    document.getElementById('logoutBtn').addEventListener('click', () => {
-      sessionStorage.removeItem('kumonAuth');
-      window.location.href = 'index.html';
-    });
-  </script>
+    <script type="module" src="attendance.js"></script>
 </body>
 </html>
