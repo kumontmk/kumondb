@@ -2,6 +2,7 @@ import { requireAuth, db } from './auth.js';
 import { ref, get, push } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
 
 if (!requireAuth()) window.location.href = 'index.html';
+
 const centerId = sessionStorage.getItem('selectedCenter');
 const studentsRef = ref(db, `centers/${centerId}/students`);
 
@@ -77,16 +78,16 @@ function isSubjectEnabled(val) {
 function buildSubject(getVal, prefix, name) {
   const boolKey = `${prefix}Bool`;
   if (!isSubjectEnabled(getVal(boolKey))) return null;
-
+  
   const timeslots = [];
   const d1 = getVal(`${prefix}Day1`);
   const t1 = parseExcelTime(getVal(`${prefix}Time1`));
   if (d1 && t1) timeslots.push({ day: String(d1).trim(), time: t1 });
-
+  
   const d2 = getVal(`${prefix}Day2`);
   const t2 = parseExcelTime(getVal(`${prefix}Time2`));
   if (d2 && t2) timeslots.push({ day: String(d2).trim(), time: t2 });
-
+  
   return {
     name,
     startLevel: String(getVal(`${prefix}StartLevel`) || '').trim(),
@@ -175,7 +176,7 @@ async function handleExcelImport(file) {
           studentNumber: studentNo,
           namePinyin,
           nickname: getVal('nickname'),
-          nameCn: getVal('nameCn'),
+          nameCn: getVal('nameCn'), 
           grade: getVal('grade'),
           school: getVal('school'),
           birthday: parseExcelDate(getVal('birthday')),
@@ -267,27 +268,35 @@ async function loadStudents(searchTerm = '') {
     const subjectFilter = document.getElementById('filter-subject')?.value || '';
     if (subjectFilter) filtered = filtered.filter(r => r.subjectName === subjectFilter);
 
-    // Search Filter
+    // ✅ SAFE SEARCH FILTER (Prevents TypeError on undefined fields)
     if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(row =>
-        row.nameCn?.toLowerCase().includes(term) ||
-        row.nickname?.toLowerCase().includes(term) ||
-        row.namePinyin?.toLowerCase().includes(term) ||
-        row.studentNumber?.toLowerCase().includes(term) ||
-        row.grade?.toLowerCase().includes(term) ||
-        row.school?.toLowerCase().includes(term) ||
-        row.subjectName?.toLowerCase().includes(term)
-      );
+      const term = searchTerm.trim().toLowerCase();
+      filtered = filtered.filter(row => {
+        const nameCn = (row.nameCn || '').toLowerCase();
+        const nickname = (row.nickname || '').toLowerCase();
+        const namePinyin = (row.namePinyin || '').toLowerCase();
+        const studentNumber = (row.studentNumber || '').toLowerCase();
+        const grade = (row.grade || '').toLowerCase();
+        const school = (row.school || '').toLowerCase();
+        const subjectName = (row.subjectName || '').toLowerCase();
+
+        return nameCn.includes(term) ||
+               nickname.includes(term) ||
+               namePinyin.includes(term) ||
+               studentNumber.includes(term) ||
+               grade.includes(term) ||
+               school.includes(term) ||
+               subjectName.includes(term);
+      });
     }
 
     // ✅ Apply Sort
     const sortRules = getSortRules();
     const sorted = applyMultiSort(filtered, sortRules);
-    
+
     // Store filtered data for pagination
     filteredStudentsData = sorted;
-    
+
     // Reset to first page when filters/search change
     if (currentPage !== 1) {
       currentPage = 1;
@@ -296,7 +305,6 @@ async function loadStudents(searchTerm = '') {
     // Render current page
     renderStudentPage(tbody, sorted);
     renderPagination();
-    
   } catch (error) {
     console.error('Error loading students:', error);
     tbody.innerHTML = `<tr><td colspan="9" class="error">Error: ${error.message}</td></tr>`;
@@ -310,15 +318,15 @@ function renderStudentPage(tbody, allData) {
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;
   const pageData = allData.slice(startIndex, endIndex);
-
-  tbody.innerHTML = '';
   
+  tbody.innerHTML = '';
   if (pageData.length === 0) {
     tbody.innerHTML = '<tr><td colspan="9" class="hint" style="text-align:center; padding:1rem;">No matching students found.</td></tr>';
   } else {
     pageData.forEach(row => {
       const dobDisplay = row.rawDob ? new Date(row.rawDob).toLocaleDateString('en-CA') : '-';
       const enrolDisplay = row.rawEnrolDate ? new Date(row.rawEnrolDate).toLocaleDateString('en-CA') : '-';
+      
       const tr = document.createElement('tr');
       tr.className = 'student-row';
       tr.innerHTML = `
@@ -351,10 +359,10 @@ function renderPagination() {
   const nextPageBtn = document.getElementById('nextPage');
   const lastPageBtn = document.getElementById('lastPage');
   const paginationNumbers = document.getElementById('paginationNumbers');
-
+  
   if (!paginationInfo) return;
 
-  // Update item counter (e.g., "1-100 of 243 items")
+  // Update item counter
   if (filteredStudentsData.length === 0) {
     paginationInfo.textContent = '0 of 0 items';
   } else {
@@ -369,16 +377,14 @@ function renderPagination() {
   if (nextPageBtn) nextPageBtn.disabled = currentPage >= totalPages;
   if (lastPageBtn) lastPageBtn.disabled = currentPage >= totalPages;
 
-  // Render page number buttons (show current ±2 pages)
+  // Render page number buttons
   if (paginationNumbers) {
     paginationNumbers.innerHTML = '';
     if (totalPages <= 10) {
-      // Show all pages if 10 or fewer
       for (let i = 1; i <= totalPages; i++) {
         addPageNumberButton(paginationNumbers, i);
       }
     } else {
-      // Show window around current page
       let startPage = Math.max(1, currentPage - 2);
       let endPage = Math.min(totalPages, startPage + 4);
       if (endPage - startPage < 4) {
@@ -391,7 +397,6 @@ function renderPagination() {
   }
 }
 
-// Helper to create page number button
 function addPageNumberButton(container, pageNum) {
   const btn = document.createElement('button');
   btn.className = `pagination-btn page-number ${pageNum === currentPage ? 'active' : ''}`;
@@ -400,24 +405,20 @@ function addPageNumberButton(container, pageNum) {
   container.appendChild(btn);
 }
 
-// Navigate to specific page
 function goToPage(page) {
   const totalPages = Math.ceil(filteredStudentsData.length / ITEMS_PER_PAGE);
   if (page < 1 || page > totalPages || page === currentPage) return;
-  
   currentPage = page;
   const tbody = document.getElementById('studentList');
   renderStudentPage(tbody, filteredStudentsData);
   renderPagination();
   
-  // Scroll table to top
   const tableWrapper = document.querySelector('.table-wrapper');
   if (tableWrapper) {
     tableWrapper.scrollTop = 0;
   }
 }
 
-// ✅ DEFAULT SORT: Chinese Name (Alphabet) prominently featured
 function getSortRules() {
   const rules = [];
   for (let i = 1; i <= 2; i++) {
@@ -425,7 +426,6 @@ function getSortRules() {
     const dir = document.getElementById(`sort${i}-dir`)?.value || 'asc';
     if (field) rules.push({ field, direction: dir });
   }
-  
   if (rules.length === 0) {
     return [
       { field: 'namePinyin', direction: 'asc' },
@@ -457,6 +457,7 @@ function applyMultiSort(rows, rules) {
       
       const strA = typeof valA === 'string' ? valA.toLowerCase() : valA;
       const strB = typeof valB === 'string' ? valB.toLowerCase() : valB;
+      
       if (strA < strB) return rule.direction === 'asc' ? -1 : 1;
       if (strA > strB) return rule.direction === 'asc' ? 1 : -1;
     }
@@ -503,7 +504,7 @@ async function exportStudentsToExcel() {
         'Phone (Emergency_D)': s.phone?.dad || '',
         'Phone (Emergency_Self)': s.phone?.own || '',
         'Ship Address': s.address || '',
-        'OverallStatus': s.overallStatus || 'Current',
+        'Overall Status': s.overallStatus || 'Current',
         'Maths': math.name ? '1' : '',
         'MStarting': math.startLevel || '',
         'MStartingNo': math.startWS || '',
@@ -575,11 +576,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Listen to status + subject filters + sort controls
   document.querySelectorAll('#filter-subject, #filter-status, [id^="sort"]').forEach(el => {
     el.addEventListener('change', () => {
-      currentPage = 1; // Reset to first page on filter change
+      currentPage = 1;
       loadStudents(document.getElementById('searchInput')?.value || '');
     });
   });
-  
+
   document.getElementById('clearSortBtn')?.addEventListener('click', () => {
     document.getElementById('filter-subject').value = '';
     document.getElementById('filter-status').value = 'current';
@@ -590,13 +591,34 @@ document.addEventListener('DOMContentLoaded', () => {
     currentPage = 1;
     loadStudents(document.getElementById('searchInput')?.value || '');
   });
-  
-  document.getElementById('searchInput')?.addEventListener('input', (e) => {
-    currentPage = 1; // Reset to first page on search
-    loadStudents(e.target.value);
-  });
-  
+
+  // ✅ IMPROVED SEARCH: Handle Chinese IME Composition
+  let isComposing = false;
+  const searchInput = document.getElementById('searchInput');
+
+  if (searchInput) {
+    // User starts typing in IME (e.g., typing pinyin)
+    searchInput.addEventListener('compositionstart', () => {
+      isComposing = true;
+    });
+
+    // User finishes selecting the Chinese character
+    searchInput.addEventListener('compositionend', (e) => {
+      isComposing = false;
+      currentPage = 1;
+      loadStudents(e.target.value);
+    });
+
+    // Normal input (or fallback if composition events aren't fired)
+    searchInput.addEventListener('input', (e) => {
+      if (isComposing) return; // Ignore keystrokes while IME is still composing
+      currentPage = 1; // Reset to first page on search
+      loadStudents(e.target.value);
+    });
+  }
+
   document.getElementById('addStudentBtn')?.addEventListener('click', () => window.location.href = 'student-form.html');
+  
   document.getElementById('logoutBtn')?.addEventListener('click', () => {
     sessionStorage.removeItem('kumonAuth');
     window.location.href = 'index.html';
@@ -614,6 +636,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   document.getElementById('exportBtn')?.addEventListener('click', exportStudentsToExcel);
+  
   document.getElementById('closeImportModal')?.addEventListener('click', () => {
     document.getElementById('importProgressModal')?.classList.add('hidden');
     currentPage = 1;

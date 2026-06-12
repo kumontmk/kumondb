@@ -1011,14 +1011,25 @@ if (isEdit && JSON.stringify(currentFormData) === JSON.stringify(originalFormDat
 const studentData = { ...currentFormData, updatedAt: new Date().toISOString() };
 if (isEdit) {
 const snap = await get(ref(db, `centers/${centerId}/students/${studentId}`));
-if (snap.exists()) {
-const existingData = snap.val();
-const oldSubjects = Array.isArray(existingData.subjects) ? existingData.subjects : Object.values(existingData.subjects || {});
-studentData.subjects = studentData.subjects.map(newSub => {
-const oldSub = oldSubjects.find(s => s.name === newSub.name);
-if (oldSub && Array.isArray(oldSub.progress)) return { ...newSub, progress: oldSub.progress };
-return newSub;
-});
+
+if (isEdit) {
+    const snap = await get(ref(db, `centers/${centerId}/students/${studentId}`));
+    if (snap.exists()) {
+        const existingData = snap.val();
+        
+        // 1. Preserve Progress data
+        const oldSubjects = Array.isArray(existingData.subjects) ? existingData.subjects : Object.values(existingData.subjects || {});
+        studentData.subjects = studentData.subjects.map(newSub => {
+            const oldSub = oldSubjects.find(s => s.name === newSub.name);
+            if (oldSub && Array.isArray(oldSub.progress)) return { ...newSub, progress: oldSub.progress };
+            return newSub;
+        });
+
+        // 2. ✅ PRESERVE PO NOTE so it doesn't get deleted on form update
+        if (existingData.poNote) {
+            studentData.poNote = existingData.poNote;
+        }
+    }
 }
 }
 try {

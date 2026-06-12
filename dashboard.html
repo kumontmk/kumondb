@@ -3,79 +3,100 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><span id="docTitle">Center</span> Dashboard - Kumon DB</title>
-  <link rel="stylesheet" href="style.css">
-  <style>
-    /* Quick dashboard card typography tweaks to match your existing CSS */
-    .center-card {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      text-decoration: none;
-      color: inherit;
-    }
-    .center-card h3 {
-      margin: 0.5rem 0 0.25rem;
-      font-size: 1.15rem;
-      font-weight: 600;
-    }
-    .center-card p {
-      margin: 0;
-      font-size: 0.9rem;
-      color: var(--text-light);
-      line-height: 1.4;
-    }
-  </style>
+  <title>Center Dashboard - Kumon DB</title>
+  <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
+
+  <!-- Page Loader -->
+  <div id="page-loader">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Header -->
   <header>
-    <nav>
+    <h1>
       <a href="centers.html">← Centers</a>
+    </h1>
+    <nav>
+      <span id="userInfo" class="user-info">Loading...</span>
     </nav>
-    <h1>📋 <span id="centerNameDisplay">Center</span> Dashboard</h1>
   </header>
 
-  <div class="dashboard">
-    <h2>What would you like to do?</h2>
+<div class="calendar-section">
+    <div class="calendar-header-main">
+        <h3>📅 Upcoming Parent Orientations</h3>
+        <p class="calendar-hint">Dates marked in <span style="color:#c62828; font-weight:bold;">red</span> have scheduled orientations.</p>
+    </div>
+    <div class="calendar-wrapper">
+        <div class="calendar-month">
+            <h4 id="currentMonthTitle">Current Month</h4>
+            <div class="calendar-grid" id="calendarCurrent"></div>
+        </div>
+        <div class="calendar-month">
+            <h4 id="nextMonthTitle">Next Month</h4>
+            <div class="calendar-grid" id="calendarNext"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Add this at the VERY BOTTOM of the <body>, before closing </body> -->
+<div id="poModal" class="modal-overlay hidden">
+    <div class="modal-content">
+        <span class="close-modal" id="closePoModal">&times;</span>
+        <h3 id="modalDateTitle">Parent Orientations</h3>
+        <div id="poStudentList" class="po-student-list">
+            <!-- Student cards will be injected here -->
+        </div>
+    </div>
+</div>
+
+  <!-- Main Dashboard Content -->
+  <main class="dashboard">
+    <div class="dashboard-header">
+      <h2>📋 Center Dashboard</h2>
+      <p>What would you like to do?</p>
+    </div>
+
     <div class="center-grid">
       <a href="students.html" class="center-card">
-        <span style="font-size: 2rem;">👥</span>
+        <div class="card-icon">👥</div>
         <h3>Student Management</h3>
         <p>Add, edit, search students & track progress</p>
       </a>
-      
+
       <a href="timetable.html" class="center-card">
-        <span style="font-size: 2rem;">🗓️</span>
+        <div class="card-icon">🗓️</div>
         <h3>Timetable</h3>
         <p>View & print weekly class schedules</p>
       </a>
-      
+
       <a href="reports.html" class="center-card">
-        <span style="font-size: 2rem;">📊</span>
+        <div class="card-icon">📊</div>
         <h3>Monthly Reports</h3>
         <p>Generate, edit & save monthly progress reports</p>
       </a>
-      
+
       <a href="graphs.html" class="center-card">
-        <span style="font-size: 2rem;">📈</span>
+        <div class="card-icon">📈</div>
         <h3>Progress Charts</h3>
         <p>Analytics, progress tracking & charts</p>
       </a>
-      
+
       <a href="attendance.html" class="center-card">
-        <span style="font-size: 2rem;">✅</span>
+        <div class="card-icon">✅</div>
         <h3>Attendance</h3>
         <p>Scan QR, track check-ins, view late students & daily reports</p>
       </a>
 
       <a href="parent-orientation.html" class="center-card">
-        <span style="font-size: 2rem;">👪</span>
+        <div class="card-icon">👪</div>
         <h3>Parent Orientation</h3>
         <p>Manage pending parent orientations & follow-ups</p>
       </a>
-      
+
       <a href="employees.html" class="center-card">
-        <div class="card-icon">👥</div>
+        <div class="card-icon">👤</div>
         <h3>Employee Management</h3>
         <p>Add/edit staff, QR codes & timeclock records</p>
       </a>
@@ -86,48 +107,9 @@
         <p>QR scanning, geolocation verification & CSV export</p>
       </a>
     </div>
-  </div>
+  </main>
 
-  <script type="module">
-    import { requireAuth } from './auth.js';
-
-    // 1. Ensure user is authenticated
-    requireAuth();
-
-    // 2. Helper to format center names (removes hyphens, Title Cases)
-    function formatCenterName(str) {
-      if (!str) return 'Center';
-      // Replaces hyphens with spaces and capitalizes the first letter of each word
-      return str.replace(/-/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
-    }
-
-    // 3. Dynamically update the Center Name on load
-    document.addEventListener('DOMContentLoaded', () => {
-      let centerName = 'Center'; // Default fallback
-
-      // Try to get the center from sessionStorage
-      const storedCenter = sessionStorage.getItem('selectedCenter');
-      if (storedCenter) {
-        try {
-          const center = JSON.parse(storedCenter);
-          centerName = center.name || center.id || 'Center';
-        } catch (e) {
-          centerName = storedCenter; // Fallback if saved as plain string
-        }
-      } else {
-        // Fallback to URL parameter
-        const urlParams = new URLSearchParams(window.location.search);
-        centerName = urlParams.get('centerName') || 'Center';
-      }
-
-      // Format and update the DOM
-      const formattedName = formatCenterName(centerName);
-      const nameDisplay = document.getElementById('centerNameDisplay');
-      const docTitle = document.getElementById('docTitle');
-      
-      if (nameDisplay) nameDisplay.textContent = formattedName;
-      if (docTitle) docTitle.textContent = formattedName;
-    });
-  </script>
+  <!-- Link to the dedicated dashboard JS (as a module) -->
+  <script type="module" src="dashboard.js"></script>
 </body>
 </html>
