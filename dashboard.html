@@ -19,11 +19,11 @@
       <a href="centers.html">← Centers</a>
     </h1>
     <nav>
-      <span id="userInfo" class="user-info">Loading...</span>
+        <span id="current-date"></span>
     </nav>
   </header>
 
-<div class="calendar-section">
+  <div class="calendar-section">
     <div class="calendar-header-main">
         <h3>📅 Upcoming Parent Orientations</h3>
         <p class="calendar-hint">Dates marked in <span style="color:#c62828; font-weight:bold;">red</span> have scheduled orientations.</p>
@@ -38,10 +38,10 @@
             <div class="calendar-grid" id="calendarNext"></div>
         </div>
     </div>
-</div>
+  </div>
 
-<!-- Add this at the VERY BOTTOM of the <body>, before closing </body> -->
-<div id="poModal" class="modal-overlay hidden">
+  <!-- Add this at the VERY BOTTOM of the <body>, before closing </body> -->
+  <div id="poModal" class="modal-overlay hidden">
     <div class="modal-content">
         <span class="close-modal" id="closePoModal">&times;</span>
         <h3 id="modalDateTitle">Parent Orientations</h3>
@@ -49,7 +49,7 @@
             <!-- Student cards will be injected here -->
         </div>
     </div>
-</div>
+  </div>
 
   <!-- Main Dashboard Content -->
   <main class="dashboard">
@@ -93,18 +93,6 @@
         <div class="card-icon">👪</div>
         <h3>Parent Orientation</h3>
         <p>Manage pending parent orientations & follow-ups</p>
-      </a>
-
-      <a href="employees.html" class="center-card">
-        <div class="card-icon">👤</div>
-        <h3>Employee Management</h3>
-        <p>Add/edit staff, QR codes & timeclock records</p>
-      </a>
-
-      <a href="timecard.html" class="center-card">
-        <div class="card-icon">⏱️</div>
-        <h3>Employee Timecard</h3>
-        <p>QR scanning, geolocation verification & CSV export</p>
       </a>
     </div>
   </main>

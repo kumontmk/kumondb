@@ -9,13 +9,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const isAuth = requireAuth();
     if (!isAuth) return;
 
-    // 2. Hide page loader once ready
-    const loader = document.getElementById('page-loader');
-    if (loader) {
-        setTimeout(() => loader.classList.add('hidden'), 300);
-    }
-
-    // 3. Populate User Info in Header
+    // 2. Populate User Info in Header
     const storedUser = sessionStorage.getItem('kumonUser');
     if (storedUser) {
         try {
@@ -29,7 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // 4. Attach Logout Event Listener
+    // 3. Attach Logout Event Listener
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', async (e) => {
@@ -40,8 +34,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // 5. Initialize PO Calendar
-    await initPOCalendar();
+    // 4. Set current date
+    const today = new Date();
+    const formattedDate = today.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+    const dateEl = document.getElementById('current-date');
+    if (dateEl) dateEl.textContent = formattedDate;
+
+    // 5. Initialize PO Calendar and Hide Loader ONLY when done
+    try {
+        await initPOCalendar();
+    } catch (err) {
+        console.error("Error initializing dashboard:", err);
+    } finally {
+        // ✅ FIX: Hide the loader ONLY after the calendar has completely finished loading
+        const loader = document.getElementById('page-loader');
+        if (loader) {
+            loader.classList.add('hidden');
+        }
+    }
 
     console.log('Dashboard loaded successfully for user:', auth.currentUser?.email);
 });
@@ -54,7 +68,6 @@ const centerId = sessionStorage.getItem('selectedCenter');
 
 async function initPOCalendar() {
     if (!centerId) return;
-
     try {
         const snap = await get(ref(db, `centers/${centerId}/students`));
         if (!snap.exists()) return;
@@ -75,8 +88,10 @@ async function initPOCalendar() {
                     .map(sub => ({ 
                         name: sub.name, 
                         startLevel: sub.startLevel || '-', 
-                        startWS: sub.startWS || '-' 
+                        startWS: sub.startWS || '-',
+                        currentLevel: sub.currentLevel || '-' // ✅ ADDED: Current Level
                     }));
+
                 poDataMap[dateKey].push({
                     id,
                     nameCn: s.nameCn || '',
@@ -94,7 +109,7 @@ async function initPOCalendar() {
         renderDualCalendar();
         setupModalListeners();
     } catch (err) {
-        console.error("Error loading PO calendar data:", err);
+        console.error("Error loading PO calendar data: ", err);
     }
 }
 
@@ -104,9 +119,8 @@ function renderDualCalendar() {
     const currentMonth = today.getMonth();
     const nextMonth = currentMonth === 11 ? 0 : currentMonth + 1;
     const nextYear = currentMonth === 11 ? currentYear + 1 : currentYear;
-
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-    
+
     document.getElementById('currentMonthTitle').textContent = `${monthNames[currentMonth]} ${currentYear}`;
     document.getElementById('nextMonthTitle').textContent = `${monthNames[nextMonth]} ${nextYear}`;
 
@@ -117,7 +131,7 @@ function renderDualCalendar() {
 function renderMonthGrid(year, month, containerId, todayDate) {
     const container = document.getElementById(containerId);
     container.innerHTML = '';
-
+    
     // Day headers
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     days.forEach(day => {
@@ -163,7 +177,7 @@ function renderMonthGrid(year, month, containerId, todayDate) {
 function setupModalListeners() {
     const modal = document.getElementById('poModal');
     const closeBtn = document.getElementById('closePoModal');
-
+    
     // Delegate click events to calendar days
     document.addEventListener('click', (e) => {
         if (e.target.classList.contains('has-po')) {
@@ -185,7 +199,7 @@ function openPOModal(dateStr) {
     // Format date for display (prevent timezone shift)
     const dateObj = new Date(dateStr + 'T00:00:00');
     title.textContent = `Parent Orientations on ${dateObj.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`;
-    
+
     list.innerHTML = '';
     const students = poDataMap[dateStr] || [];
 
@@ -204,28 +218,42 @@ function openPOModal(dateStr) {
             
             const fullNameHtml = nameParts.length > 0 ? nameParts.join(' ') : 'Unknown Student';
 
-            // Build Subjects HTML
             const subjectsHtml = student.subjects.length > 0 
-                ? student.subjects.map(s => `<span class="po-subject-tag">${s.name} (Lvl: ${s.startLevel}, WS: ${s.startWS})</span>`).join('')
+                ? student.subjects.map(s => `<span class="po-subject-tag">${s.name} (Current: ${s.currentLevel})</span>`).join('')
                 : '<span style="color:#999; font-size:0.85rem;">No active subjects</span>';
 
-            // Build DT Table HTML
             let dtHtml = '';
             if (student.diagnosticTests && student.diagnosticTests.length > 0) {
                 dtHtml = `
                     <table class="dt-mini-table">
                         <thead>
-                            <tr><th>Subject</th><th>Test / AT</th><th>Score</th><th>Time (mins)</th></tr>
+                            <tr>
+                                <th>Date</th>
+                                <th>Subject</th>
+                                <th>Test / AT</th>
+                                <th>Score</th>
+                                <th>Time (mins)</th>
+                                <th>Start Lvl</th>
+                                <th>Start WS</th>
+                            </tr>
                         </thead>
                         <tbody>
-                            ${student.diagnosticTests.map(dt => `
-                                <tr>
-                                    <td>${dt.subject || '-'}</td>
-                                    <td>${dt.test || '-'}</td>
-                                    <td>${dt.score || '-'}</td>
-                                    <td>${dt.time ? dt.time : '-'}</td>
-                                </tr>
-                            `).join('')}
+                            ${student.diagnosticTests.map(dt => {
+                                const subj = student.subjects.find(s => s.name === dt.subject);
+                                const startLvl = subj ? subj.startLevel : '-';
+                                const startWs = subj ? subj.startWS : '-';
+                                return `
+                                    <tr>
+                                        <td>${dt.date || '-'}</td>
+                                        <td>${dt.subject || '-'}</td>
+                                        <td>${dt.test || '-'}</td>
+                                        <td>${dt.score || '-'}</td>
+                                        <td>${dt.time ? dt.time : '-'}</td>
+                                        <td>${startLvl}</td>
+                                        <td>${startWs}</td>
+                                    </tr>
+                                `;
+                            }).join('')}
                         </tbody>
                     </table>
                 `;
@@ -273,7 +301,7 @@ window.savePoNote = async function(studentId, textareaId, btnElement) {
     const textarea = document.getElementById(textareaId);
     const statusEl = document.getElementById(`status-${studentId}`);
     const noteText = textarea.value.trim();
-
+    
     btnElement.disabled = true;
     btnElement.textContent = 'Saving...';
 

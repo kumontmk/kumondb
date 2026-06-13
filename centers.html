@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Select Center - Kumon DB</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="centers.css">
 </head>
 <body>
   <div id="page-loader"><div class="spinner"></div></div>
@@ -15,10 +15,26 @@
       <button id="logoutBtn">Logout</button>
     </nav>
   </header>
+  
   <main class="dashboard">
     <h2>Select Your Center</h2>
     <div id="centersList" class="center-grid">
       <p style="grid-column: 1/-1; text-align:center; color: var(--text-light);">Loading centers...</p>
+    </div>
+
+    <h2 style="margin-top: 2.5rem; border-top: 1px solid #e2e8f0; padding-top: 1.5rem;">Center Administration</h2>
+    <div class="center-grid">
+      <a href="employees.html" class="center-card">
+        <div class="card-icon">👤</div>
+        <h3>Employee Management</h3>
+        <p>Add/edit staff, QR codes & timeclock records</p>
+      </a>
+
+      <a href="timecard.html" class="center-card">
+        <div class="card-icon">⏱️</div>
+        <h3>Employee Timecard</h3>
+        <p>QR scanning, geolocation verification & CSV export</p>
+      </a>
     </div>
   </main>
 
@@ -70,6 +86,9 @@
       } catch (err) {
         console.error('Failed to load centers:', err);
         document.getElementById('centersList').innerHTML = '<p style="grid-column:1/-1;color:#dc3545;text-align:center;">Error loading centers.</p>';
+      } finally {
+        // ✅ ADDED: Hide the loader ONLY after the centers have finished loading
+        document.getElementById('page-loader').classList.add('hidden');
       }
     }
   </script>

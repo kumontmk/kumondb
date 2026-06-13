@@ -46,7 +46,7 @@ function initAutoLogout() {
   const user = auth.currentUser;
   const stored = sessionStorage.getItem('kumonUser');
   if (!user && !stored) return;
-  
+
   isAutoLogoutInitialized = true;
   const activityEvents = ['mousedown', 'keypress', 'scroll', 'touchstart', 'click'];
   activityEvents.forEach(event => {
@@ -59,9 +59,14 @@ function initAutoLogout() {
 // SHOW INACTIVITY MESSAGE ON LOGIN PAGE
 // ============================================
 window.addEventListener('DOMContentLoaded', () => {
-  // Hide initial page loader after a brief moment so the login form is visible
+  // ✅ FIX: Only hide the loader automatically if we are on the login page!
+  // This prevents it from hiding prematurely on centers.html or dashboard.html
+  const isLoginPage = document.getElementById('emailAuthForm') || document.getElementById('googleSignInBtn');
   const loader = document.getElementById('page-loader');
-  if (loader) setTimeout(() => loader.classList.add('hidden'), 300);
+  
+  if (loader && isLoginPage) {
+    setTimeout(() => loader.classList.add('hidden'), 300);
+  }
 
   const urlParams = new URLSearchParams(window.location.search);
   if (urlParams.get('reason') === 'inactive') {
@@ -87,14 +92,14 @@ window.addEventListener('DOMContentLoaded', () => {
   const passInput = document.getElementById('password');
 
   googleBtn?.addEventListener('click', async () => {
-    try { 
-      setLoading(googleBtn, true, 'Connecting...'); 
-      await signInWithPopup(auth, provider); 
+    try {
+      setLoading(googleBtn, true, 'Connecting...');
+      await signInWithPopup(auth, provider);
       // ✅ SUCCESS: Do NOT hide loader. Let the redirect happen seamlessly.
-    } catch (error) { 
-      showError(error.message); 
+    } catch (error) {
+      showError(error.message);
       // ✅ ERROR: Hide loader so user can try again
-      setLoading(googleBtn, false, 'Continue with Google', true); 
+      setLoading(googleBtn, false, 'Continue with Google', true);
     }
   });
 
@@ -103,7 +108,7 @@ window.addEventListener('DOMContentLoaded', () => {
     errorMsg.textContent = '';
     const email = emailInput.value.trim();
     const password = passInput.value;
-    
+
     try {
       setLoading(submitBtn, true, isLoginMode ? 'Signing in...' : 'Creating account...');
       if (isLoginMode) await signInWithEmailAndPassword(auth, email, password);
@@ -115,6 +120,7 @@ window.addEventListener('DOMContentLoaded', () => {
       else if (msg.includes('auth/email-already-in-use')) msg = 'Email already registered.';
       else if (msg.includes('auth/invalid-email')) msg = 'Please enter a valid email.';
       else if (msg.includes('auth/weak-password')) msg = 'Password must be at least 6 characters.';
+      
       showError(msg);
       // ✅ ERROR: Hide loader so user can try again
       setLoading(submitBtn, false, isLoginMode ? 'Sign In' : 'Sign Up', true); 
@@ -135,9 +141,10 @@ onAuthStateChanged(auth, async (user) => {
     sessionStorage.setItem('kumonUser', JSON.stringify({
       uid: user.uid, email: user.email, name: user.displayName || user.email.split('@')[0], photo: user.photoURL
     }));
+    
     await initializeCenters();
     initAutoLogout();
-
+    
     const path = window.location.pathname;
     if (path.endsWith('/') || path.endsWith('index.html')) {
       window.location.href = 'centers.html'; // Redirects while loader is still visible!
@@ -182,7 +189,6 @@ export function requireAuth() {
 function setLoading(btn, isLoading, text, forceHideLoader = false) {
   btn.disabled = isLoading;
   btn.style.opacity = isLoading ? '0.7' : '1';
-  
   if (!btn.querySelector('svg')) {
     btn.textContent = text;
   }
