@@ -28,6 +28,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         userInfoEl.textContent = `Welcome, ${user.name}`;
       }
       
+      // ✅ NEW: Update dashboard header with the logged-in user's name
+      const dashboardUserNameEl = document.getElementById('dashboard-user-name');
+      if (dashboardUserNameEl) {
+        dashboardUserNameEl.textContent = user.name || 'there';
+      }
+      
       // ✅ Apply Dashboard Permissions & Set Admin Status
       await applyDashboardPermissions(user);
     } catch (error) {
@@ -54,7 +60,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const dateEl = document.getElementById('current-date');
   if (dateEl) dateEl.textContent = formattedDate;
 
-  // 5. Initialize PO Calendar and Hide Loader
+  // 5. ✅ NEW: Load and display Center Name
+  await loadCenterName();
+
+  // 6. Initialize PO Calendar and Hide Loader
   try {
     await initPOCalendar();
   } catch (err) {
@@ -66,6 +75,30 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   console.log('Dashboard loaded successfully for user:', auth.currentUser?.email);
 });
+
+// ✅ NEW: Function to fetch and display the Center Name
+async function loadCenterName() {
+  if (!centerId) return;
+  try {
+    const centerSnap = await get(ref(db, `centers/${centerId}`));
+    if (centerSnap.exists()) {
+      const centerData = centerSnap.val();
+      // Adjust 'name' or 'centerName' based on your actual Firebase database schema
+      const centerName = centerData.name || centerData.centerName || "Center";
+      
+      const calendarNameEl = document.getElementById('calendar-center-name');
+      if (calendarNameEl) calendarNameEl.textContent = centerName;
+      
+      const dashboardNameEl = document.getElementById('dashboard-center-name');
+      if (dashboardNameEl) dashboardNameEl.textContent = centerName;
+
+      const titleEl = document.getElementById('title-center-name');
+      if (titleEl) titleEl.textContent = centerName;
+    }
+  } catch (err) {
+    console.error("Error loading center name:", err);
+  }
+}
 
 // ✅ Permission Logic Function
 async function applyDashboardPermissions(user) {
