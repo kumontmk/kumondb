@@ -8,28 +8,31 @@
 </head>
 <body>
   <div id="page-loader"><div class="spinner"></div></div>
+  
   <header>
     <h1>🏢 Centers</h1>
     <nav>
-      <span id="userDisplay" style="font-size:0.9rem; opacity:0.9;"></span>
+      <span id="userEmail"></span>
       <button id="logoutBtn">Logout</button>
     </nav>
   </header>
-  
+
   <main class="dashboard">
     <h2>Select Your Center</h2>
-    <div id="centersList" class="center-grid">
-      <p style="grid-column: 1/-1; text-align:center; color: var(--text-light);">Loading centers...</p>
+    <div id="centerGrid" class="center-grid">
+      <div class="center-card">
+        <div class="card-icon">⏳</div>
+        <h3>Loading centers...</h3>
+      </div>
     </div>
-
-    <h2 style="margin-top: 2.5rem; border-top: 1px solid #e2e8f0; padding-top: 1.5rem;">Center Administration</h2>
+    
+    <h2 style="margin-top: 3rem;">Center Administration</h2>
     <div class="center-grid">
       <a href="employees.html" class="center-card">
         <div class="card-icon">👤</div>
         <h3>Employee Management</h3>
         <p>Add/edit staff, QR codes & timeclock records</p>
       </a>
-
       <a href="timecard.html" class="center-card">
         <div class="card-icon">⏱️</div>
         <h3>Employee Timecard</h3>
@@ -38,59 +41,7 @@
     </div>
   </main>
 
-  <script type="module">
-    import { auth, db, logout } from './auth.js';
-    import { ref, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-
-    let hasRendered = false;
-
-    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-    
-    onAuthStateChanged(auth, (user) => {
-      if (!user) { window.location.href = 'index.html'; return; }
-      if (hasRendered) return;
-      hasRendered = true;
-
-      const userObj = JSON.parse(sessionStorage.getItem('kumonUser') || '{}');
-      if (userObj.name) document.getElementById('userDisplay').textContent = `👤 ${userObj.name}`;
-      document.getElementById('logoutBtn').addEventListener('click', logout);
-
-      loadCenters();
-    });
-
-    async function loadCenters() {
-      try {
-        const centersRef = ref(db, 'centers');
-        const snapshot = await get(centersRef);
-        const list = document.getElementById('centersList');
-        list.innerHTML = '';
-
-        if (snapshot.exists()) {
-          Object.values(snapshot.val()).forEach(center => {
-            const card = document.createElement('div');
-            card.className = 'center-card';
-            // ✅ Structured HTML instead of raw text
-            card.innerHTML = `
-              <h3>${center.name}</h3>
-              <p>Click to manage students & reports</p>
-            `;
-            card.onclick = () => {
-              sessionStorage.setItem('selectedCenter', center.id);
-              window.location.href = `dashboard.html?center=${center.id}`;
-            };
-            list.appendChild(card);
-          });
-        } else {
-          list.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:var(--text-light);padding:2rem;">No centers found. Contact admin.</p>';
-        }
-      } catch (err) {
-        console.error('Failed to load centers:', err);
-        document.getElementById('centersList').innerHTML = '<p style="grid-column:1/-1;color:#dc3545;text-align:center;">Error loading centers.</p>';
-      } finally {
-        // ✅ ADDED: Hide the loader ONLY after the centers have finished loading
-        document.getElementById('page-loader').classList.add('hidden');
-      }
-    }
-  </script>
+  <!-- ✅ ADDED SCRIPT TAG TO LOAD THE NEW JS FILE -->
+  <script type="module" src="centers.js"></script>
 </body>
 </html>

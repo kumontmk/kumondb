@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Center Dashboard - Kumon DB</title>
+  <title>Dashboard - Kumon DB</title>
   <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
@@ -23,10 +23,15 @@
     </nav>
   </header>
 
+  <!-- Updated Calendar Section -->
   <div class="calendar-section">
     <div class="calendar-header-main">
-        <h3>📅 Upcoming Parent Orientations</h3>
-        <p class="calendar-hint">Dates marked in <span style="color:#c62828; font-weight:bold;">red</span> have scheduled orientations.</p>
+        <h3>📅 Center Calendar</h3>
+        <p class="calendar-hint">
+          <span style="color:#c62828; font-weight:bold;">● Red</span> = Parent Orientation &nbsp;|&nbsp; 
+          <span style="color:#e65100; font-weight:bold;">● Orange</span> = Center Holiday &nbsp;|&nbsp; 
+          <span style="color:#2e7d32; font-weight:bold;">● Green</span> = Employee Holiday
+        </p>
     </div>
     <div class="calendar-wrapper">
         <div class="calendar-month">
@@ -40,7 +45,7 @@
     </div>
   </div>
 
-  <!-- Add this at the VERY BOTTOM of the <body>, before closing </body> -->
+  <!-- EXISTING: Parent Orientation Modal (100% Preserved) -->
   <div id="poModal" class="modal-overlay hidden">
     <div class="modal-content">
         <span class="close-modal" id="closePoModal">&times;</span>
@@ -48,6 +53,42 @@
         <div id="poStudentList" class="po-student-list">
             <!-- Student cards will be injected here -->
         </div>
+    </div>
+  </div>
+
+  <!-- NEW: Edit Calendar Modal (Admin Only) -->
+  <div id="editCalendarModal" class="modal-overlay hidden">
+    <div class="modal-content">
+      <span class="close-modal" id="closeEditCalendarModal">&times;</span>
+      <h3 id="editCalendarDateTitle" style="color: var(--primary-dark); margin-bottom: 1rem;">Edit Date</h3>
+      
+      <form id="editCalendarForm">
+        <div style="margin-bottom: 1.5rem;">
+          <label style="display:block; margin-bottom:0.75rem; font-weight:600; font-size: 0.95rem;">Event Type:</label>
+          <label style="margin-right: 1.5rem; cursor: pointer;">
+            <input type="radio" name="eventType" value="none" checked> 
+            <span style="font-weight: 500;">None (Regular Day)</span>
+          </label>
+          <label style="margin-right: 1.5rem; cursor: pointer;">
+            <input type="radio" name="eventType" value="center"> 
+            <span style="color: #e65100; font-weight: 600;">🟠 Center Holiday</span>
+          </label>
+          <label style="cursor: pointer;">
+            <input type="radio" name="eventType" value="employee"> 
+            <span style="color: #2e7d32; font-weight: 600;">🟢 Employee Holiday</span>
+          </label>
+        </div>
+        
+        <div style="margin-bottom: 1.5rem;">
+          <label for="calendarNote" style="display:block; margin-bottom:0.5rem; font-weight:600; font-size: 0.95rem;">Note (Optional):</label>
+          <textarea id="calendarNote" class="po-note-area" placeholder="e.g., Closed for Thanksgiving, Staff Training, etc."></textarea>
+        </div>
+        
+        <div style="display:flex; gap: 1rem; flex-wrap: wrap;">
+          <button type="submit" class="save-note-btn">💾 Save Changes</button>
+          <button type="button" id="clearCalendarBtn" class="save-note-btn" style="background:#dc3545;">🗑️ Clear Event</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -59,37 +100,37 @@
     </div>
 
     <div class="center-grid">
-      <a href="students.html" class="center-card">
+      <a href="students.html" id="card-studentManagement" class="center-card">
         <div class="card-icon">👥</div>
         <h3>Student Management</h3>
         <p>Add, edit, search students & track progress</p>
       </a>
-
-      <a href="timetable.html" class="center-card">
+      
+      <a href="timetable.html" id="card-timetable" class="center-card">
         <div class="card-icon">🗓️</div>
         <h3>Timetable</h3>
         <p>View & print weekly class schedules</p>
       </a>
-
-      <a href="reports.html" class="center-card">
+      
+      <a href="reports.html" id="card-monthlyReports" class="center-card">
         <div class="card-icon">📊</div>
         <h3>Monthly Reports</h3>
         <p>Generate, edit & save monthly progress reports</p>
       </a>
-
-      <a href="graphs.html" class="center-card">
+      
+      <a href="graphs.html" id="card-progressCharts" class="center-card">
         <div class="card-icon">📈</div>
         <h3>Progress Charts</h3>
         <p>Analytics, progress tracking & charts</p>
       </a>
-
-      <a href="attendance.html" class="center-card">
+      
+      <a href="attendance.html" id="card-attendance" class="center-card">
         <div class="card-icon">✅</div>
         <h3>Attendance</h3>
         <p>Scan QR, track check-ins, view late students & daily reports</p>
       </a>
-
-      <a href="parent-orientation.html" class="center-card">
+      
+      <a href="parent-orientation.html" id="card-parentOrientation" class="center-card">
         <div class="card-icon">👪</div>
         <h3>Parent Orientation</h3>
         <p>Manage pending parent orientations & follow-ups</p>
@@ -97,7 +138,6 @@
     </div>
   </main>
 
-  <!-- Link to the dedicated dashboard JS (as a module) -->
   <script type="module" src="dashboard.js"></script>
 </body>
 </html>

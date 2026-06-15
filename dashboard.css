@@ -27,7 +27,7 @@ body {
 
 /* =========================================
    HEADER
-   ========================================= */
+========================================= */
 header {
   background: var(--primary);
   color: var(--white);
@@ -84,7 +84,7 @@ header a:hover, header button:hover {
 
 /* =========================================
    DASHBOARD CONTAINER & GRID
-   ========================================= */
+========================================= */
 .dashboard {
   padding: 2rem;
   max-width: 1400px;
@@ -116,7 +116,7 @@ header a:hover, header button:hover {
 
 /* =========================================
    DASHBOARD CARDS
-   ========================================= */
+========================================= */
 .center-card {
   background: var(--white);
   padding: 1.5rem;
@@ -138,9 +138,9 @@ header a:hover, header button:hover {
 .center-card::before {
   content: '';
   position: absolute;
-  top: 0; 
-  left: 0; 
-  width: 4px; 
+  top: 0;
+  left: 0;
+  width: 4px;
   height: 100%;
   background: var(--primary);
   transition: width 0.25s ease;
@@ -152,8 +152,8 @@ header a:hover, header button:hover {
   border-color: var(--primary);
 }
 
-.center-card:hover::before { 
-  width: 6px; 
+.center-card:hover::before {
+  width: 6px;
 }
 
 .center-card .card-icon {
@@ -180,39 +180,39 @@ header a:hover, header button:hover {
 
 /* =========================================
    LOADING SPINNER
-   ========================================= */
+========================================= */
 #page-loader {
-  position: fixed; 
-  inset: 0; 
+  position: fixed;
+  inset: 0;
   background: rgba(255, 255, 255, 0.95);
-  display: flex; 
-  align-items: center; 
+  display: flex;
+  align-items: center;
   justify-content: center;
-  z-index: 9999; 
+  z-index: 9999;
   transition: opacity 0.3s ease;
 }
 
-#page-loader.hidden { 
-  opacity: 0; 
-  pointer-events: none; 
+#page-loader.hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .spinner {
-  width: 48px; 
-  height: 48px; 
+  width: 48px;
+  height: 48px;
   border: 4px solid #e2e8f0;
-  border-top-color: var(--primary-dark); 
+  border-top-color: var(--primary-dark);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
 
-@keyframes spin { 
-  to { transform: rotate(360deg); } 
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 /* =========================================
    CALENDAR STYLES
-   ========================================= */
+========================================= */
 .calendar-section {
   background: var(--white);
   padding: 1.5rem;
@@ -284,6 +284,7 @@ header a:hover, header button:hover {
   font-size: 0.9rem;
 }
 
+/* EXISTING: PO Styles (Dot moved to bottom-right to avoid overlap) */
 .calendar-day.has-po {
   background: #ffebee;
   color: #c62828;
@@ -300,10 +301,66 @@ header a:hover, header button:hover {
   content: '';
   position: absolute;
   bottom: 4px;
+  right: 4px; /* Moved to right */
   width: 6px;
   height: 6px;
   background: #c62828;
   border-radius: 50%;
+}
+
+/* NEW: Center Holiday Styles */
+.calendar-day.has-center-holiday {
+  background: #fff3e0;
+  color: #e65100;
+  font-weight: 700;
+  border: 1px solid #ffe0b2;
+}
+
+.calendar-day.has-center-holiday:hover {
+  background: #ffe0b2;
+}
+
+.calendar-day.has-center-holiday::before {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  left: 4px; /* Bottom-left */
+  width: 6px;
+  height: 6px;
+  background: #e65100;
+  border-radius: 50%;
+}
+
+/* NEW: Employee Holiday Styles */
+.calendar-day.has-employee-holiday {
+  background: #e8f5e9;
+  color: #2e7d32;
+  font-weight: 700;
+  border: 1px solid #c8e6c9;
+}
+
+.calendar-day.has-employee-holiday:hover {
+  background: #c8e6c9;
+}
+
+.calendar-day.has-employee-holiday::before {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  left: 4px; /* Bottom-left */
+  width: 6px;
+  height: 6px;
+  background: #2e7d32;
+  border-radius: 50%;
+}
+
+/* Handle overlap gracefully if a day has both a Holiday and a PO */
+.calendar-day.has-po.has-center-holiday {
+  border-color: #e65100;
+}
+
+.calendar-day.has-po.has-employee-holiday {
+  border-color: #2e7d32;
 }
 
 .calendar-day.today {
@@ -318,7 +375,7 @@ header a:hover, header button:hover {
 
 /* =========================================
    MODAL STYLES
-   ========================================= */
+========================================= */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -359,15 +416,15 @@ header a:hover, header button:hover {
   transition: color 0.2s;
 }
 
-.close-modal:hover { 
-  color: var(--text); 
+.close-modal:hover {
+  color: var(--text);
 }
 
-.po-student-list { 
-  display: flex; 
-  flex-direction: column; 
-  gap: 1rem; 
-  margin-top: 1rem; 
+.po-student-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
 }
 
 .po-student-card {
@@ -378,7 +435,6 @@ header a:hover, header button:hover {
   border-left: 4px solid var(--primary);
 }
 
-/* UPDATED: Added flex-wrap and gap to prevent name overflow on small screens */
 .po-student-card h4 {
   color: var(--primary-dark);
   margin: 0 0 0.75rem 0;
@@ -390,29 +446,28 @@ header a:hover, header button:hover {
   gap: 0.5rem;
 }
 
-/* NEW: Name Styling Classes */
-.student-name-cn { 
-  font-weight: 700; 
-  color: var(--text); 
+.student-name-cn {
+  font-weight: 700;
+  color: var(--text);
 }
 
-.student-name-pinyin { 
-  color: var(--text-light); 
-  font-weight: 400; 
+.student-name-pinyin {
+  color: var(--text-light);
+  font-weight: 400;
 }
 
-.student-nickname { 
-  color: var(--primary-dark); 
-  font-weight: 500; 
-  font-style: italic; 
+.student-name-nickname {
+  color: var(--primary-dark);
+  font-weight: 500;
+  font-style: italic;
 }
 
 .grade-school-badge {
-  font-size: 0.85rem; 
-  font-weight: 500; 
-  color: #666; 
-  background: #f1f5f9; 
-  padding: 0.25rem 0.6rem; 
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #666;
+  background: #f1f5f9;
+  padding: 0.25rem 0.6rem;
   border-radius: 12px;
   white-space: nowrap;
 }
@@ -466,16 +521,16 @@ header a:hover, header button:hover {
   text-align: left;
 }
 
-.dt-mini-table th { 
-  background: #f1f5f9; 
-  font-weight: 600; 
-  color: var(--text-light); 
+.dt-mini-table th {
+  background: #f1f5f9;
+  font-weight: 600;
+  color: var(--text-light);
 }
 
-.po-note-wrapper { 
-  margin-top: 1rem; 
-  padding-top: 1rem; 
-  border-top: 1px dashed #cbd5e1; 
+.po-note-wrapper {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px dashed #cbd5e1;
 }
 
 .po-note-wrapper label {
@@ -517,13 +572,13 @@ header a:hover, header button:hover {
   transition: background 0.2s;
 }
 
-.save-note-btn:hover { 
-  background: var(--primary-dark); 
+.save-note-btn:hover {
+  background: var(--primary-dark);
 }
 
-.save-note-btn:disabled { 
-  background: #cbd5e1; 
-  cursor: not-allowed; 
+.save-note-btn:disabled {
+  background: #cbd5e1;
+  cursor: not-allowed;
 }
 
 .save-status {
@@ -534,20 +589,20 @@ header a:hover, header button:hover {
   transition: opacity 0.3s;
 }
 
-.save-status.visible { 
-  opacity: 1; 
+.save-status.visible {
+  opacity: 1;
 }
 
 /* =========================================
    RESPONSIVE ADJUSTMENTS
-   ========================================= */
+========================================= */
 @media (max-width: 768px) {
   header {
     padding: 1rem;
     flex-direction: column;
     align-items: flex-start;
   }
-  
+
   header nav {
     width: 100%;
     justify-content: space-between;
@@ -562,13 +617,96 @@ header a:hover, header button:hover {
     grid-template-columns: 1fr;
   }
 
-  .calendar-wrapper { 
-    grid-template-columns: 1fr; 
-    gap: 1.5rem; 
+  .calendar-wrapper {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
   }
-  
-  .modal-content { 
-    width: 95%; 
-    padding: 1rem; 
+
+  .modal-content {
+    width: 95%;
+    padding: 1rem;
   }
+}
+
+/* 🔐 ACCESS DENIED SCREEN */
+.access-denied {
+  position: fixed; inset: 0; background: var(--secondary);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 2000; padding: 2rem;
+}
+
+.access-denied-content {
+  background: var(--white); padding: 2.5rem 3rem; border-radius: var(--radius);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.15); text-align: center; max-width: 480px;
+  border-top: 4px solid #dc3545;
+}
+
+.access-denied h2 { color: #dc3545; margin-bottom: 1rem; }
+.access-denied p { margin: 0.75rem 0; color: var(--text-light); }
+
+/* =========================================
+   NEW: HOLIDAY CALENDAR STYLES
+========================================= */
+
+/* Move the existing PO red dot to the right to avoid overlap */
+.calendar-day.has-po::after {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  right: 4px; /* Added */
+  left: auto; /* Added */
+  width: 6px;
+  height: 6px;
+  background: #c62828;
+  border-radius: 50%;
+}
+
+/* 🟠 Center Holiday Styles */
+.calendar-day.has-center-holiday {
+  background: #fff3e0;
+  color: #e65100;
+  font-weight: 700;
+  border: 1px solid #ffe0b2;
+}
+.calendar-day.has-center-holiday:hover {
+  background: #ffe0b2;
+}
+.calendar-day.has-center-holiday::before {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  left: 4px; /* Bottom-left */
+  width: 6px;
+  height: 6px;
+  background: #e65100;
+  border-radius: 50%;
+}
+
+/* 🟢 Employee Holiday Styles */
+.calendar-day.has-employee-holiday {
+  background: #e8f5e9;
+  color: #2e7d32;
+  font-weight: 700;
+  border: 1px solid #c8e6c9;
+}
+.calendar-day.has-employee-holiday:hover {
+  background: #c8e6c9;
+}
+.calendar-day.has-employee-holiday::before {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  left: 4px; /* Bottom-left */
+  width: 6px;
+  height: 6px;
+  background: #2e7d32;
+  border-radius: 50%;
+}
+
+/* Handle overlap gracefully if a day has both a Holiday and a PO */
+.calendar-day.has-po.has-center-holiday {
+  border-color: #e65100;
+}
+.calendar-day.has-po.has-employee-holiday {
+  border-color: #2e7d32;
 }

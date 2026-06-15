@@ -893,3 +893,52 @@ label span { font-weight: 400; font-size: 0.8rem; color: #999; margin-left: 0.25
 #subjectCheckboxes .att-subject-check {
     margin: 0 !important;
 }
+
+/* Pending Verifications Table Actions */
+#verificationsTableBody .danger {
+  background: #dc3545;
+  color: white;
+}
+#verificationsTableBody .danger:hover {
+  background: #a71d2a;
+}
+
+/* Ensure modal tabs don't get squished */
+#employeeModal .tabs {
+  justify-content: flex-start;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+/* ============================================
+🔐 ACCESS DENIED SCREEN (For Page-Level Guards)
+============================================ */
+.access-denied {
+  position: fixed; 
+  inset: 0; 
+  background: var(--secondary);
+  display: flex; 
+  align-items: center; 
+  justify-content: center;
+  z-index: 2000; 
+  padding: 2rem;
+}
+.access-denied-content {
+  background: var(--white); 
+  padding: 2.5rem 3rem; 
+  border-radius: var(--radius);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.15); 
+  text-align: center; 
+  max-width: 480px;
+  border-top: 4px solid #dc3545;
+}
+.access-denied h2 { 
+  color: #dc3545; 
+  margin-bottom: 1rem; 
+}
+.access-denied p { 
+  margin: 0.75rem 0; 
+  color: var(--text-light); 
+}
+.access-denied .primary { 
+  margin-top: 1.5rem; 
+}

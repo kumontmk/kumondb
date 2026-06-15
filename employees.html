@@ -4,124 +4,186 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Employees - Kumon DB</title>
+  <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="employees.css">
 </head>
 <body>
+  <div id="page-loader"><div class="spinner"></div></div>
+
   <header>
     <nav>
       <a href="centers.html">← Centers</a>
     </nav>
-    <h1>👥 Employee Management</h1>
+    <h2>👥 Employee Management</h2>
   </header>
 
-  <!-- 🔐 Access Denied Message (shown if email doesn't match) -->
   <div id="accessDenied" class="access-denied hidden">
     <div class="access-denied-content">
       <h2>🔐 Access Restricted</h2>
-      <p>This page is only accessible to <strong>kumonchamps@gmail.com</strong>.</p>
+      <p>This page is only accessible to kumonchamps@gmail.com.</p>
       <p>Please log in with the authorized account or contact your administrator.</p>
-      <button id="backToDashboard" class="primary">← Back to Dashboard</button>
+      <button id="backToDashboard" class="primary" style="margin-top:1rem">← Back to Centers</button>
     </div>
   </div>
 
-  <!-- Main Content (shown only if authorized) -->
-  <main id="mainContent" class="students-page hidden">
-    <div class="controls">
-      <input type="text" id="searchEmployee" placeholder="🔍 Search employees by name, position...">
-      <button id="addEmployeeBtn" class="primary">+ Add Employee</button>
+  <div id="mainContent" class="students-page hidden">
+    <div class="tabs" style="margin-bottom: 1.5rem;">
+      <button class="tab-btn active" data-main-tab="employees">Employees</button>
+      <button class="tab-btn" data-main-tab="verifications">Pending Verifications</button>
     </div>
 
-    <div class="table-wrapper">
-      <table>
-        <thead>
-          <tr>
-            <th>English Name</th>
-            <th>Chinese Name</th>
-            <th>Position</th>
-            <th>Terms</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="employeeTableBody">
-          <tr><td colspan="5" class="empty-state">Loading employees...</td></tr>
-        </tbody>
-      </table>
+    <div id="main-tab-employees" class="tab-content active">
+      <div class="controls">
+        <input type="text" id="searchEmployee" placeholder="🔍 Search by name, position, or email...">
+        <button id="addEmployeeBtn" class="primary">+ Add Employee</button>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>English Name</th>
+              <th>Chinese Name</th>
+              <th>Email</th>
+              <th>Position</th>
+              <th>Terms</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="employeeTableBody">
+            <tr><td colspan="6" class="empty-state">Loading employees...</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
-  </main>
+
+    <div id="main-tab-verifications" class="tab-content">
+      <h3 style="margin-bottom: 1rem;">Pending Account Verifications</h3>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th>English Name</th>
+              <th>Position</th>
+              <th>Date Registered</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="verificationsTableBody">
+            <tr><td colspan="5" class="empty-state">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 
   <!-- Employee Modal -->
   <div id="employeeModal" class="modal hidden">
     <div class="modal-content wide">
-      <button id="closeModal" class="close-btn">&times;</button>
+      <span class="close-btn" id="closeModal">&times;</span>
       <h3 id="modalTitle">Add Employee</h3>
+      
+      <div class="tabs" style="margin: 1rem 0;">
+        <button class="tab-btn active" data-tab="details">Details & QR</button>
+        <button class="tab-btn" data-tab="timeclock">Timeclock Records</button>
+        <button class="tab-btn" data-tab="permissions" id="permissionsTabBtn">Permissions</button>
+      </div>
+
       <form id="employeeForm">
         <input type="hidden" id="empId">
-        <div class="form-grid">
-          <div>
-            <label>English Name *</label>
-            <input type="text" id="empEnglish" required>
-          </div>
-          <div>
-            <label>Chinese Name</label>
-            <input type="text" id="empChinese">
-          </div>
-          <div>
-            <label>Nationality *</label>
-            <select id="empNationality" required>
-              <option value="Filipino">Filipino</option>
-              <option value="Chinese">Chinese</option>
-              <option value="Portuguese">Portuguese</option>
-              <option value="Others">Others</option>
-            </select>
-            <input type="text" id="empNationalityOther" class="other-input" placeholder="Specify nationality">
-          </div>
-          <div>
-            <label>Position *</label>
-            <select id="empPosition" required>
-              <option value="English Teacher">English Teacher</option>
-              <option value="Math Teacher">Math Teacher</option>
-              <option value="Chinese Teacher">Chinese Teacher</option>
-              <option value="Admin">Admin</option>
-              <option value="Manager">Manager</option>
-            </select>
-          </div>
-          <div>
-            <label>Employment Date *</label>
-            <input type="date" id="empDate" required>
-          </div>
-          <div>
-            <label>Employment Terms *</label>
-            <select id="empTerms" required>
-              <option value="Full-time">Full-time</option>
-              <option value="Part-time">Part-time</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="tabs">
-          <button type="button" class="tab-btn active" data-tab="details">Details & QR</button>
-          <button type="button" class="tab-btn" data-tab="timeclock">Timeclock Records</button>
-        </div>
-
+        
+        <!-- Details Tab -->
         <div id="tab-details" class="tab-content active">
+          <div class="form-grid">
+            <div><label>English Name *</label><input type="text" id="empEnglish" required></div>
+            <div><label>Chinese Name</label><input type="text" id="empChinese"></div>
+            <div><label>Email Address *</label><input type="email" id="empEmail" required></div>
+            <div>
+              <label>Nationality *</label>
+              <select id="empNationality" required>
+                <option value="">Select...</option>
+                <option value="Filipino">Filipino</option>
+                <option value="Chinese">Chinese</option>
+                <option value="Portuguese">Portuguese</option>
+                <option value="Others">Others</option>
+              </select>
+              <input type="text" id="empNationalityOther" class="other-input" placeholder="Specify Nationality">
+            </div>
+            <div>
+              <label>Position *</label>
+              <select id="empPosition" required>
+                <option value="">Select...</option>
+                <option value="English Teacher">English Teacher</option>
+                <option value="Math Teacher">Math Teacher</option>
+                <option value="Chinese Teacher">Chinese Teacher</option>
+                <option value="Admin">Admin</option>
+                <option value="Manager">Manager</option>
+              </select>
+            </div>
+            <div><label>Employment Date *</label><input type="date" id="empDate" required></div>
+            <div>
+              <label>Employment Terms *</label>
+              <select id="empTerms" required>
+                <option value="Full-time">Full-time</option>
+                <option value="Part-time">Part-time</option>
+              </select>
+            </div>
+          </div>
           <div id="qrContainer">
-            <img id="empQrImg" alt="QR Code" style="max-width: 200px; display: block; margin: 0 auto 1rem;">
-            <button type="button" id="downloadQrBtn" class="secondary">⬇ Download QR Code</button>
+            <p>QR Code</p>
+            <img id="empQrImg" alt="QR Code" style="max-width: 200px; margin: 0 auto; display: block;">
+            <button type="button" id="downloadQrBtn" class="secondary" style="margin-top: 1rem;">⬇ Download QR Code</button>
           </div>
         </div>
 
+        <!-- Timeclock Tab -->
         <div id="tab-timeclock" class="tab-content">
-          <p style="margin-bottom: 0.5rem; color: var(--text-light); font-size: 0.9rem;">Edit time in/out records manually. Changes apply immediately.</p>
-          <div class="table-wrapper" style="max-height: 300px;">
+          <p class="hint">Edit time in/out records manually. Changes apply immediately.</p>
+          <div class="table-wrapper" style="max-height: 400px;">
             <table class="timeclock-edit-table">
-              <!-- ✅ UPDATED HEADERS -->
-              <thead><tr><th>Date</th><th>First Time In</th><th>Last Time Out</th><th>Total Hours Worked</th><th>Action</th></tr></thead>
-              <tbody id="timeclockHistoryBody"></tbody>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>First Time In</th>
+                  <th>Last Time Out</th>
+                  <th>Total Hours Worked</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="timeclockHistoryBody">
+                <tr><td colspan="5" class="empty-state">No records found</td></tr>
+              </tbody>
             </table>
           </div>
         </div>
 
-        <div style="margin-top: 1.5rem; display: flex; gap: 1rem; justify-content: flex-end;">
+        <!-- ✅ PERMISSIONS TAB (FIXED WITH PROPER IDs AND INPUTS) -->
+        <div id="tab-permissions" class="tab-content">
+          <p class="hint">Configure access rights for this employee.</p>
+          
+          <h4 style="margin: 1rem 0 0.5rem;">Center Access</h4>
+          <div class="form-grid" id="centerPermissions">
+            <label><input type="checkbox" value="kumon-taipa-mei-keng"> Kumon Taipa Mei Keng</label>
+            <label><input type="checkbox" value="kumon-taipa-pac-tat"> Kumon Taipa Pac Tat</label>
+          </div>
+
+          <h4 style="margin: 1rem 0 0.5rem;">Dashboard Cards Access</h4>
+          <div class="form-grid" id="dashboardPermissions">
+            <label><input type="checkbox" value="studentManagement"> Student Management</label>
+            <label><input type="checkbox" value="editStudent"> Edit Student Details</label>
+            <label><input type="checkbox" value="timetable"> Timetable</label>
+            <label><input type="checkbox" value="monthlyReports"> Monthly Reports</label>
+            <label><input type="checkbox" value="progressCharts"> Progress Charts</label>
+            <label><input type="checkbox" value="attendance"> Attendance</label>
+            <label><input type="checkbox" value="parentOrientation"> Parent Orientation</label>
+          </div>
+          
+          <div class="hint" style="margin-top: 1rem; color: #dc3545; display: none;" id="permissionsLockedMsg">
+            🔒 Only kumonchamps@gmail.com can edit permissions.
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
           <button type="button" id="cancelModal" class="secondary">Cancel</button>
           <button type="button" id="saveEmployee" class="primary">Save Employee</button>
         </div>
@@ -129,12 +191,7 @@
     </div>
   </div>
 
-  <div id="page-loader" class="hidden">
-    <div class="spinner"></div>
-  </div>
-
-  <!-- External Libraries -->
-  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script type="module" src="employees.js"></script>
 </body>
 </html>

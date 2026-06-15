@@ -4,40 +4,70 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Kumon Center DB - Login</title>
+  <link rel="icon" href="data:,"> <!-- ✅ Prevents favicon.ico 404 error -->
   <link rel="stylesheet" href="style.css">
 </head>
-<body class="login-page">
-  <div class="login-container">
-    <img src="logo.png" alt="Kumon Logo" class="login-logo">
-    <p>Sign in to manage students & reports</p>
+<body>
+  <div id="page-loader" class="hidden"><div class="spinner"></div></div>
+  <div class="login-page">
+    <div class="login-container">
+      <!-- Replace src with your actual logo path -->
+      <img src="logo.png" alt="Kumon Logo" class="login-logo">
+      <h2>Sign in to manage students & reports</h2>
+      
+      <!-- Auth Form -->
+      <div id="authFormContainer">
+        <button id="googleSignInBtn" class="google-btn">
+          <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.715H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.159 6.656 3.58 9 3.58z"/></svg>
+          Continue with Google
+        </button>
+        <div class="divider">OR</div>
+        <form id="emailAuthForm" class="auth-form">
+          <input type="email" id="email" placeholder="Email address" autocomplete="email" required>
+          <input type="password" id="password" placeholder="Password" autocomplete="current-password" required> <!-- ✅ ADDED autocomplete -->
+          <button type="submit" id="submitBtn">Sign In</button>
+        </form>
+        <p id="errorMsg" class="error"></p>
+        <button id="authToggleBtn" class="auth-toggle">Don't have an account? Sign Up</button>
+      </div>
 
-    <button id="googleSignInBtn" class="google-btn">
-      <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
-        <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"></path>
-        <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.836.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"></path>
-        <path d="M3.964 10.706a5.41 5.41 0 0 1 0-3.412V4.962H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332z" fill="#FBBC05"></path>
-        <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.167 6.656 3.58 9 3.58z" fill="#EA4335"></path>
-      </svg>
-      Continue with Google
-    </button>
+      <!-- Profile Completion Form (Hidden by default) -->
+      <div id="profileFormContainer" class="hidden">
+        <h3>Complete Your Profile</h3>
+        <p class="hint">Please provide your details for admin verification.</p>
+        <form id="profileForm" class="auth-form">
+          <input type="text" id="profEnglishName" placeholder="English Name *" required>
+          <input type="text" id="profChineseName" placeholder="Chinese Name">
+          <select id="profNationality" required>
+            <option value="">Nationality *</option>
+            <option value="Filipino">Filipino</option>
+            <option value="Chinese">Chinese</option>
+            <option value="Portuguese">Portuguese</option>
+            <option value="Others">Others</option>
+          </select>
+          <input type="text" id="profNationalityOther" class="other-input" placeholder="Specify Nationality">
+          <select id="profPosition" required>
+            <option value="">Position *</option>
+            <option value="English Teacher">English Teacher</option>
+            <option value="Math Teacher">Math Teacher</option>
+            <option value="Chinese Teacher">Chinese Teacher</option>
+            <option value="Admin">Admin</option>
+            <option value="Manager">Manager</option>
+          </select>
+          <label style="text-align:left; font-size:0.85rem; color:#666; margin-top:0.5rem;">Employment Date *</label>
+          <input type="date" id="profEmploymentDate" required>
+          <select id="profTerms" required>
+            <option value="">Employment Terms *</option>
+            <option value="Full-time">Full-time</option>
+            <option value="Part-time">Part-time</option>
+          </select>
+          <button type="submit" id="submitProfileBtn" class="primary" style="margin-top:1rem;">Submit for Verification</button>
+        </form>
+        <button id="cancelProfileBtn" class="auth-toggle" style="margin-top: 1rem;">Cancel</button>
+      </div>
 
-    <div class="divider">OR</div>
-
-    <form id="emailAuthForm" class="auth-form">
-      <input type="email" id="email" placeholder="Email address" required>
-      <input type="password" id="password" placeholder="Password" required>
-      <button type="submit" id="submitBtn">Sign In</button>
-    </form>
-
-    <!-- <button id="authToggleBtn" class="auth-toggle">Don't have an account? Sign Up</button> -->
-    <div id="errorMsg" class="error"></div>
+    </div>
   </div>
-
-  <!-- ✅ Page Loading Spinner Overlay (Blocks all clicks when active) -->
-  <div id="page-loader" class="hidden">
-    <div class="spinner"></div>
-  </div>
-
   <script type="module" src="auth.js"></script>
 </body>
 </html>

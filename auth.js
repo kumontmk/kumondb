@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getDatabase, ref, set, get, update } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import {
   getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
   signInWithEmailAndPassword, createUserWithEmailAndPassword
@@ -21,18 +21,15 @@ export const db = getDatabase(app);
 export const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 
-// ============================================
-// AUTO-LOGOUT AFTER INACTIVITY
-// ============================================
-const AUTO_LOGOUT_TIMEOUT = 20 * 60 * 1000; // 20 minutes
+const AUTO_LOGOUT_TIMEOUT = 20 * 60 * 1000;
 let logoutTimer;
 let isAutoLogoutInitialized = false;
+let pendingUser = null; 
+let isLoginMode = true; 
 
 function resetLogoutTimer() {
   clearTimeout(logoutTimer);
-  logoutTimer = setTimeout(() => {
-    performAutoLogout();
-  }, AUTO_LOGOUT_TIMEOUT);
+  logoutTimer = setTimeout(() => { performAutoLogout(); }, AUTO_LOGOUT_TIMEOUT);
 }
 
 function performAutoLogout() {
@@ -46,7 +43,6 @@ function initAutoLogout() {
   const user = auth.currentUser;
   const stored = sessionStorage.getItem('kumonUser');
   if (!user && !stored) return;
-
   isAutoLogoutInitialized = true;
   const activityEvents = ['mousedown', 'keypress', 'scroll', 'touchstart', 'click'];
   activityEvents.forEach(event => {
@@ -55,19 +51,13 @@ function initAutoLogout() {
   resetLogoutTimer();
 }
 
-// ============================================
-// SHOW INACTIVITY MESSAGE ON LOGIN PAGE
-// ============================================
 window.addEventListener('DOMContentLoaded', () => {
-  // ✅ FIX: Only hide the loader automatically if we are on the login page!
-  // This prevents it from hiding prematurely on centers.html or dashboard.html
   const isLoginPage = document.getElementById('emailAuthForm') || document.getElementById('googleSignInBtn');
   const loader = document.getElementById('page-loader');
-  
   if (loader && isLoginPage) {
     setTimeout(() => loader.classList.add('hidden'), 300);
   }
-
+  
   const urlParams = new URLSearchParams(window.location.search);
   if (urlParams.get('reason') === 'inactive') {
     const errorMsg = document.getElementById('errorMsg');
@@ -78,11 +68,14 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     window.history.replaceState({}, document.title, window.location.pathname);
   }
-});
 
-let isLoginMode = true;
+  const profNatSelect = document.getElementById('profNationality');
+  const profNatOther = document.getElementById('profNationalityOther');
+  profNatSelect?.addEventListener('change', e => {
+    profNatOther.classList.toggle('visible', e.target.value === 'Others');
+    if (e.target.value !== 'Others') profNatOther.value = '';
+  });
 
-window.addEventListener('DOMContentLoaded', () => {
   const googleBtn = document.getElementById('googleSignInBtn');
   const emailForm = document.getElementById('emailAuthForm');
   const submitBtn = document.getElementById('submitBtn');
@@ -90,15 +83,15 @@ window.addEventListener('DOMContentLoaded', () => {
   const errorMsg = document.getElementById('errorMsg');
   const emailInput = document.getElementById('email');
   const passInput = document.getElementById('password');
+  const profileForm = document.getElementById('profileForm');
+  const cancelProfileBtn = document.getElementById('cancelProfileBtn');
 
   googleBtn?.addEventListener('click', async () => {
     try {
       setLoading(googleBtn, true, 'Connecting...');
       await signInWithPopup(auth, provider);
-      // ✅ SUCCESS: Do NOT hide loader. Let the redirect happen seamlessly.
     } catch (error) {
       showError(error.message);
-      // ✅ ERROR: Hide loader so user can try again
       setLoading(googleBtn, false, 'Continue with Google', true);
     }
   });
@@ -108,23 +101,79 @@ window.addEventListener('DOMContentLoaded', () => {
     errorMsg.textContent = '';
     const email = emailInput.value.trim();
     const password = passInput.value;
-
     try {
       setLoading(submitBtn, true, isLoginMode ? 'Signing in...' : 'Creating account...');
-      if (isLoginMode) await signInWithEmailAndPassword(auth, email, password);
-      else await createUserWithEmailAndPassword(auth, email, password);
-      // ✅ SUCCESS: Do NOT hide loader. Let the redirect happen seamlessly.
+      if (isLoginMode) {
+        await signInWithEmailAndPassword(auth, email, password);
+      } else {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        pendingUser = userCredential.user;
+        
+        document.getElementById('authFormContainer').classList.add('hidden');
+        document.getElementById('profileFormContainer').classList.remove('hidden');
+        
+        const pageLoader = document.getElementById('page-loader');
+        if (pageLoader) pageLoader.classList.add('hidden');
+        
+        setLoading(submitBtn, false, 'Sign Up', true);
+        return; 
+      }
     } catch (error) {
       let msg = error.message;
       if (msg.includes('auth/user-not-found') || msg.includes('auth/wrong-password') || msg.includes('auth/invalid-credential')) msg = 'Invalid email or password.';
       else if (msg.includes('auth/email-already-in-use')) msg = 'Email already registered.';
       else if (msg.includes('auth/invalid-email')) msg = 'Please enter a valid email.';
       else if (msg.includes('auth/weak-password')) msg = 'Password must be at least 6 characters.';
-      
       showError(msg);
-      // ✅ ERROR: Hide loader so user can try again
       setLoading(submitBtn, false, isLoginMode ? 'Sign In' : 'Sign Up', true); 
     }
+  });
+
+  profileForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!pendingUser) return;
+    
+    const submitProfileBtn = document.getElementById('submitProfileBtn');
+    setLoading(submitProfileBtn, true, 'Submitting...');
+    
+    const nationality = profNatSelect.value === 'Others' ? profNatOther.value.trim() : profNatSelect.value;
+
+    const userData = {
+      email: pendingUser.email,
+      englishName: document.getElementById('profEnglishName').value.trim(),
+      chineseName: document.getElementById('profChineseName').value.trim(),
+      nationality: nationality,
+      position: document.getElementById('profPosition').value,
+      employmentDate: document.getElementById('profEmploymentDate').value,
+      terms: document.getElementById('profTerms').value,
+      isVerified: false, 
+      createdAt: new Date().toISOString()
+    };
+
+    try {
+      await set(ref(db, `users/${pendingUser.uid}`), userData);
+      await signOut(auth);
+      pendingUser = null;
+      showError('Account created successfully! Please wait for admin verification.');
+      document.getElementById('profileFormContainer').classList.add('hidden');
+      document.getElementById('authFormContainer').classList.remove('hidden');
+      profileForm.reset();
+      setLoading(submitProfileBtn, false, 'Submit for Verification', true);
+    } catch (error) {
+      showError('Failed to save profile: ' + error.message);
+      setLoading(submitProfileBtn, false, 'Submit for Verification', true);
+    }
+  });
+
+  cancelProfileBtn?.addEventListener('click', async () => {
+    if (pendingUser) {
+      await signOut(auth);
+      pendingUser = null;
+    }
+    document.getElementById('profileFormContainer').classList.add('hidden');
+    document.getElementById('authFormContainer').classList.remove('hidden');
+    profileForm?.reset();
+    showError('');
   });
 
   toggleBtn?.addEventListener('click', () => {
@@ -137,22 +186,86 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 onAuthStateChanged(auth, async (user) => {
+  const pageLoader = document.getElementById('page-loader');
+
   if (user) {
-    sessionStorage.setItem('kumonUser', JSON.stringify({
-      uid: user.uid, email: user.email, name: user.displayName || user.email.split('@')[0], photo: user.photoURL
-    }));
+    const userRef = ref(db, `users/${user.uid}`);
+    let snapshot = await get(userRef);
     
+    // Auto-provision admin if missing
+    if (!snapshot.exists() && user.email?.toLowerCase() === 'kumonchamps@gmail.com') {
+      const adminData = {
+        email: user.email,
+        englishName: user.displayName || 'Kumon Admin',
+        chineseName: '',
+        nationality: 'Other',
+        position: 'Admin',
+        employmentDate: new Date().toISOString().split('T')[0],
+        terms: 'Full-time',
+        isVerified: true, 
+        isDisabled: false,
+        permissions: {
+          centers: { 'kumon-taipa-mei-keng': true, 'kumon-taipa-pac-tat': true },
+          dashboardCards: { studentManagement: true, timetable: true, monthlyReports: true, progressCharts: true, attendance: true, parentOrientation: true },
+          centerAdminCards: { userManagement: true, centerSettings: true, financialReports: true }
+        },
+        createdAt: new Date().toISOString()
+      };
+      await set(userRef, adminData);
+      snapshot = await get(userRef); 
+    }
+
+    if (!snapshot.exists()) {
+      pendingUser = user;
+      document.getElementById('authFormContainer')?.classList.add('hidden');
+      const profileContainer = document.getElementById('profileFormContainer');
+      if (profileContainer) {
+        profileContainer.classList.remove('hidden');
+        document.getElementById('profEnglishName')?.focus();
+      }
+      if (pageLoader) pageLoader.classList.add('hidden');
+      return; 
+    }
+    
+    const userData = snapshot.val();
+
+    // 🚨 CHECK FOR DISABLED ACCOUNTS 🚨
+    if (userData.isDisabled === true) {
+      showError('❌ Your account has been disabled by the administrator. Please contact management.');
+      await signOut(auth);
+      if (pageLoader) pageLoader.classList.add('hidden');
+      return;
+    }
+
+    if (!userData.isVerified) {
+      showError('Your account is pending admin verification. Please contact kumonchamps@gmail.com.');
+      await signOut(auth);
+      if (pageLoader) pageLoader.classList.add('hidden');
+      return;
+    }
+    
+    sessionStorage.setItem('kumonUser', JSON.stringify({
+      uid: user.uid, 
+      email: user.email, 
+      name: userData.englishName || user.email.split('@')[0], 
+      photo: user.photoURL,
+      permissions: userData.permissions || {}
+    }));
     await initializeCenters();
     initAutoLogout();
-    
+
     const path = window.location.pathname;
     if (path.endsWith('/') || path.endsWith('index.html')) {
-      window.location.href = 'centers.html'; // Redirects while loader is still visible!
+      window.location.href = 'centers.html';
+    } else {
+      if (pageLoader) pageLoader.classList.add('hidden');
     }
   } else {
     sessionStorage.removeItem('kumonUser');
     clearTimeout(logoutTimer);
     isAutoLogoutInitialized = false;
+    pendingUser = null;
+    if (pageLoader) pageLoader.classList.add('hidden'); 
   }
 });
 
@@ -185,20 +298,18 @@ export function requireAuth() {
   return true;
 }
 
-// ✅ UPDATED: Added 'forceHideLoader' parameter
 function setLoading(btn, isLoading, text, forceHideLoader = false) {
   btn.disabled = isLoading;
   btn.style.opacity = isLoading ? '0.7' : '1';
   if (!btn.querySelector('svg')) {
     btn.textContent = text;
   }
-
   const pageLoader = document.getElementById('page-loader');
   if (pageLoader) {
     if (isLoading) {
-      pageLoader.classList.remove('hidden'); // Show spinner & block clicks
+      pageLoader.classList.remove('hidden');
     } else if (forceHideLoader) {
-      pageLoader.classList.add('hidden'); // Only hide spinner on ERROR, not on success
+      pageLoader.classList.add('hidden');
     }
   }
 }

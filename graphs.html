@@ -3,68 +3,86 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Progress Chart - Kumon DB</title>
+    <title>Progress Charts - Kumon DB</title>
+    <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="graph.css">
-    <script src="https://cdn.plot.ly/plotly-2.35.0.min.js"></script>
-    <script type="module" src="graphs.js"></script>
+    <!-- Plotly.js for Charts -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 </head>
 <body>
-    <header>
-        <nav>
-            <a href="dashboard.html">← Dashboard</a>
-        </nav>
-        <h1>📈 Progress Chart</h1>
-    </header>
-
-    <div class="graphs-page">
-        <div class="graph-header">
-            <h2>Individual Student Progress</h2>
-            <div class="graph-actions">
-                <input type="text" id="studentSearchInput" placeholder="🔍 Search by name or ID..." style="padding: 0.6rem; width: 280px; border-radius: 8px; border: 1px solid #cbd5e1;">
-            </div>
-        </div>
-
-        <div class="table-wrapper" style="max-height: 450px; overflow-y: auto; margin-bottom: 2rem; background: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-            <table class="analytics-table" style="width: 100%; border-collapse: collapse;">
-                <thead>
-                    <tr>
-                        <th style="padding: 0.75rem 1rem; text-align: left; background: #4682B4; color: #fff; position: sticky; top: 0;">Student Name</th>
-                        <th style="padding: 0.75rem 1rem; text-align: left; background: #4682B4; color: #fff; position: sticky; top: 0;">Student ID</th>
-                        <th style="padding: 0.75rem 1rem; text-align: left; background: #4682B4; color: #fff; position: sticky; top: 0;">Subjects</th>
-                    </tr>
-                </thead>
-                <tbody id="analyticsStudentTable">
-                    <tr><td colspan="3" style="text-align:center; padding: 1rem;">Loading students...</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <div class="graph-header">
-            <h2>Students per Month by Subject</h2>
-            <div class="chart-navigation">
-                <button id="prevMonths" class="nav-btn">◀ Previous</button>
-                <span id="monthRange" class="month-range">Loading...</span>
-                <button id="nextMonths" class="nav-btn">Next ▶</button>
-            </div>
-        </div>
-        
-        <div class="chart-container" style="overflow: hidden;">
-            <div id="studentsChart" style="width: 100%; height: 400px;"></div>
+    <!-- 🔐 ACCESS DENIED OVERLAY -->
+    <div id="accessDenied" class="access-denied hidden">
+        <div class="access-denied-content">
+            <h2>🔐 Access Restricted</h2>
+            <p>You do not have permission to view Progress Charts.</p>
+            <button id="backToDashboardBtn" class="primary" style="margin-top:1rem">← Back to Dashboard</button>
         </div>
     </div>
 
-    <!-- Progress Chart Modal -->
-    <div id="progressModal" class="modal hidden" style="display: none;">
-        <div class="modal-content">
-            <span class="close-modal" id="closeModalBtn">&times;</span>
-            <h3 id="modalTitle" style="margin-top:0; color:#4682B4;">Student Progress</h3>
-            <div id="progressChartModal" style="width: 100%; height: 650px;"></div>
-        </div>
-    </div>
-
-    <div id="loadingOverlay">
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="hidden">
         <div class="loading-spinner"></div>
         <p>Loading graphs...</p>
     </div>
+
+    <!-- ✅ MAIN CONTENT WRAPPER (Hidden by default until authorized) -->
+    <div id="mainContent" class="hidden">
+        
+        <header>
+            <nav>
+                <a href="dashboard.html">← Dashboard</a>
+            </nav>
+            <h1>📈 Progress Charts</h1>
+        </header>
+
+        <main class="graphs-page">
+            <!-- Individual Student Progress Table -->
+            <div class="chart-container" style="margin-bottom: 1.5rem;">
+                <h2>Individual Student Progress</h2>
+                <div style="margin-bottom: 1rem;">
+                    <input type="text" id="studentSearchInput" placeholder="🔍 Search by name or ID..." style="max-width: 300px;">
+                </div>
+                <div class="table-wrapper" style="max-height: 500px;">
+                    <table class="analytics-table">
+                        <thead>
+                            <tr>
+                                <th>Student Name</th>
+                                <th>Student ID</th>
+                                <th>Subjects</th>
+                            </tr>
+                        </thead>
+                        <tbody id="analyticsStudentTable">
+                            <tr><td colspan="3" style="text-align:center;">Loading students...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Aggregate Chart -->
+            <div class="chart-container">
+                <div class="graph-header">
+                    <h2>Students per Month by Subject</h2>
+                    <div class="chart-navigation">
+                        <button id="prevMonths" class="nav-btn">◀ Previous</button>
+                        <span id="monthRange" class="month-range">Loading...</span>
+                        <button id="nextMonths" class="nav-btn">Next ▶</button>
+                    </div>
+                </div>
+                <div id="studentsChart" style="width:100%; height:400px;"></div>
+            </div>
+        </main>
+
+        <!-- Modal for Individual Chart -->
+        <div id="progressModal" class="modal hidden">
+            <div class="modal-content" style="max-width: 1200px;">
+                <span id="closeModalBtn" class="close-modal">&times;</span>
+                <h3 id="modalTitle" style="margin-bottom: 1rem; color: var(--primary-dark);">Student Progress</h3>
+                <div id="progressChartModal" style="width:100%; height:600px;"></div>
+            </div>
+        </div>
+
+    </div> <!-- ✅ End of mainContent wrapper -->
+
+    <script type="module" src="graphs.js"></script>
 </body>
 </html>

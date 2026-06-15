@@ -1,51 +1,66 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Monthly Reports - Kumon DB</title>
-  <link rel="stylesheet" href="reports.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monthly Reports - Kumon DB</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="reports.css">
 </head>
 <body>
-  <div id="page-loader" class="hidden">
-    <div class="spinner"></div>
-  </div>
+    <div id="page-loader" class="hidden"><div class="spinner"></div></div>
 
-  <header>
-    <nav>
-      <a href="dashboard.html">← Dashboard</a>
-    </nav>
-    <h1>📊 Monthly Reports</h1>
-  </header>
-
-  <main class="form-container">
-    <div class="subject-grid">
-      <div class="subject-card active" data-subject="all">📚 All Subjects</div>
-      <div class="subject-card" data-subject="Math">🔢 Math</div>
-      <div class="subject-card" data-subject="Chinese">🀄 Chinese</div>
-      <div class="subject-card" data-subject="English ERP">🔤 English ERP</div>
-      <div class="subject-card" data-subject="English EFL">🌍 English EFL</div>
-      <div class="subject-card" data-subject="Pencil">✏️ ZI/ZII Pencil</div>
+    <!-- 🔐 ACCESS DENIED OVERLAY -->
+    <div id="accessDenied" class="access-denied hidden">
+        <div class="access-denied-content">
+            <h2>🔐 Access Restricted</h2>
+            <p>You do not have permission to view Monthly Reports.</p>
+            <button id="backToDashboardBtn" class="primary" style="margin-top:1rem">← Back to Dashboard</button>
+        </div>
     </div>
 
-    <div class="controls">
-      <div class="control-group">
-        <label class="control-label" for="reportMonth">📅 Month</label>
-        <input type="month" id="reportMonth" required>
-      </div>
-      <button id="generateReport" class="primary">📊 Generate</button>
-      <button id="printReport" class="print-btn">🖨️ Print</button>
-    </div>
+    <!-- ✅ MAIN CONTENT WRAPPER (Hidden by default until authorized) -->
+    <div id="mainContent" class="hidden">
+        <header>
+            <nav>
+                <a href="dashboard.html">← Dashboard</a>
+            </nav>
+            <h1>📊 Monthly Reports</h1>
+        </header>
 
-    <div id="monthlyReport" class="hidden">
-      <div id="reportOutput"></div>
-    </div>
-  </main>
+        <main class="form-container">
+            <!-- Subject Selector -->
+            <div class="subject-grid" id="subjectSelector">
+                <div class="subject-card active" data-subject="all">📚 All Subjects</div>
+                <div class="subject-card" data-subject="Math">🔢 Math</div>
+                <div class="subject-card" data-subject="Chinese">🀄 Chinese</div>
+                <div class="subject-card" data-subject="English ERP">🔤 English ERP</div>
+                <div class="subject-card" data-subject="English EFL">🌍 English EFL</div>
+                <div class="subject-card" data-subject="Pencil">✏️ ZI/ZII Pencil</div>
+            </div>
 
-  <div class="save-bar hidden" id="saveBar">
-    <button id="saveReportBtn" class="primary">💾 Save Changes</button>
-  </div>
+            <!-- Controls -->
+            <div class="controls">
+                <div class="control-group">
+                    <label class="control-label">📅 Month</label>
+                    <input type="month" id="reportMonth" class="report-input">
+                </div>
+                <button id="generateReport" class="primary">📊 Generate</button>
+                <button id="printReport" class="print-btn">🖨️ Print</button>
+            </div>
 
-  <script type="module" src="reports.js"></script>
+            <!-- Save Bar -->
+            <div id="saveBar" class="save-bar hidden">
+                <button id="saveReportBtn" class="primary">💾 Save Changes</button>
+            </div>
+
+            <!-- Report Output -->
+            <div id="monthlyReport" class="hidden">
+                <div id="reportOutput"></div>
+            </div>
+        </main>
+    </div> <!-- ✅ End of mainContent wrapper -->
+
+    <script type="module" src="reports.js"></script>
 </body>
 </html>

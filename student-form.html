@@ -5,16 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Student Form - Kumon DB</title>
   <link rel="stylesheet" href="student-form.css">
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 </head>
 <body>
-  <div id="page-loader"><div class="spinner"></div><p>Loading student details...</p></div>
-  
-  <header>
-    <a href="students.html" id="backToStudents">← Students</a>
-    <h1 id="formTitle">✏️ Add Student</h1>
-    <div></div>
-  </header>
+  <div id="page-loader"><div class="spinner"></div></div>
+
+  <!-- ✅ ACCESS DENIED SCREEN -->
+  <div id="accessDenied" class="access-denied hidden">
+    <div class="access-denied-content">
+            <h2>🔐 Access Restricted</h2>
+            <p>You do not have permission to view Student Management.</p>
+      <button id="backToStudentsBtn" class="primary" style="margin-top:1rem">← Back to Students</button>
+    </div>
+  </div>
+
+  <!-- ✅ MAIN CONTENT WRAPPER (Hidden by default until authorized) -->
+  <div id="mainContent" class="hidden">
+    <header>
+      <nav>
+        <a href="students.html" id="backToStudents">← Students</a>
+      </nav>
+        <h2 id="formTitle">✏️ Add Student</h2>
+    </header>
 
   <main class="form-container">
     <form id="studentForm">
@@ -287,6 +298,7 @@
     </div>
   </div>
 
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script type="module" src="student-form.js"></script>
 </body>
 </html>

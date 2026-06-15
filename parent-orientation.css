@@ -231,3 +231,36 @@ tr:hover { background-color: #f8fafc; }
     table { box-shadow: none; }
     th, td { border-color: #999; }
 }
+/* ============================================
+🔐 ACCESS DENIED SCREEN (For Page-Level Guards)
+============================================ */
+.access-denied {
+  position: fixed; 
+  inset: 0; 
+  background: var(--secondary);
+  display: flex; 
+  align-items: center; 
+  justify-content: center;
+  z-index: 2000; 
+  padding: 2rem;
+}
+.access-denied-content {
+  background: var(--white); 
+  padding: 2.5rem 3rem; 
+  border-radius: var(--radius);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.15); 
+  text-align: center; 
+  max-width: 480px;
+  border-top: 4px solid #dc3545;
+}
+.access-denied h2 { 
+  color: #dc3545; 
+  margin-bottom: 1rem; 
+}
+.access-denied p { 
+  margin: 0.75rem 0; 
+  color: var(--text-light); 
+}
+.access-denied .primary { 
+  margin-top: 1.5rem; 
+}
