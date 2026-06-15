@@ -3,14 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard</title>
+    <title>Dashboard - Kumon DB</title>
     <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
     <header>
-        <h1><a href="centers.html" style="color: white; text-decoration: none; margin-right: 1rem;">← Centers</a> <span id="title-center-name"></span>Dashboard</h1>
+        <h1><a href="centers.html" style="color: white; text-decoration: none; margin-right: 1rem;">← Centers</a>  <span id="title-center-name"></span>Dashboard</h1>
         <nav>
             <span id="userInfo" class="user-info">Loading...</span>
+            <button id="logoutBtn">Logout</button>
         </nav>
     </header>
 
@@ -44,49 +45,77 @@
 
         <!-- Dashboard Cards Section -->
         <section class="dashboard-header">
-            <!-- UPDATED: Added span for dynamic center name -->
-            <h2>📋 <span id="dashboard-user-name">Center</span> what would you like to do?</h2>
+            <!-- UPDATED: Changed ID to dashboard-user-name and updated text -->
+            <h2>📋 <span id="dashboard-user-name">there</span>, what would you like to do?</h2>
             <p>Select a feature below to manage your center's operations and track student progress.</p>
         </section>
 
-    <div class="center-grid">
-      <a href="students.html" id="card-studentManagement" class="center-card">
-        <div class="card-icon">👥</div>
-        <h3>Student Management</h3>
-        <p>Add, edit, search students & track progress</p>
-      </a>
-      
-      <a href="timetable.html" id="card-timetable" class="center-card">
-        <div class="card-icon">🗓️</div>
-        <h3>Timetable</h3>
-        <p>View & print weekly class schedules</p>
-      </a>
-      
-      <a href="reports.html" id="card-monthlyReports" class="center-card">
-        <div class="card-icon">📊</div>
-        <h3>Monthly Reports</h3>
-        <p>Generate, edit & save monthly progress reports</p>
-      </a>
-      
-      <a href="graphs.html" id="card-progressCharts" class="center-card">
-        <div class="card-icon">📈</div>
-        <h3>Progress Charts</h3>
-        <p>Analytics, progress tracking & charts</p>
-      </a>
-      
-      <a href="attendance.html" id="card-attendance" class="center-card">
-        <div class="card-icon">✅</div>
-        <h3>Attendance</h3>
-        <p>Scan QR, track check-ins, view late students & daily reports</p>
-      </a>
-      
-      <a href="parent-orientation.html" id="card-parentOrientation" class="center-card">
-        <div class="card-icon">👪</div>
-        <h3>Parent Orientation</h3>
-        <p>Manage pending parent orientations & follow-ups</p>
-      </a>
+        <div class="center-grid">
+            <a href="students.html" id="card-studentManagement" class="center-card" style="display: none;">
+                <div class="card-icon">👥</div>
+                <h3>Student Management</h3>
+                <p>Add, edit, search students & track progress</p>
+            </a>
+            <a href="timetable.html" id="card-timetable" class="center-card" style="display: none;">
+                <div class="card-icon">🗓️</div>
+                <h3>Timetable</h3>
+                <p>View & print weekly class schedules</p>
+            </a>
+            <a href="reports.html" id="card-monthlyReports" class="center-card" style="display: none;">
+                <div class="card-icon">📊</div>
+                <h3>Monthly Reports</h3>
+                <p>Generate, edit & save monthly progress reports</p>
+            </a>
+            <a href="progress.html" id="card-progressCharts" class="center-card" style="display: none;">
+                <div class="card-icon">📈</div>
+                <h3>Progress Charts</h3>
+                <p>Analytics, progress tracking & charts</p>
+            </a>
+            <a href="attendance.html" id="card-attendance" class="center-card" style="display: none;">
+                <div class="card-icon">✅</div>
+                <h3>Attendance</h3>
+                <p>Scan QR, track check-ins, view late students & daily reports</p>
+            </a>
+            <a href="#" id="card-parentOrientation" class="center-card" style="display: none;" onclick="event.preventDefault(); document.querySelector('.calendar-section').scrollIntoView({behavior: 'smooth'});">
+                <div class="card-icon">👪</div>
+                <h3>Parent Orientation</h3>
+                <p>Manage pending parent orientations & follow-ups</p>
+            </a>
+        </div>
+    </main>
+
+    <!-- Parent Orientation Modal -->
+    <div id="poModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <span class="close-modal" id="closePoModal">&times;</span>
+            <h3 id="modalDateTitle">Parent Orientations</h3>
+            <div id="poStudentList" class="po-student-list"></div>
+        </div>
     </div>
-  </main>
+
+    <!-- Edit Calendar Modal -->
+    <div id="editCalendarModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <span class="close-modal" id="closeEditCalendarModal">&times;</span>
+            <h3 id="editCalendarDateTitle">Edit Date</h3>
+            <form id="editCalendarForm" style="margin-top: 1rem;">
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Event Type:</label>
+                    <label style="margin-right: 1rem;"><input type="radio" name="eventType" value="none" checked> None (Regular Day)</label>
+                    <label style="margin-right: 1rem;"><input type="radio" name="eventType" value="center"> 🟠 Center Holiday</label>
+                    <label><input type="radio" name="eventType" value="employee"> 🟢 Employee Holiday</label>
+                </div>
+                <div style="margin-bottom: 1rem;">
+                    <label for="calendarNote" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Note (Optional):</label>
+                    <textarea id="calendarNote" class="po-note-area" placeholder="Add details about this holiday..."></textarea>
+                </div>
+                <div style="display: flex; gap: 1rem;">
+                    <button type="submit" class="save-note-btn">💾 Save Changes</button>
+                    <button type="button" id="clearCalendarBtn" class="save-note-btn" style="background: #dc3545;">🗑️ Clear Event</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <script type="module" src="dashboard.js"></script>
 </body>

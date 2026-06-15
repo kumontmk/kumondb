@@ -1,12 +1,11 @@
 import { auth, requireAuth, logout, db } from './auth.js';
-// ✅ FIX: Added 'remove' to the Firebase imports
 import { ref, get, update, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 // ============================================
 // GLOBAL STATE
 // ============================================
 let isAdmin = false;
-let poDataMap = {}; 
+let poDataMap = {};
 let calendarEventsMap = {}; // Stores holiday events
 const centerId = sessionStorage.getItem('selectedCenter');
 
@@ -60,7 +59,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const dateEl = document.getElementById('current-date');
   if (dateEl) dateEl.textContent = formattedDate;
 
-  // 5. ✅ NEW: Load and display Center Name
+  // 5. ✅ NEW: Load and display Center Name in Calendar
   await loadCenterName();
 
   // 6. Initialize PO Calendar and Hide Loader
@@ -88,12 +87,9 @@ async function loadCenterName() {
       
       const calendarNameEl = document.getElementById('calendar-center-name');
       if (calendarNameEl) calendarNameEl.textContent = centerName;
-      
-      const dashboardNameEl = document.getElementById('dashboard-center-name');
-      if (dashboardNameEl) dashboardNameEl.textContent = centerName;
 
-      const titleEl = document.getElementById('title-center-name');
-      if (titleEl) titleEl.textContent = centerName;
+      const titleCenterNameEl = document.getElementById('title-center-name');
+      if (titleCenterNameEl) titleCenterNameEl.textContent = centerName;
     }
   } catch (err) {
     console.error("Error loading center name:", err);
