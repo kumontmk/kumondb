@@ -54,6 +54,8 @@ onAuthStateChanged(auth, (user) => {
 function initApp() {
   let employees = {};
   let currentQrData = "";
+  let availableCenters = []; 
+  let currentTimeclockEmpId = null; // Track which employee's timeclock is open
 
   function openModal(id) {
     const el = document.getElementById(id);
@@ -75,18 +77,47 @@ function initApp() {
   const addBtn = document.getElementById('addEmployeeBtn');
   const downloadQrBtn = document.getElementById('downloadQrBtn');
   const timeclockBody = document.getElementById('timeclockHistoryBody');
+  const exportBtn = document.getElementById('exportExcelBtn');
+  const monthPicker = document.getElementById('exportMonthPicker');
+  
+  // ✅ DATE FILTER ELEMENTS
+  const timeclockDateFilter = document.getElementById('timeclockDateFilter');
+  const clearTimeclockFilter = document.getElementById('clearTimeclockFilter');
 
   document.getElementById('logoutBtn')?.addEventListener('click', logout);
 
   loadEmployees();
-  loadVerifications(); 
-  loadCentersForPermissions(); // ✅ Dynamically load ALL centers into the permissions tab
+  loadVerifications();
+  loadCentersForPermissions();
   setupTabs();
-  
+
+  if (monthPicker) {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    monthPicker.value = `${yyyy}-${mm}`;
+  }
+  exportBtn?.addEventListener('click', exportToExcel);
+
   natSelect?.addEventListener('change', e => natOther.classList.toggle('visible', e.target.value === 'Others'));
   saveBtn?.addEventListener('click', saveEmployee);
   searchInput?.addEventListener('input', e => renderTable(e.target.value));
   addBtn?.addEventListener('click', () => openEmployeeModal(null));
+
+  // ✅ DATE FILTER EVENT LISTENERS
+  timeclockDateFilter?.addEventListener('change', (e) => {
+    if (currentTimeclockEmpId) {
+      loadTimeclock(currentTimeclockEmpId, e.target.value || null);
+    }
+  });
+
+  clearTimeclockFilter?.addEventListener('click', (e) => {
+    e.preventDefault(); // Prevent any default form submission
+    if (timeclockDateFilter) timeclockDateFilter.value = '';
+    if (currentTimeclockEmpId) {
+      loadTimeclock(currentTimeclockEmpId, null);
+    }
+  });
 
   function loadEmployees() {
     onValue(ref(db, 'employees'), (snapshot) => {
@@ -122,23 +153,23 @@ function initApp() {
     });
   }
 
-  // ✅ NEW: Fetch all centers from DB and generate checkboxes dynamically
   async function loadCentersForPermissions() {
     const centerPermsContainer = document.getElementById('centerPermissions');
     if (!centerPermsContainer) return;
-    
+
     try {
       const centersSnap = await get(ref(db, 'centers'));
       if (centersSnap.exists()) {
         const centers = centersSnap.val();
-        centerPermsContainer.innerHTML = ''; // Clear any hardcoded centers
-        
+        availableCenters = Object.entries(centers).map(([id, data]) => ({ id, name: data.name || id }));
+        centerPermsContainer.innerHTML = '';
+
         Object.entries(centers).forEach(([centerId, centerData]) => {
           const label = document.createElement('label');
           const checkbox = document.createElement('input');
           checkbox.type = 'checkbox';
           checkbox.value = centerId;
-          
+
           label.appendChild(checkbox);
           label.appendChild(document.createTextNode(` ${centerData.name || centerId}`));
           centerPermsContainer.appendChild(label);
@@ -168,7 +199,7 @@ function initApp() {
               employmentDate: userData.employmentDate || new Date().toISOString().split('T')[0],
               terms: userData.terms || 'Full-time',
               qrCode: `EMP_${uid.slice(0, 8)}`,
-              permissions: { centers: {}, dashboardCards: {} }, // ✅ Removed centerAdminCards
+              permissions: { centers: {}, dashboardCards: {} },
               updatedAt: new Date().toISOString()
             };
             await set(ref(db, `employees/${uid}`), empData);
@@ -208,31 +239,31 @@ function initApp() {
       e.position?.toLowerCase().includes(lower) ||
       e.email?.toLowerCase().includes(lower)
     );
-    tableBody.innerHTML = filtered.length === 0 
-      ? '<tr><td colspan="6" class="empty-state">No employees found</td></tr>' 
+    tableBody.innerHTML = filtered.length === 0
+      ? '<tr><td colspan="6" class="empty-state">No employees found</td></tr>'
       : '';
 
     filtered.forEach(([id, e]) => {
       const isDisabled = e.isDisabled === true;
       const rowClass = isDisabled ? 'disabled-row' : '';
-      const statusBadge = isDisabled 
-        ? `<span class="status-badge disabled">Disabled</span>` 
+      const statusBadge = isDisabled
+        ? `<span class="status-badge disabled">Disabled</span>`
         : `<span class="status-badge active">Active</span>`;
       const toggleBtnText = isDisabled ? 'Enable' : 'Disable';
       const toggleBtnClass = isDisabled ? 'secondary' : 'danger';
-      
+
       const row = document.createElement('tr');
       row.className = rowClass;
       row.innerHTML = `
-         <td>${e.englishName || ''} ${statusBadge}</td>
-         <td>${e.chineseName || '-'}</td>
-         <td>${e.email || '-'}</td>
-         <td>${e.position || ''}</td>
-         <td>${e.terms || ''}</td>
-         <td class="student-actions">
-           <button class="secondary" onclick="window.editEmp('${id}')">Edit/View</button>
-           <button class="${toggleBtnClass}" onclick="window.toggleEmpStatus('${id}', ${!isDisabled})">${toggleBtnText}</button>
-         </td>`;
+        <td>${e.englishName || ''} ${statusBadge}</td>
+        <td>${e.chineseName || '-'}</td>
+        <td>${e.email || '-'}</td>
+        <td>${e.position || ''}</td>
+        <td>${e.terms || ''}</td>
+        <td class="student-actions">
+          <button class="secondary" onclick="window.editEmp('${id}')">Edit/View</button>
+          <button class="${toggleBtnClass}" onclick="window.toggleEmpStatus('${id}', ${!isDisabled})">${toggleBtnText}</button>
+        </td>`;
       tableBody.appendChild(row);
     });
   }
@@ -240,7 +271,7 @@ function initApp() {
   function openEmployeeModal(id) {
     openModal('employeeModal');
     document.getElementById('modalTitle').textContent = id ? 'Edit Employee' : 'Add Employee';
-    
+
     document.querySelectorAll('#employeeModal .tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('#employeeModal .tab-content').forEach(c => c.classList.remove('active'));
     document.querySelector('#employeeModal .tab-btn[data-tab="details"]').classList.add('active');
@@ -248,7 +279,7 @@ function initApp() {
 
     form.reset();
     natOther.classList.remove('visible');
-    
+
     if (id && employees[id]) {
       const e = employees[id];
       document.getElementById('empId').value = id;
@@ -261,14 +292,15 @@ function initApp() {
       document.getElementById('empDate').value = e.employmentDate || new Date().toISOString().split('T')[0];
       document.getElementById('empTerms').value = e.terms || 'Full-time';
       currentQrData = e.qrCode || `EMP_${id}`;
-      loadTimeclock(id);
+      
+      // ✅ Pass the currently selected date filter (if any)
+      const selectedDate = timeclockDateFilter?.value || null;
+      loadTimeclock(id, selectedDate);
 
-      // ✅ LOAD PERMISSIONS
       const perms = e.permissions || {};
       const centerPerms = perms.centers || {};
       const dashPerms = perms.dashboardCards || {};
-      
-      // Wait a brief moment to ensure dynamic checkboxes are rendered before checking them
+
       setTimeout(() => {
         document.querySelectorAll('#centerPermissions input').forEach(cb => cb.checked = !!centerPerms[cb.value]);
         document.querySelectorAll('#dashboardPermissions input').forEach(cb => cb.checked = !!dashPerms[cb.value]);
@@ -283,7 +315,6 @@ function initApp() {
       }, 100);
     }
 
-    // ✅ ENFORCE ADMIN-ONLY PERMISSIONS EDITING
     const currentUserEmail = auth.currentUser?.email?.toLowerCase();
     const isAdmin = currentUserEmail === 'kumonchamps@gmail.com';
     const permInputs = document.querySelectorAll('#tab-permissions input');
@@ -358,7 +389,6 @@ function initApp() {
     link.click();
   });
 
-  // ✅ UPDATED: Syncs permissions to BOTH employees and users nodes
   async function saveEmployee() {
     const empId = document.getElementById('empId')?.value;
     const englishName = document.getElementById('empEnglish')?.value.trim();
@@ -369,12 +399,11 @@ function initApp() {
     const position = document.getElementById('empPosition')?.value;
     const employmentDate = document.getElementById('empDate')?.value;
     const terms = document.getElementById('empTerms')?.value;
-    
+
     if (!englishName || !nationality || !position || !employmentDate || !email) {
       return alert('Please fill in all required fields.');
     }
 
-    // Gather permissions
     const centers = {};
     document.querySelectorAll('#centerPermissions input').forEach(cb => { centers[cb.value] = cb.checked; });
     const dashboardCards = {};
@@ -389,7 +418,7 @@ function initApp() {
       employmentDate,
       terms,
       qrCode: currentQrData,
-      permissions: { centers, dashboardCards }, // ✅ Removed centerAdminCards
+      permissions: { centers, dashboardCards },
       updatedAt: new Date().toISOString()
     };
 
@@ -397,18 +426,17 @@ function initApp() {
       const empRef = empId ? ref(db, `employees/${empId}`) : push(ref(db, 'employees'));
       const saveId = empId || empRef.key;
       await set(empRef, employeeData);
-      
-      // ✅ CRITICAL FIX: Also save permissions to the 'users' node so centers.js can read them!
+
       if (empId) {
         const userRef = ref(db, `users/${empId}`);
         const userSnap = await get(userRef);
         if (userSnap.exists()) {
           await update(userRef, {
-            permissions: { centers, dashboardCards } // ✅ Removed centerAdminCards
+            permissions: { centers, dashboardCards }
           });
         }
       }
-      
+
       employees[saveId] = { ...employeeData, id: saveId };
       renderTable(searchInput?.value || '');
       closeModal('employeeModal');
@@ -436,12 +464,11 @@ function initApp() {
     return `${h}h ${m}m`;
   }
 
-  // Helper function to get sequential In/Out rows
   function getLogsRows(logs) {
     const sortedLogs = [...logs].sort((a, b) => a.time.localeCompare(b.time));
     const rows = [];
     let currentRow = { inTime: '', inIndex: -1, outTime: '', outIndex: -1 };
-    
+
     for (let i = 0; i < sortedLogs.length; i++) {
       const log = sortedLogs[i];
       if (log.type === 'in') {
@@ -462,37 +489,52 @@ function initApp() {
         }
       }
     }
-    
+
     if (currentRow.inTime !== '' || currentRow.outTime !== '') {
       rows.push(currentRow);
     }
-    
+
     return rows;
   }
 
-  // Replace your existing loadTimeclock function with this updated version:
-  function loadTimeclock(empId) {
-    get(ref(db, 'timecards')).then(snap => {
-      const all = snap.val() || {};
+  // ✅ UPDATED: Now accepts a filterDate parameter for fast single-day fetching
+  function loadTimeclock(empId, filterDate = null) {
+    currentTimeclockEmpId = empId; // Remember who we are viewing
+    
+    let fetchPromise;
+    if (filterDate) {
+      // Fetch ONLY the specific date for this employee (Much faster!)
+      fetchPromise = get(ref(db, `timecards/${filterDate}/${empId}`)).then(snap => {
+        const data = snap.val();
+        if (data) {
+          return { [filterDate]: { [empId]: data } };
+        }
+        return {};
+      });
+    } else {
+      // Fetch all timecards
+      fetchPromise = get(ref(db, 'timecards')).then(snap => snap.val() || {});
+    }
+
+    fetchPromise.then(all => {
       timeclockBody.innerHTML = '';
       const records = [];
-      let maxCycles = 3; 
-      
+      let maxCycles = 3;
+
       Object.entries(all).forEach(([date, dayData]) => {
         if (dayData[empId]?.logs?.length) {
           const logs = dayData[empId].logs;
           const sortedLogs = [...logs].sort((a, b) => a.time.localeCompare(b.time));
           const rows = getLogsRows(sortedLogs);
-          
+
           if (rows.length > maxCycles) {
             maxCycles = rows.length;
           }
-          
-          // ✅ Total Hours Calculation Logic (unchanged, robust)
+
           let totalMinutes = 0;
           let hasValidCycle = false;
           let currentIn = null;
-          
+
           for (const log of sortedLogs) {
             if (log.type === 'in') {
               currentIn = timeToMinutes(log.time);
@@ -508,19 +550,18 @@ function initApp() {
             }
           }
           const durationText = hasValidCycle ? formatDuration(totalMinutes) : '-';
-          
+
           records.push({ date, rows, durationText });
         }
       });
-      
+
       records.sort((a, b) => b.date.localeCompare(a.date));
-      
+
       if (records.length === 0) {
         timeclockBody.innerHTML = `<tr><td colspan="${maxCycles * 2 + 3}" class="empty-state">No records found</td></tr>`;
         return;
       }
-      
-      // 2. Dynamically build the table header based on maxCycles
+
       const table = timeclockBody.parentElement;
       let theadHtml = `<thead id="timeclockThead"><tr><th rowspan="2">Date</th>`;
       for (let i = 0; i < maxCycles; i++) {
@@ -533,20 +574,19 @@ function initApp() {
         theadHtml += `<th>In</th><th>Out</th>`;
       }
       theadHtml += `</tr></thead>`;
-      
+
       const existingThead = table.querySelector('thead');
       if (existingThead) {
         existingThead.outerHTML = theadHtml;
       } else {
         table.insertAdjacentHTML('afterbegin', theadHtml);
       }
-      
-      // 3. Render the data rows
+
       records.forEach(r => {
         const row = document.createElement('tr');
         row.dataset.editing = 'false';
         row.dataset.date = r.date;
-        
+
         let rowHtml = `<td>${r.date}</td>`;
         for (let i = 0; i < maxCycles; i++) {
           const cycle = r.rows[i] || { inTime: '', inIndex: -1, outTime: '', outIndex: -1 };
@@ -562,8 +602,7 @@ function initApp() {
         row.innerHTML = rowHtml;
         timeclockBody.appendChild(row);
       });
-      
-      // 4. Handle Edit / Save logic (targets all dynamic columns)
+
       document.querySelectorAll('.edit-log-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           e.preventDefault();
@@ -571,9 +610,8 @@ function initApp() {
           const isEditing = mainRow.dataset.editing === 'true';
           const date = btn.dataset.date;
           const inputs = mainRow.querySelectorAll('.tc-input');
-          
+
           if (!isEditing) {
-            // ✅ Switch to Edit Mode
             mainRow.dataset.editing = 'true';
             inputs.forEach(input => {
               input.disabled = false;
@@ -582,16 +620,41 @@ function initApp() {
             btn.textContent = 'Save';
             btn.classList.remove('secondary');
             btn.classList.add('primary');
+
+            // ✅ Add center dropdown for new entries
+            const modalContent = document.querySelector('#employeeModal .modal-content');
+            let dropdownContainer = modalContent?.querySelector('.center-selector-container');
+            
+            if (!dropdownContainer) {
+              dropdownContainer = document.createElement('div');
+              dropdownContainer.className = 'center-selector-container';
+              dropdownContainer.style.cssText = 'margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 8px; border: 1px solid #e2e8f0;';
+              dropdownContainer.innerHTML = `
+                <label style="font-size: 0.9rem; font-weight: 600; color: #4682B4; display: block; margin-bottom: 0.5rem;">
+                  📍 Center for New Entries:
+                </label>
+                <select id="newEntryCenter" style="width: 100%; max-width: 400px; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; background: white;">
+                  <option value="auto">🔍 Auto-detect (from nearby logs)</option>
+                  ${availableCenters.map(c => `<option value="${c.name}">${c.name}</option>`).join('')}
+                </select>
+                <small style="font-size: 0.8rem; color: #666; display: block; margin-top: 0.5rem;">
+                  Only applies to newly added time entries
+                </small>
+              `;
+              if (modalContent) {
+                modalContent.appendChild(dropdownContainer);
+              }
+            }
+
           } else {
-            // ✅ Switch to Save Mode
             btn.textContent = 'Saving...';
             btn.disabled = true;
-            
+
             try {
               const daySnap = await get(ref(db, `timecards/${date}/${empId}`));
               let currentLogs = daySnap.val()?.logs || [];
               if (!Array.isArray(currentLogs)) currentLogs = Object.values(currentLogs);
-              
+
               const modifications = [];
               inputs.forEach(input => {
                 modifications.push({
@@ -600,43 +663,78 @@ function initApp() {
                   newTime: input.value
                 });
               });
-              
-              // Sort descending to safely mutate array without shifting indices
+
               modifications.sort((a, b) => b.idx - a.idx);
-              
+
               let logsToSave = [...currentLogs];
+
+              const centerSelect = document.getElementById('newEntryCenter');
+              const selectedCenter = centerSelect?.value || 'auto';
+
               modifications.forEach(mod => {
                 if (mod.idx !== -1) {
                   if (mod.newTime) {
                     logsToSave[mod.idx].time = mod.newTime;
                   } else {
-                    logsToSave.splice(mod.idx, 1); // Remove if cleared
+                    logsToSave.splice(mod.idx, 1);
                   }
                 } else {
                   if (mod.newTime) {
-                    logsToSave.push({ type: mod.type, time: mod.newTime, location: 'Manual Edit' });
+                    let matchedLocation = 'Manual Edit';
+
+                    if (selectedCenter !== 'auto') {
+                      matchedLocation = selectedCenter;
+                    } else {
+                      const newTimeMins = timeToMinutes(mod.newTime);
+                      let closestLog = null;
+                      let minTimeDiff = Infinity;
+
+                      currentLogs.forEach(existingLog => {
+                        const existingTimeMins = timeToMinutes(existingLog.time);
+                        const timeDiff = Math.abs(existingTimeMins - newTimeMins);
+
+                        if (timeDiff < 120 && timeDiff < minTimeDiff) {
+                          minTimeDiff = timeDiff;
+                          closestLog = existingLog;
+                        }
+                      });
+
+                      if (closestLog && closestLog.location && closestLog.location !== 'Manual Edit') {
+                        matchedLocation = closestLog.location;
+                      }
+                    }
+
+                    logsToSave.push({
+                      type: mod.type,
+                      time: mod.newTime,
+                      location: matchedLocation
+                    });
                   }
                 }
               });
-              
+
               logsToSave.sort((a, b) => a.time.localeCompare(b.time));
-              
+
               await update(ref(db, `timecards/${date}/${empId}`), { logs: logsToSave });
-              
-              // Revert UI to View Mode
+
               mainRow.dataset.editing = 'false';
               inputs.forEach(input => {
                 input.disabled = true;
                 input.style.borderColor = '#cbd5e1';
               });
+
+              const dropdown = document.querySelector('#employeeModal .modal-content .center-selector-container');
+              if (dropdown) dropdown.remove();
+
               btn.textContent = 'Edit';
               btn.classList.remove('primary');
               btn.classList.add('secondary');
               btn.disabled = false;
-              
-              // Reload to reflect accurate total hours and sorted state
-              loadTimeclock(empId);
-              
+
+              // ✅ Reload with the currently selected date filter
+              const selectedDate = timeclockDateFilter?.value || null;
+              loadTimeclock(empId, selectedDate);
+
             } catch (err) {
               console.error("Error saving timeclock:", err);
               alert("Failed to save. Check console.");
@@ -646,11 +744,196 @@ function initApp() {
           }
         });
       });
-      
+
     }).catch(err => {
       console.error("Error loading timeclock:", err);
       timeclockBody.innerHTML = '<tr><td colspan="9" class="empty-state">Error loading records</td></tr>';
     });
+  }
+
+  // ==========================================
+  // ✅ EXCEL EXPORT FEATURE
+  // ==========================================
+  async function exportToExcel() {
+    if (typeof XLSX === 'undefined') {
+      return alert('❌ Excel library not loaded. Please check your internet connection or script tags.');
+    }
+
+    const selectedMonth = monthPicker?.value;
+    if (!selectedMonth) return alert('⚠️ Please select a month to export.');
+
+    const [year, month] = selectedMonth.split('-');
+
+    const originalText = exportBtn.textContent;
+    exportBtn.textContent = 'Exporting...';
+    exportBtn.disabled = true;
+
+    try {
+      const timecardsSnap = await get(ref(db, 'timecards'));
+      const timecards = timecardsSnap.val() || {};
+      const employeesSnap = await get(ref(db, 'employees'));
+      const employeesData = employeesSnap.val() || {};
+
+      const empData = {};
+
+      Object.entries(timecards).forEach(([date, dayData]) => {
+        if (!date.startsWith(selectedMonth)) return;
+
+        Object.entries(dayData).forEach(([empId, empDayData]) => {
+          if (!empData[empId]) {
+            const emp = employeesData[empId] || {};
+            empData[empId] = {
+              name: emp.englishName || 'Unknown',
+              position: emp.position || 'Unknown',
+              totalMinutes: 0,
+              centers: {}
+            };
+          }
+
+          const logs = empDayData.logs || [];
+          const centerLogs = {};
+
+          logs.forEach(log => {
+            const abbr = getCenterAbbr(log.location);
+            if (abbr === 'Unknown') return;
+            if (!centerLogs[abbr]) centerLogs[abbr] = [];
+            centerLogs[abbr].push(log);
+          });
+
+          Object.entries(centerLogs).forEach(([abbr, cLogs]) => {
+            if (!empData[empId].centers[abbr]) {
+              empData[empId].centers[abbr] = { minutes: 0, records: [] };
+            }
+
+            cLogs.sort((a, b) => a.time.localeCompare(b.time));
+
+            const rows = getLogsRows(cLogs);
+
+            let dayTotalMinutes = 0;
+            const cycles = [];
+
+            rows.forEach(row => {
+              if (row.inTime && row.outTime) {
+                const inMins = timeToMinutes(row.inTime);
+                const outMins = timeToMinutes(row.outTime);
+                if (inMins !== null && outMins !== null && outMins >= inMins) {
+                  const diff = outMins - inMins;
+                  dayTotalMinutes += diff;
+                  cycles.push({ in: row.inTime, out: row.outTime });
+                }
+              } else if (row.inTime && !row.outTime) {
+                cycles.push({ in: row.inTime, out: '' });
+              } else if (!row.inTime && row.outTime) {
+                cycles.push({ in: '', out: row.outTime });
+              }
+            });
+
+            empData[empId].centers[abbr].minutes += dayTotalMinutes;
+            empData[empId].totalMinutes += dayTotalMinutes;
+
+            if (cycles.length > 0) {
+              empData[empId].centers[abbr].records.push({ date, cycles });
+            }
+          });
+        });
+      });
+
+      if (Object.keys(empData).length === 0) {
+        alert('⚠️ No records found for the selected month.');
+        exportBtn.textContent = originalText;
+        exportBtn.disabled = false;
+        return;
+      }
+
+      const wb = XLSX.utils.book_new();
+
+      const summaryData = [['Name', 'Position', 'Total Hours', 'C', 'PT', 'MK', 'TS']];
+      Object.values(empData).forEach(emp => {
+        summaryData.push([
+          emp.name,
+          emp.position,
+          formatExcelTime(emp.totalMinutes),
+          formatExcelTime(emp.centers['C']?.minutes || 0),
+          formatExcelTime(emp.centers['PT']?.minutes || 0),
+          formatExcelTime(emp.centers['MK']?.minutes || 0),
+          formatExcelTime(emp.centers['TS']?.minutes || 0)
+        ]);
+      });
+      const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+      XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
+
+      Object.entries(empData).forEach(([empId, emp]) => {
+        Object.entries(emp.centers).forEach(([abbr, centerData]) => {
+          if (centerData.records.length === 0) return;
+
+          let maxCycles = 0;
+          centerData.records.forEach(rec => {
+            if (rec.cycles.length > maxCycles) maxCycles = rec.cycles.length;
+          });
+
+          const headers = ['Date'];
+          for (let i = 1; i <= maxCycles; i++) {
+            headers.push(`In${i}`, `Out${i}`);
+          }
+          headers.push('Overall Total');
+
+          const sheetData = [headers];
+          centerData.records.forEach(rec => {
+            const row = [rec.date];
+            let dayMins = 0;
+
+            for (let i = 0; i < maxCycles; i++) {
+              const cycle = rec.cycles[i];
+              if (cycle) {
+                row.push(cycle.in || '', cycle.out || '');
+                if (cycle.in && cycle.out) {
+                  const inM = timeToMinutes(cycle.in);
+                  const outM = timeToMinutes(cycle.out);
+                  if (inM !== null && outM !== null && outM >= inM) {
+                    dayMins += (outM - inM);
+                  }
+                }
+              } else {
+                row.push('', '');
+              }
+            }
+            row.push(formatExcelTime(dayMins));
+            sheetData.push(row);
+          });
+
+          const sheet = XLSX.utils.aoa_to_sheet(sheetData);
+          const tabName = `${abbr}_${emp.name}`.substring(0, 31);
+          XLSX.utils.book_append_sheet(wb, sheet, tabName);
+        });
+      });
+
+      XLSX.writeFile(wb, `Kumon_Timeclock_Records_${month}-${year}.xlsx`);
+      alert('✅ Export successful!');
+
+    } catch (err) {
+      console.error('Export error:', err);
+      alert('❌ Failed to export. Check console for details.');
+    } finally {
+      exportBtn.textContent = originalText;
+      exportBtn.disabled = false;
+    }
+  }
+
+  function getCenterAbbr(location) {
+    if (!location) return 'Unknown';
+    const loc = location.toLowerCase();
+    if (loc.includes('mei keng')) return 'MK';
+    if (loc.includes('pac tat')) return 'PT';
+    if (loc.includes('tap siac')) return 'TS';
+    if (loc.includes('champs')) return 'C';
+    if (loc.includes('taipa')) return 'TS';
+    return 'Unknown';
+  }
+
+  function formatExcelTime(minutes) {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return `${h}:${String(m).padStart(2, '0')}:00`;
   }
 
   function setupTabs() {

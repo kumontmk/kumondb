@@ -34,8 +34,13 @@
 
     <div id="main-tab-employees" class="tab-content active">
       <div class="controls">
-        <input type="text" id="searchEmployee" placeholder="🔍 Search by name, position, or email...">
-        <button id="addEmployeeBtn" class="primary">+ Add Employee</button>
+          <input type="text" id="searchEmployee" placeholder="Search employees...">
+          
+          <!-- NEW: Export Controls -->
+          <input type="month" id="exportMonthPicker" style="max-width: 200px;">
+          <button id="exportExcelBtn" class="primary"> Export to Excel</button>
+          
+          <button id="addEmployeeBtn" class="primary">+ Add Employee</button>
       </div>
       <div class="table-wrapper">
         <table>
@@ -139,6 +144,11 @@
         <!-- Timeclock Tab -->
         <div id="tab-timeclock" class="tab-content">
           <p class="hint">Edit time in/out records manually. Changes apply immediately.</p>
+          <div style="display: flex; gap: 1rem; margin-bottom: 1rem; align-items: center; flex-wrap: wrap;">
+            <label for="timeclockDateFilter" style="font-weight: 600; color: #4682B4; margin: 0;">Filter by Date:</label>
+            <input type="date" id="timeclockDateFilter" style="max-width: 200px; padding: 0.5rem;">
+            <button id="clearTimeclockFilter" type="button" class="secondary" style="padding: 0.5rem 1rem; font-size: 0.85rem; margin: 0;">Show All</button>
+          </div>
           <div class="table-wrapper" style="max-height: 400px;">
             <!-- Replace the old timeclock table in employees.html with this: -->
             <table class="timeclock-edit-table">
@@ -187,6 +197,7 @@
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
   <script type="module" src="employees.js"></script>
 </body>
 </html>
