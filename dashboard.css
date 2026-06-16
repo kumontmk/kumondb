@@ -115,7 +115,7 @@ header a:hover, header button:hover {
 }
 
 /* =========================================
-   DASHBOARD CARDS
+DASHBOARD CARDS
 ========================================= */
 .center-card {
   background: var(--white);
@@ -156,11 +156,25 @@ header a:hover, header button:hover {
   width: 6px;
 }
 
+/* ✅ UPDATED: Icon container to handle both emojis and images perfectly */
 .center-card .card-icon {
   font-size: 2.25rem;
   margin-bottom: 0.25rem;
   color: var(--primary-dark);
   line-height: 1;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ✅ NEW: Styles for favicon images */
+.center-card .card-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 6px; /* Gives a slight modern rounding to the favicons */
 }
 
 .center-card h3 {

@@ -76,6 +76,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // ✅ NEW: Function to fetch and display the Center Name
+// ✅ NEW: Function to fetch and display the Center Name
 async function loadCenterName() {
   if (!centerId) return;
   try {
@@ -90,6 +91,15 @@ async function loadCenterName() {
 
       const titleCenterNameEl = document.getElementById('title-center-name');
       if (titleCenterNameEl) titleCenterNameEl.textContent = centerName;
+
+      // ✅ NEW: Show MK Progress Report link if center is Mei Keng
+      const mkLink = document.getElementById('link-mk-progress');
+      if (mkLink) {
+        const isMK = centerName.toLowerCase().includes('mei keng');
+        if (isMK) {
+          mkLink.style.display = 'flex'; // Reveal the card
+        }
+      }
     }
   } catch (err) {
     console.error("Error loading center name:", err);
