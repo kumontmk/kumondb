@@ -126,10 +126,27 @@ th { background: var(--primary); color: var(--white); font-weight: 600; }
 .student-row:hover { background-color: #e3f2fd; }
 
 @media (max-width: 768px) {
-  .attendance-controls { flex-direction: column; align-items: stretch; }
-  .attendance-controls .control-group, .manual-qr-group { min-width: 100%; }
-  .scan-btn, .export-csv-btn { justify-content: center; width: 100%; }
-  #reader { width: 100%; max-width: 300px; height: 250px; }
+    .attendance-controls { 
+        flex-direction: column; 
+        align-items: stretch; 
+        gap: 1rem; /* Ensures consistent spacing between all items */
+    }
+    
+    /* ✅ FIX: Add flex: none to prevent vertical stretching */
+    .attendance-controls .control-group, 
+    .attendance-controls .search-group, 
+    .manual-qr-group { 
+        min-width: 100%; 
+        flex: none; 
+        width: 100%; 
+    }
+    
+    .scan-btn, .export-csv-btn { 
+        justify-content: center; 
+        width: 100%; 
+    }
+    
+    #reader { width: 100%; max-width: 300px; height: 250px; }
 }
 
 @media print {
