@@ -310,3 +310,49 @@ tr.disabled-row td:first-child {
   text-align: center;
   margin-top: 1rem;
 }
+
+/* ============================================
+✅ EXTRA LOGS ROW & TOGGLE BUTTON
+============================================ */
+.extra-logs-row {
+  background-color: #f1f5f9;
+  transition: all 0.3s ease;
+}
+.extra-logs-row.hidden {
+  display: none;
+}
+.show-extra-btn {
+  margin-top: 0.5rem;
+  font-size: 0.8rem !important;
+  padding: 0.3rem 0.6rem !important;
+  width: 100%;
+}
+.extra-logs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+  max-width: 600px;
+  margin: 0 auto;
+}
+.extra-log-item {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  background: white;
+  padding: 0.5rem;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+.extra-log-item span {
+  font-weight: 600;
+  min-width: 50px;
+  color: #4682B4;
+  font-size: 0.85rem;
+}
+.extra-log-item input[type="time"] {
+  flex: 1;
+  padding: 0.3rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}

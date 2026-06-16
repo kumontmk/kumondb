@@ -181,14 +181,39 @@ th, td { padding: 0.75rem 0.6rem; text-align: left; border-bottom: 1px solid #ee
 
 /* 🖨️ Print Styles (Reports Only) */
 @media print {
-  .controls, .save-bar, header, #page-loader, .subject-card, #generateReport, .print-btn { display: none !important; }
-  .table-wrapper { display: block !important; box-shadow: none !important; border: none !important; max-height: none !important; overflow: visible !important; background: transparent !important; padding: 0cm !important; margin: 1rem !important; }
-  body { background: white; margin: 0; padding: 0cm; font-size: 24pt; }
-  *, *::before, ::after { font-family: 'Noto Sans SC', 'Microsoft YaHei', 'Segoe UI', sans-serif !important; color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .subject-table, .report-table { width: 100% !important; border: 3px solid #333 !important; table-layout: auto !important; break-inside: avoid; margin-bottom: 1rem; }
-  .subject-table th, .subject-table td, .subject-table caption, .report-table th, .report-table td { border: 1px solid #333 !important; padding: 0.3rem !important; white-space: normal !important; font-size: 0.75rem !important; }
-  .subject-table thead th { text-align: center; position: static !important; color: #000 !important; box-shadow: none !important; }
-  .report-table input { border: none !important; padding: 0rem !important; background: transparent !important; width: 100% !important; color: #000 !important; }
+    .controls, .save-bar, header, #page-loader, .subject-card, #generateReport, .print-btn { display: none !important; }
+    .table-wrapper { display: block !important; box-shadow: none !important; border: none !important; max-height: none !important; overflow: visible !important; background: transparent !important; padding: 0cm !important; margin: 1rem !important; }
+    body { background: white; margin: 0; padding: 0cm; font-size: 24pt; }
+    *, *::before, ::after { font-family: 'Noto Sans SC', 'Microsoft YaHei', 'Segoe UI', sans-serif !important; color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .subject-table, .report-table { width: 100% !important; border: 3px solid #333 !important; table-layout: auto !important; break-inside: avoid; margin-bottom: 1rem; }
+    .subject-table th, .subject-table td, .subject-table caption, .report-table th, .report-table td { border: 1px solid #333 !important; padding: 0.3rem !important; white-space: normal !important; font-size: 0.75rem !important; }
+    .subject-table thead th { text-align: center; position: static !important; color: #000 !important; box-shadow: none !important; }
+    .report-table input { border: none !important; padding: 0rem !important; background: transparent !important; width: 100% !important; color: #000 !important; }
+    
+    /* ✅ Hide Add AT and Remove buttons during print */
+    .add-at-btn, .remove-at-btn { display: none !important; }
+    
+    /* ✅ Hide entire AT block if date is empty */
+    .at-block {
+        display: flex !important;
+        flex-wrap: wrap !important;
+    }
+    
+    /* Hide empty date inputs and their containers */
+    .at-block:has(.test-date[value=""]) { display: none !important; }
+    
+    /* Fallback for browsers that don't support :has() */
+    .test-date[value=""], 
+    .test-date:not([value]), 
+    input.test-date:focus { 
+        visibility: hidden !important; 
+        position: absolute !important;
+        width: 0 !important;
+        height: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: none !important;
+    }
 }
 
 /* ============================================
@@ -223,4 +248,99 @@ th, td { padding: 0.75rem 0.6rem; text-align: left; border-bottom: 1px solid #ee
 }
 .access-denied .primary { 
   margin-top: 1.5rem; 
+}
+
+/* ==========================================
+ AT BLOCK FORMATTING FIX
+========================================== */
+.tests-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+.at-block {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+    width: 100%;
+    padding: 4px 0;
+}
+
+.at-block .report-input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.85rem;
+    height: 36px;
+}
+
+.at-block .test-date {
+    flex: 1.2;
+    min-width: 120px;
+}
+
+.at-block .test-level,
+.at-block .test-score {
+    flex: 0.8;
+    min-width: 70px;
+}
+
+.at-block .test-time {
+    flex: 0.6;
+    min-width: 55px;
+}
+
+.at-block .test-group {
+    flex: 0.8;
+    min-width: 70px;
+}
+
+.at-block .remove-at-btn {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: 0.9rem;
+    line-height: 1;
+}
+
+.add-at-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 6px;
+    font-size: 0.8rem;
+    padding: 5px 12px;
+    background: #e8f0fe;
+    color: #667eea;
+    border: 1px solid #667eea;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.add-at-btn:hover {
+    background: #667eea;
+    color: white;
+}
+
+/* Print: hide empty date fields */
+@media print {
+    .at-block .test-date.hide-on-print {
+        display: none !important;
+    }
+    .at-block {
+        flex-wrap: wrap;
+    }
+}
+
+.at-block.hide-on-print {
+    display: none !important;
 }

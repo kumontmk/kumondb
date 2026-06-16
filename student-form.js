@@ -755,32 +755,50 @@ function initApp() {
         tr.querySelector('.remove-dt-btn').onclick = () => tr.remove();
     }
     
-    function renderATTable() {
-        const tbody = document.getElementById('atTableBody');
-        if (!tbody) return;
-        tbody.innerHTML = '';
-        if (!currentStudentData || !currentStudentData.subjects) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#999; padding:1rem;">No student data loaded.</td></tr>';
-            return;
-        }
-        const subjects = Array.isArray(currentStudentData.subjects) ? currentStudentData.subjects : Object.values(currentStudentData.subjects || {});
-        let hasData = false;
-        subjects.forEach(sub => {
-            if (!sub.progress) return;
-            const progArray = Array.isArray(sub.progress) ? sub.progress : Object.values(sub.progress || {});
-            progArray.forEach(prog => {
-                if (prog.test && prog.test.date) {
+
+function renderATTable() {
+    const tbody = document.getElementById('atTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (!currentStudentData || !currentStudentData.subjects) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#999; padding:1rem;">No student data loaded.</td></tr>';
+        return;
+    }
+    const subjects = Array.isArray(currentStudentData.subjects) ? currentStudentData.subjects : Object.values(currentStudentData.subjects || {});
+    let hasData = false;
+    
+    subjects.forEach(sub => {
+        if (!sub.progress) return;
+        const progArray = Array.isArray(sub.progress) ? sub.progress : Object.values(sub.progress || {});
+        
+        progArray.forEach(prog => {
+            // 🔄 NEW: Support both new 'tests' array and legacy 'test' object
+            const testsToRender = prog.tests || (prog.test ? [prog.test] : []);
+            
+            testsToRender.forEach(test => {
+                // Show row if there is any meaningful data
+                if (test && (test.date || test.level || test.score || test.time || test.group)) {
                     hasData = true;
                     const tr = document.createElement('tr');
-                    tr.innerHTML = `<td>${sub.name || 'Unknown'}</td><td>${prog.test.level || '-'}</td><td>${prog.test.date}</td><td>${prog.test.score || '-'}</td><td>${prog.test.time || '-'}</td><td>${prog.test.group || '-'}</td>`;
+                    tr.innerHTML = `
+                        <td>${sub.name || 'Unknown'}</td>
+                        <td>${test.level || '-'}</td>
+                        <td>${test.date || '-'}</td>
+                        <td>${test.score || '-'}</td>
+                        <td>${test.time || '-'}</td>
+                        <td>${test.group || '-'}</td>
+                    `;
                     tbody.appendChild(tr);
                 }
             });
         });
-        if (!hasData) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#999; padding:1rem;">No Achievement Tests recorded yet. Update monthly reports to see data here.</td></tr>';
-        }
+    });
+    
+    if (!hasData) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#999; padding:1rem;">No Achievement Tests recorded yet. Update monthly reports to see data here.</td></tr>';
     }
+}
+
     
     document.getElementById('addDTBtn')?.addEventListener('click', () => addDTRow());
     

@@ -10,7 +10,6 @@ onAuthStateChanged(auth, async (user) => {
         window.location.href = 'index.html';
         return;
     }
-
     try {
         const userSnap = await get(ref(db, `users/${user.uid}`));
         if (!userSnap.exists()) {
@@ -21,20 +20,16 @@ onAuthStateChanged(auth, async (user) => {
         const userData = userSnap.val();
         const isAdmin = user.email?.toLowerCase() === 'kumonchamps@gmail.com';
         const dashPerms = userData.permissions?.dashboardCards || {};
-
         const hasAccess = isAdmin || dashPerms[REQUIRED_PERMISSION] === true;
 
         if (hasAccess) {
-            // ✅ ALLOWED: Show content, hide error
             document.getElementById('accessDenied')?.classList.add('hidden');
             document.getElementById('mainContent')?.classList.remove('hidden');
             initializeReports();
         } else {
-            // 🚫 BLOCKED: Hide content, show error
             document.getElementById('accessDenied')?.classList.remove('hidden');
             document.getElementById('mainContent')?.classList.add('hidden');
             document.getElementById('page-loader')?.classList.add('hidden');
-
             document.getElementById('backToDashboardBtn')?.addEventListener('click', () => {
                 window.location.href = 'dashboard.html'; 
             });
@@ -46,12 +41,11 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 // ==========================================
-// 📄 MAIN APP LOGIC (Only runs if authorized)
+// 📄 MAIN APP LOGIC
 // ==========================================
 function initializeReports() {
     const centerId = sessionStorage.getItem('selectedCenter');
     if (!centerId) window.location.href = 'centers.html';
-
     const studentsRef = ref(db, `centers/${centerId}/students`);
     let cachedStudents = [];
     let isDataLoaded = false;
@@ -123,11 +117,51 @@ function initializeReports() {
         if (isPencil) {
             return `<thead><tr><th>Student No</th><th>Chinese Name</th><th>Pinyin/Nickname</th><th>Grade</th><th>Subject</th><th>Pencil Level</th><th>Pencil WS</th></tr></thead>`;
         }
-        return `<thead><tr><th>Student No</th><th>Chinese Name</th><th>Pinyin/Nickname</th><th>Grade</th><th>Prev Level</th><th>Prev WS</th><th>Current Level</th><th>Current WS</th><th>Date</th><th>AT</th><th>Score</th><th>Time</th><th>Group</th></tr></thead>`;
+        return `
+            <thead>
+                <tr>
+                    <th rowspan="2">Student No</th>
+                    <th rowspan="2">Chinese Name</th>
+                    <th rowspan="2">Pinyin/Nickname</th>
+                    <th rowspan="2">Grade</th>
+                    <th rowspan="2">Prev Level</th>
+                    <th rowspan="2">Prev WS</th>
+                    <th rowspan="2">Current Level</th>
+                    <th rowspan="2">Current WS</th>
+                    <th colspan="5" style="text-align:center; background: rgba(135,206,235,0.3);">Achievement Tests (AT)</th>
+                </tr>
+                <tr>
+                    <th style="background: rgba(135,206,235,0.2);">Date</th>
+                    <th style="background: rgba(135,206,235,0.2);">Level</th>
+                    <th style="background: rgba(135,206,235,0.2);">Score</th>
+                    <th style="background: rgba(135,206,235,0.2);">Time</th>
+                    <th style="background: rgba(135,206,235,0.2);">Group</th>
+                </tr>
+            </thead>
+        `;
     }
 
     function createInput(val, cls, readonly = false, type = 'text') {
         return `<input type="${type}" value="${val ?? ''}" class="report-input ${cls}" ${readonly ? 'readonly' : ''} autocomplete="off">`;
+    }
+
+    function createATBlock(test = {}) {
+        const dateVal = test.date || '';
+        const levelVal = test.level || '';
+        const scoreVal = test.score || '';
+        const timeVal = test.time || '';
+        const groupVal = test.group || '';
+        
+        return `
+            <div class="at-block">
+                <input type="date" class="report-input test-date" value="${dateVal}" title="Date">
+                <input type="text" class="report-input test-level" value="${levelVal}" placeholder="Level" title="Level">
+                <input type="text" class="report-input test-score" value="${scoreVal}" placeholder="Score" title="Score">
+                <input type="number" class="report-input test-time" value="${timeVal}" placeholder="Time" title="Time">
+                <input type="text" class="report-input test-group" value="${groupVal}" placeholder="Group" title="Group">
+                <button type="button" class="remove-at-btn" title="Remove AT">✕</button>
+            </div>
+        `;
     }
 
     function buildReport() {
@@ -167,7 +201,6 @@ function initializeReports() {
                     if (!sub || ['drop', 'pause', 'inquiry'].includes(sub.status)) return;
                     
                     const isPencil = subName === 'Pencil';
-                    
                     if (isPencil) {
                         if (!sub.pencilSkill || !sub.pencilSkill.level) return;
                     } else {
@@ -183,14 +216,15 @@ function initializeReports() {
                     const prevWS = prev?.currWS ?? sub.startWS ?? 0;
                     const currLevel = prog?.currLevel || sub.currentLevel || '';
                     const currWS = prog?.currWS ?? sub.currentWS ?? 0;
-                    const test = prog?.test || {};
+                    
+                    // Support both new 'tests' array and legacy 'test' object
+                    const tests = prog?.tests || (prog?.test ? [prog.test] : []);
 
                     const row = document.createElement('tr');
                     row.dataset.studentId = id;
                     row.dataset.subjectName = sub.name;
 
                     let rowHTML = '';
-                    
                     if (isPencil) {
                         rowHTML = `
                             <td>${s.studentNumber || '-'}</td>
@@ -211,11 +245,10 @@ function initializeReports() {
                             <td>${createInput(prevWS, 'prev-ws', true, 'number')}</td>
                             <td>${createInput(currLevel, 'curr-level')}</td>
                             <td>${createInput(currWS, 'curr-ws', false, 'number')}</td>
-                            <td>${createInput(test.date || '', 'test-date', true, 'date')}</td>
-                            <td>${createInput(test.level || '', 'test-level', true)}</td>
-                            <td>${createInput(test.score || '', 'test-score', true)}</td>
-                            <td>${createInput(test.time || '', 'test-time', true, 'number')}</td>
-                            <td>${createInput(test.group || '', 'test-group', true)}</td>
+                            <td colspan="5" style="padding: 0.5rem; min-width: 420px;">
+                                <div class="tests-container"></div>
+                                <button type="button" class="add-at-btn">➕ Add AT</button>
+                            </td>
                         `;
                     }
                     
@@ -225,13 +258,21 @@ function initializeReports() {
 
                     if (!isPencil) {
                         const currInput = row.querySelector('.curr-level');
-                        const testInputs = row.querySelectorAll('.test-date, .test-level, .test-score, .test-time, .test-group');
+                        const container = row.querySelector('.tests-container');
                         
+                        // Populate existing tests or add one empty block by default
+                        if (tests.length > 0) {
+                            tests.forEach(t => container.insertAdjacentHTML('beforeend', createATBlock(t)));
+                        } else {
+                            container.insertAdjacentHTML('beforeend', createATBlock({}));
+                        }
+
                         const toggleTests = () => {
                             const curr = (currInput?.value || '').trim();
                             const prevVal = (row.querySelector('.prev-level')?.value || '').trim();
                             const changed = curr !== '' && prevVal !== '' && curr !== prevVal;
                             
+                            const testInputs = container.querySelectorAll('.test-date, .test-level, .test-score, .test-time, .test-group');
                             testInputs.forEach(input => {
                                 input.readOnly = !changed;
                                 input.style.background = changed ? '#fff' : '#f8f9fa';
@@ -240,8 +281,25 @@ function initializeReports() {
                                 if (!changed && input.value) input.value = '';
                             });
                         };
+
                         currInput?.addEventListener('input', toggleTests);
-                        toggleTests();
+                        
+                        // Add AT Button Logic
+                        row.querySelector('.add-at-btn').addEventListener('click', () => {
+                            container.insertAdjacentHTML('beforeend', createATBlock({}));
+                            toggleTests(); // Apply readonly state to new inputs immediately
+                        });
+
+                        // Remove AT Button Logic (Event Delegation)
+                        container.addEventListener('click', (e) => {
+                            if (e.target.classList.contains('remove-at-btn')) {
+                                if (container.children.length > 1 || confirm('Remove this AT block?')) {
+                                    e.target.closest('.at-block').remove();
+                                }
+                            }
+                        });
+
+                        toggleTests(); // Initial call
                     }
                 });
             });
@@ -276,7 +334,39 @@ function initializeReports() {
     }
 
     if (generateBtn) generateBtn.addEventListener('click', buildReport);
-    if (printBtn) printBtn.addEventListener('click', () => window.print());
+    
+    if (printBtn) {
+        printBtn.addEventListener('click', () => {
+            // Mark empty AT blocks for hiding
+            const allATBlocks = document.querySelectorAll('.at-block');
+            allATBlocks.forEach(block => {
+                const dateInput = block.querySelector('.test-date');
+                const hasAnyData = Array.from(block.querySelectorAll('input')).some(input => {
+                    return input.value && input.value.trim() !== '';
+                });
+                
+                if (!hasAnyData && dateInput) {
+                    block.classList.add('hide-on-print');
+                }
+            });
+            
+            // Hide empty date inputs specifically
+            const emptyDates = document.querySelectorAll('.test-date');
+            emptyDates.forEach(input => {
+                if (!input.value || input.value.trim() === '') {
+                    input.classList.add('hide-on-print');
+                }
+            });
+            
+            window.print();
+            
+            // Clean up classes after print
+            setTimeout(() => {
+                allATBlocks.forEach(block => block.classList.remove('hide-on-print'));
+                emptyDates.forEach(input => input.classList.remove('hide-on-print'));
+            }, 1000);
+        });
+    }
 
     if (saveBtn) {
         saveBtn.addEventListener('click', async () => {
@@ -326,17 +416,12 @@ function initializeReports() {
                     }
                     if (!subjectData) continue;
 
-                    if (currLevelEl && currLevel) {
-                        subjectData.currentLevel = currLevel;
-                    }
-                    if (currWSEl) {
-                        subjectData.currentWS = currWS !== null ? currWS : 0;
-                    }
+                    if (currLevelEl && currLevel) subjectData.currentLevel = currLevel;
+                    if (currWSEl) subjectData.currentWS = currWS !== null ? currWS : 0;
 
                     if (pencilLevelEl || pencilWSEl) {
                         const pencilLevel = pencilLevelEl ? (pencilLevelEl.value?.trim() || '') : '';
                         const pencilWS = pencilWSEl ? (pencilWSEl.value?.trim() || '') : '';
-
                         if (pencilLevel !== '' || pencilWS !== '') {
                             if (!subjectData.pencilSkill) subjectData.pencilSkill = {};
                             subjectData.pencilSkill.level = pencilLevel;
@@ -354,17 +439,30 @@ function initializeReports() {
                     if (currLevelEl && currLevel) entry.currLevel = currLevel;
                     if (currWSEl) entry.currWS = currWS !== null ? currWS : 0;
 
-                    const tL = getVal('test-level');
-                    const tD = getVal('test-date');
-                     
-                    if (tL || tD) {
-                        entry.test = {
-                            level: tL,
-                            date: tD,
-                            score: getVal('test-score') || '',
-                            time: parseInt(getVal('test-time')) || 0,
-                            group: getVal('test-group') || ''
-                        };
+                    // 🔄 NEW: Gather multiple ATs
+                    const testsArray = [];
+                    const atBlocks = row.querySelectorAll('.at-block');
+                    atBlocks.forEach(block => {
+                        const tDate = block.querySelector('.test-date')?.value?.trim() || '';
+                        const tLevel = block.querySelector('.test-level')?.value?.trim() || '';
+                        const tScore = block.querySelector('.test-score')?.value?.trim() || '';
+                        const tTime = block.querySelector('.test-time')?.value?.trim() || '';
+                        const tGroup = block.querySelector('.test-group')?.value?.trim() || '';
+                        
+                        // Only save if at least one field has data
+                        if (tDate || tLevel || tScore || tTime || tGroup) {
+                            testsArray.push({
+                                date: tDate,
+                                level: tLevel,
+                                score: tScore,
+                                time: parseInt(tTime) || 0,
+                                group: tGroup
+                            });
+                        }
+                    });
+
+                    if (testsArray.length > 0) {
+                        entry.tests = testsArray;
                     }
 
                     const idx = progArr.findIndex(p => p?.month === month);
@@ -395,6 +493,5 @@ function initializeReports() {
         });
     }
 
-    // Initial load
     setTimeout(() => loadStudents(true).then(buildReport), 200);
 }

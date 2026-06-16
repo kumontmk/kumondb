@@ -140,18 +140,13 @@
         <div id="tab-timeclock" class="tab-content">
           <p class="hint">Edit time in/out records manually. Changes apply immediately.</p>
           <div class="table-wrapper" style="max-height: 400px;">
+            <!-- Replace the old timeclock table in employees.html with this: -->
             <table class="timeclock-edit-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>First Time In</th>
-                  <th>Last Time Out</th>
-                  <th>Total Hours Worked</th>
-                  <th>Action</th>
-                </tr>
+              <thead id="timeclockThead">
+                <!-- JavaScript will dynamically populate this based on max cycles -->
               </thead>
               <tbody id="timeclockHistoryBody">
-                <tr><td colspan="5" class="empty-state">No records found</td></tr>
+                <tr><td colspan="9" class="empty-state">No records found</td></tr>
               </tbody>
             </table>
           </div>

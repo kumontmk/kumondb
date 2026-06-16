@@ -436,23 +436,63 @@ function initApp() {
     return `${h}h ${m}m`;
   }
 
+  // Helper function to get sequential In/Out rows
+  function getLogsRows(logs) {
+    const sortedLogs = [...logs].sort((a, b) => a.time.localeCompare(b.time));
+    const rows = [];
+    let currentRow = { inTime: '', inIndex: -1, outTime: '', outIndex: -1 };
+    
+    for (let i = 0; i < sortedLogs.length; i++) {
+      const log = sortedLogs[i];
+      if (log.type === 'in') {
+        if (currentRow.inTime !== '') {
+          rows.push(currentRow);
+          currentRow = { inTime: log.time, inIndex: i, outTime: '', outIndex: -1 };
+        } else {
+          currentRow.inTime = log.time;
+          currentRow.inIndex = i;
+        }
+      } else if (log.type === 'out') {
+        if (currentRow.outTime !== '') {
+          rows.push(currentRow);
+          currentRow = { inTime: '', inIndex: -1, outTime: log.time, outIndex: i };
+        } else {
+          currentRow.outTime = log.time;
+          currentRow.outIndex = i;
+        }
+      }
+    }
+    
+    if (currentRow.inTime !== '' || currentRow.outTime !== '') {
+      rows.push(currentRow);
+    }
+    
+    return rows;
+  }
+
+  // Replace your existing loadTimeclock function with this updated version:
   function loadTimeclock(empId) {
     get(ref(db, 'timecards')).then(snap => {
       const all = snap.val() || {};
       timeclockBody.innerHTML = '';
       const records = [];
+      let maxCycles = 3; 
+      
       Object.entries(all).forEach(([date, dayData]) => {
         if (dayData[empId]?.logs?.length) {
           const logs = dayData[empId].logs;
           const sortedLogs = [...logs].sort((a, b) => a.time.localeCompare(b.time));
-          const inLogs = sortedLogs.filter(l => l.type === 'in');
-          const outLogs = sortedLogs.filter(l => l.type === 'out');
-          const firstIn = inLogs.length > 0 ? inLogs[0].time : '';
-          const lastOut = outLogs.length > 0 ? outLogs[outLogs.length - 1].time : '';
+          const rows = getLogsRows(sortedLogs);
+          
+          if (rows.length > maxCycles) {
+            maxCycles = rows.length;
+          }
+          
+          // ✅ Total Hours Calculation Logic (unchanged, robust)
           let totalMinutes = 0;
           let hasValidCycle = false;
           let currentIn = null;
-
+          
           for (const log of sortedLogs) {
             if (log.type === 'in') {
               currentIn = timeToMinutes(log.time);
@@ -467,63 +507,149 @@ function initApp() {
               }
             }
           }
-          let durationText = hasValidCycle ? formatDuration(totalMinutes) : '-';
-          records.push({ date, firstIn, lastOut, durationText });
+          const durationText = hasValidCycle ? formatDuration(totalMinutes) : '-';
+          
+          records.push({ date, rows, durationText });
         }
       });
+      
       records.sort((a, b) => b.date.localeCompare(a.date));
+      
       if (records.length === 0) {
-        timeclockBody.innerHTML = '<tr><td colspan="5" class="empty-state">No records found</td></tr>';
+        timeclockBody.innerHTML = `<tr><td colspan="${maxCycles * 2 + 3}" class="empty-state">No records found</td></tr>`;
         return;
       }
+      
+      // 2. Dynamically build the table header based on maxCycles
+      const table = timeclockBody.parentElement;
+      let theadHtml = `<thead id="timeclockThead"><tr><th rowspan="2">Date</th>`;
+      for (let i = 0; i < maxCycles; i++) {
+        const ordinal = i + 1;
+        const suffix = ordinal === 1 ? 'st' : ordinal === 2 ? 'nd' : ordinal === 3 ? 'rd' : 'th';
+        theadHtml += `<th colspan="2" style="text-align:center;">${ordinal}${suffix} Time</th>`;
+      }
+      theadHtml += `<th rowspan="2">Total Hours</th><th rowspan="2">Action</th></tr><tr>`;
+      for (let i = 0; i < maxCycles; i++) {
+        theadHtml += `<th>In</th><th>Out</th>`;
+      }
+      theadHtml += `</tr></thead>`;
+      
+      const existingThead = table.querySelector('thead');
+      if (existingThead) {
+        existingThead.outerHTML = theadHtml;
+      } else {
+        table.insertAdjacentHTML('afterbegin', theadHtml);
+      }
+      
+      // 3. Render the data rows
       records.forEach(r => {
         const row = document.createElement('tr');
-        row.innerHTML = `
-           <td>${r.date}</td>
-           <td><input type="time" value="${r.firstIn}"></td>
-           <td><input type="time" value="${r.lastOut}"></td>
-           <td style="font-weight: 600; color: #4682B4; text-align: center;">${r.durationText}</td>
-           <td><button class="save-log-btn" data-date="${r.date}">💾 Save</button></td>`;
+        row.dataset.editing = 'false';
+        row.dataset.date = r.date;
+        
+        let rowHtml = `<td>${r.date}</td>`;
+        for (let i = 0; i < maxCycles; i++) {
+          const cycle = r.rows[i] || { inTime: '', inIndex: -1, outTime: '', outIndex: -1 };
+          rowHtml += `
+            <td><input type="time" value="${cycle.inTime}" disabled class="tc-input" data-idx="${cycle.inIndex}" data-type="in"></td>
+            <td><input type="time" value="${cycle.outTime}" disabled class="tc-input" data-idx="${cycle.outIndex}" data-type="out"></td>
+          `;
+        }
+        rowHtml += `
+          <td style="font-weight: 600; color: #4682B4; text-align: center;">${r.durationText}</td>
+          <td><button class="edit-log-btn secondary" data-date="${r.date}">Edit</button></td>
+        `;
+        row.innerHTML = rowHtml;
         timeclockBody.appendChild(row);
       });
-      document.querySelectorAll('.save-log-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
+      
+      // 4. Handle Edit / Save logic (targets all dynamic columns)
+      document.querySelectorAll('.edit-log-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          const mainRow = btn.closest('tr');
+          const isEditing = mainRow.dataset.editing === 'true';
           const date = btn.dataset.date;
-          const inputs = btn.closest('tr').querySelectorAll('input[type="time"]');
-          const newIn = inputs[0].value;
-          const newOut = inputs[1].value;
-          try {
-            const daySnap = await get(ref(db, `timecards/${date}/${empId}`));
-            let currentLogs = daySnap.val()?.logs || [];
-            if (!Array.isArray(currentLogs)) currentLogs = Object.values(currentLogs);
-            if (currentLogs.length === 0) {
-              if (newIn) currentLogs.push({ type: 'in', time: newIn, location: 'Manual' });
-              if (newOut) currentLogs.push({ type: 'out', time: newOut, location: 'Manual' });
-            } else {
-              let earliestInIdx = -1, latestOutIdx = -1, earliestInTime = '99:99', latestOutTime = '00:00';
-              for (let i = 0; i < currentLogs.length; i++) {
-                if (currentLogs[i].type === 'in' && currentLogs[i].time < earliestInTime) {
-                  earliestInTime = currentLogs[i].time; earliestInIdx = i;
+          const inputs = mainRow.querySelectorAll('.tc-input');
+          
+          if (!isEditing) {
+            // ✅ Switch to Edit Mode
+            mainRow.dataset.editing = 'true';
+            inputs.forEach(input => {
+              input.disabled = false;
+              input.style.borderColor = '#4682B4';
+            });
+            btn.textContent = 'Save';
+            btn.classList.remove('secondary');
+            btn.classList.add('primary');
+          } else {
+            // ✅ Switch to Save Mode
+            btn.textContent = 'Saving...';
+            btn.disabled = true;
+            
+            try {
+              const daySnap = await get(ref(db, `timecards/${date}/${empId}`));
+              let currentLogs = daySnap.val()?.logs || [];
+              if (!Array.isArray(currentLogs)) currentLogs = Object.values(currentLogs);
+              
+              const modifications = [];
+              inputs.forEach(input => {
+                modifications.push({
+                  idx: parseInt(input.dataset.idx, 10),
+                  type: input.dataset.type,
+                  newTime: input.value
+                });
+              });
+              
+              // Sort descending to safely mutate array without shifting indices
+              modifications.sort((a, b) => b.idx - a.idx);
+              
+              let logsToSave = [...currentLogs];
+              modifications.forEach(mod => {
+                if (mod.idx !== -1) {
+                  if (mod.newTime) {
+                    logsToSave[mod.idx].time = mod.newTime;
+                  } else {
+                    logsToSave.splice(mod.idx, 1); // Remove if cleared
+                  }
+                } else {
+                  if (mod.newTime) {
+                    logsToSave.push({ type: mod.type, time: mod.newTime, location: 'Manual Edit' });
+                  }
                 }
-                if (currentLogs[i].type === 'out' && currentLogs[i].time > latestOutTime) {
-                  latestOutTime = currentLogs[i].time; latestOutIdx = i;
-                }
-              }
-              if (earliestInIdx !== -1 && newIn) currentLogs[earliestInIdx].time = newIn;
-              if (latestOutIdx !== -1 && newOut) currentLogs[latestOutIdx].time = newOut;
+              });
+              
+              logsToSave.sort((a, b) => a.time.localeCompare(b.time));
+              
+              await update(ref(db, `timecards/${date}/${empId}`), { logs: logsToSave });
+              
+              // Revert UI to View Mode
+              mainRow.dataset.editing = 'false';
+              inputs.forEach(input => {
+                input.disabled = true;
+                input.style.borderColor = '#cbd5e1';
+              });
+              btn.textContent = 'Edit';
+              btn.classList.remove('primary');
+              btn.classList.add('secondary');
+              btn.disabled = false;
+              
+              // Reload to reflect accurate total hours and sorted state
+              loadTimeclock(empId);
+              
+            } catch (err) {
+              console.error("Error saving timeclock:", err);
+              alert("Failed to save. Check console.");
+              btn.textContent = 'Save';
+              btn.disabled = false;
             }
-            await update(ref(db, `timecards/${date}/${empId}`), { logs: currentLogs });
-            btn.textContent = '✅ Saved';
-            setTimeout(() => { btn.textContent = '💾 Save'; loadTimeclock(empId); }, 1500);
-          } catch (err) {
-            console.error("Error saving timeclock: ", err);
-            alert("Failed to save. Check console.");
           }
         });
       });
+      
     }).catch(err => {
-      console.error("Error loading timeclock: ", err);
-      timeclockBody.innerHTML = '<tr><td colspan="5" class="empty-state">Error loading records</td></tr>';
+      console.error("Error loading timeclock:", err);
+      timeclockBody.innerHTML = '<tr><td colspan="9" class="empty-state">Error loading records</td></tr>';
     });
   }
 

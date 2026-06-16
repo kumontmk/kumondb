@@ -10,7 +10,6 @@ onAuthStateChanged(auth, async (user) => {
         window.location.href = 'index.html';
         return;
     }
-
     try {
         const userSnap = await get(ref(db, `users/${user.uid}`));
         if (!userSnap.exists()) {
@@ -69,7 +68,7 @@ function initializePO() {
         const cleanName = sub.name
             .replace('English ', '')
             .replace('Chinese (Trad)', 'Chinese')
-            .replace('Chinese (Simp)', 'Chinese');
+            .replace('Chinese  (Simp)', 'Chinese');
         return `${cleanName} ${level}`;
     }
 
@@ -83,7 +82,7 @@ function initializePO() {
 
     async function fetchPendingStudents() {
         if (!centerId) {
-            tbody.innerHTML = '<tr><td colspan="6" class="empty-state">⚠️ No center selected. Please log in via Dashboard.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="empty-state">⚠️ No center selected. Please log in via Dashboard.</td></tr>';
             return;
         }
         
@@ -120,7 +119,10 @@ function initializePO() {
 
                 allPendingStudents.push({
                     id,
-                    name: s.nickname || s.namePinyin || s.nameCn || 'Unknown Student',
+                    // ✅ FIX: Prioritize namePinyin so the "Student Name" column doesn't duplicate the "Nickname" column
+                    name: s.namePinyin || s.nameCn || s.name || 'Unknown Student',
+                    nameCn: s.nameCn || '-',
+                    nickname: s.nickname || '-',
                     grade: s.grade || '-',
                     subjects: activeSubjects.length > 0 ? activeSubjects : ['No active subjects'],
                     enrolDate: earliestEnrol || '-',
@@ -131,7 +133,7 @@ function initializePO() {
 
             renderTable();
         } catch (err) {
-            tbody.innerHTML = `<tr><td colspan="6" class="empty-state">❌ Error loading data: ${err.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" class="empty-state">❌ Error loading data: ${err.message}</td></tr>`;
             console.error(err);
         } finally {
             poLoader.classList.add('hidden');
@@ -141,8 +143,11 @@ function initializePO() {
     function renderTable(filter = '') {
         tbody.innerHTML = '';
         const lowerFilter = filter.toLowerCase().trim();
+        
         const filtered = allPendingStudents.filter(s =>
             s.name.toLowerCase().includes(lowerFilter) ||
+            s.nameCn.toLowerCase().includes(lowerFilter) ||
+            s.nickname.toLowerCase().includes(lowerFilter) ||
             s.grade.toLowerCase().includes(lowerFilter) ||
             s.poReason.toLowerCase().includes(lowerFilter) ||
             s.subjects.some(sub => sub.toLowerCase().includes(lowerFilter))
@@ -165,6 +170,8 @@ function initializePO() {
 
                 tr.innerHTML = `
                     <td><strong>${s.name}</strong></td>
+                    <td>${s.nameCn}</td>
+                    <td>${s.nickname}</td>
                     <td>${s.grade}</td>
                     <td>${subjectPills}</td>
                     <td>${s.enrolDate}</td>
