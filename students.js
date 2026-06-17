@@ -1,5 +1,6 @@
 import { auth, db, logout } from './auth.js';
-import { ref, get, push } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+// ✅ 1. Added 'remove' to the Firebase imports
+import { ref, get, push, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const REQUIRED_PERMISSION = 'studentManagement'; 
@@ -32,8 +33,8 @@ onAuthStateChanged(auth, async (user) => {
       document.getElementById('accessDenied')?.classList.add('hidden');
       document.getElementById('mainContent')?.classList.remove('hidden');
       
-      // Initialize the rest of the page
-      initializePage();
+      // ✅ 2. Pass isAdmin to initializePage
+      initializePage(isAdmin);
     } else {
       // 🚫 BLOCKED: Hide content, show error
       document.getElementById('accessDenied')?.classList.remove('hidden');
@@ -53,9 +54,15 @@ onAuthStateChanged(auth, async (user) => {
 // ==========================================
 // 📄 MAIN APP LOGIC (Only runs if authorized)
 // ==========================================
-function initializePage() {
+// ✅ 3. Accept isAdmin parameter
+function initializePage(isAdmin = false) {
   const centerId = sessionStorage.getItem('selectedCenter');
   const studentsRef = ref(db, `centers/${centerId}/students`);
+
+  // ✅ Show delete button only for admin
+  if (isAdmin) {
+    document.getElementById('deleteAllBtn')?.classList.remove('hidden');
+  }
 
   // ==========================================
   // 📊 PAGINATION CONFIGURATION
@@ -844,6 +851,62 @@ document.getElementById('exportGradeBtn')?.addEventListener('click', async () =>
     currentPage = 1;
     loadStudents();
   });
+
+  // ==========================================
+  // 🗑️ DELETE ALL STUDENTS LOGIC
+  // ==========================================
+  const deleteAllBtn = document.getElementById('deleteAllBtn');
+  const deleteAllModal = document.getElementById('deleteAllModal');
+  const closeDeleteAllModal = document.getElementById('closeDeleteAllModal');
+  const cancelDeleteAllBtn = document.getElementById('cancelDeleteAllBtn');
+  const confirmDeleteAllBtn = document.getElementById('confirmDeleteAllBtn');
+
+  // Open modal
+  if (deleteAllBtn) {
+    deleteAllBtn.addEventListener('click', () => {
+      deleteAllModal?.classList.remove('hidden');
+    });
+  }
+
+  // Close modal actions
+  if (closeDeleteAllModal) {
+    closeDeleteAllModal.addEventListener('click', () => deleteAllModal?.classList.add('hidden'));
+  }
+  if (cancelDeleteAllBtn) {
+    cancelDeleteAllBtn.addEventListener('click', () => deleteAllModal?.classList.add('hidden'));
+  }
+
+  // Execute deletion
+  if (confirmDeleteAllBtn) {
+    confirmDeleteAllBtn.addEventListener('click', async () => {
+      // Double-check admin status on execution
+      if (!isAdmin) {
+        alert('You do not have permission to perform this action.');
+        deleteAllModal?.classList.add('hidden');
+        return;
+      }
+
+      confirmDeleteAllBtn.disabled = true;
+      confirmDeleteAllBtn.textContent = 'Deleting...';
+
+      try {
+        // Removes the entire 'students' node for this specific center
+        await remove(studentsRef);
+        
+        alert('All student records for this center have been successfully deleted.');
+        deleteAllModal?.classList.add('hidden');
+        
+        // Refresh the table to show empty state
+        loadStudents(); 
+      } catch (err) {
+        console.error('Error deleting all students:', err);
+        alert('Failed to delete student records: ' + err.message);
+      } finally {
+        confirmDeleteAllBtn.disabled = false;
+        confirmDeleteAllBtn.textContent = 'Yes, Delete All';
+      }
+    });
+  }
 
   // Initial load
   loadStudents();
