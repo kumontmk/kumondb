@@ -25,9 +25,9 @@
                 <!-- UPDATED: Added span for dynamic center name -->
                 <h3>📅 <span id="calendar-center-name">Center</span> Calendar</h3>
                 <p class="calendar-hint">
-                    <span style="color: #c62828;">●</span> Red = Parent Orientation &nbsp;|&nbsp; 
-                    <span style="color: #e65100;">●</span> Orange = Center Holiday &nbsp;|&nbsp; 
-                    <span style="color: #2e7d32;">●</span> Green = Employee Holiday
+                    <span style="color: #1565c0;">●</span> Blue = Parent Orientation &nbsp;|&nbsp; 
+                    <span style="color: #2e7d32;">●</span> Green = Center Holiday &nbsp;|&nbsp; 
+                    <span style="color: #c62828;">●</span> Red = Public Holiday
                 </p>
             </div>
             <div class="calendar-wrapper">
@@ -80,12 +80,17 @@
                 <h3>Parent Orientation List</h3>
                 <p>Manage pending parent orientations & follow-ups</p>
             </a>
+            <a href="calendar.html" class="center-card">
+                <div class="card-icon">📅</div>
+                <h3>Manage Calendar</h3>
+                <p>View and manage the center's calendar events</p>
+            </a>
         </div>
         <!-- =========================================
             NEW: HELPFUL LINKS SECTION
         ========================================= -->
         <div class="dashboard-header" style="margin-top: 3rem;">
-        <h2>Helpful Links</h2>
+        <h2>🛟 Helpful Links</h2>
         <p>Quick access to essential Kumon tools and resources.</p>
         </div>
         <div class="center-grid">
@@ -140,8 +145,8 @@
                 <div style="margin-bottom: 1rem;">
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Event Type:</label>
                     <label style="margin-right: 1rem;"><input type="radio" name="eventType" value="none" checked> None (Regular Day)</label>
-                    <label style="margin-right: 1rem;"><input type="radio" name="eventType" value="center"> 🟠 Center Holiday</label>
-                    <label><input type="radio" name="eventType" value="employee"> 🟢 Employee Holiday</label>
+                    <label style="margin-right: 1rem;"><input type="radio" name="eventType" value="center"> 🟢 Center Holiday</label>
+                    <label><input type="radio" name="eventType" value="public"> 🔴 Public Holiday</label>
                 </div>
                 <div style="margin-bottom: 1rem;">
                     <label for="calendarNote" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Note (Optional):</label>

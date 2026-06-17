@@ -145,7 +145,49 @@
         </main>
 
     </div> <!-- ✅ End of mainContent wrapper -->
+        <!-- Export Options Modal -->
+        <div id="exportModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 500px; text-align: left;">
+            <span id="closeExportModal" style="position: absolute; top: 10px; right: 15px; font-size: 1.5rem; cursor: pointer; color: var(--text-light);">&times;</span>
+            <h2 style="margin-bottom: 1.5rem; text-align: center; color: var(--primary-dark);">Export Options</h2>
+            
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
+            <!-- Option 1: All Students -->
+            <button id="exportAllBtn" class="primary" style="width: 100%;">📊 Export All Students (Full Details)</button>
+            
+            <!-- Option 2: By Subject -->
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <select id="exportSubjectSelect" style="flex: 1; padding: 0.75rem; border: 1px solid #ddd; border-radius: var(--radius);">
+                <option value="">Select Subject...</option>
+                <option value="Math">Math</option>
+                <option value="English EFL">English EFL</option>
+                <option value="English ERP">English ERP</option>
+                <option value="Chinese (Trad)">Chinese (Trad)</option>
+                </select>
+                <button id="exportSubjectBtn" class="secondary" style="flex: 1;">Export by Subject</button>
+            </div>
 
+            <!-- Option 3: Names Only (16 per column) -->
+            <button id="exportNamesOnlyBtn" class="secondary" style="width: 100%;">📝 Export Names Only (16 per column)</button>
+
+            <!-- Option 4: By School -->
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <select id="exportSchoolSelect" style="flex: 1; padding: 0.75rem; border: 1px solid #ddd; border-radius: var(--radius);">
+                <option value="">Loading schools...</option>
+                </select>
+                <button id="exportSchoolBtn" class="secondary" style="flex: 1;">Export by School</button>
+            </div>
+
+            <!-- Option 5: By Grade -->
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <select id="exportGradeSelect" style="flex: 1; padding: 0.75rem; border: 1px solid #ddd; border-radius: var(--radius);">
+                <option value="">Loading grades...</option>
+                </select>
+                <button id="exportGradeBtn" class="secondary" style="flex: 1;">Export by Grade</button>
+            </div>
+            </div>
+        </div>
+        </div>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <script type="module" src="students.js"></script>
 </body>

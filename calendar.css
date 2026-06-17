@@ -1,0 +1,399 @@
+/* Re-use variables from dashboard.css implicitly, but define fallbacks just in case */
+:root {
+    --primary: #87CEEB;
+    --primary-dark: #4682B4;
+    --secondary: #f0f8ff;
+    --text: #333;
+    --text-light: #666;
+    --white: #fff;
+    --shadow: 0 2px 10px rgba(0,0,0,0.1);
+    --radius: 8px;
+    --danger: #dc3545;
+    --success: #28a745;
+    --warning: #e65100;
+}
+
+/* =========================================
+   TABS
+========================================= */
+.tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 0;
+}
+
+.tab-btn {
+    background: transparent;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-light);
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.tab-btn:hover {
+    color: var(--primary-dark);
+    background: rgba(135, 206, 235, 0.1);
+    border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.tab-btn.active {
+    color: var(--primary-dark);
+    border-bottom-color: var(--primary-dark);
+}
+
+.tab-content {
+    display: none;
+    animation: fadeIn 0.3s ease;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* =========================================
+   CARDS & FORMS
+========================================= */
+.card {
+    background: var(--white);
+    padding: 1.5rem;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 1.5rem;
+    border: 1px solid #e2e8f0;
+}
+
+.card h3 {
+    margin-bottom: 1rem;
+    color: var(--text);
+    font-size: 1.15rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.holiday-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    align-items: end;
+}
+
+.form-group label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-light);
+    margin-bottom: 0.4rem;
+}
+
+.form-group input, .form-group select {
+    width: 100%;
+    padding: 0.6rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    transition: border-color 0.2s;
+}
+
+.form-group input:focus, .form-group select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.2);
+}
+
+.form-group-btn {
+    display: flex;
+    align-items: flex-end;
+}
+
+.btn-primary {
+    background: var(--primary);
+    color: var(--white);
+    border: none;
+    padding: 0.6rem 1.2rem;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    width: 100%;
+}
+
+.btn-primary:hover {
+    background: var(--primary-dark);
+}
+
+/* =========================================
+   TABLES
+========================================= */
+.table-responsive {
+    overflow-x: auto;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+}
+
+.data-table th, .data-table td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.data-table th {
+    background: #f8fafc;
+    font-weight: 600;
+    color: var(--text-light);
+    text-transform: uppercase;
+    font-size: 0.8rem;
+}
+
+.data-table tbody tr:hover {
+    background: #f8fafc;
+}
+
+.muc-yes {
+    color: var(--danger) !important;
+    font-weight: 700;
+}
+
+.muc-no {
+    color: var(--text-light);
+}
+
+.btn-danger {
+    background: #fee2e2;
+    color: var(--danger);
+    border: none;
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background 0.2s;
+}
+
+.btn-danger:hover {
+    background: #fecaca;
+}
+
+/* =========================================
+   CALENDAR CONTROLS & LEGEND
+========================================= */
+.calendar-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.year-selector {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: #f1f5f9;
+    padding: 0.4rem 1rem;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.btn-icon {
+    background: var(--white);
+    border: 1px solid #cbd5e1;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--text);
+}
+
+.btn-icon:hover {
+    background: var(--primary);
+    color: var(--white);
+    border-color: var(--primary);
+}
+
+.calendar-legend {
+    display: flex;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+    font-size: 0.9rem;
+    color: var(--text-light);
+    flex-wrap: wrap;
+}
+
+.calendar-legend .dot {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 0.4rem;
+    vertical-align: middle;
+}
+
+.dot.public { background: #fff3e0; border: 1px solid #e65100; }
+.dot.center { background: #e8f5e9; border: 1px solid #2e7d32; }
+.dot.closed { background: #f3f4f6; border: 1px solid #9ca3af; }
+
+/* =========================================
+   12-MONTH CALENDAR GRID
+========================================= */
+.year-calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+
+.month-calendar {
+    background: var(--white);
+    border: 1px solid #e2e8f0;
+    border-radius: var(--radius);
+    padding: 1rem;
+}
+
+.month-calendar h4 {
+    text-align: center;
+    margin-bottom: 0.75rem;
+    color: var(--primary-dark);
+    font-size: 1.1rem;
+}
+
+.mini-calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    text-align: center;
+}
+
+.mini-calendar-grid .day-header {
+    font-weight: 600;
+    color: var(--text-light);
+    font-size: 0.75rem;
+    padding: 0.4rem 0;
+}
+
+.mini-calendar-grid .day-cell {
+    padding: 0.4rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    position: relative;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mini-calendar-grid .day-cell.empty {
+    background: transparent;
+}
+
+.mini-calendar-grid .day-cell.closed {
+    background: #f3f4f6;
+    color: #9ca3af;
+    text-decoration: line-through;
+}
+
+.mini-calendar-grid .day-cell.has-public {
+    background: #fff3e0;
+    color: #e65100;
+    font-weight: 700;
+    border: 1px solid #ffcc80;
+}
+
+.mini-calendar-grid .day-cell.has-center {
+    background: #e8f5e9;
+    color: #2e7d32;
+    font-weight: 700;
+    border: 1px solid #c8e6c9;
+}
+
+.mini-calendar-grid .day-cell.today {
+    border: 2px solid var(--primary-dark);
+}
+
+/* =========================================
+   CLASS SCHEDULE
+========================================= */
+.schedule-hint {
+    font-size: 0.9rem;
+    color: var(--text-light);
+    margin-bottom: 1rem;
+    font-style: italic;
+}
+
+.schedule-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.schedule-month {
+    border: 1px solid #e2e8f0;
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.schedule-month-header {
+    background: var(--primary);
+    color: var(--white);
+    padding: 0.75rem 1rem;
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.schedule-month-body {
+    padding: 1rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.schedule-day-group h5 {
+    color: var(--primary-dark);
+    margin-bottom: 0.5rem;
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.schedule-dates {
+    font-size: 0.95rem;
+    color: var(--text);
+    line-height: 1.6;
+}
+
+.schedule-dates .muc-date {
+    color: var(--danger);
+    font-weight: 700;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .holiday-form {
+        grid-template-columns: 1fr;
+    }
+    .year-calendar-grid {
+        grid-template-columns: 1fr;
+    }
+}

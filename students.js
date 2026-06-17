@@ -506,97 +506,272 @@ function initializePage() {
   // ==========================================
   // 📤 EXCEL EXPORT LOGIC
   // ==========================================
-  async function exportStudentsToExcel() {
-    const loader = document.getElementById('page-loader');
-    loader?.classList.remove('hidden');
-    
-    try {
-      const snapshot = await get(studentsRef);
-      if (!snapshot.exists()) {
-        alert("No students found to export.");
-        return;
-      }
+// ==========================================
+// 📤 ENHANCED EXCEL EXPORT LOGIC
+// ==========================================
 
-      const rows = [];
-      snapshot.forEach(child => {
-        const s = child.val();
-        const subs = s.subjects || [];
-        const getSubj = (name) => subs.find(sub => sub.name === name) || {};
-
-        const math = getSubj('Math');
-        const eng = getSubj('English ERP');
-        const efl = getSubj('English EFL');
-        const chi = getSubj('Chinese (Trad)');
-
-        rows.push({
-          'StudentNo': s.studentNumber || '',
-          'Chinese Name (Alphabet)': s.namePinyin || '',
-          'Chinese Name': s.nameCn || '',
-          'Nickname': s.nickname || '',
-          'SchoolGrade': s.grade || '',
-          'SchoolName': s.school || '',
-          'DateOfBirth': s.birthday || '',
-          'Nationality': s.nationality || '',
-          'Email': s.email || '',
-          'Phone (Emergency_M)': s.phone?.mom || '',
-          'Phone (Emergency_D)': s.phone?.dad || '',
-          'Phone (Emergency_Self)': s.phone?.own || '',
-          'Ship Address': s.address || '',
-          'Overall Status': s.overallStatus || 'Current',
-          'Maths': math.name ? '1' : '',
-          'MStarting': math.startLevel || '',
-          'MStartingNo': math.startWS || '',
-          'MEnrollmentDate': math.enrolDate || '',
-          'MClassDay': math.timeslots?.[0]?.day || '',
-          'MClassTime': math.timeslots?.[0]?.time || '',
-          'MClassDay2': math.timeslots?.[1]?.day || '',
-          'MClassTime2': math.timeslots?.[1]?.time || '',
-          'CurrentMath': math.currentLevel || '',
-          'MathNo': math.currentWS || '',
-          'English': eng.name ? '1' : '',
-          'EStarting': eng.startLevel || '',
-          'EStartingNo': eng.startWS || '',
-          'EEnrollmentDate': eng.enrolDate || '',
-          'EClassDay': eng.timeslots?.[0]?.day || '',
-          'EClassTime': eng.timeslots?.[0]?.time || '',
-          'EClassDay2': eng.timeslots?.[1]?.day || '',
-          'EClassTime2': eng.timeslots?.[1]?.time || '',
-          'CurrentEng': eng.currentLevel || '',
-          'EngNo': eng.currentWS || '',
-          'EFL': efl.name ? '1' : '',
-          'EFLStarting': efl.startLevel || '',
-          'EFLStartingNo': efl.startWS || '',
-          'EFLEnrollmentDate': efl.enrolDate || '',
-          'EFLClassDay': efl.timeslots?.[0]?.day || '',
-          'EFLClassTime': efl.timeslots?.[0]?.time || '',
-          'EFLClassDay2': efl.timeslots?.[1]?.day || '',
-          'EFLClassTime2': efl.timeslots?.[1]?.time || '',
-          'CurrentEFL': efl.currentLevel || '',
-          'EFLNo': efl.currentWS || '',
-          'Chinese': chi.name ? '1' : '',
-          'CStarting': chi.startLevel || '',
-          'CStartingNo': chi.startWS || '',
-          'CEnrollmentDate': chi.enrolDate || '',
-          'CClassDay': chi.timeslots?.[0]?.day || '',
-          'CClassTime': chi.timeslots?.[0]?.time || '',
-          'CClassDay2': chi.timeslots?.[1]?.day || '',
-          'CClassTime2': chi.timeslots?.[1]?.time || '',
-          'CurrentChinese': chi.currentLevel || '',
-          'ChiNo': chi.currentWS || ''
-        });
-      });
-
-      const ws = XLSX.utils.json_to_sheet(rows);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Students");
-      XLSX.writeFile(wb, `Kumon_Students_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
-    } catch (err) {
-      console.error("❌ Export failed:", err);
-      alert("Failed to export students.");
-    } finally {
-      loader?.classList.add('hidden');
-    }
+// Helper to fetch all students once for filtering
+async function fetchAllStudents() {
+  const loader = document.getElementById('page-loader');
+  loader?.classList.remove('hidden');
+  try {
+    const snapshot = await get(studentsRef);
+    if (!snapshot.exists()) return [];
+    const students = [];
+    snapshot.forEach(child => {
+      students.push({ id: child.key, ...child.val() });
+    });
+    return students;
+  } catch (err) {
+    console.error("❌ Fetch failed: ", err);
+    alert("Failed to fetch students.");
+    return [];
+  } finally {
+    loader?.classList.add('hidden');
   }
+}
+
+// Core export function that accepts a filter and filename suffix
+async function exportFilteredStudents(filterFn, filenameSuffix) {
+  const students = await fetchAllStudents();
+  if (students.length === 0) {
+    alert("No students found to export.");
+    return;
+  }
+
+  const filtered = students.filter(filterFn);
+  if (filtered.length === 0) {
+    alert("No students match the selected criteria.");
+    return;
+  }
+
+  const rows = filtered.map(s => {
+    const subs = s.subjects || [];
+    const getSubj = (name) => subs.find(sub => sub.name === name) || {};
+    
+    // Note: Fixed typo from original 'Chinese (Tra d)' to 'Chinese (Trad)'
+    const math = getSubj('Math');
+    const eng = getSubj('English ERP');
+    const efl = getSubj('English EFL');
+    const chi = getSubj('Chinese (Trad)');
+
+    return {
+      'StudentNo': s.studentNumber || '',
+      'Chinese Name (Alphabet)': s.namePinyin || '',
+      'Chinese Name': s.nameCn || '',
+      'Nickname': s.nickname || '',
+      'SchoolGrade': s.grade || '',
+      'SchoolName': s.school || '',
+      'DateOfBirth': s.birthday || '',
+      'Nationality': s.nationality || '',
+      'Email': s.email || '',
+      'Phone (Emergency_M)': s.phone?.mom || '',
+      'Phone (Emergency_D)': s.phone?.dad || '',
+      'Phone (Emergency_Self)': s.phone?.own || '',
+      'Ship Address': s.address || '',
+      'Overall Status': s.overallStatus || 'Current',
+      'Maths': math.name ? '1' : '',
+      'MStarting': math.startLevel || '',
+      'MStartingNo': math.startWS || '',
+      'MEnrollmentDate': math.enrolDate || '',
+      'MClassDay': math.timeslots?.[0]?.day || '',
+      'MClassTime': math.timeslots?.[0]?.time || '',
+      'MClassDay2': math.timeslots?.[1]?.day || '',
+      'MClassTime2': math.timeslots?.[1]?.time || '',
+      'CurrentMath': math.currentLevel || '',
+      'MathNo': math.currentWS || '',
+      'English': eng.name ? '1' : '',
+      'EStarting': eng.startLevel || '',
+      'EStartingNo': eng.startWS || '',
+      'EEnrollmentDate': eng.enrolDate || '',
+      'EClassDay': eng.timeslots?.[0]?.day || '',
+      'EClassTime': eng.timeslots?.[0]?.time || '',
+      'EClassDay2': eng.timeslots?.[1]?.day || '',
+      'EClassTime2': eng.timeslots?.[1]?.time || '',
+      'CurrentEng': eng.currentLevel || '',
+      'EngNo': eng.currentWS || '',
+      'EFL': efl.name ? '1' : '',
+      'EFLStarting': efl.startLevel || '',
+      'EFLStartingNo': efl.startWS || '',
+      'EFLEnrollmentDate': efl.enrolDate || '',
+      'EFLClassDay': efl.timeslots?.[0]?.day || '',
+      'EFLClassTime': efl.timeslots?.[0]?.time || '',
+      'EFLClassDay2': efl.timeslots?.[1]?.day || '',
+      'EFLClassTime2': efl.timeslots?.[1]?.time || '',
+      'CurrentEFL': efl.currentLevel || '',
+      'EFLNo': efl.currentWS || '',
+      'Chinese': chi.name ? '1' : '',
+      'CStarting': chi.startLevel || '',
+      'CStartingNo': chi.startWS || '',
+      'CEnrollmentDate': chi.enrolDate || '',
+      'CClassDay': chi.timeslots?.[0]?.day || '',
+      'CClassTime': chi.timeslots?.[0]?.time || '',
+      'CClassDay2': chi.timeslots?.[1]?.day || '',
+      'CClassTime2': chi.timeslots?.[1]?.time || '',
+      'CurrentChinese': chi.currentLevel || '',
+      'ChiNo': chi.currentWS || ''
+    };
+  });
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Students");
+  XLSX.writeFile(wb, `Kumon_Students_${filenameSuffix}_${new Date().toISOString().split('T')[0]}.xlsx`);
+}
+
+// 1. Export All (Original behavior)
+async function exportStudentsToExcel() {
+  await exportFilteredStudents(() => true, "Export_All");
+}
+
+// 2. Export by Subject
+async function exportBySubject(subject) {
+  await exportFilteredStudents(
+    s => s.subjects && s.subjects.some(sub => sub.name === subject), 
+    `Subject_${subject.replace(/\s+/g, '_')}`
+  );
+}
+
+// 3. Export by School or Grade
+async function exportByFilter(field, value) {
+  await exportFilteredStudents(
+    s => s[field] && String(s[field]).toLowerCase() === String(value).toLowerCase(), 
+    `${field}_${value.replace(/\s+/g, '_')}`
+  );
+}
+
+// 4. Export Names Only (16 per column grid) - Current Students, Chinese Characters, No Duplicates
+async function exportNamesOnlyGrid() {
+  const loader = document.getElementById('page-loader');
+  loader?.classList.remove('hidden');
+  
+  try {
+    const snapshot = await get(studentsRef);
+    if (!snapshot.exists()) {
+      alert("No students found to export.");
+      return;
+    }
+
+    // Use a Set to guarantee absolutely no duplicate names
+    const uniqueNames = new Set();
+
+    snapshot.forEach(child => {
+      const s = child.val();
+      
+      // ✅ FILTER 1: ONLY export "Current" students
+      if (s.overallStatus === 'Current') {
+        // ✅ FILTER 2: Prioritize Chinese Characters (nameCn). 
+        // Falls back to Pinyin ONLY if the Chinese name field is completely blank.
+        const name = (s.nameCn || s.namePinyin || 'Unknown').trim();
+        
+        if (name && name !== 'Unknown') {
+          uniqueNames.add(name);
+        }
+      }
+    });
+
+    // Convert Set back to an Array and sort properly for Chinese characters
+    const names = Array.from(uniqueNames).sort((a, b) => {
+      return a.localeCompare(b, 'zh-Hans'); // Ensures proper Chinese character sorting
+    });
+
+    if (names.length === 0) {
+      alert("No current students with names found to export.");
+      return;
+    }
+
+    const rows = 16;
+    const cols = Math.ceil(names.length / rows);
+    const aoa = []; // Array of Arrays for XLSX
+    
+    // Build the grid: exactly 16 rows, N columns
+    for (let r = 0; r < rows; r++) {
+      const rowData = [];
+      for (let c = 0; c < cols; c++) {
+        const index = (c * rows) + r;
+        rowData.push(index < names.length ? names[index] : '');
+      }
+      aoa.push(rowData);
+    }
+    
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Current Names");
+    XLSX.writeFile(wb, `Kumon_Current_Names_Grid_${new Date().toISOString().split('T')[0]}.xlsx`);
+    
+  } catch (err) {
+    console.error("❌ Export failed: ", err);
+    alert("Failed to export names.");
+  } finally {
+    loader?.classList.add('hidden');
+  }
+}
+
+// ==========================================
+// 🔌 EXPORT MODAL EVENT LISTENERS
+// ==========================================
+
+// Open modal and populate dynamic dropdowns
+async function openExportModal() {
+  const modal = document.getElementById('exportModal');
+  modal?.classList.remove('hidden');
+  
+  const students = await fetchAllStudents();
+  
+  // Get unique, sorted schools and grades
+  const schools = [...new Set(students.map(s => s.school).filter(Boolean))].sort();
+  const grades = [...new Set(students.map(s => s.grade).filter(Boolean))].sort();
+  
+  const schoolSelect = document.getElementById('exportSchoolSelect');
+  if (schoolSelect) {
+    schoolSelect.innerHTML = '<option value="">Select School...</option>' + 
+      schools.map(s => `<option value="${s}">${s}</option>`).join('');
+  }
+  
+  const gradeSelect = document.getElementById('exportGradeSelect');
+  if (gradeSelect) {
+    gradeSelect.innerHTML = '<option value="">Select Grade...</option>' + 
+      grades.map(g => `<option value="${g}">${g}</option>`).join('');
+  }
+}
+
+// Attach listeners
+document.getElementById('exportBtn')?.addEventListener('click', openExportModal);
+
+document.getElementById('closeExportModal')?.addEventListener('click', () => {
+  document.getElementById('exportModal')?.classList.add('hidden');
+});
+
+document.getElementById('exportAllBtn')?.addEventListener('click', async () => {
+  document.getElementById('exportModal')?.classList.add('hidden');
+  await exportStudentsToExcel();
+});
+
+document.getElementById('exportSubjectBtn')?.addEventListener('click', async () => {
+  const subject = document.getElementById('exportSubjectSelect').value;
+  if (!subject) return alert('Please select a subject.');
+  document.getElementById('exportModal')?.classList.add('hidden');
+  await exportBySubject(subject);
+});
+
+document.getElementById('exportNamesOnlyBtn')?.addEventListener('click', async () => {
+  document.getElementById('exportModal')?.classList.add('hidden');
+  await exportNamesOnlyGrid();
+});
+
+document.getElementById('exportSchoolBtn')?.addEventListener('click', async () => {
+  const school = document.getElementById('exportSchoolSelect').value;
+  if (!school) return alert('Please select a school.');
+  document.getElementById('exportModal')?.classList.add('hidden');
+  await exportByFilter('school', school);
+});
+
+document.getElementById('exportGradeBtn')?.addEventListener('click', async () => {
+  const grade = document.getElementById('exportGradeSelect').value;
+  if (!grade) return alert('Please select a grade.');
+  document.getElementById('exportModal')?.classList.add('hidden');
+  await exportByFilter('grade', grade);
+});
 
   // ==========================================
   // 🔌 EVENT LISTENERS
@@ -663,8 +838,6 @@ function initializePage() {
       e.target.value = '';
     });
   }
-
-  document.getElementById('exportBtn')?.addEventListener('click', exportStudentsToExcel);
   
   document.getElementById('closeImportModal')?.addEventListener('click', () => {
     document.getElementById('importProgressModal')?.classList.add('hidden');

@@ -7,6 +7,7 @@ import { ref, get, update, remove } from "https://www.gstatic.com/firebasejs/10.
 let isAdmin = false;
 let poDataMap = {};
 let calendarEventsMap = {}; // Stores holiday events
+let centerName = ""; // ✅ NEW: Stores the center name to determine closed days
 const centerId = sessionStorage.getItem('selectedCenter');
 
 // ============================================
@@ -76,15 +77,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // ✅ NEW: Function to fetch and display the Center Name
-// ✅ NEW: Function to fetch and display the Center Name
 async function loadCenterName() {
   if (!centerId) return;
   try {
     const centerSnap = await get(ref(db, `centers/${centerId}`));
     if (centerSnap.exists()) {
       const centerData = centerSnap.val();
-      // Adjust 'name' or 'centerName' based on your actual Firebase database schema
-      const centerName = centerData.name || centerData.centerName || "Center";
+      
+      // ✅ UPDATED: Save to global variable (removed 'const' to avoid shadowing)
+      centerName = centerData.name || centerData.centerName || "Center";
       
       const calendarNameEl = document.getElementById('calendar-center-name');
       if (calendarNameEl) calendarNameEl.textContent = centerName;
@@ -214,10 +215,19 @@ function renderDualCalendar() {
   renderMonthGrid(nextYear, nextMonth, 'calendarNext', today);
 }
 
+// ✅ NEW: Helper function to get closed days based on center name
+function getClosedDaysForCenter(name) {
+    const lowerName = name.toLowerCase();
+    if (lowerName.includes('mei keng')) return [0]; // 0 = Sunday
+    if (lowerName.includes('pac tat')) return [0, 6]; // 0 = Sunday, 6 = Saturday
+    if (lowerName.includes('champs')) return [0]; // 0 = Sunday
+    if (lowerName.includes('tap siac')) return [2]; // 2 = Tuesday
+    return []; // Default fallback
+}
+
 function renderMonthGrid(year, month, containerId, todayDate) {
   const container = document.getElementById(containerId);
   container.innerHTML = '';
-  
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   days.forEach(day => {
     const header = document.createElement('div');
@@ -228,6 +238,9 @@ function renderMonthGrid(year, month, containerId, todayDate) {
 
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
+  
+  // ✅ NEW: Get closed days for this specific center
+  const closedDays = getClosedDaysForCenter(centerName);
 
   for (let i = 0; i < firstDay; i++) {
     const empty = document.createElement('div');
@@ -240,29 +253,43 @@ function renderMonthGrid(year, month, containerId, todayDate) {
     const cell = document.createElement('div');
     cell.className = 'calendar-day';
     cell.textContent = day;
-    
-    // ✅ Always set dataset.date so admin can click any date
     cell.dataset.date = dateStr;
 
     if (year === todayDate.getFullYear() && month === todayDate.getMonth() && day === todayDate.getDate()) {
       cell.classList.add('today');
     }
 
-    // Apply Holiday Classes (NEW)
+    // ✅ NEW: Check if this day of the week is closed for the center
+    const dayOfWeek = new Date(year, month, day).getDay();
+    const isClosed = closedDays.includes(dayOfWeek);
+
+    // ✅ UPDATED: Apply Holiday Classes (Public & Center)
     const event = calendarEventsMap[dateStr];
     if (event) {
+      if (event.type === 'public') cell.classList.add('has-public-holiday');
       if (event.type === 'center') cell.classList.add('has-center-holiday');
-      if (event.type === 'employee') cell.classList.add('has-employee-holiday');
     }
 
-    // Apply PO Class (EXISTING)
+    // ✅ UPDATED: Apply PO Class & Sync Notes/MUC
     if (poDataMap[dateStr] && poDataMap[dateStr].length > 0) {
       cell.classList.add('has-po');
       let tooltipText = `${poDataMap[dateStr].length} Parent Orientation(s) scheduled`;
-      if (event) tooltipText += ` | ${event.type === 'center' ? 'Center' : 'Employee'} Holiday`;
+      if (event) {
+        let hType = event.type === 'center' ? 'Center' : 'Public';
+        tooltipText += ` | ${hType} Holiday`;
+        if (event.name) tooltipText += `: ${event.name}`; // Synced Holiday Name
+        if (event.muc) tooltipText += ' (MUC)';           // Synced MUC status
+      }
       cell.title = tooltipText;
     } else if (event) {
-      cell.title = `${event.type === 'center' ? 'Center' : 'Employee'} Holiday` + (event.note ? `: ${event.note}` : '');
+      let hType = event.type === 'center' ? 'Center' : 'Public';
+      let titleText = `${hType} Holiday`;
+      if (event.name) titleText += `: ${event.name}`;     // Synced Holiday Name
+      if (event.muc) titleText += ' (MUC)';               // Synced MUC status
+      cell.title = titleText;
+    } else if (isClosed) {
+      // ✅ NEW: Gray out the day if it's a closed day and has no PO/Holiday
+      cell.classList.add('closed-day');
     }
 
     container.appendChild(cell);
@@ -403,7 +430,7 @@ function openPOModal(dateStr) {
     editCalBtn.style.marginTop = '1.5rem';
     editCalBtn.style.background = '#e65100'; // Orange to match Center Holiday
     editCalBtn.style.width = '100%';
-    editCalBtn.textContent = '📅 Edit Center/Employee Holidays for this Date';
+    editCalBtn.textContent = '📅 Edit Center/Public Holidays for this Date';
     editCalBtn.onclick = () => {
       modal.classList.add('hidden'); // Close PO modal
       openEditCalendarModal(dateStr); // Open Edit Calendar modal
@@ -430,7 +457,8 @@ function openEditCalendarModal(dateStr) {
   if (event) {
     const radio = form.querySelector(`input[name="eventType"][value="${event.type}"]`);
     if (radio) radio.checked = true;
-    document.getElementById('calendarNote').value = event.note || '';
+    // ✅ UPDATED: Load the 'name' into the note textarea
+    document.getElementById('calendarNote').value = event.name || ''; 
   } else {
     form.querySelector('input[name="eventType"][value="none"]').checked = true;
   }
@@ -442,22 +470,23 @@ function openEditCalendarModal(dateStr) {
     const eventType = form.querySelector('input[name="eventType"]:checked').value;
     const note = document.getElementById('calendarNote').value.trim();
     const saveBtn = form.querySelector('button[type="submit"]');
-    
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving...';
 
     try {
       if (eventType === 'none') {
-        // ✅ FIX: Use remove() instead of update(..., null) to properly delete the node
         await remove(ref(db, `centers/${centerId}/calendar/${dateStr}`));
         delete calendarEventsMap[dateStr];
       } else {
+        // ✅ UPDATED: Save as 'name' and PRESERVE the 'muc' status from calendar.js
+        const existingEvent = calendarEventsMap[dateStr] || {};
         await update(ref(db, `centers/${centerId}/calendar/${dateStr}`), {
           type: eventType,
-          note: note,
+          name: note, 
+          muc: existingEvent.muc || false, // Prevents dashboard from wiping out MUC
           updatedAt: new Date().toISOString()
         });
-        calendarEventsMap[dateStr] = { type: eventType, note: note };
+        calendarEventsMap[dateStr] = { type: eventType, name: note, muc: existingEvent.muc || false };
       }
       renderDualCalendar();
       modal.classList.add('hidden');
