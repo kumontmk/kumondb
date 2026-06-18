@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Notes - Kumon DB</title>
+    <link rel="stylesheet" href="notes.css">
+</head>
+<body class="notes-page">
+    <header class="app-header">
+        <a href="dashboard.html" class="back-link">← Dashboard</a>
+        <h1>📝 My Notes</h1>
+        <div id="userInfo"></div>
+    </header>
+
+    <main class="container">
+        <div class="notes-header">
+            <h2>Personal Notes & Memos</h2>
+            <button id="addNoteBtn" class="primary">+ Add New Note</button>
+        </div>
+
+        <div id="notesGrid" class="notes-grid">
+            <div class="empty-state">Loading your notes...</div>
+        </div>
+    </main>
+
+    <!-- Add/Edit Note Modal -->
+    <div id="noteModal" class="modal hidden">
+        <div class="modal-content">
+            <h2 id="modalTitle">Add New Note</h2>
+            <form id="noteForm">
+                <input type="hidden" id="noteId">
+                <div class="form-group">
+                    <label for="noteTitleInput">Title *</label>
+                    <input type="text" id="noteTitleInput" required placeholder="e.g., Meeting Minutes, To-Do List">
+                </div>
+                <div class="form-group">
+                    <label>Body *</label>
+                    <!-- Rich Text Toolbar -->
+                    <div class="editor-toolbar">
+                        <button type="button" id="boldBtn" title="Bold (Ctrl+B)"><b>B</b></button>
+                        <button type="button" id="italicBtn" title="Italic (Ctrl+I)"><i>I</i></button>
+                    </div>
+                    <!-- Content Editable Editor -->
+                    <div id="noteBodyInput" contenteditable="true" class="rich-text-editor" data-placeholder="Write your note details here..."></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" id="cancelModal" class="secondary">Cancel</button>
+                    <button type="submit" id="saveNoteBtn" class="primary">Save Note</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- View Note Modal (Wider & Bigger) -->
+    <div id="viewNoteModal" class="modal hidden">
+        <div class="modal-content view-modal-content">
+            <button class="close-view-btn" id="closeViewModal">&times;</button>
+            <h2 id="viewNoteTitle"></h2>
+            <div id="viewNoteMeta" class="note-meta"></div>
+            <div id="viewNoteBody" class="view-note-body"></div>
+            <div class="modal-footer">
+                <button class="secondary" id="viewEditBtn">✏️ Edit</button>
+                <button class="danger" id="viewDeleteBtn">🗑️ Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="notes.js"></script>
+</body>
+</html>

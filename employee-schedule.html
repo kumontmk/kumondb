@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employee Schedule - Kumon DB</title>
+    <link rel="stylesheet" href="employee-schedule.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="centers.html" class="back-link">← Centers</a>
+        </nav>
+        <h1>📅 Employee Schedule</h1>
+    </header>
+
+    <div id="page-loader">
+        <div class="spinner"></div>
+    </div>
+
+    <main class="schedule-dashboard">
+        <div class="schedule-tabs">
+            <button class="tab-btn active" data-tab="admin" id="adminTabBtn">
+                <i class="fas fa-user-tie"></i> Admin View
+            </button>
+            <button class="tab-btn" data-tab="center" id="centerTabBtn">
+                <i class="fas fa-building"></i> Per Center
+            </button>
+            <button class="tab-btn" data-tab="employee" id="employeeTabBtn">
+                <i class="fas fa-user"></i> Employee View
+            </button>
+        </div>
+
+        <!-- ==================== ADMIN TAB ==================== -->
+        <div id="tab-admin" class="tab-content active">
+            <div class="schedule-toolbar">
+                <div class="nav-group">
+                    <button id="prevWeekBtn" class="nav-btn"><i class="fas fa-chevron-left"></i> Prev</button>
+                    <span id="weekRangeDisplay" class="week-range">Loading...</span>
+                    <button id="nextWeekBtn" class="nav-btn">Next <i class="fas fa-chevron-right"></i></button>
+                    <button id="todayBtn" class="nav-btn today-btn">Today</button>
+                </div>
+                <div class="action-group">
+                    <button id="applyPatternBtn" class="action-btn primary">
+                        <i class="fas fa-calendar-check"></i> Apply Patterns to Month
+                    </button>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table id="adminTable" class="schedule-table">
+                    <thead><tr id="adminHeaderRow"></tr></thead>
+                    <tbody id="adminBody"></tbody>
+                </table>
+            </div>
+            <div id="adminEmptyState" class="empty-state hidden">
+                <i class="fas fa-calendar-xmark" style="font-size:3rem;color:#ccc;"></i>
+                <p>No employees found. Add employees first.</p>
+            </div>
+        </div>
+
+        <!-- ==================== PER CENTER TAB ==================== -->
+        <div id="tab-center" class="tab-content">
+            <div class="schedule-toolbar">
+                <div class="nav-group">
+                    <div class="employee-selector">
+                        <label for="centerDropdown"><i class="fas fa-building"></i> Center:</label>
+                        <select id="centerDropdown" class="center-select"></select>
+                    </div>
+                </div>
+                <div class="nav-group">
+                    <button id="centerPrevBtn" class="nav-btn"><i class="fas fa-chevron-left"></i> Prev</button>
+                    <span id="centerWeekRangeDisplay" class="week-range">Loading...</span>
+                    <button id="centerNextBtn" class="nav-btn">Next <i class="fas fa-chevron-right"></i></button>
+                    <button id="centerTodayBtn" class="nav-btn today-btn">Today</button>
+                </div>
+                <div class="action-group">
+                    <button id="printCenterBtn" class="action-btn print-btn">
+                        <i class="fas fa-print"></i> Print Schedule
+                    </button>
+                </div>
+            </div>
+            <div class="table-wrapper" id="centerTableWrapper">
+                <table id="centerTable" class="schedule-table center-view-table">
+                    <thead><tr id="centerHeaderRow"></tr></thead>
+                    <tbody id="centerBody"></tbody>
+                </table>
+            </div>
+            <div id="centerEmptyState" class="empty-state hidden">
+                <i class="fas fa-building-circle-xmark" style="font-size:3rem;color:#ccc;"></i>
+                <p>No employees scheduled at this center for this period.</p>
+            </div>
+        </div>
+
+        <!-- ==================== EMPLOYEE TAB ==================== -->
+        <div id="tab-employee" class="tab-content">
+            <div class="schedule-toolbar">
+                <div class="nav-group">
+                    <div id="employeeSelectorWrap" class="employee-selector hidden">
+                        <label for="employeeDropdown"><i class="fas fa-user"></i> View schedule for:</label>
+                        <select id="employeeDropdown"></select>
+                    </div>
+                </div>
+                <div class="nav-group">
+                    <button id="empPrevWeekBtn" class="nav-btn"><i class="fas fa-chevron-left"></i> Prev</button>
+                    <span id="empWeekRangeDisplay" class="week-range">Loading...</span>
+                    <button id="empNextWeekBtn" class="nav-btn">Next <i class="fas fa-chevron-right"></i></button>
+                    <button id="empTodayBtn" class="nav-btn today-btn">Today</button>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table id="empTable" class="schedule-table">
+                    <thead><tr id="empHeaderRow"></tr></thead>
+                    <tbody id="empBody"></tbody>
+                </table>
+            </div>
+            <div id="empEmptyState" class="empty-state hidden">
+                <i class="fas fa-calendar-xmark" style="font-size:3rem;color:#ccc;"></i>
+                <p>No schedule assigned. Contact your manager.</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- EDIT MODAL -->
+    <div id="scheduleModal" class="modal-overlay hidden">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h2 id="modalTitle">Edit Schedule</h2>
+                <button class="modal-close" id="modalCloseBtn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="modalDateInfo" class="modal-date-info"></div>
+                <div id="modalWarnings" class="modal-warnings"></div>
+
+                <!-- Dynamic Shifts -->
+                <fieldset class="shift-group">
+                    <legend>🕐 Shifts</legend>
+                    <div id="shiftsContainer" class="shifts-container"></div>
+                    <button type="button" id="addShiftBtn" class="add-shift-btn">
+                        <i class="fas fa-plus"></i> Add Shift
+                    </button>
+                </fieldset>
+
+                <!-- Status -->
+                <fieldset class="shift-group">
+                    <legend>📌 Status</legend>
+                    <div class="shift-fields">
+                        <label>Status
+                            <select id="scheduleStatus" class="center-select">
+                                <option value="scheduled">Scheduled</option>
+                                <option value="other-center">Other Centers</option>
+                                <option value="leave">On Leave</option>
+                                <option value="sick">Sick</option>
+                                <option value="off">Day Off</option>
+                            </select>
+                        </label>
+                    </div>
+                </fieldset>
+
+                <!-- Notes -->
+                <fieldset class="shift-group">
+                    <legend>📝 Notes</legend>
+                    <textarea id="scheduleNotes" rows="2" placeholder="Optional notes..."></textarea>
+                </fieldset>
+
+                <!-- Save as pattern -->
+                <div class="pattern-option">
+                    <label>
+                        <input type="checkbox" id="saveAsPattern">
+                        Save as recurring pattern for every <strong id="patternDayName">Monday</strong>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="clearDayBtn" class="btn-danger"><i class="fas fa-trash"></i> Clear Day</button>
+                <div class="modal-footer-right">
+                    <button id="cancelModalBtn" class="btn-secondary">Cancel</button>
+                    <button id="saveScheduleBtn" class="btn-primary"><i class="fas fa-save"></i> Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script type="module" src="employee-schedule.js"></script>
+</body>
+</html>
