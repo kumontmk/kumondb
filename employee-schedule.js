@@ -1459,20 +1459,18 @@ function printCenterSchedule() {
 
     // Build print HTML
     let html = `
-    <div id="printArea">
-        <div class="print-header">
-            <h1>${centerNamePrint} — Employee Schedule</h1>
-            <p class="print-subtitle">Kumon Learning Center</p>
-            <p class="print-date-range">${dateRangeStr}</p>
-        </div>
+    <div class="print-header">
+        <h1>${centerNamePrint} — Employee Schedule</h1>
+        <p class="print-subtitle">Kumon Learning Center</p>
+        <p class="print-date-range">${dateRangeStr}</p>
+    </div>
 
-        <div class="print-table-wrapper">
-            <table class="print-schedule-table">
-                <thead>
-                    <tr>
-                        <th class="employee-col">Employee</th>`;
+    <div class="print-table-wrapper">
+        <table class="print-schedule-table">
+            <thead>
+                <tr>
+                    <th class="employee-col">Employee</th>`;
 
-    // Header row
     dates.forEach((d, idx) => {
         const dateObj = parseDate(d);
         const dow = dateObj.getDay();
@@ -1494,7 +1492,6 @@ function printCenterSchedule() {
 
     html += `</tr></thead><tbody>`;
 
-    // Body rows
     let lastTerms = null;
     const dailyCounts = {};
     dates.forEach(d => dailyCounts[d] = 0);
@@ -1539,17 +1536,11 @@ function printCenterSchedule() {
                 const status = sched.status || 'scheduled';
 
                 if (status !== 'scheduled') {
-                    const statusLabels = {
-                        'other-center': '📍 Other',
-                        'leave': '🏖 Leave',
-                        'sick': '🤒 Sick',
-                        'off': '😴 Off'
-                    };
+                    const statusLabels = { 'other-center': '📍 Other', 'leave': '🏖 Leave', 'sick': '🤒 Sick', 'off': '😴 Off' };
                     const statusCls = status === 'leave' ? 'leave' : status === 'sick' ? 'sick' : status === 'off' ? 'off' : 'other';
                     cellContent = `<span class="print-status ${statusCls}">${statusLabels[status] || status}</span>`;
-                    // ✅ FIX: Don't increment dailyCounts for leave/sick/off
                 } else if (centerShifts.length > 0) {
-                    dailyCounts[dateStr]++;  // ✅ Only count if actually has shifts
+                    dailyCounts[dateStr]++;
                     const sortedShifts = [...centerShifts].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
                     sortedShifts.forEach(s => {
                         if (s.type === 'break') {
@@ -1567,33 +1558,23 @@ function printCenterSchedule() {
                     cellContent = '—';
                 }
             } else {
-                if (isClosed) {
-                    cellContent = '<span style="color:#999;font-size:6pt;">Closed</span>';
-                } else if (isHoliday) {
-                    cellContent = `<span style="color:#e74c3c;font-size:6pt;">🎌 ${event.name || ''}</span>`;
-                } else {
-                    cellCls += ' empty-cell';
-                    cellContent = '—';
-                }
+                if (isClosed) cellContent = '<span style="color:#999;font-size:6pt;">Closed</span>';
+                else if (isHoliday) cellContent = `<span style="color:#e74c3c;font-size:6pt;">🎌 ${event.name || ''}</span>`;
+                else { cellCls += ' empty-cell'; cellContent = '—'; }
             }
 
             html += `<td class="${cellCls}">${cellContent}</td>`;
         });
-
         html += '</tr>';
     });
 
-    // Summary row
     html += `<tr class="summary-row"><td>Staff Count</td>`;
     dates.forEach((d, idx) => {
         const sep = idx === 7 ? ' week-sep' : '';
         html += `<td class="${sep}">${dailyCounts[d]}</td>`;
     });
-    html += '</tr>';
+    html += '</tr></tbody></table></div>';
 
-    html += `</tbody></table></div>`;
-
-    // Legend
     html += `
         <div class="print-legend">
             <div class="print-legend-item"><span class="print-legend-color" style="background:#3498db;"></span> MK</div>
@@ -1605,22 +1586,21 @@ function printCenterSchedule() {
         </div>
         <div class="print-footer">
             Printed: ${new Date().toLocaleString()} | Kumon DB Employee Schedule System
-        </div>
-    </div>`;
+        </div>`;
 
-    // Inject into DOM temporarily
-    const printContainer = document.createElement('div');
-    printContainer.innerHTML = html;
-    document.body.appendChild(printContainer);
+    // ✅ INJECT INTO THE EXISTING HIDDEN CONTAINER (No screen flash!)
+    const printArea = document.getElementById('printArea');
+    if (printArea) {
+        printArea.innerHTML = html;
+    }
 
-    // Print
+    // ✅ TRIGGER BROWSER PRINT DIALOG IMMEDIATELY
+    window.print();
+
+    // ✅ CLEAN UP AFTER PRINT DIALOG CLOSES
     setTimeout(() => {
-        window.print();
-        // Clean up after print dialog
-        setTimeout(() => {
-            document.body.removeChild(printContainer);
-        }, 500);
-    }, 300);
+        if (printArea) printArea.innerHTML = '';
+    }, 1000);
 }
 
 // ============================================
