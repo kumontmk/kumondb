@@ -264,3 +264,76 @@ tr:hover { background-color: #f8fafc; }
 .access-denied .primary { 
   margin-top: 1.5rem; 
 }
+
+/* ============================================
+🗂️  TAB NAVIGATION
+============================================ */
+.tabs {
+    display: flex;
+    gap: 0.25rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid #e2e8f0;
+    flex-wrap: wrap;
+}
+.tab-btn {
+    background: transparent;
+    color: var(--text-light);
+    border: none;
+    border-bottom: 3px solid transparent;
+    padding: 0.85rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-radius: 0;
+    margin-bottom: -2px;
+}
+.tab-btn:hover {
+    color: var(--primary-dark);
+    background: rgba(135, 206, 235, 0.08);
+}
+.tab-btn.active {
+    color: var(--primary-dark);
+    border-bottom-color: var(--primary-dark);
+    background: rgba(135, 206, 235, 0.1);
+}
+
+.tab-content {
+    display: none;
+    animation: fadeIn 0.25s ease;
+}
+.tab-content.active {
+    display: block;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================
+✅ DT STATUS BADGES
+============================================ */
+.dt-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 14px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.dt-yes {
+    background: #d1fae5;
+    color: #065f46;
+}
+.dt-no {
+    background: #fee2e2;
+    color: #991b1b;
+}
+.dt-partial {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.hidden { display: none !important; }

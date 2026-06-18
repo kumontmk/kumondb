@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Follow Ups - Kumon DB</title>
+    <link rel="stylesheet" href="follow-ups.css">
+</head>
+<body>
+    <header>
+        <a href="dashboard.html">← Dashboard</a>
+        <h1>📋 Follow Ups</h1>
+        <button id="refreshBtn" title="Refresh">🔄 Refresh</button>
+    </header>
+
+    <!-- 🔐 Access Denied Screen -->
+    <div id="accessDenied" class="access-denied hidden">
+        <div class="access-denied-content">
+            <h2>🔐 Access Restricted</h2>
+            <p>You do not have permission to view Follow Ups.</p>
+            <button id="backToDashboardBtn" class="primary">← Back to Dashboard</button>
+        </div>
+    </div>
+
+    <div id="mainContent" class="hidden">
+        <div class="po-container">
+            <!-- ✅ TAB NAVIGATION -->
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="po">
+                    📝 Pending Parent Orientation
+                </button>
+                <button class="tab-btn" data-tab="inquiries">
+                    🔍 Inquiries
+                </button>
+            </div>
+
+            <!-- Controls -->
+            <div class="controls">
+                <input type="text" id="searchInput" placeholder="🔍 Search students...">
+            </div>
+
+            <!-- TAB 1: PENDING PARENT ORIENTATION -->
+            <div id="tab-po" class="tab-content active">
+                <div class="table-wrapper" style="position: relative;">
+                    <table id="poTable">
+                        <thead>
+                            <tr>
+                                <th>Student Name</th>
+                                <th>Chinese Name</th>
+                                <th>Nickname</th>
+                                <th>Grade</th>
+                                <th>Subjects & Levels</th>
+                                <th>Enrol Date</th>
+                                <th>Reason / Notes</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="poTableBody">
+                            <tr><td colspan="8" class="empty-state">Loading students...</td></tr>
+                        </tbody>
+                    </table>
+                    <div id="noResults" class="empty-state">
+                        No students pending orientation.
+                    </div>
+                    <div id="poLoader" class="loader-overlay hidden">
+                        <div class="spinner"></div>
+                        <p>Loading...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: INQUIRIES -->
+            <div id="tab-inquiries" class="tab-content">
+                <div class="table-wrapper" style="position: relative;">
+                    <table id="inquiryTable">
+                        <thead>
+                            <tr>
+                                <th>Student Name</th>
+                                <th>Chinese Name</th>
+                                <th>Nickname</th>
+                                <th>Grade</th>
+                                <th>Subjects & Levels</th>
+                                <th>Inquiry Date</th>
+                                <th>DT</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inquiryTableBody">
+                            <tr><td colspan="8" class="empty-state">Loading inquiries...</td></tr>
+                        </tbody>
+                    </table>
+                    <div id="noInquiryResults" class="empty-state">
+                        No inquiries found.
+                    </div>
+                    <div id="inquiryLoader" class="loader-overlay hidden">
+                        <div class="spinner"></div>
+                        <p>Loading...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="follow-ups.js"></script>
+</body>
+</html>

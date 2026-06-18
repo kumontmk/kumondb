@@ -125,7 +125,7 @@ async function applyDashboardPermissions(user) {
       'card-monthlyReports': 'monthlyReports',
       'card-progressCharts': 'progressCharts',
       'card-attendance': 'attendance',
-      'card-parentOrientation': 'parentOrientation'
+      'card-followUps': 'parentOrientation'
     };
 
     for (const [cardId, permKey] of Object.entries(cardMap)) {

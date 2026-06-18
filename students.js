@@ -1,5 +1,4 @@
 import { auth, db, logout } from './auth.js';
-// ✅ 1. Added 'remove' to the Firebase imports
 import { ref, get, push, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
@@ -25,18 +24,13 @@ onAuthStateChanged(auth, async (user) => {
     const isAdmin = user.email?.toLowerCase() === 'kumonchamps@gmail.com';
     const dashPerms = userData.permissions?.dashboardCards || {};
 
-    // Check if user is admin OR has the specific permission
     const hasAccess = isAdmin || dashPerms[REQUIRED_PERMISSION] === true;
 
     if (hasAccess) {
-      // ✅ ALLOWED: Show content, hide error
       document.getElementById('accessDenied')?.classList.add('hidden');
       document.getElementById('mainContent')?.classList.remove('hidden');
-      
-      // ✅ 2. Pass isAdmin to initializePage
       initializePage(isAdmin);
     } else {
-      // 🚫 BLOCKED: Hide content, show error
       document.getElementById('accessDenied')?.classList.remove('hidden');
       document.getElementById('mainContent')?.classList.add('hidden');
       document.getElementById('page-loader')?.classList.add('hidden');
@@ -54,12 +48,10 @@ onAuthStateChanged(auth, async (user) => {
 // ==========================================
 // 📄 MAIN APP LOGIC (Only runs if authorized)
 // ==========================================
-// ✅ 3. Accept isAdmin parameter
 function initializePage(isAdmin = false) {
   const centerId = sessionStorage.getItem('selectedCenter');
   const studentsRef = ref(db, `centers/${centerId}/students`);
 
-  // ✅ Show delete button only for admin
   if (isAdmin) {
     document.getElementById('deleteAllBtn')?.classList.remove('hidden');
   }
@@ -288,8 +280,20 @@ function initializePage(isAdmin = false) {
       snapshot.forEach(child => {
         const student = child.val();
         const id = child.key;
-        const overallStatus = student.overallStatus || (student.subjects?.length > 0 ? 'Current' : 'Drop');
         
+        // ✅ DYNAMICALLY CALCULATE overallStatus based on actual subjects
+        let overallStatus = student.overallStatus;
+        if (student.subjects && Array.isArray(student.subjects) && student.subjects.length > 0) {
+          const hasCurrent = student.subjects.some(sub => sub.status === 'current');
+          const hasInquiry = student.subjects.some(sub => sub.status === 'inquiry');
+          
+          if (hasCurrent) overallStatus = 'Current';
+          else if (hasInquiry) overallStatus = 'Inquiry';
+          else overallStatus = 'Drop';
+        } else if (!overallStatus) {
+          overallStatus = 'Drop';
+        }
+
         if (student.subjects && Array.isArray(student.subjects)) {
           student.subjects.forEach(sub => {
             allRows.push({
@@ -298,7 +302,7 @@ function initializePage(isAdmin = false) {
               level: sub.startLevel || '-',
               enrolDate: sub.enrolDate || '-',
               subjectStatus: sub.status || overallStatus,
-              overallStatus,
+              overallStatus, 
               rawDob: student.birthday || '',
               rawEnrolDate: sub.enrolDate || ''
             });
@@ -307,7 +311,8 @@ function initializePage(isAdmin = false) {
           allRows.push({
             ...student, id,
             subjectName: '-', level: '-', enrolDate: '-',
-            subjectStatus: 'Drop', overallStatus: 'Drop',
+            subjectStatus: overallStatus, 
+            overallStatus: overallStatus,
             rawDob: student.birthday || '',
             rawEnrolDate: ''
           });
@@ -316,10 +321,11 @@ function initializePage(isAdmin = false) {
 
       allStudentsData = allRows;
 
+      // ✅ THE FIX IS HERE: Changed r.overallStatus to r.subjectStatus
       const statusFilter = document.getElementById('filter-status')?.value || 'current';
       let filtered = statusFilter === 'all' 
         ? allRows 
-        : allRows.filter(r => (r.overallStatus || 'Current').toLowerCase() === statusFilter);
+        : allRows.filter(r => (r.subjectStatus || 'current').toLowerCase() === statusFilter);
 
       const subjectFilter = document.getElementById('filter-subject')?.value || '';
       if (subjectFilter) filtered = filtered.filter(r => r.subjectName === subjectFilter);
@@ -513,272 +519,263 @@ function initializePage(isAdmin = false) {
   // ==========================================
   // 📤 EXCEL EXPORT LOGIC
   // ==========================================
-// ==========================================
-// 📤 ENHANCED EXCEL EXPORT LOGIC
-// ==========================================
-
-// Helper to fetch all students once for filtering
-async function fetchAllStudents() {
-  const loader = document.getElementById('page-loader');
-  loader?.classList.remove('hidden');
-  try {
-    const snapshot = await get(studentsRef);
-    if (!snapshot.exists()) return [];
-    const students = [];
-    snapshot.forEach(child => {
-      students.push({ id: child.key, ...child.val() });
-    });
-    return students;
-  } catch (err) {
-    console.error("❌ Fetch failed: ", err);
-    alert("Failed to fetch students.");
-    return [];
-  } finally {
-    loader?.classList.add('hidden');
-  }
-}
-
-// Core export function that accepts a filter and filename suffix
-async function exportFilteredStudents(filterFn, filenameSuffix) {
-  const students = await fetchAllStudents();
-  if (students.length === 0) {
-    alert("No students found to export.");
-    return;
+  async function fetchAllStudents() {
+    const loader = document.getElementById('page-loader');
+    loader?.classList.remove('hidden');
+    try {
+      const snapshot = await get(studentsRef);
+      if (!snapshot.exists()) return [];
+      const students = [];
+      snapshot.forEach(child => {
+        students.push({ id: child.key, ...child.val() });
+      });
+      return students;
+    } catch (err) {
+      console.error("❌ Fetch failed: ", err);
+      alert("Failed to fetch students.");
+      return [];
+    } finally {
+      loader?.classList.add('hidden');
+    }
   }
 
-  const filtered = students.filter(filterFn);
-  if (filtered.length === 0) {
-    alert("No students match the selected criteria.");
-    return;
-  }
-
-  const rows = filtered.map(s => {
-    const subs = s.subjects || [];
-    const getSubj = (name) => subs.find(sub => sub.name === name) || {};
-    
-    // Note: Fixed typo from original 'Chinese (Tra d)' to 'Chinese (Trad)'
-    const math = getSubj('Math');
-    const eng = getSubj('English ERP');
-    const efl = getSubj('English EFL');
-    const chi = getSubj('Chinese (Trad)');
-
-    return {
-      'StudentNo': s.studentNumber || '',
-      'Chinese Name (Alphabet)': s.namePinyin || '',
-      'Chinese Name': s.nameCn || '',
-      'Nickname': s.nickname || '',
-      'SchoolGrade': s.grade || '',
-      'SchoolName': s.school || '',
-      'DateOfBirth': s.birthday || '',
-      'Nationality': s.nationality || '',
-      'Email': s.email || '',
-      'Phone (Emergency_M)': s.phone?.mom || '',
-      'Phone (Emergency_D)': s.phone?.dad || '',
-      'Phone (Emergency_Self)': s.phone?.own || '',
-      'Ship Address': s.address || '',
-      'Overall Status': s.overallStatus || 'Current',
-      'Maths': math.name ? '1' : '',
-      'MStarting': math.startLevel || '',
-      'MStartingNo': math.startWS || '',
-      'MEnrollmentDate': math.enrolDate || '',
-      'MClassDay': math.timeslots?.[0]?.day || '',
-      'MClassTime': math.timeslots?.[0]?.time || '',
-      'MClassDay2': math.timeslots?.[1]?.day || '',
-      'MClassTime2': math.timeslots?.[1]?.time || '',
-      'CurrentMath': math.currentLevel || '',
-      'MathNo': math.currentWS || '',
-      'English': eng.name ? '1' : '',
-      'EStarting': eng.startLevel || '',
-      'EStartingNo': eng.startWS || '',
-      'EEnrollmentDate': eng.enrolDate || '',
-      'EClassDay': eng.timeslots?.[0]?.day || '',
-      'EClassTime': eng.timeslots?.[0]?.time || '',
-      'EClassDay2': eng.timeslots?.[1]?.day || '',
-      'EClassTime2': eng.timeslots?.[1]?.time || '',
-      'CurrentEng': eng.currentLevel || '',
-      'EngNo': eng.currentWS || '',
-      'EFL': efl.name ? '1' : '',
-      'EFLStarting': efl.startLevel || '',
-      'EFLStartingNo': efl.startWS || '',
-      'EFLEnrollmentDate': efl.enrolDate || '',
-      'EFLClassDay': efl.timeslots?.[0]?.day || '',
-      'EFLClassTime': efl.timeslots?.[0]?.time || '',
-      'EFLClassDay2': efl.timeslots?.[1]?.day || '',
-      'EFLClassTime2': efl.timeslots?.[1]?.time || '',
-      'CurrentEFL': efl.currentLevel || '',
-      'EFLNo': efl.currentWS || '',
-      'Chinese': chi.name ? '1' : '',
-      'CStarting': chi.startLevel || '',
-      'CStartingNo': chi.startWS || '',
-      'CEnrollmentDate': chi.enrolDate || '',
-      'CClassDay': chi.timeslots?.[0]?.day || '',
-      'CClassTime': chi.timeslots?.[0]?.time || '',
-      'CClassDay2': chi.timeslots?.[1]?.day || '',
-      'CClassTime2': chi.timeslots?.[1]?.time || '',
-      'CurrentChinese': chi.currentLevel || '',
-      'ChiNo': chi.currentWS || ''
-    };
-  });
-
-  const ws = XLSX.utils.json_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Students");
-  XLSX.writeFile(wb, `Kumon_Students_${filenameSuffix}_${new Date().toISOString().split('T')[0]}.xlsx`);
-}
-
-// 1. Export All (Original behavior)
-async function exportStudentsToExcel() {
-  await exportFilteredStudents(() => true, "Export_All");
-}
-
-// 2. Export by Subject
-async function exportBySubject(subject) {
-  await exportFilteredStudents(
-    s => s.subjects && s.subjects.some(sub => sub.name === subject), 
-    `Subject_${subject.replace(/\s+/g, '_')}`
-  );
-}
-
-// 3. Export by School or Grade
-async function exportByFilter(field, value) {
-  await exportFilteredStudents(
-    s => s[field] && String(s[field]).toLowerCase() === String(value).toLowerCase(), 
-    `${field}_${value.replace(/\s+/g, '_')}`
-  );
-}
-
-// 4. Export Names Only (16 per column grid) - Current Students, Chinese Characters, No Duplicates
-async function exportNamesOnlyGrid() {
-  const loader = document.getElementById('page-loader');
-  loader?.classList.remove('hidden');
-  
-  try {
-    const snapshot = await get(studentsRef);
-    if (!snapshot.exists()) {
+  async function exportFilteredStudents(filterFn, filenameSuffix) {
+    const students = await fetchAllStudents();
+    if (students.length === 0) {
       alert("No students found to export.");
       return;
     }
 
-    // Use a Set to guarantee absolutely no duplicate names
-    const uniqueNames = new Set();
-
-    snapshot.forEach(child => {
-      const s = child.val();
-      
-      // ✅ FILTER 1: ONLY export "Current" students
-      if (s.overallStatus === 'Current') {
-        // ✅ FILTER 2: Prioritize Chinese Characters (nameCn). 
-        // Falls back to Pinyin ONLY if the Chinese name field is completely blank.
-        const name = (s.nameCn || s.namePinyin || 'Unknown').trim();
-        
-        if (name && name !== 'Unknown') {
-          uniqueNames.add(name);
-        }
-      }
-    });
-
-    // Convert Set back to an Array and sort properly for Chinese characters
-    const names = Array.from(uniqueNames).sort((a, b) => {
-      return a.localeCompare(b, 'zh-Hans'); // Ensures proper Chinese character sorting
-    });
-
-    if (names.length === 0) {
-      alert("No current students with names found to export.");
+    const filtered = students.filter(filterFn);
+    if (filtered.length === 0) {
+      alert("No students match the selected criteria.");
       return;
     }
 
-    const rows = 16;
-    const cols = Math.ceil(names.length / rows);
-    const aoa = []; // Array of Arrays for XLSX
+    const rows = filtered.map(s => {
+      const subs = s.subjects || [];
+      const getSubj = (name) => subs.find(sub => sub.name === name) || {};
+      
+      const math = getSubj('Math');
+      const eng = getSubj('English ERP');
+      const efl = getSubj('English EFL');
+      const chi = getSubj('Chinese (Trad)');
+
+      return {
+        'StudentNo': s.studentNumber || '',
+        'Chinese Name (Alphabet)': s.namePinyin || '',
+        'Chinese Name': s.nameCn || '',
+        'Nickname': s.nickname || '',
+        'SchoolGrade': s.grade || '',
+        'SchoolName': s.school || '',
+        'DateOfBirth': s.birthday || '',
+        'Nationality': s.nationality || '',
+        'Email': s.email || '',
+        'Phone (Emergency_M)': s.phone?.mom || '',
+        'Phone (Emergency_D)': s.phone?.dad || '',
+        'Phone (Emergency_Self)': s.phone?.own || '',
+        'Ship Address': s.address || '',
+        'Overall Status': s.overallStatus || 'Current',
+        'Maths': math.name ? '1' : '',
+        'MStarting': math.startLevel || '',
+        'MStartingNo': math.startWS || '',
+        'MEnrollmentDate': math.enrolDate || '',
+        'MClassDay': math.timeslots?.[0]?.day || '',
+        'MClassTime': math.timeslots?.[0]?.time || '',
+        'MClassDay2': math.timeslots?.[1]?.day || '',
+        'MClassTime2': math.timeslots?.[1]?.time || '',
+        'CurrentMath': math.currentLevel || '',
+        'MathNo': math.currentWS || '',
+        'English': eng.name ? '1' : '',
+        'EStarting': eng.startLevel || '',
+        'EStartingNo': eng.startWS || '',
+        'EEnrollmentDate': eng.enrolDate || '',
+        'EClassDay': eng.timeslots?.[0]?.day || '',
+        'EClassTime': eng.timeslots?.[0]?.time || '',
+        'EClassDay2': eng.timeslots?.[1]?.day || '',
+        'EClassTime2': eng.timeslots?.[1]?.time || '',
+        'CurrentEng': eng.currentLevel || '',
+        'EngNo': eng.currentWS || '',
+        'EFL': efl.name ? '1' : '',
+        'EFLStarting': efl.startLevel || '',
+        'EFLStartingNo': efl.startWS || '',
+        'EFLEnrollmentDate': efl.enrolDate || '',
+        'EFLClassDay': efl.timeslots?.[0]?.day || '',
+        'EFLClassTime': efl.timeslots?.[0]?.time || '',
+        'EFLClassDay2': efl.timeslots?.[1]?.day || '',
+        'EFLClassTime2': efl.timeslots?.[1]?.time || '',
+        'CurrentEFL': efl.currentLevel || '',
+        'EFLNo': efl.currentWS || '',
+        'Chinese': chi.name ? '1' : '',
+        'CStarting': chi.startLevel || '',
+        'CStartingNo': chi.startWS || '',
+        'CEnrollmentDate': chi.enrolDate || '',
+        'CClassDay': chi.timeslots?.[0]?.day || '',
+        'CClassTime': chi.timeslots?.[0]?.time || '',
+        'CClassDay2': chi.timeslots?.[1]?.day || '',
+        'CClassTime2': chi.timeslots?.[1]?.time || '',
+        'CurrentChinese': chi.currentLevel || '',
+        'ChiNo': chi.currentWS || ''
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Students");
+    XLSX.writeFile(wb, `Kumon_Students_${filenameSuffix}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  }
+
+  async function exportStudentsToExcel() {
+    await exportFilteredStudents(() => true, "Export_All");
+  }
+
+  async function exportBySubject(subject) {
+    await exportFilteredStudents(
+      s => s.subjects && s.subjects.some(sub => sub.name === subject), 
+      `Subject_${subject.replace(/\s+/g, '_')}`
+    );
+  }
+
+  async function exportByFilter(field, value) {
+    await exportFilteredStudents(
+      s => s[field] && String(s[field]).toLowerCase() === String(value).toLowerCase(), 
+      `${field}_${value.replace(/\s+/g, '_')}`
+    );
+  }
+
+  async function exportNamesOnlyGrid() {
+    const loader = document.getElementById('page-loader');
+    loader?.classList.remove('hidden');
     
-    // Build the grid: exactly 16 rows, N columns
-    for (let r = 0; r < rows; r++) {
-      const rowData = [];
-      for (let c = 0; c < cols; c++) {
-        const index = (c * rows) + r;
-        rowData.push(index < names.length ? names[index] : '');
+    try {
+      const snapshot = await get(studentsRef);
+      if (!snapshot.exists()) {
+        alert("No students found to export.");
+        return;
       }
-      aoa.push(rowData);
+
+      const uniqueNames = new Set();
+
+      snapshot.forEach(child => {
+        const s = child.val();
+        
+        // ✅ DYNAMICALLY CALCULATE overallStatus for accurate filtering
+        let overallStatus = s.overallStatus;
+        if (s.subjects && Array.isArray(s.subjects) && s.subjects.length > 0) {
+          const hasCurrent = s.subjects.some(sub => sub.status === 'current');
+          const hasInquiry = s.subjects.some(sub => sub.status === 'inquiry');
+          
+          if (hasCurrent) overallStatus = 'Current';
+          else if (hasInquiry) overallStatus = 'Inquiry';
+          else overallStatus = 'Drop';
+        }
+
+        // ✅ FILTER 1: ONLY export "Current" students
+        if (overallStatus === 'Current') {
+          const name = (s.nameCn || s.namePinyin || 'Unknown').trim();
+          
+          if (name && name !== 'Unknown') {
+            uniqueNames.add(name);
+          }
+        }
+      });
+
+      const names = Array.from(uniqueNames).sort((a, b) => {
+        return a.localeCompare(b, 'zh-Hans'); 
+      });
+
+      if (names.length === 0) {
+        alert("No current students with names found to export.");
+        return;
+      }
+
+      const rows = 16;
+      const cols = Math.ceil(names.length / rows);
+      const aoa = []; 
+      
+      for (let r = 0; r < rows; r++) {
+        const rowData = [];
+        for (let c = 0; c < cols; c++) {
+          const index = (c * rows) + r;
+          rowData.push(index < names.length ? names[index] : '');
+        }
+        aoa.push(rowData);
+      }
+      
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Current Names");
+      XLSX.writeFile(wb, `Kumon_Current_Names_Grid_${new Date().toISOString().split('T')[0]}.xlsx`);
+      
+    } catch (err) {
+      console.error("❌ Export failed: ", err);
+      alert("Failed to export names.");
+    } finally {
+      loader?.classList.add('hidden');
+    }
+  }
+
+  // ==========================================
+  // 🔌 EXPORT MODAL EVENT LISTENERS
+  // ==========================================
+  async function openExportModal() {
+    const modal = document.getElementById('exportModal');
+    modal?.classList.remove('hidden');
+    
+    const students = await fetchAllStudents();
+    
+    const schools = [...new Set(students.map(s => s.school).filter(Boolean))].sort();
+    const grades = [...new Set(students.map(s => s.grade).filter(Boolean))].sort();
+    
+    const schoolSelect = document.getElementById('exportSchoolSelect');
+    if (schoolSelect) {
+      schoolSelect.innerHTML = '<option value="">Select School...</option>' + 
+        schools.map(s => `<option value="${s}">${s}</option>`).join('');
     }
     
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Current Names");
-    XLSX.writeFile(wb, `Kumon_Current_Names_Grid_${new Date().toISOString().split('T')[0]}.xlsx`);
-    
-  } catch (err) {
-    console.error("❌ Export failed: ", err);
-    alert("Failed to export names.");
-  } finally {
-    loader?.classList.add('hidden');
+    const gradeSelect = document.getElementById('exportGradeSelect');
+    if (gradeSelect) {
+      gradeSelect.innerHTML = '<option value="">Select Grade...</option>' + 
+        grades.map(g => `<option value="${g}">${g}</option>`).join('');
+    }
   }
-}
 
-// ==========================================
-// 🔌 EXPORT MODAL EVENT LISTENERS
-// ==========================================
+  document.getElementById('exportBtn')?.addEventListener('click', openExportModal);
 
-// Open modal and populate dynamic dropdowns
-async function openExportModal() {
-  const modal = document.getElementById('exportModal');
-  modal?.classList.remove('hidden');
-  
-  const students = await fetchAllStudents();
-  
-  // Get unique, sorted schools and grades
-  const schools = [...new Set(students.map(s => s.school).filter(Boolean))].sort();
-  const grades = [...new Set(students.map(s => s.grade).filter(Boolean))].sort();
-  
-  const schoolSelect = document.getElementById('exportSchoolSelect');
-  if (schoolSelect) {
-    schoolSelect.innerHTML = '<option value="">Select School...</option>' + 
-      schools.map(s => `<option value="${s}">${s}</option>`).join('');
-  }
-  
-  const gradeSelect = document.getElementById('exportGradeSelect');
-  if (gradeSelect) {
-    gradeSelect.innerHTML = '<option value="">Select Grade...</option>' + 
-      grades.map(g => `<option value="${g}">${g}</option>`).join('');
-  }
-}
+  document.getElementById('closeExportModal')?.addEventListener('click', () => {
+    document.getElementById('exportModal')?.classList.add('hidden');
+  });
 
-// Attach listeners
-document.getElementById('exportBtn')?.addEventListener('click', openExportModal);
+  document.getElementById('exportAllBtn')?.addEventListener('click', async () => {
+    document.getElementById('exportModal')?.classList.add('hidden');
+    await exportStudentsToExcel();
+  });
 
-document.getElementById('closeExportModal')?.addEventListener('click', () => {
-  document.getElementById('exportModal')?.classList.add('hidden');
-});
+  document.getElementById('exportSubjectBtn')?.addEventListener('click', async () => {
+    const subject = document.getElementById('exportSubjectSelect').value;
+    if (!subject) return alert('Please select a subject.');
+    document.getElementById('exportModal')?.classList.add('hidden');
+    await exportBySubject(subject);
+  });
 
-document.getElementById('exportAllBtn')?.addEventListener('click', async () => {
-  document.getElementById('exportModal')?.classList.add('hidden');
-  await exportStudentsToExcel();
-});
+  document.getElementById('exportNamesOnlyBtn')?.addEventListener('click', async () => {
+    document.getElementById('exportModal')?.classList.add('hidden');
+    await exportNamesOnlyGrid();
+  });
 
-document.getElementById('exportSubjectBtn')?.addEventListener('click', async () => {
-  const subject = document.getElementById('exportSubjectSelect').value;
-  if (!subject) return alert('Please select a subject.');
-  document.getElementById('exportModal')?.classList.add('hidden');
-  await exportBySubject(subject);
-});
+  document.getElementById('exportSchoolBtn')?.addEventListener('click', async () => {
+    const school = document.getElementById('exportSchoolSelect').value;
+    if (!school) return alert('Please select a school.');
+    document.getElementById('exportModal')?.classList.add('hidden');
+    await exportByFilter('school', school);
+  });
 
-document.getElementById('exportNamesOnlyBtn')?.addEventListener('click', async () => {
-  document.getElementById('exportModal')?.classList.add('hidden');
-  await exportNamesOnlyGrid();
-});
-
-document.getElementById('exportSchoolBtn')?.addEventListener('click', async () => {
-  const school = document.getElementById('exportSchoolSelect').value;
-  if (!school) return alert('Please select a school.');
-  document.getElementById('exportModal')?.classList.add('hidden');
-  await exportByFilter('school', school);
-});
-
-document.getElementById('exportGradeBtn')?.addEventListener('click', async () => {
-  const grade = document.getElementById('exportGradeSelect').value;
-  if (!grade) return alert('Please select a grade.');
-  document.getElementById('exportModal')?.classList.add('hidden');
-  await exportByFilter('grade', grade);
-});
+  document.getElementById('exportGradeBtn')?.addEventListener('click', async () => {
+    const grade = document.getElementById('exportGradeSelect').value;
+    if (!grade) return alert('Please select a grade.');
+    document.getElementById('exportModal')?.classList.add('hidden');
+    await exportByFilter('grade', grade);
+  });
 
   // ==========================================
   // 🔌 EVENT LISTENERS
@@ -831,8 +828,6 @@ document.getElementById('exportGradeBtn')?.addEventListener('click', async () =>
   }
 
   document.getElementById('addStudentBtn')?.addEventListener('click', () => window.location.href = 'student-form.html');
-  
-  // ✅ Updated to use the proper logout function from auth.js
   document.getElementById('logoutBtn')?.addEventListener('click', logout);
 
   const importBtn = document.getElementById('importBtn');
@@ -861,14 +856,12 @@ document.getElementById('exportGradeBtn')?.addEventListener('click', async () =>
   const cancelDeleteAllBtn = document.getElementById('cancelDeleteAllBtn');
   const confirmDeleteAllBtn = document.getElementById('confirmDeleteAllBtn');
 
-  // Open modal
   if (deleteAllBtn) {
     deleteAllBtn.addEventListener('click', () => {
       deleteAllModal?.classList.remove('hidden');
     });
   }
 
-  // Close modal actions
   if (closeDeleteAllModal) {
     closeDeleteAllModal.addEventListener('click', () => deleteAllModal?.classList.add('hidden'));
   }
@@ -876,10 +869,8 @@ document.getElementById('exportGradeBtn')?.addEventListener('click', async () =>
     cancelDeleteAllBtn.addEventListener('click', () => deleteAllModal?.classList.add('hidden'));
   }
 
-  // Execute deletion
   if (confirmDeleteAllBtn) {
     confirmDeleteAllBtn.addEventListener('click', async () => {
-      // Double-check admin status on execution
       if (!isAdmin) {
         alert('You do not have permission to perform this action.');
         deleteAllModal?.classList.add('hidden');
@@ -890,13 +881,11 @@ document.getElementById('exportGradeBtn')?.addEventListener('click', async () =>
       confirmDeleteAllBtn.textContent = 'Deleting...';
 
       try {
-        // Removes the entire 'students' node for this specific center
         await remove(studentsRef);
         
         alert('All student records for this center have been successfully deleted.');
         deleteAllModal?.classList.add('hidden');
         
-        // Refresh the table to show empty state
         loadStudents(); 
       } catch (err) {
         console.error('Error deleting all students:', err);
