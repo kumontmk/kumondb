@@ -11,7 +11,6 @@ onAuthStateChanged(auth, async (user) => {
         window.location.href = 'index.html';
         return;
     }
-
     try {
         const userSnap = await get(ref(db, `users/${user.uid}`));
         if (!userSnap.exists()) {
@@ -23,18 +22,13 @@ onAuthStateChanged(auth, async (user) => {
         const isAdmin = user.email?.toLowerCase() === 'kumonchamps@gmail.com';
         const dashPerms = userData.permissions?.dashboardCards || {};
 
-        // Check if user is admin OR has the specific permission
         const hasAccess = isAdmin || dashPerms[REQUIRED_PERMISSION] === true;
 
         if (hasAccess) {
-            // ✅ ALLOWED: Show content, hide error
             document.getElementById('accessDenied')?.classList.add('hidden');
             document.getElementById('mainContent')?.classList.remove('hidden');
-            
-            // Initialize the timetable
             initializeTimetable();
         } else {
-            // 🚫 BLOCKED: Hide content, show error
             document.getElementById('accessDenied')?.classList.remove('hidden');
             document.getElementById('mainContent')?.classList.add('hidden');
             document.getElementById('page-loader')?.classList.add('hidden');
@@ -54,8 +48,8 @@ onAuthStateChanged(auth, async (user) => {
 // ============================================
 function initializeTimetable() {
     const centerId = sessionStorage.getItem('selectedCenter');
-    if (!centerId) { 
-        window.location.href = 'centers.html'; 
+    if (!centerId) {
+        window.location.href = 'centers.html';
         return;
     }
 
@@ -67,7 +61,7 @@ function initializeTimetable() {
     function showLoader() { 
         document.getElementById('page-loader')?.classList.remove('hidden'); 
     }
-    
+
     function hideLoader() { 
         document.getElementById('page-loader')?.classList.add('hidden'); 
     }
@@ -81,7 +75,7 @@ function initializeTimetable() {
         Sat: 'Saturday', 
         Sun: 'Sunday' 
     };
-    
+
     const DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const DAY_TO_NUM = { 
         Monday: 1, 
@@ -109,7 +103,6 @@ function initializeTimetable() {
         return slots;
     }
 
-    // ✅ Updated to correctly route ERP/EFL to the English column
     function getSubjectGroup(name) {
         if (!name) return null;
         if (name === 'Math' || name.startsWith('Math')) return 'Math';
@@ -123,25 +116,25 @@ function initializeTimetable() {
         return /^[F-O]/i.test(level);
     }
 
-    // 🔢 Requirement 2: Find next scheduled day (1-7) for a subject
     function getNextDayNum(tsList, currentDay) {
         const days = [...new Set(tsList.map(ts => DAY_MAP[ts.day] || ts.day))];
-        if (days.length <= 1) return ''; // Comes only once per week
+        if (days.length <= 1) return ''; 
         const currentIdx = DAY_ORDER.indexOf(currentDay);
         const dayNums = days.map(d => DAY_TO_NUM[d] || 0).filter(n => n > 0);
 
         let next = dayNums.find(n => n > currentIdx + 1);
-        if (next === undefined) next = Math.min(...dayNums); // Wrap around to Monday if needed
+        if (next === undefined) next = Math.min(...dayNums); 
         return String(next);
     }
 
-    // 📅 Requirement 3: Get chronological subject order for the day (e.g., MRC)
     function getDaySubjectOrder(subjects, currentDay) {
         const daySubjects = [];
         const seen = new Set();
         
         subjects.forEach(sub => {
-            if (sub.status === 'drop' || !sub.timeslots) return;
+            // ✅ UPDATED: Only include 'current' students
+            if (sub.status !== 'current' || !sub.timeslots) return; 
+            
             const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
             const dayTs = tsList.filter(ts => (DAY_MAP[ts.day] || ts.day) === currentDay);
             
@@ -193,11 +186,12 @@ function initializeTimetable() {
                 if (!s?.subjects) return;
                 const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
 
-                // ✅ Pre-calculate daily subject order string for this student
                 const dayOrderStr = getDaySubjectOrder(subjects, day);
 
                 subjects.forEach(sub => {
-                    if (sub.status === 'drop' || !sub.timeslots) return;
+                    // ✅ UPDATED: Only include 'current' students
+                    if (sub.status !== 'current' || !sub.timeslots) return; 
+                    
                     const group = getSubjectGroup(sub.name);
                     if (!group) return;
 
@@ -209,19 +203,16 @@ function initializeTimetable() {
                             const ws = sub.currentWS ?? sub.startWS ?? 0;
                             const levelWS = `${level}${ws}`;
 
-                            // ✅ Requirement 1: EFL vs ERP indicator
                             let enType = '';
                             if (group === 'English') {
                                 enType = sub.name.includes('EFL') ? '(L)' : sub.name.includes('ERP') ? '(R)' : '(L)';
                             }
 
-                            // ✅ Requirement 2: Next day indicator
                             const nextDayNum = getNextDayNum(tsList, day);
 
-                            // ✅ Build formatted display name
                             const baseName = s.nameCn || '-';
                             const nick = s.nickname ? ` (${s.nickname})` : '';
-                            const indicators = [enType, nextDayNum].filter(Boolean).join('');
+                            const indicators = [ enType, nextDayNum].filter(Boolean).join('');
                             const displayName = `${baseName}${nick}${indicators}${dayOrderStr ? ' ' + dayOrderStr : ''}`;
 
                             const studentObj = { 
@@ -246,12 +237,10 @@ function initializeTimetable() {
                 });
             });
 
-            // Sort by grade within each group
             Object.values(schedule).forEach(slot => {
                 Object.values(slot).forEach(arr => arr.sort((a, b) => a.grade.localeCompare(b.grade)));
             });
 
-            // Build rows
             timeSlots.forEach(time => {
                 const s = schedule[time];
                 const maxRows = Math.max(s.mathLow.length, s.mathHigh.length, s.english.length, s.chinese.length);
@@ -301,7 +290,6 @@ function initializeTimetable() {
     }
 
     if (daySelect) {
-        // ✅ Automatically select today's day on page load
         const today = new Date();
         const currentDayName = today.toLocaleDateString('en-US', { weekday: 'long' });
         const hasOption = Array.from(daySelect.options).some(opt => opt.value === currentDayName);
@@ -312,8 +300,7 @@ function initializeTimetable() {
     }
 
     document.getElementById('printTimetable')?.addEventListener('click', () => window.print());
-    
-    // Cleanup on page unload
+
     window.addEventListener('beforeunload', () => { 
         if (timetableUnsub) timetableUnsub(); 
     });
