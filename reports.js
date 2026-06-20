@@ -46,10 +46,34 @@ onAuthStateChanged(auth, async (user) => {
 function initializeReports() {
     const centerId = sessionStorage.getItem('selectedCenter');
     if (!centerId) window.location.href = 'centers.html';
+    
     const studentsRef = ref(db, `centers/${centerId}/students`);
     let cachedStudents = [];
     let isDataLoaded = false;
     let activeSubject = 'all';
+
+    // 🚀 FIX 1: LOCALSTORAGE CACHE SETUP (Saves Firebase Bandwidth)
+    const CACHE_KEY = `students_cache_${centerId}`;
+    const CACHE_TIME_KEY = `students_cache_time_${centerId}`;
+    const CACHE_DURATION = 5 * 60 * 1000; // Cache valid for 5 minutes
+
+    function getCachedStudents() {
+        const cached = localStorage.getItem(CACHE_KEY);
+        const timestamp = localStorage.getItem(CACHE_TIME_KEY);
+        if (cached && timestamp && (Date.now() - parseInt(timestamp)) < CACHE_DURATION) {
+            try { return JSON.parse(cached); } catch (e) { return null; }
+        }
+        return null;
+    }
+
+    function cacheStudents(students) {
+        try {
+            localStorage.setItem(CACHE_KEY, JSON.stringify(students));
+            localStorage.setItem(CACHE_TIME_KEY, Date.now().toString());
+        } catch (e) {
+            console.warn('LocalStorage quota exceeded or unavailable');
+        }
+    }
 
     const reportMonthInput = document.getElementById('reportMonth');
     const generateBtn = document.getElementById('generateReport');
@@ -83,6 +107,22 @@ function initializeReports() {
 
     async function loadStudents(forceRefresh = false) {
         if (isDataLoaded && !forceRefresh) return;
+        
+        // Clear cache if forcing refresh
+        if (forceRefresh) {
+            localStorage.removeItem(CACHE_KEY);
+            localStorage.removeItem(CACHE_TIME_KEY);
+        } else {
+            // 🚀 Try cache first to prevent Firebase download
+            const cached = getCachedStudents();
+            if (cached) {
+                cachedStudents = cached;
+                isDataLoaded = true;
+                console.log('✅ Loaded from cache (0 Firebase bandwidth used)');
+                return;
+            }
+        }
+
         showLoader();
         cachedStudents = [];
         try {
@@ -90,10 +130,23 @@ function initializeReports() {
             if (snap.exists()) {
                 snap.forEach(child => {
                     const data = child.val();
+                    
+                    // 🚀 Skip inactive/dropped students immediately to save bandwidth
+                    if (data.status === 'drop' || data.status === 'pause') return;
+                    
                     data.subjects = Array.isArray(data.subjects) ? data.subjects : Object.values(data.subjects || {});
+                    
+                    // 🚀 Filter out inactive subjects
+                    data.subjects = data.subjects.filter(sub => 
+                        sub && !['drop', 'pause', 'inquiry'].includes(sub.status)
+                    );
+                    
                     cachedStudents.push({ id: child.key, data });
                 });
             }
+            
+            // 🚀 Save filtered students to LocalStorage
+            cacheStudents(cachedStudents);
             isDataLoaded = true;
         } catch (err) {
             console.error('❌ Load failed:', err);
@@ -198,7 +251,7 @@ function initializeReports() {
                 if (!s?.subjects) return;
                 
                 s.subjects.forEach(sub => {
-                    if (!sub || ['drop', 'pause', 'inquiry'].includes(sub.status)) return;
+                    if (!sub) return; // Status already filtered in loadStudents
                     
                     const isPencil = subName === 'Pencil';
                     if (isPencil) {
@@ -260,7 +313,6 @@ function initializeReports() {
                         const currInput = row.querySelector('.curr-level');
                         const container = row.querySelector('.tests-container');
                         
-                        // Populate existing tests or add one empty block by default
                         if (tests.length > 0) {
                             tests.forEach(t => container.insertAdjacentHTML('beforeend', createATBlock(t)));
                         } else {
@@ -284,13 +336,11 @@ function initializeReports() {
 
                         currInput?.addEventListener('input', toggleTests);
                         
-                        // Add AT Button Logic
                         row.querySelector('.add-at-btn').addEventListener('click', () => {
                             container.insertAdjacentHTML('beforeend', createATBlock({}));
-                            toggleTests(); // Apply readonly state to new inputs immediately
+                            toggleTests();
                         });
 
-                        // Remove AT Button Logic (Event Delegation)
                         container.addEventListener('click', (e) => {
                             if (e.target.classList.contains('remove-at-btn')) {
                                 if (container.children.length > 1 || confirm('Remove this AT block?')) {
@@ -299,7 +349,7 @@ function initializeReports() {
                             }
                         });
 
-                        toggleTests(); // Initial call
+                        toggleTests();
                     }
                 });
             });
@@ -337,7 +387,6 @@ function initializeReports() {
     
     if (printBtn) {
         printBtn.addEventListener('click', () => {
-            // Mark empty AT blocks for hiding
             const allATBlocks = document.querySelectorAll('.at-block');
             allATBlocks.forEach(block => {
                 const dateInput = block.querySelector('.test-date');
@@ -350,7 +399,6 @@ function initializeReports() {
                 }
             });
             
-            // Hide empty date inputs specifically
             const emptyDates = document.querySelectorAll('.test-date');
             emptyDates.forEach(input => {
                 if (!input.value || input.value.trim() === '') {
@@ -360,7 +408,6 @@ function initializeReports() {
             
             window.print();
             
-            // Clean up classes after print
             setTimeout(() => {
                 allATBlocks.forEach(block => block.classList.remove('hide-on-print'));
                 emptyDates.forEach(input => input.classList.remove('hide-on-print'));
@@ -368,6 +415,7 @@ function initializeReports() {
         });
     }
 
+    // 🚀 FIX 2: HIGH-SPEED SAVE LOGIC (Granular updates & Change detection)
     if (saveBtn) {
         saveBtn.addEventListener('click', async () => {
             const rows = reportOutput?.querySelectorAll('tr[data-student-id]') || [];
@@ -377,6 +425,7 @@ function initializeReports() {
             showLoader();
             saveBtn.disabled = true;
             saveBtn.textContent = '⏳ Saving...';
+            
             const batchUpdates = {};
             const month = reportMonthInput?.value;
 
@@ -390,16 +439,14 @@ function initializeReports() {
                     
                     const currLevelEl = row.querySelector('.curr-level');
                     const currWSEl = row.querySelector('.curr-ws');
-                    
-                    const currLevel = currLevelEl ? (currLevelEl.value?.trim() || '') : '';
-                    const currWS = currWSEl ? (parseInt(currWSEl.value?.trim()) || 0) : null;
-                    
                     const pencilLevelEl = row.querySelector('.pencil-level');
                     const pencilWSEl = row.querySelector('.pencil-ws');
 
-                    const snap = await get(ref(db, `centers/${centerId}/students/${studentId}`));
-                    if (!snap.exists()) continue;
-                    const student = snap.val();
+                    // 🚀 USE CACHED DATA INSTEAD OF FETCHING FROM FIREBASE
+                    const cachedStudent = cachedStudents.find(s => s.id === studentId);
+                    if (!cachedStudent) continue;
+                    const student = cachedStudent.data;
+                    
                     let subjects = student.subjects || {};
                     let subjectKey = null;
                     let subjectData = null;
@@ -416,68 +463,88 @@ function initializeReports() {
                     }
                     if (!subjectData) continue;
 
-                    if (currLevelEl && currLevel) subjectData.currentLevel = currLevel;
-                    if (currWSEl) subjectData.currentWS = currWS !== null ? currWS : 0;
+                    const basePath = `centers/${centerId}/students/${studentId}/subjects/${subjectKey}`;
+
+                    // 🚀 GRANULAR UPDATES (Only send exactly what changed!)
+                    if (currLevelEl) {
+                        const newLevel = currLevelEl.value?.trim() || '';
+                        if (newLevel && newLevel !== subjectData.currentLevel) {
+                            batchUpdates[`${basePath}/currentLevel`] = newLevel;
+                            subjectData.currentLevel = newLevel; // Update memory
+                        }
+                    }
+                    if (currWSEl) {
+                        const newWS = currWSEl.value?.trim() !== '' ? parseInt(currWSEl.value.trim()) : 0;
+                        if (newWS !== subjectData.currentWS) {
+                            batchUpdates[`${basePath}/currentWS`] = newWS;
+                            subjectData.currentWS = newWS;
+                        }
+                    }
 
                     if (pencilLevelEl || pencilWSEl) {
-                        const pencilLevel = pencilLevelEl ? (pencilLevelEl.value?.trim() || '') : '';
-                        const pencilWS = pencilWSEl ? (pencilWSEl.value?.trim() || '') : '';
-                        if (pencilLevel !== '' || pencilWS !== '') {
-                            if (!subjectData.pencilSkill) subjectData.pencilSkill = {};
-                            subjectData.pencilSkill.level = pencilLevel;
-                            subjectData.pencilSkill.ws = pencilWS !== '' ? (parseInt(pencilWS) || 0) : '';
+                        const pLevel = pencilLevelEl ? (pencilLevelEl.value?.trim() || '') : '';
+                        const pWS = pencilWSEl ? (pencilWSEl.value?.trim() || '') : '';
+                        const oldPencil = subjectData.pencilSkill || {};
+                        
+                        if (pLevel !== '' || pWS !== '') {
+                            if (pLevel !== oldPencil.level) batchUpdates[`${basePath}/pencilSkill/level`] = pLevel;
+                            const newPWS = pWS !== '' ? (parseInt(pWS) || 0) : '';
+                            if (newPWS !== oldPencil.ws) batchUpdates[`${basePath}/pencilSkill/ws`] = newPWS;
+                            subjectData.pencilSkill = { level: pLevel, ws: newPWS };
                         } else if (subjectData.pencilSkill) {
+                            batchUpdates[`${basePath}/pencilSkill`] = null; // Deletes from Firebase
                             delete subjectData.pencilSkill;
                         }
                     }
 
                     let progArr = Array.isArray(subjectData.progress) ? subjectData.progress : Object.values(subjectData.progress || {});
                     const entry = { month };
+                    
                     const pL = getVal('prev-level'); if (pL) entry.prevLevel = pL;
                     const pW = getVal('prev-ws'); if (pW) entry.prevWS = parseInt(pW);
-                    
-                    if (currLevelEl && currLevel) entry.currLevel = currLevel;
-                    if (currWSEl) entry.currWS = currWS !== null ? currWS : 0;
+                    if (currLevelEl && currLevelEl.value?.trim()) entry.currLevel = currLevelEl.value.trim();
+                    if (currWSEl && currWSEl.value?.trim() !== '') entry.currWS = parseInt(currWSEl.value.trim()) || 0;
 
-                    // 🔄 NEW: Gather multiple ATs
+                    // Gather multiple ATs
                     const testsArray = [];
-                    const atBlocks = row.querySelectorAll('.at-block');
-                    atBlocks.forEach(block => {
+                    row.querySelectorAll('.at-block').forEach(block => {
                         const tDate = block.querySelector('.test-date')?.value?.trim() || '';
                         const tLevel = block.querySelector('.test-level')?.value?.trim() || '';
                         const tScore = block.querySelector('.test-score')?.value?.trim() || '';
                         const tTime = block.querySelector('.test-time')?.value?.trim() || '';
                         const tGroup = block.querySelector('.test-group')?.value?.trim() || '';
                         
-                        // Only save if at least one field has data
                         if (tDate || tLevel || tScore || tTime || tGroup) {
-                            testsArray.push({
-                                date: tDate,
-                                level: tLevel,
-                                score: tScore,
-                                time: parseInt(tTime) || 0,
-                                group: tGroup
-                            });
+                            testsArray.push({ date: tDate, level: tLevel, score: tScore, time: parseInt(tTime) || 0, group: tGroup });
                         }
                     });
+                    
+                    // Always set tests array so deletions are saved correctly
+                    entry.tests = testsArray;
 
-                    if (testsArray.length > 0) {
-                        entry.tests = testsArray;
-                    }
-
+                    // Update the specific progress index instead of the whole array
                     const idx = progArr.findIndex(p => p?.month === month);
-                    if (idx >= 0) progArr[idx] = { ...progArr[idx], ...entry };
-                    else progArr.push(entry);
-
+                    if (idx >= 0) {
+                        const oldEntry = progArr[idx];
+                        // 🚀 CHANGE DETECTION (Only update if data actually changed)
+                        const changed = Object.keys(entry).some(k => JSON.stringify(oldEntry[k]) !== JSON.stringify(entry[k]));
+                        if (changed) {
+                            progArr[idx] = { ...oldEntry, ...entry };
+                            batchUpdates[`${basePath}/progress/${idx}`] = progArr[idx];
+                        }
+                    } else {
+                        progArr.push(entry);
+                        batchUpdates[`${basePath}/progress/${progArr.length - 1}`] = entry;
+                    }
                     subjectData.progress = progArr;
-                    batchUpdates[`centers/${centerId}/students/${studentId}/subjects/${subjectKey}`] = subjectData;
                 }
 
                 if (Object.keys(batchUpdates).length > 0) {
                     await update(ref(db), batchUpdates);
                     alert('✅ Saved successfully!');
-                    isDataLoaded = false;
-                    await loadStudents(true);
+                    
+                    // 🚀 UPDATE CACHE & REBUILD WITHOUT RELOADING FROM FIREBASE
+                    cacheStudents(cachedStudents);
                     setTimeout(buildReport, 300);
                 } else {
                     alert('ℹ️ No changes detected.');
@@ -493,5 +560,6 @@ function initializeReports() {
         });
     }
 
-    setTimeout(() => loadStudents(true).then(buildReport), 200);
+    // 🚀 Removed 'true' so it respects the cache on initial page load
+    setTimeout(() => loadStudents().then(buildReport), 200);
 }
