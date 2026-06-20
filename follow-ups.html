@@ -5,11 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Follow Ups - Kumon DB</title>
     <link rel="stylesheet" href="follow-ups.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <header>
         <a href="dashboard.html">← Dashboard</a>
-        <h1>📋 Follow Ups</h1>
+        <h2>📋 Follow Ups</h2>
         <button id="refreshBtn" title="Refresh">🔄 Refresh</button>
     </header>
 
@@ -26,12 +27,8 @@
         <div class="po-container">
             <!-- ✅ TAB NAVIGATION -->
             <div class="tabs">
-                <button class="tab-btn active" data-tab="po">
-                    📝 Pending Parent Orientation
-                </button>
-                <button class="tab-btn" data-tab="inquiries">
-                    🔍 Inquiries
-                </button>
+                <button class="tab-btn active" data-tab="po"><i class="fas fa-list"></i> Pending Parent Orientation</button>
+                <button class="tab-btn" data-tab="inquiries"><i class="fas fa-search"></i> Inquiries</button>
             </div>
 
             <!-- Controls -->
