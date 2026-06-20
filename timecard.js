@@ -159,51 +159,166 @@ async function closeScanner() {
     }
 }
 
-if (startScanBtn) {
-    startScanBtn.addEventListener('click', async () => {
-        if (scanModal) scanModal.classList.remove('hidden');
-        if (isScanning) return;
+// ============================================================
+// ✅ NEW: Choice Modal (Camera vs Upload)
+// ============================================================
+function ensureChoiceModal() {
+    let modal = document.getElementById('scanChoiceModal');
+    if (modal) return modal;
+
+    modal = document.createElement('div');
+    modal.id = 'scanChoiceModal';
+    modal.className = 'result-modal hidden';
+    modal.innerHTML = `
+        <div class="result-content" style="min-width:300px;">
+            <div class="result-icon" style="color:#4682B4;">📷</div>
+            <div class="result-text" style="margin-bottom:1.2rem;">Choose scan method</div>
+            <div style="display:flex; flex-direction:column; gap:0.6rem;">
+                <button id="choiceCameraBtn" class="scan-btn" style="justify-content:center; width:100%;">
+                    📷 Scan with Camera
+                </button>
+                <button id="choiceUploadBtn" class="scan-btn" style="justify-content:center; width:100%; background:#6c757d;">
+                    🖼️ Upload QR Image
+                </button>
+                <button id="choiceCancelBtn" style="padding:0.5rem; background:transparent; color:#666; border:none; cursor:pointer;">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    // Hidden file input for uploads
+    let fileInput = document.getElementById('qrFileInput');
+    if (!fileInput) {
+        fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.id = 'qrFileInput';
+        fileInput.accept = 'image/*';
+        fileInput.style.display = 'none';
+        document.body.appendChild(fileInput);
+    }
+
+    document.getElementById('choiceCameraBtn').addEventListener('click', async () => {
+        modal.classList.add('hidden');
+        await startCameraScan();
+    });
+    document.getElementById('choiceUploadBtn').addEventListener('click', () => {
+        modal.classList.add('hidden');
+        document.getElementById('qrFileInput').click();
+    });
+    document.getElementById('choiceCancelBtn').addEventListener('click', () => {
+        modal.classList.add('hidden');
+    });
+
+    // File input handler
+    fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        fileInput.value = ''; // reset so same file can be re-selected
+        if (!file) return;
+        await handleUploadedQr(file);
+    });
+
+    return modal;
+}
+
+// ============================================================
+// ✅ NEW: Upload QR Image → decode → reuse handleScanSuccess
+// ============================================================
+async function handleUploadedQr(file) {
+    if (typeof Html5Qrcode === 'undefined') {
+        showResultModal(false, '❌ Scanner library not loaded.');
+        return;
+    }
+    if (Object.keys(employees).length === 0) {
+        showResultModal(false, '⏳ Employee database still loading...');
+        return;
+    }
+
+    // Use a hidden reader element for file scanning (separate from camera #reader)
+    let uploadReaderEl = document.getElementById('qrUploadReader');
+    if (!uploadReaderEl) {
+        uploadReaderEl = document.createElement('div');
+        uploadReaderEl.id = 'qrUploadReader';
+        uploadReaderEl.style.display = 'none';
+        document.body.appendChild(uploadReaderEl);
+    }
+
+    showResultModal(true, '⏳ Reading uploaded image...');
+
+    try {
+        const scanner = new Html5Qrcode('qrUploadReader', { verbose: false });
+        const decodedText = await scanner.scanFile(file, false);
         
-        if (!window.isSecureContext) {
-            showResultModal(false, '❌ Camera requires HTTPS.');
-            return;
-        }
-        if (typeof Html5Qrcode === 'undefined') {
-            showResultModal(false, '❌ Scanner library not loaded.');
-            return;
-        }
+        // ✅ FIX: scanner.clear() does NOT return a Promise. 
+        // Wrap it in a standard try/catch instead of using .catch()
+        try { scanner.clear(); } catch (e) { console.warn("Scanner clear warning:", e); }
+        
+        if (!decodedText) throw new Error('No QR code found in image.');
+        await handleScanSuccess(decodedText);
+    } catch (err) {
+        console.error('Upload QR decode failed:', err);
+        showResultModal(false, `❌ Could not read QR from image: ${err.message || err}`);
+    }
+}
+
+// ============================================================
+// ✅ REFACTORED: Camera scan moved into its own function
+//    (LOGIC IS 100% UNCHANGED — just wrapped)
+// ============================================================
+async function startCameraScan() {
+    if (scanModal) scanModal.classList.remove('hidden');
+    if (isScanning) return;
+    
+    if (!window.isSecureContext) {
+        showResultModal(false, '❌ Camera requires HTTPS.');
+        return;
+    }
+    if (typeof Html5Qrcode === 'undefined') {
+        showResultModal(false, '❌ Scanner library not loaded.');
+        return;
+    }
+
+    try {
+        html5QrCode = new Html5Qrcode("reader");
+        const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0, disableFlip: false };
+        let started = false;
 
         try {
-            html5QrCode = new Html5Qrcode("reader");
-            const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0, disableFlip: false };
-            let started = false;
-
-            try {
-                const devices = await Html5Qrcode.getCameras();
-                if (devices && devices.length > 0) {
-                    const rearCam = devices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('environment') || d.label.toLowerCase().includes('rear'));
-                    const camId = rearCam ? rearCam.id : devices[0].id;
-                    await html5QrCode.start(camId, config, handleScanSuccess, handleScanFailure);
-                    started = true;
-                }
-            } catch (e) { console.warn("Camera enumeration failed, falling back", e); }
-
-            if (!started) {
-                await html5QrCode.start({ facingMode: "environment" }, config, handleScanSuccess, handleScanFailure);
+            const devices = await Html5Qrcode.getCameras();
+            if (devices && devices.length > 0) {
+                const rearCam = devices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('environment') || d.label.toLowerCase().includes('rear'));
+                const camId = rearCam ? rearCam.id : devices[0].id;
+                await html5QrCode.start(camId, config, handleScanSuccess, handleScanFailure);
                 started = true;
             }
-            if (!started) await html5QrCode.start({ facingMode: "user" }, config, handleScanSuccess, handleScanFailure);
+        } catch (e) { console.warn("Camera enumeration failed, falling back", e); }
 
-            if (started) {
-                isScanning = true;
-                startScanBtn.textContent = "📷 Scanning Active";
-                startScanBtn.disabled = true;
-            }
-        } catch (err) {
-            console.error('Scanner init failed:', err);
-            await closeScanner();
-            showResultModal(false, `❌ Camera error: ${err.message}`);
+        if (!started) {
+            await html5QrCode.start({ facingMode: "environment" }, config, handleScanSuccess, handleScanFailure);
+            started = true;
         }
+        if (!started) await html5QrCode.start({ facingMode: "user" }, config, handleScanSuccess, handleScanFailure);
+
+        if (started) {
+            isScanning = true;
+            startScanBtn.textContent = "📷 Scanning Active";
+            startScanBtn.disabled = true;
+        }
+    } catch (err) {
+        console.error('Scanner init failed:', err);
+        await closeScanner();
+        showResultModal(false, `❌ Camera error: ${err.message}`);
+    }
+}
+
+// ============================================================
+// 🔁 UPDATED: startScanBtn now opens the choice modal
+// ============================================================
+if (startScanBtn) {
+    startScanBtn.addEventListener('click', async () => {
+        const choiceModal = ensureChoiceModal();
+        choiceModal.classList.remove('hidden');
     });
 }
 
