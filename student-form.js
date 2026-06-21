@@ -10,14 +10,13 @@ onAuthStateChanged(auth, async (user) => {
         window.location.href = 'index.html';
         return;
     }
-
     try {
         const userSnap = await get(ref(db, `users/${user.uid}`));
         if (!userSnap.exists()) {
             window.location.href = 'index.html';
             return;
         }
-
+        
         const userData = userSnap.val();
         const isAdmin = user.email?.toLowerCase() === 'kumonchamps@gmail.com';
         const dashPerms = userData.permissions?.dashboardCards || {};
@@ -50,21 +49,23 @@ function initApp() {
         'Math': 'subj-Math', 'Chinese (Trad)': 'subj-Chinese', 'Chinese (Simp)': 'subj-Chinese',
         'English ERP': 'subj-ERP', 'English EFL': 'subj-EFL'
     };
-    
+
     document.getElementById('studentForm')?.setAttribute('novalidate', '');
+
     const GRADE_ORDER = ['K0', 'K1', 'K2', 'K3', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13'];
     let currentStudentData = null;
-    
+
     function getNextGrade(grade) {
         const idx = GRADE_ORDER.indexOf(String(grade));
         return (idx !== -1 && idx < GRADE_ORDER.length - 1) ? GRADE_ORDER[idx + 1] : grade;
     }
-    
+
     function checkSeptemberGradeUpdate(studentData) {
         const now = new Date();
         const currentYear = now.getFullYear();
         const isSeptOrLater = now.getMonth() >= 8;
         const academicYear = isSeptOrLater ? currentYear : currentYear - 1;
+
         if (isSeptOrLater && (!studentData.lastGradeUpdateYear || studentData.lastGradeUpdateYear < academicYear)) {
             const oldGrade = studentData.grade;
             studentData.grade = getNextGrade(oldGrade);
@@ -74,7 +75,37 @@ function initApp() {
         }
         return false;
     }
-    
+
+    // 🆕 Auto-execute pending drop/pause requests
+    function processPendingRequests(studentData) {
+        if (!studentData.subjects) return false;
+        const subjects = Array.isArray(studentData.subjects) ? studentData.subjects : Object.values(studentData.subjects);
+        const now = new Date();
+        const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+        const currentYear = String(now.getFullYear());
+        let changed = false;
+
+        subjects.forEach(sub => {
+            if (sub.pendingRequest && (sub.status === 'current' || sub.status === 'inquiry')) {
+                const pr = sub.pendingRequest;
+                let triggerMonth = '', triggerYear = '';
+                if (pr.type === 'drop') { triggerMonth = pr.dropMonth; triggerYear = pr.dropYear; } 
+                else if (pr.type === 'pause') { triggerMonth = pr.pauseFromMonth; triggerYear = pr.pauseFromYear; }
+                
+                if (triggerYear && triggerMonth) {
+                    if (triggerYear < currentYear || (triggerYear === currentYear && triggerMonth <= currentMonth)) {
+                        sub.status = pr.type;
+                        if (pr.type === 'drop') { sub.dropMonth = pr.dropMonth; sub.dropYear = pr.dropYear; sub.dropReason = pr.reason; } 
+                        else { sub.pauseFromMonth = pr.pauseFromMonth; sub.pauseFromYear = pr.pauseFromYear; sub.pauseToMonth = pr.pauseToMonth; sub.pauseToYear = pr.pauseToYear; sub.pauseReason = pr.reason; }
+                        delete sub.pendingRequest;
+                        changed = true;
+                    }
+                }
+            }
+        });
+        return changed;
+    }
+
     let subjectCount = 0;
     let html5QrCode = null;
     let scannerActive = false;
@@ -85,7 +116,7 @@ function initApp() {
     const isEdit = !!studentId;
     const formTitleEl = document.getElementById('formTitle');
     if (formTitleEl) formTitleEl.textContent = isEdit ? '✏️ Edit Student' : '➕ Add Student';
-    
+
     function showError(msg) {
         const modal = document.getElementById('errorModal');
         if (modal) {
@@ -94,11 +125,11 @@ function initApp() {
             modal.classList.remove('hidden');
             modal.style.display = 'flex';
             modal.style.zIndex = '10000';
-        } else {
+        } else { 
             alert(msg);
         }
     }
-    
+
     function hideErrorModal() {
         const modal = document.getElementById('errorModal');
         if (modal) {
@@ -106,11 +137,11 @@ function initApp() {
             modal.style.display = 'none';
         }
     }
-    
+
     document.getElementById('closeErrorBtn')?.addEventListener('click', hideErrorModal);
     document.getElementById('errorModal')?.addEventListener('click', (e) => { if (e.target.id === 'errorModal') hideErrorModal(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideErrorModal(); });
-    
+
     function hideLoader() {
         const loader = document.getElementById('page-loader');
         if (loader) setTimeout(() => loader.classList.add('hidden'), 300);
@@ -118,7 +149,7 @@ function initApp() {
     function showLoader() {
         document.getElementById('page-loader')?.classList.remove('hidden');
     }
-    
+
     function getWSDropdownOptions(currentValue = '') {
         let opts = '<option value="">Select WS</option>';
         const currentStr = String(currentValue);
@@ -128,7 +159,33 @@ function initApp() {
         }
         return opts;
     }
-    
+
+    /* ============================================
+       🆕 MONTH / YEAR DROPDOWN HELPERS
+       ============================================ */
+    function getMonthOptions(selectedMonth = '') {
+        const months = [
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        let opts = '<option value="">Month</option>';
+        months.forEach((m, i) => {
+            const val = String(i + 1).padStart(2, '0');
+            opts += `<option value="${val}" ${val === selectedMonth ? 'selected' : ''}>${m}</option>`;
+        });
+        return opts;
+    }
+
+    function getYearOptions(selectedYear = '') {
+        const currentYear = new Date().getFullYear();
+        let opts = '<option value="">Year</option>';
+        for (let y = currentYear - 2; y <= currentYear + 5; y++) {
+            const val = String(y);
+            opts += `<option value="${val}" ${val === selectedYear ? 'selected' : ''}>${y}</option>`;
+        }
+        return opts;
+    }
+
     function initOtherInputs() {
         const fields = ['grade', 'school', 'nationality'];
         fields.forEach(fieldId => {
@@ -159,7 +216,7 @@ function initApp() {
             }
         });
     }
-    
+
     function updateAgeDisplay() {
         const bdayEl = document.getElementById('birthday');
         const ageEl = document.getElementById('ageDisplay');
@@ -173,10 +230,10 @@ function initApp() {
         if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
         ageEl.value = age >= 0 ? `${age} yr` : '';
     }
-    
+
     document.getElementById('birthday')?.addEventListener('input', updateAgeDisplay);
     setInterval(updateAgeDisplay, 60000);
-    
+
     function updateOverallStatus() {
         const statuses = Array.from(document.querySelectorAll('.subject-entry')).map(e => e.querySelector('.status')?.value || 'drop');
         const overall = document.getElementById('overallStatus');
@@ -190,7 +247,7 @@ function initApp() {
         else if (allDrop) overall.value = 'Drop';
         else overall.value = 'Pause';
     }
-    
+
     function updateCurrentLevelsSummary() {
         const summaryContainer = document.getElementById('currentLevelsSummary');
         if (!summaryContainer) return;
@@ -223,7 +280,7 @@ function initApp() {
         });
         summaryContainer.innerHTML = hasSubjects ? html : '<p class="hint" style="grid-column: 1 / -1; margin:0;">Add subjects to view their current levels.</p>';
     }
-    
+
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.preventDefault();
@@ -237,7 +294,7 @@ function initApp() {
             if (btn.dataset.tab === 'dt-at') renderATTable();
         });
     });
-    
+
     function renderSchedule() {
         const thead = document.getElementById('scheduleHeader');
         const tbody = document.getElementById('scheduleBody');
@@ -277,13 +334,13 @@ function initApp() {
         });
         tbody.appendChild(tr);
     }
-    
+
     const scanBtn = document.getElementById('startScannerBtn');
     const qrModal = document.getElementById('qrModal');
     const closeQrModal = document.getElementById('closeQrModal');
     const qrStatus = document.getElementById('qr-status');
     const qrInput = document.getElementById('qrCodeInput');
-    
+
     if (scanBtn && qrModal) {
         scanBtn.addEventListener('click', async () => {
             if (scannerActive) { await stopScanner(); return; }
@@ -322,7 +379,7 @@ function initApp() {
         qrModal?.addEventListener('click', (e) => { if (e.target === qrModal) stopScanner(); });
     }
     window.addEventListener('beforeunload', async () => { if (html5QrCode && scannerActive) await html5QrCode.stop(); });
-    
+
     function getLevelOptions(subject, currentValue = '') {
         let levels = [];
         if (subject === 'Math' || subject === 'English EFL') {
@@ -337,7 +394,68 @@ function initApp() {
         levels.forEach(lvl => { optionsHTML += `<option value="${lvl}" ${lvl === currentValue ? 'selected' : ''}>${lvl}</option>`; });
         return optionsHTML;
     }
-    
+
+    // 🆕 Pending Request Helpers
+    let activePREntry = null;
+
+    function updatePRBanner(entry) {
+        const banner = entry.querySelector('.pending-request-banner');
+        const btn = entry.querySelector('.add-pr-btn');
+        const prType = entry.querySelector('.pr-type')?.value;
+        if (!prType) {
+            banner.classList.add('hidden');
+            const status = entry.querySelector('.status')?.value;
+            if (btn && status !== 'drop' && status !== 'pause') btn.style.display = 'inline-block';
+            return;
+        }
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        let text = '';
+        if (prType === 'drop') {
+            const m = entry.querySelector('.pr-drop-month')?.value;
+            const y = entry.querySelector('.pr-drop-year')?.value;
+            const reason = entry.querySelector('.pr-reason')?.value;
+            text = `⚠️ Drop requested for ${m ? months[parseInt(m, 10) - 1] : ''} ${y}. Reason: ${reason}`;
+        } else {
+            const fm = entry.querySelector('.pr-pause-from-month')?.value;
+            const fy = entry.querySelector('.pr-pause-from-year')?.value;
+            const tm = entry.querySelector('.pr-pause-to-month')?.value;
+            const ty = entry.querySelector('.pr-pause-to-year')?.value;
+            const reason = entry.querySelector('.pr-reason')?.value;
+            text = `⚠️ Pause requested from ${fm ? months[parseInt(fm, 10) - 1] : ''} ${fy} to ${tm ? months[parseInt(tm, 10) - 1] : ''} ${ty}. Reason: ${reason}`;
+        }
+        banner.querySelector('.banner-text').textContent = text;
+        banner.classList.remove('hidden');
+        if (btn) btn.style.display = 'none';
+    }
+
+    function openPRModal(entry) {
+        activePREntry = entry;
+        const type = entry.querySelector('.pr-type')?.value || 'pause';
+        document.getElementById('prType').value = type;
+        document.getElementById('prType').dispatchEvent(new Event('change'));
+        document.getElementById('prReason').value = entry.querySelector('.pr-reason')?.value || '';
+        
+        // Default to next month if empty
+        const now = new Date();
+        let nextM = String(now.getMonth() + 2).padStart(2, '0');
+        let nextY = String(now.getFullYear());
+        if (nextM === '13') { nextM = '01'; nextY = String(now.getFullYear() + 1); }
+
+        if (type === 'pause') {
+            document.getElementById('prPauseFromMonth').value = entry.querySelector('.pr-pause-from-month')?.value || nextM;
+            document.getElementById('prPauseFromYear').value = entry.querySelector('.pr-pause-from-year')?.value || nextY;
+            document.getElementById('prPauseToMonth').value = entry.querySelector('.pr-pause-to-month')?.value || nextM;
+            document.getElementById('prPauseToYear').value = entry.querySelector('.pr-pause-to-year')?.value || nextY;
+        } else {
+            document.getElementById('prDropMonth').value = entry.querySelector('.pr-drop-month')?.value || nextM;
+            document.getElementById('prDropYear').value = entry.querySelector('.pr-drop-year')?.value || nextY;
+        }
+        document.getElementById('dropPauseRequestModal').classList.remove('hidden');
+    }
+
+    /* ============================================
+       🆕 UPDATED: applySubjectUI — handles pause/drop fields
+       ============================================ */
     function applySubjectUI(entry) {
         const statusEl = entry.querySelector('.status');
         if (!statusEl) return;
@@ -347,15 +465,33 @@ function initApp() {
         const startWS = entry.querySelector('.fld-start-ws');
         const enrolDate = entry.querySelector('.fld-enrol-date');
         const timeslots = entry.querySelector('.timeslots-container');
-        
+
+        // 🆕 Pause fields
+        const pauseFrom = entry.querySelector('.fld-pause-from');
+        const pauseTo = entry.querySelector('.fld-pause-to');
+        const pauseReason = entry.querySelector('.fld-pause-reason');
+
+        // 🆕 Drop fields
+        const dropDate = entry.querySelector('.fld-drop-date');
+        const dropReason = entry.querySelector('.fld-drop-reason');
+
         [inquiryDate, enrolDate].forEach(el => { if(el) el.style.display = 'none'; });
         [startLevel, startWS].forEach(el => { if(el) el.style.display = 'none'; });
-        
+
+        // 🆕 Hide all pause/drop fields first
+        [pauseFrom, pauseTo, pauseReason, dropDate, dropReason].forEach(el => {
+            if (el) el.style.display = 'none';
+        });
+        // 🆕 Reset required on pause/drop inputs
+        entry.querySelectorAll('.pause-from-month, .pause-from-year, .pause-to-month, .pause-to-year, .pause-reason').forEach(el => { if(el) el.required = false; });
+        entry.querySelectorAll('.drop-month, .drop-year, .drop-reason').forEach(el => { if(el) el.required = false; });
+
         if (status === 'inquiry') {
             if (inquiryDate) { inquiryDate.style.display = 'block'; const input = inquiryDate.querySelector('input'); if (input) input.required = true; }
         } else {
             if (inquiryDate) { inquiryDate.style.display = 'none'; const input = inquiryDate.querySelector('input'); if (input) input.required = false; }
         }
+
         if (status === 'inquiry') {
             if (enrolDate) { enrolDate.style.display = 'none'; const input = enrolDate.querySelector('input'); if (input) input.required = false; }
             if (timeslots) timeslots.style.display = 'none';
@@ -363,6 +499,7 @@ function initApp() {
             if (enrolDate) { enrolDate.style.display = 'block'; const input = enrolDate.querySelector('input'); if (input) input.required = true; }
             if (timeslots) timeslots.style.display = 'block';
         }
+
         if (status === 'inquiry') {
             if (startLevel) { startLevel.style.display = 'none'; const sel = startLevel.querySelector('select'); if (sel) sel.required = false; }
             if (startWS) { startWS.style.display = 'none'; const sel = startWS.querySelector('select'); if (sel) sel.required = false; }
@@ -370,6 +507,47 @@ function initApp() {
             if (startLevel) { startLevel.style.display = 'block'; const sel = startLevel.querySelector('select'); if (sel) sel.required = true; }
             if (startWS) { startWS.style.display = 'block'; const sel = startWS.querySelector('select'); if (sel) sel.required = true; }
         }
+
+        // 🆕 Show pause fields when status is 'pause'
+        if (status === 'pause') {
+            if (pauseFrom) {
+                pauseFrom.style.display = 'block';
+                pauseFrom.querySelectorAll('select').forEach(s => s.required = true);
+            }
+            if (pauseTo) {
+                pauseTo.style.display = 'block';
+                pauseTo.querySelectorAll('select').forEach(s => s.required = true);
+            }
+            if (pauseReason) {
+                pauseReason.style.display = 'block';
+                const input = pauseReason.querySelector('input');
+                if (input) input.required = true;
+            }
+            // Hide timeslots for paused subjects
+            if (timeslots) timeslots.style.display = 'none';
+            if (enrolDate) { enrolDate.style.display = 'none'; const input = enrolDate.querySelector('input'); if (input) input.required = false; }
+            if (startLevel) { startLevel.style.display = 'none'; const sel = startLevel.querySelector('select'); if (sel) sel.required = false; }
+            if (startWS) { startWS.style.display = 'none'; const sel = startWS.querySelector('select'); if (sel) sel.required = false; }
+        }
+
+        // 🆕 Show drop fields when status is 'drop'
+        if (status === 'drop') {
+            if (dropDate) {
+                dropDate.style.display = 'block';
+                dropDate.querySelectorAll('select').forEach(s => s.required = true);
+            }
+            if (dropReason) {
+                dropReason.style.display = 'block';
+                const input = dropReason.querySelector('input');
+                if (input) input.required = true;
+            }
+            // Hide timeslots for dropped subjects
+            if (timeslots) timeslots.style.display = 'none';
+            if (enrolDate) { enrolDate.style.display = 'none'; const input = enrolDate.querySelector('input'); if (input) input.required = false; }
+            if (startLevel) { startLevel.style.display = 'none'; const sel = startLevel.querySelector('select'); if (sel) sel.required = false; }
+            if (startWS) { startWS.style.display = 'none'; const sel = startWS.querySelector('select'); if (sel) sel.required = false; }
+        }
+
         if (status === 'drop') {
             entry.style.opacity = '0.65';
             entry.style.filter = 'grayscale(0.4)';
@@ -380,21 +558,41 @@ function initApp() {
             entry.style.opacity = '1';
             entry.style.filter = 'none';
         }
+
         const statusSelect = entry.querySelector('.status');
         if (statusSelect) statusSelect.disabled = false;
+
+        // 🆕 Handle Drop/Pause Request Button Visibility & Overrides
+        const addPrBtn = entry.querySelector('.add-pr-btn');
+        if (addPrBtn) {
+            if (status === 'drop' || status === 'pause') {
+                addPrBtn.style.display = 'none';
+                // Clear pending request if manually overridden
+                if (entry.querySelector('.pr-type')?.value) {
+                    entry.querySelectorAll('.pr-type, .pr-reason, .pr-pause-from-month, .pr-pause-from-year, .pr-pause-to-month, .pr-pause-to-year, .pr-drop-month, .pr-drop-year').forEach(el => el.value = '');
+                    updatePRBanner(entry);
+                }
+            } else {
+                updatePRBanner(entry); // Re-evaluates visibility based on pending request
+            }
+        }
+
         updateOverallStatus();
         renderSchedule();
-        updateSubjectEntry(entry);
+        updateSubjectEntry(entry); 
         updateCurrentLevelsSummary();
     }
-    
+
+    /* ============================================
+       🆕 UPDATED: collectFormData — includes pause/drop data
+       ============================================ */
     function collectFormData() {
         const subjects = [];
         for (const entry of document.querySelectorAll('.subject-entry')) {
             const statusEl = entry.querySelector('.status');
             const status = statusEl?.value || 'drop';
             const timeslots = [];
-            if (status !== 'inquiry') {
+            if (status !== 'inquiry' && status !== 'pause' && status !== 'drop') {
                 entry.querySelectorAll('.timeslots-list .timeslot-row').forEach(row => {
                     const dayEl = row.querySelector('.ts-day');
                     const hourEl = row.querySelector('.ts-hour');
@@ -420,7 +618,32 @@ function initApp() {
                 status,
                 timeslots,
                 progress: [],
-                pencilSkill: pencilData
+                pencilSkill: pencilData,
+                // 🆕 Pause data
+                pauseFromMonth: entry.querySelector('.pause-from-month')?.value || '',
+                pauseFromYear: entry.querySelector('.pause-from-year')?.value || '',
+                pauseToMonth: entry.querySelector('.pause-to-month')?.value || '',
+                pauseToYear: entry.querySelector('.pause-to-year')?.value || '', 
+                pauseReason: entry.querySelector('.pause-reason')?.value?.trim() || '',
+                // 🆕 Drop data
+                dropMonth: entry.querySelector('.drop-month')?.value || '',
+                dropYear: entry.querySelector('.drop-year')?.value || '',
+                dropReason: entry.querySelector('.drop-reason')?.value?.trim() || '',
+                // 🆕 Pending Request Data
+                pendingRequest: (() => {
+                    const prType = entry.querySelector('.pr-type')?.value;
+                    if (!prType) return null;
+                    return {
+                        type: prType,
+                        pauseFromMonth: entry.querySelector('.pr-pause-from-month')?.value || '',
+                        pauseFromYear: entry.querySelector('.pr-pause-from-year')?.value || '',
+                        pauseToMonth: entry.querySelector('.pr-pause-to-month')?.value || '',
+                        pauseToYear: entry.querySelector('.pr-pause-to-year')?.value || '',
+                        dropMonth: entry.querySelector('.pr-drop-month')?.value || '',
+                        dropYear: entry.querySelector('.pr-drop-year')?.value || '',
+                        reason: entry.querySelector('.pr-reason')?.value || ''
+                    };
+                })()
             });
         }
         const diagnosticTests = [];
@@ -467,7 +690,7 @@ function initApp() {
             diagnosticTests
         };
     }
-    
+
     function getUsedSubjects(excludeEntry = null) {
         const used = new Set();
         document.querySelectorAll('.subject-entry').forEach(entry => {
@@ -480,7 +703,7 @@ function initApp() {
         });
         return used;
     }
-    
+
     function refreshSubjectOptions(subjectSelect) {
         if (!subjectSelect) return;
         const currentValue = subjectSelect.value;
@@ -496,14 +719,17 @@ function initApp() {
         });
         subjectSelect.innerHTML = optionsHTML;
     }
-    
+
     function updateSubjectEntry(entry) {
         const subjectSelect = entry.querySelector('.subject-name');
         const subject = subjectSelect?.value;
         entry.classList.remove('subj-Math', 'subj-Chinese', 'subj-ERP', 'subj-EFL');
         if (subject && SUBJECT_COLORS[subject]) entry.classList.add(SUBJECT_COLORS[subject]);
     }
-    
+
+    /* ============================================
+       🆕 UPDATED: addSubjectField — includes pause/drop fields
+       ============================================ */
     function addSubjectField(data = {}) {
         if (subjectCount >= 3) return showError('Maximum 3 subjects allowed');
         const container = document.getElementById('subjectsContainer');
@@ -517,62 +743,139 @@ function initApp() {
                 data.pencilSkill.ws = match[2];
             }
         }
-        const div = document.createElement('div');
+        const div = document.createElement('div');  
         div.className = 'subject-entry';
         const usedSubjects = getUsedSubjects(div);
         const initialSubject = data.name || 'Math';
         const levelOptionsHTML = getLevelOptions(initialSubject, data.startLevel);
-        div.innerHTML = `<div class="form-grid">
-            <div><label>Status</label><select class="status">
-                <option value="inquiry" ${data.status === 'inquiry' ? 'selected' : ''}>Inquiry</option>
-                <option value="current" ${data.status === 'current' ? 'selected' : ''} ${!data.status ? 'selected' : ''}>Current</option>
-                <option value="pause" ${data.status === 'pause' ? 'selected' : ''}>Pause</option>
-                <option value="drop" ${data.status === 'drop' ? 'selected' : ''}>Drop</option>
-            </select></div>
-            <div><label>Select Subject *</label><select class="subject-name" required>
-                <option value="">Select Subject *</option>
-                ${SUBJECTS.map(s => {
-                    const isSelected = data.name === s;
-                    const isUsed = usedSubjects.has(s) && !isSelected;
-                    return `<option value="${s}" ${isSelected ? 'selected' : ''} ${isUsed ? 'disabled' : ''}>${s}${isUsed ? ' (Added)' : ''}</option>`;
-                }).join('')}
-            </select></div>
-            <div class="fld-inquiry-date" style="display:${data.status === 'inquiry' ? 'block' : 'none'}">
-                <label>Inquiry Date *</label><input type="date" class="inquiry-date" value="${data.inquiryDate || ''}">
-            </div>
-            <div class="fld-start-level" style="display:${data.status === 'inquiry' ? 'none' : 'block'}">
-                <label>Start Level *</label><select class="start-level subject-level-select">${levelOptionsHTML}</select>
-            </div>
-            <div class="fld-start-ws" style="display:${data.status === 'inquiry' ? 'none' : 'block'}">
-                <label>Start WS # *</label><select class="start-ws">${getWSDropdownOptions(data.startWS)}</select>
-            </div>
-            <input type="hidden" class="current-level-db" value="${data.currentLevel || ''}">
-            <div class="fld-current-level-readonly" style="display:block;">
-                <label>Current Level <span style="color:#999; font-weight:400;">(From Database)</span></label>
-                <input type="text" class="current-level-display" readonly value="${data.currentLevel || 'Not Set'}" style="background:#f1f5f9; color:#64748b; cursor:not-allowed;">
-            </div>
-            <div class="fld-enrol-date" style="display:${data.status === 'inquiry' ? 'none' : 'block'}">
-                <label>Enrol Date *</label><input type="date" class="enrol-date" value="${data.enrolDate || ''}">
-            </div>
-        </div>
-        <button type="button" class="add-pencil-btn secondary" style="margin:0.25rem 0 0.75rem; padding:0.3rem 0.7rem; font-size:0.85rem; width:auto; background:#e8f0fe; color:#667eea; border:1px solid #667eea;">➕ Add Pencil Skill</button>
-        <div class="pencil-skill-entry" style="display:none; margin-top:0.5rem; margin-bottom:1rem; padding:0.75rem; background:#e8f0fe; border-radius:8px; border-left:4px solid #667eea;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-                <h4 style="font-size:0.9rem; margin:0; color:#333;">Pencil Skill</h4>
-                <button type="button" class="remove-pencil-btn" style="background:none; border:none; cursor:pointer; color:#dc3545; font-size:1.2rem; padding:0; line-height:1;">×</button>
-            </div>
-            <div class="form-grid">
-                <div><label>Pencil Level</label><select class="pencil-level"><option value="">Select Level</option>${['ZI','ZII'].map(l => `<option value="${l}" ${data.pencilSkill?.level === l ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
-                <div><label>Pencil Start WS</label><select class="pencil-ws">${getWSDropdownOptions(data.pencilSkill?.ws)}</select></div>
-            </div>
-        </div>
-        <div class="timeslots-container" style="display:${data.status === 'inquiry' ? 'none' : 'block'}">
-            <h4 style="font-size:0.9rem; margin:0 0 0.5rem;">Timeslots (Max 6)</h4>
-            <div class="timeslots-list"></div>
-            <button type="button" class="add-timeslot-btn secondary" style="margin-top:0.5rem; padding:0.4rem 0.8rem; font-size:0.9rem;">+ Add Timeslot</button>
-        </div>
-        <button type="button" class="remove-subject" style="background:#dc3545; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; margin-top:0.5rem;">Remove Subject</button>`;
-        
+
+        div.innerHTML = `
+         <div class="form-grid">
+             <div>
+                 <label>Status</label>
+                 <select class="status">
+                     <option value="inquiry" ${data.status === 'inquiry' ? 'selected' : ''}>Inquiry</option>
+                     <option value="current" ${data.status === 'current' ? 'selected' : ''} ${!data.status ? 'selected' : ''}>Current</option>
+                     <option value="pause" ${data.status === 'pause' ? 'selected' : ''}>Pause</option>
+                     <option value="drop" ${data.status === 'drop' ? 'selected' : ''}>Drop</option>
+                 </select>
+             </div>
+
+             <!-- 🆕 Pause From -->
+             <div class="fld-pause-from" style="display:${data.status === 'pause' ? 'block' : 'none'};">
+                 <label>Pause From *</label>
+                 <div class="month-year-group">
+                     <select class="pause-from-month">${getMonthOptions(data.pauseFromMonth)}</select>
+                     <select class="pause-from-year">${getYearOptions(data.pauseFromYear)}</select>
+                 </div>
+             </div>
+
+             <!-- 🆕 Pause To -->
+             <div class="fld-pause-to" style="display:${data.status === 'pause' ? 'block' : 'none'};">
+                 <label>Pause To *</label>
+                 <div class="month-year-group">
+                     <select class="pause-to-month">${getMonthOptions(data.pauseToMonth)}</select>
+                     <select class="pause-to-year">${getYearOptions(data.pauseToYear)}</select>
+                 </div>
+             </div>
+
+             <!-- 🆕 Drop Month/Year -->
+             <div class="fld-drop-date" style="display:${data.status === 'drop' ? 'block' : 'none'};">
+                 <label>Drop Month *</label>
+                 <div class="month-year-group">
+                     <select class="drop-month">${getMonthOptions(data.dropMonth)}</select>
+                     <select class="drop-year">${getYearOptions(data.dropYear)}</select>
+                 </div>
+             </div>
+
+             <div>
+                 <label>Select Subject *</label>
+                 <select class="subject-name" required>
+                     <option value="">Select Subject *</option>
+                    ${SUBJECTS.map(s => {
+                        const isSelected = data.name === s;
+                        const isUsed = usedSubjects.has(s) && !isSelected;
+                        return `<option value="${s}" ${isSelected ? 'selected' : ''} ${isUsed ? 'disabled' : ''}>${s}${isUsed ? ' (Added)' : ''}</option>`;
+                    }).join('')}
+                 </select>
+             </div>
+             <div class="fld-inquiry-date" style="display:${data.status === 'inquiry' ? 'block' : 'none'};">
+                 <label>Inquiry Date *</label>
+                 <input type="date" class="inquiry-date" value="${data.inquiryDate || ''}">
+             </div>
+             <div class="fld-start-level" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'};">
+                 <label>Start Level *</label>
+                 <select class="start-level subject-level-select">${levelOptionsHTML}</select>
+             </div>
+             <div class="fld-start-ws" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'};">
+                 <label>Start WS # *</label>
+                 <select class="start-ws">${getWSDropdownOptions(data.startWS)}</select>
+             </div>
+             <input type="hidden" class="current-level-db" value="${data.currentLevel || ''}">
+             <div class="fld-current-level-readonly" style="display:block;">
+                 <label>Current Level <span style="color:#999; font-weight:400;">(From Database)</span></label>
+                 <input type="text" class="current-level-display" readonly value="${data.currentLevel || 'Not Set'}" style="background:#f1f5f9; color:#64748b; cursor:not-allowed;">
+             </div>
+             <div class="fld-enrol-date" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'};">
+                 <label>Enrol Date *</label>
+                 <input type="date" class="enrol-date" value="${data.enrolDate || ''}">
+             </div>
+         </div>
+
+         <!-- 🆕 Pending Request Banner -->
+         <div class="pending-request-banner hidden">
+             <div class="banner-content">
+                 <span class="banner-icon">⏳</span>
+                 <span class="banner-text"></span>
+             </div>
+             <button type="button" class="cancel-pr-btn danger">Cancel Request</button>
+         </div>
+
+         <!-- 🆕 Hidden Inputs for Pending Request -->
+         <input type="hidden" class="pr-type" value="${data.pendingRequest?.type || ''}">
+         <input type="hidden" class="pr-pause-from-month" value="${data.pendingRequest?.pauseFromMonth || ''}">
+         <input type="hidden" class="pr-pause-from-year" value="${data.pendingRequest?.pauseFromYear || ''}">
+         <input type="hidden" class="pr-pause-to-month" value="${data.pendingRequest?.pauseToMonth || ''}">
+         <input type="hidden" class="pr-pause-to-year" value="${data.pendingRequest?.pauseToYear || ''}">
+         <input type="hidden" class="pr-drop-month" value="${data.pendingRequest?.dropMonth || ''}">
+         <input type="hidden" class="pr-drop-year" value="${data.pendingRequest?.dropYear || ''}">
+         <input type="hidden" class="pr-reason" value="${data.pendingRequest?.reason || ''}">
+
+         <button type="button" class="add-pr-btn secondary" style="position:absolute; bottom:1rem; right:1rem; background:#fff3cd; color:#856404; border:1px solid #ffeeba; width:auto; padding:0.4rem 0.8rem; font-size:0.85rem; z-index:10;">🗓️ Drop/Pause Request</button>
+         
+         <button type="button" class="add-pencil-btn secondary" style="margin:0.25rem 0 0.75rem; padding:0.3rem 0.7rem; font-size:0.85rem; width:auto; background:#e8f0fe; color:#667eea; border:1px solid #667eea;">➕ Add Pencil Skill</button>
+         <div class="pencil-skill-entry" style="display:none; margin-top:0.5rem; margin-bottom:1rem; padding:0.75rem; background:#e8f0fe; border-radius:8px; border-left:4px solid #667eea;">
+             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                 <h4 style="font-size:0.9rem; margin:0; color:#333;">Pencil Skill</h4>
+                 <button type="button" class="remove-pencil-btn" style="background:none; border:none; cursor:pointer; color:#dc3545; font-size:1.2rem; padding:0; line-height:1;">×</button>
+             </div>
+             <div class="form-grid">
+                 <div> <label>Pencil Level</label> <select class="pencil-level"> <option value="">Select Level</option>${['ZI','ZII'].map(l => `<option value="${l}" ${data.pencilSkill?.level === l ? 'selected' : ''}>${l}</option>`).join('')}</select> </div>
+                 <div> <label>Pencil Start WS</label> <select class="pencil-ws">${getWSDropdownOptions(data.pencilSkill?.ws)}</select> </div>
+             </div>
+         </div>
+
+         <!-- 🆕 Pause Reason -->
+         <div class="fld-pause-reason pause-drop-reason-field" style="display:${data.status === 'pause' ? 'block' : 'none'};">
+             <label>Reason for Pause *</label>
+             <input type="text" class="pause-reason" placeholder="Enter reason for pause..." value="${data.pauseReason || ''}">
+         </div>
+
+         <!-- 🆕 Drop Reason -->
+         <div class="fld-drop-reason pause-drop-reason-field" style="display:${data.status === 'drop' ? 'block' : 'none'};">
+             <label>Reason for Drop *</label>
+             <input type="text" class="drop-reason" placeholder="Enter reason for drop..." value="${data.dropReason || ''}">
+         </div>
+
+      <div class="timeslots-container" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'}; margin-bottom:1rem;">
+         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+             <h4 style="font-size:0.9rem; margin:0;">Timeslots (Max 6)</h4>
+             <button type="button" class="add-timeslot-btn secondary" style="margin:0; padding:0.3rem 0.8rem; font-size:0.8rem; width:auto;">+ Add Timeslot</button>
+         </div>
+         <div class="timeslots-list"></div>
+     </div>
+     <button type="button" class="remove-subject" style="background:#dc3545; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; margin-top:1.5rem;">Remove Subject</button>`;  
+
         const timeslotsList = div.querySelector('.timeslots-list');
         if (data.timeslots?.length) data.timeslots.forEach(ts => addTimeslotField(timeslotsList, ts));
         else addTimeslotField(timeslotsList);
@@ -591,7 +894,7 @@ function initApp() {
             addPencilBtn.onclick = () => {
                 const anyVisible = Array.from(document.querySelectorAll('.pencil-skill-entry')).some(el => el.style.display !== 'none');
                 if (anyVisible) return showError('⚠️ Only one Pencil Skill can be added per student.');
-                pencilEntry.style.display = 'block';
+                pencilEntry.style.display = 'block';  
                 addPencilBtn.style.display = 'inline-block';
                 const pencilLevel = pencilEntry.querySelector('.pencil-level');
                 const pencilWs = pencilEntry.querySelector('.pencil-ws');
@@ -610,6 +913,20 @@ function initApp() {
                 if (pencilWs) { pencilWs.value = ''; pencilWs.required = false; }
             };
         }
+
+        // 🆕 Bind Drop/Pause Request Buttons
+        const addPrBtn = div.querySelector('.add-pr-btn');
+        if (addPrBtn) addPrBtn.onclick = () => openPRModal(div);
+
+        const cancelPrBtn = div.querySelector('.cancel-pr-btn');
+        if (cancelPrBtn) {
+            cancelPrBtn.onclick = () => {
+                div.querySelectorAll('.pr-type, .pr-reason, .pr-pause-from-month, .pr-pause-from-year, .pr-pause-to-month, .pr-pause-to-year, .pr-drop-month, .pr-drop-year').forEach(el => el.value = '');
+                updatePRBanner(div);
+            };
+        }
+        updatePRBanner(div); // Initialize banner state
+        
         const addTimeslotBtn = div.querySelector('.add-timeslot-btn');
         if (addTimeslotBtn) addTimeslotBtn.onclick = () => addTimeslotField(timeslotsList);
         const removeSubjectBtn = div.querySelector('.remove-subject');
@@ -647,7 +964,7 @@ function initApp() {
         subjectCount++;
         applySubjectUI(div);
     }
-    
+
     function validateConflict(currentSelect) {
         if (!currentSelect) return;
         const selected = currentSelect.value;
@@ -688,7 +1005,7 @@ function initApp() {
         }
         return opts;
     }
-    
+
     function getMinuteOptions(selectedMin) {
         let opts = '';
         for (let i = 0; i < 60; i++) {
@@ -697,7 +1014,7 @@ function initApp() {
         }
         return opts;
     }
-    
+
     function isTimeslotGloballyUsed(day, hour, min, excludeRow = null) {
         for (const row of document.querySelectorAll('.timeslot-row')) {
             if (row === excludeRow) continue;
@@ -709,16 +1026,17 @@ function initApp() {
         }
         return false;
     }
-    
+
     function addTimeslotField(timeslotsList, data = {}) {
         if (!timeslotsList || timeslotsList.children.length >= 6) return showError('Maximum 6 timeslots per subject');
         let h = '01', m = '00', day = data.day || 'Monday';
         if (data.time) { const p = data.time.split(':'); if(p.length===2) { h = p[0]; m = p[1]; } }
         const row = document.createElement('div');
         row.className = 'timeslot-row';
-        row.innerHTML = `<div><label>Day</label><select class="ts-day" required>${DAYS.map(d => `<option value="${d}" ${data.day === d ? 'selected' : ''}>${d}</option>`).join('')}</select></div>
-        <div><label>Time (24h)</label><div class="time-input-group"><select class="ts-hour" required>${getHourOptions(h, day)}</select><span class="time-separator">:</span><select class="ts-min" required>${getMinuteOptions(m)}</select></div></div>
-        <div class="remove-timeslot-wrapper"><button type="button" class="remove-ts-btn" title="Remove">×</button></div>`;
+        row.innerHTML = `
+         <div> <label>Day</label> <select class="ts-day" required>${DAYS.map(d => `<option value="${d}" ${data.day === d ? 'selected' : ''}>${d}</option>`).join('')}</select> </div>
+         <div> <label>Time (24h)</label> <div class="time-input-group"> <select class="ts-hour" required>${getHourOptions(h, day)}</select> <span class="time-separator">:</span> <select class="ts-min" required>${getMinuteOptions(m)}</select> </div> </div>
+         <div class="remove-timeslot-wrapper"> <button type="button" class="remove-ts-btn" title="Remove">×</button> </div>`;
         
         const daySel = row.querySelector('.ts-day'), hourSel = row.querySelector('.ts-hour'), minSel = row.querySelector('.ts-min');
         const checkConflict = () => {
@@ -736,82 +1054,82 @@ function initApp() {
         if (removeBtn) removeBtn.onclick = () => { row.remove(); renderSchedule(); };
         timeslotsList.appendChild(row);
     }
-    
+
     document.getElementById('addSubjectBtn')?.addEventListener('click', () => addSubjectField());
-    
+
     function addDTRow(data = {}) {
         const tbody = document.getElementById('dtTableBody');
         if (!tbody) return;
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td><select class="dt-subject" required style="width:100%; padding:0.5rem;"><option value="">Select Subject</option>${SUBJECTS.map(s => `<option value="${s}" ${data.subject === s ? 'selected' : ''}>${s}</option>`).join('')}</select></td>
-        <td><input type="date" class="dt-date" value="${data.date || ''}" required style="width:100%; padding:0.5rem;"></td>
-        <td><input type="text" class="dt-test" placeholder="e.g., K1/K2" value="${data.test || ''}" required style="width:100%; padding:0.5rem;"></td>
-        <td><input type="text" class="dt-score" placeholder="e.g., 85/100" value="${data.score || ''}" required style="width:100%; padding:0.5rem;"></td>
-        <td><input type="number" class="dt-time" placeholder="30" value="${data.time || ''}" required style="width:100%; padding:0.5rem;"></td>
-        <td><input type="text" class="dt-suggested" placeholder="e.g., 7A" value="${data.suggestedStart || ''}" style="width:100%; padding:0.5rem;"></td>
-        <td><input type="text" class="dt-actual" placeholder="e.g., 7A" value="${data.actualStart || ''}" style="width:100%; padding:0.5rem;"></td>
-        <td style="text-align:center;"><button type="button" class="remove-dt-btn danger" style="padding:0.4rem 0.8rem;">🗑️</button></td>`;
+        const tr = document.createElement('tr');  
+        tr.innerHTML = `
+         <td> <select class="dt-subject" required style="width:100%; padding:0.5rem;"> <option value="">Select Subject</option>${SUBJECTS.map(s => `<option value="${s}" ${data.subject === s ? 'selected' : ''}>${s}</option>`).join('')}</select> </td>
+         <td> <input type="date" class="dt-date" value="${data.date || ''}" required style="width:100%; padding:0.5rem;"> </td>
+         <td> <input type="text" class="dt-test" placeholder="e.g., K1/K2" value="${data.test || ''}" required style="width:100%; padding:0.5rem;"> </td>
+         <td> <input type="text" class="dt-score" placeholder="e.g., 85/100" value="${data.score || ''}" required style="width:100%; padding:0.5rem;"> </td>
+         <td> <input type="number" class="dt-time" placeholder="30" value="${data.time || ''}" required style="width:100%; padding:0.5rem;"> </td>
+         <td> <input type="text" class="dt-suggested" placeholder="e.g., 7A" value="${data.suggestedStart || ''}" style="width:100%; padding:0.5rem;"> </td>
+         <td> <input type="text" class="dt-actual" placeholder="e.g., 7A" value="${data.actualStart || ''}" style="width:100%; padding:0.5rem;"> </td>
+         <td style="text-align:center;"> <button type="button" class="remove-dt-btn danger" style="padding:0.4rem 0.8rem;">🗑️</button> </td>`;
         tbody.appendChild(tr);
         tr.querySelector('.remove-dt-btn').onclick = () => tr.remove();
     }
-    
 
-function renderATTable() {
-    const tbody = document.getElementById('atTableBody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-    if (!currentStudentData || !currentStudentData.subjects) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#999; padding:1rem;">No student data loaded.</td></tr>';
-        return;
-    }
-    const subjects = Array.isArray(currentStudentData.subjects) ? currentStudentData.subjects : Object.values(currentStudentData.subjects || {});
-    let hasData = false;
-    
-    subjects.forEach(sub => {
-        if (!sub.progress) return;
-        const progArray = Array.isArray(sub.progress) ? sub.progress : Object.values(sub.progress || {});
-        
-        progArray.forEach(prog => {
-            // 🔄 NEW: Support both new 'tests' array and legacy 'test' object
-            const testsToRender = prog.tests || (prog.test ? [prog.test] : []);
-            
-            testsToRender.forEach(test => {
-                // Show row if there is any meaningful data
-                if (test && (test.date || test.level || test.score || test.time || test.group)) {
-                    hasData = true;
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td>${sub.name || 'Unknown'}</td>
-                        <td>${test.level || '-'}</td>
-                        <td>${test.date || '-'}</td>
-                        <td>${test.score || '-'}</td>
-                        <td>${test.time || '-'}</td>
-                        <td>${test.group || '-'}</td>
-                    `;
-                    tbody.appendChild(tr);
-                }
+    function renderATTable() {
+        const tbody = document.getElementById('atTableBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (!currentStudentData || !currentStudentData.subjects) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#999; padding:1rem;">No student data loaded.</td></tr>';
+            return;
+        }
+        const subjects = Array.isArray(currentStudentData.subjects) ? currentStudentData.subjects : Object.values(currentStudentData.subjects || {});
+        let hasData = false;
+        subjects.forEach(sub => {
+            if (!sub.progress) return;
+            const progArray = Array.isArray(sub.progress) ? sub.progress : Object.values(sub.progress || {});
+            progArray.forEach(prog => {
+                const testsToRender = prog.tests || (prog.test ? [prog.test] : []);
+                testsToRender.forEach(test => {
+                    if (test && (test.date || test.level || test.score || test.time || test.group)) {
+                        hasData = true;
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                         <td>${sub.name || 'Unknown'}</td>
+                         <td>${test.level || '-'}</td>
+                         <td>${test.date || '-'}</td>
+                         <td>${test.score || '-'}</td>
+                         <td>${test.time || '-'}</td>
+                         <td>${test.group || '-'}</td>`;
+                        tbody.appendChild(tr);
+                    }
+                });
             });
         });
-    });
-    
-    if (!hasData) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#999; padding:1rem;">No Achievement Tests recorded yet. Update monthly reports to see data here.</td></tr>';
+        if (!hasData) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#999; padding:1rem;">No Achievement Tests recorded yet. Update monthly reports to see data here.</td></tr>';
+        }
     }
-}
 
-    
     document.getElementById('addDTBtn')?.addEventListener('click', () => addDTRow());
-    
+
     async function loadStudentData() {
         try {
             if (!centerId || !studentId) {
                 showError('Missing center or student ID');
-                hideLoader();
+                hideLoader();  
                 return;
             }
             const snap = await get(ref(db, `centers/${centerId}/students/${studentId}`));
             if (snap.exists()) {
                 let s = snap.val();
+                
+                // 🆕 Auto-execute pending drop/pause requests
+                if (processPendingRequests(s)) {
+                    s.updatedAt = new Date().toISOString();
+                    await update(ref(db, `centers/${centerId}/students/${studentId}`), s);
+                    console.log("⏳ Pending Drop/Pause requests auto-executed and saved.");
+                }
+                
                 currentStudentData = s;
                 if (checkSeptemberGradeUpdate(s)) {
                     await set(ref(db, `centers/${centerId}/students/${studentId}`), s);
@@ -882,7 +1200,7 @@ function renderATTable() {
             hideLoader();
         }
     }
-    
+
     const deleteBtn = document.getElementById('deleteBtn');
     if(isEdit && deleteBtn) {
         deleteBtn.style.display = '';
@@ -901,7 +1219,7 @@ function renderATTable() {
             }
         };
     }
-    
+
     const transferBtn = document.getElementById('transferBtn');
     const transferModal = document.getElementById('transferModal');
     const targetCenterSelect = document.getElementById('targetCenterSelect');
@@ -924,7 +1242,7 @@ function renderATTable() {
             }
         };
     }
-    
+
     document.getElementById('closeTransferModal')?.addEventListener('click', () => transferModal.classList.add('hidden'));
     document.getElementById('confirmTransferBtn')?.addEventListener('click', async () => {
         const targetId = targetCenterSelect?.value;
@@ -949,7 +1267,10 @@ function renderATTable() {
             hideLoader();
         }
     });
-    
+
+    /* ============================================
+       🆕 UPDATED: Form submit validation — includes pause/drop validation 
+       ============================================ */
     document.getElementById('studentForm')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         if (!centerId) return showError('Error: No center selected.');
@@ -969,7 +1290,7 @@ function renderATTable() {
         const phoneMom = document.getElementById('phoneMom')?.value?.trim();
         const phoneDad = document.getElementById('phoneDad')?.value?.trim();
         const phoneOwn = document.getElementById('phoneOwn')?.value?.trim();
-        if (!phoneMom && !phoneDad && !phoneOwn) return showError('️ At least one Phone Number is required.');
+        if (!phoneMom && !phoneDad && !phoneOwn) return showError('⚠️ At least one Phone Number is required.');
         
         const poSelect = document.getElementById('parentOrientation');
         const poVal = poSelect?.value;
@@ -980,15 +1301,28 @@ function renderATTable() {
         }
         if (poVal === 'No') {
             const poReasonEl = document.getElementById('poReason');
-            if (poReasonEl && !poReasonEl.value?.trim()) return showError('️ Please provide a reason for no Parent Orientation.');
+            if (poReasonEl && !poReasonEl.value?.trim()) return showError('⚠️ Please provide a reason for no Parent Orientation.');
         }
         
         const pencilCount = Array.from(document.querySelectorAll('.pencil-skill-entry')).filter(el => el.style.display !== 'none').length;
-        if (pencilCount > 1) return showError('️ Only one Pencil Skill can be added per student.');
+        if (pencilCount > 1) return showError('⚠️ Only one Pencil Skill can be added per student.');
         
         let subIdx = 1;
         for (const entry of document.querySelectorAll('.subject-entry')) {
-            if (entry.style.display === 'none' || entry.querySelector('.status')?.value === 'drop') continue;
+            if (entry.style.display === 'none' || entry.querySelector('.status')?.value === 'drop') {
+                // 🆕 Still validate drop fields even though status is 'drop'
+                const status = entry.querySelector('.status')?.value;
+                if (status === 'drop') {
+                    const dropMonth = entry.querySelector('.drop-month');
+                    const dropYear = entry.querySelector('.drop-year');
+                    const dropReason = entry.querySelector('.drop-reason');
+                    if (!dropMonth?.value) return showError(`⚠️ Subject #${subIdx}: Drop month is required.`);
+                    if (!dropYear?.value) return showError(`⚠️ Subject #${subIdx}: Drop year is required.`);
+                    if (!dropReason?.value?.trim()) return showError(`⚠️ Subject #${subIdx}: Reason for Drop is required.`);
+                }
+                subIdx++;
+                continue;
+            }
             const status = entry.querySelector('.status')?.value;
             const subject = entry.querySelector('.subject-name');
             const startLevel = entry.querySelector('.start-level');
@@ -997,13 +1331,38 @@ function renderATTable() {
             const inquiryDate = entry.querySelector('.inquiry-date');
             
             if (!subject?.value) return showError(`⚠️ Subject #${subIdx}: Please select a Subject.`);
+
+            // 🆕 Validate Pause fields
+            if (status === 'pause') {
+                const pauseFromMonth = entry.querySelector('.pause-from-month');
+                const pauseFromYear = entry.querySelector('.pause-from-year');
+                const pauseToMonth = entry.querySelector('.pause-to-month');
+                const pauseToYear = entry.querySelector('.pause-to-year');
+                const pauseReason = entry.querySelector('.pause-reason');
+                if (!pauseFromMonth?.value) return showError(`⚠️ Subject #${subIdx}: Pause From month is required.`);
+                if (!pauseFromYear?.value) return showError(`⚠️ Subject #${subIdx}: Pause From year is required.`);
+                if (!pauseToMonth?.value) return showError(`⚠️ Subject #${subIdx}: Pause To month is required.`);
+                if (!pauseToYear?.value) return showError(`⚠️ Subject #${subIdx}: Pause To year is required.`);
+                if (!pauseReason?.value?.trim()) return showError(`⚠️ Subject #${subIdx}: Reason for Pause is required.`);
+            }
+
+            // 🆕 Validate Drop fields
+            if (status === 'drop') {
+                const dropMonth = entry.querySelector('.drop-month');
+                const dropYear = entry.querySelector('.drop-year');
+                const dropReason = entry.querySelector('.drop-reason');
+                if (!dropMonth?.value) return showError(`⚠️ Subject #${subIdx}: Drop month is required.`);
+                if (!dropYear?.value) return showError(`⚠️ Subject #${subIdx}: Drop year is required.`);
+                if (!dropReason?.value?.trim()) return showError(`⚠️ Subject #${subIdx}: Reason for Drop is required.`);
+            }
+
             if (status === 'inquiry') {
                 if (!inquiryDate?.value) return showError(`⚠️ Subject #${subIdx}: Inquiry Date is required.`);
-            } else {
+            } else if (status === 'current') {
                 if (!enrolDate?.value) return showError(`⚠️ Subject #${subIdx}: Enrol Date is required.`);
-                if (entry.querySelectorAll('.timeslots-list .timeslot-row').length === 0) return showError(`️ Subject #${subIdx}: Add at least one timeslot.`);
+                if (entry.querySelectorAll('.timeslots-list .timeslot-row').length === 0) return showError(`⚠️ Subject #${subIdx}: Add at least one timeslot.`);
                 if (!startLevel?.value) return showError(`⚠️ Subject #${subIdx}: Please select a Start Level.`);
-                if (!startWS?.value) return showError(`️ Subject #${subIdx}: Please select a Start WS #.`);
+                if (!startWS?.value) return showError(`⚠️ Subject #${subIdx}: Please select a Start WS #.`);
             }
             subIdx++;
         }
@@ -1020,8 +1379,8 @@ function renderATTable() {
                 if (!subject) return showError(`⚠️ DT #${dtIdx}: Subject is required.`);
                 if (!date) return showError(`⚠️ DT #${dtIdx}: Diagnostic Date is required.`);
                 if (!test) return showError(`⚠️ DT #${dtIdx}: Test Name/Level is required.`);
-                if (!score) return showError(`️ DT #${dtIdx}: Score is required.`);
-                if (!time) return showError(`️ DT #${dtIdx}: Time is required.`);
+                if (!score) return showError(`⚠️ DT #${dtIdx}: Score is required.`);
+                if (!time) return showError(`⚠️ DT #${dtIdx}: Time is required.`);
             }
             dtIdx++;
         }
@@ -1030,6 +1389,7 @@ function renderATTable() {
         let hasConflict = false;
         for (const entry of document.querySelectorAll('.subject-entry')) {
             if (entry.querySelector('.status')?.value === 'drop') continue;
+            if (entry.querySelector('.status')?.value === 'pause') continue;
             const subjectName = entry.querySelector('.subject-name')?.value || 'Unknown';
             entry.querySelectorAll('.timeslots-list .timeslot-row').forEach(row => {
                 const day = row.querySelector('.ts-day')?.value, hour = row.querySelector('.ts-hour')?.value, min = row.querySelector('.ts-min')?.value;
@@ -1079,7 +1439,7 @@ function renderATTable() {
             hideLoader();
         }
     });
-    
+
     document.getElementById('cancelBtn')?.addEventListener('click', () => { if (confirm('Discard changes?')) window.location.href = 'students.html'; });
     document.getElementById('backToStudents')?.addEventListener('click', (e) => {
         e.preventDefault();
@@ -1090,7 +1450,7 @@ function renderATTable() {
             window.location.href = 'students.html';
         }
     });
-    
+
     function initParentOrientation() {
         const poSelect = document.getElementById('parentOrientation');
         if (!poSelect) return;
@@ -1120,10 +1480,58 @@ function renderATTable() {
         poSelect.addEventListener('change', togglePOFields);
         return togglePOFields;
     }
-    
+
     const togglePO = initParentOrientation();
     initOtherInputs();
-    if (isEdit) loadStudentData(); else { addSubjectField(); hideLoader(); }
+
+    // 🆕 Init Drop/Pause Request Modal
+    const prModal = document.getElementById('dropPauseRequestModal');
+    const prTypeSelect = document.getElementById('prType');
     
+    document.querySelectorAll('#dropPauseRequestModal .pr-month-select').forEach(sel => sel.innerHTML = getMonthOptions());
+    document.querySelectorAll('#dropPauseRequestModal .pr-year-select').forEach(sel => sel.innerHTML = getYearOptions());
+
+    prTypeSelect?.addEventListener('change', () => {
+        if (prTypeSelect.value === 'pause') {
+            document.getElementById('prPauseFields').style.display = 'block';
+            document.getElementById('prDropFields').style.display = 'none';
+        } else {
+            document.getElementById('prPauseFields').style.display = 'none';
+            document.getElementById('prDropFields').style.display = 'block';
+        }
+    });
+
+    document.getElementById('closeDropPauseModal')?.addEventListener('click', () => prModal.classList.add('hidden'));
+    document.getElementById('cancelDropPauseBtn')?.addEventListener('click', () => prModal.classList.add('hidden'));
+
+    document.getElementById('saveDropPauseBtn')?.addEventListener('click', () => {
+        if (!activePREntry) return;
+        const type = prTypeSelect.value;
+        const reason = document.getElementById('prReason').value.trim();
+        if (!reason) return showError('⚠️ Reason is required.');
+        
+        activePREntry.querySelector('.pr-type').value = type;
+        activePREntry.querySelector('.pr-reason').value = reason;
+        
+        if (type === 'pause') {
+            const fm = document.getElementById('prPauseFromMonth').value, fy = document.getElementById('prPauseFromYear').value;
+            const tm = document.getElementById('prPauseToMonth').value, ty = document.getElementById('prPauseToYear').value;
+            if (!fm || !fy || !tm || !ty) return showError('⚠️ Please select Pause From and To dates.');
+            activePREntry.querySelector('.pr-pause-from-month').value = fm; activePREntry.querySelector('.pr-pause-from-year').value = fy;
+            activePREntry.querySelector('.pr-pause-to-month').value = tm; activePREntry.querySelector('.pr-pause-to-year').value = ty;
+            activePREntry.querySelector('.pr-drop-month').value = ''; activePREntry.querySelector('.pr-drop-year').value = '';
+        } else {
+            const dm = document.getElementById('prDropMonth').value, dy = document.getElementById('prDropYear').value;
+            if (!dm || !dy) return showError('⚠️ Please select Drop Month and Year.');
+            activePREntry.querySelector('.pr-drop-month').value = dm; activePREntry.querySelector('.pr-drop-year').value = dy;
+            activePREntry.querySelector('.pr-pause-from-month').value = ''; activePREntry.querySelector('.pr-pause-from-year').value = '';
+            activePREntry.querySelector('.pr-pause-to-month').value = ''; activePREntry.querySelector('.pr-pause-to-year').value = '';
+        }
+        updatePRBanner(activePREntry);
+        prModal.classList.add('hidden');
+    });
+
+    if (isEdit) loadStudentData(); else { addSubjectField(); hideLoader(); }
+     
     document.getElementById('logoutBtn')?.addEventListener('click', logout);
 }

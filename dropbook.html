@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drop Book - Kumon Management</title>
+    <link rel="stylesheet" href="dropbook.css">
+</head>
+<body>
+    <div id="page-loader">
+        <div class="spinner"></div>
+    </div>
+
+    <header>
+        <nav>
+            <a href="dashboard.html">← Dashboard</a>
+        </nav>
+                    <h2>📉 Drop Book</h2>
+    </header>
+
+    <div id="accessDenied" class="access-denied hidden">
+        <div class="access-denied-content">
+            <h2>🔐 Access Restricted</h2>
+            <p>You do not have permission to view the Drop Book.</p>
+            <button id="backToDashboardBtn" class="primary">← Back to Dashboard</button>
+        </div>
+    </div>
+
+    <div id="mainContent" class="form-container hidden">
+        <div class="controls">
+            <select id="filterStatus">
+                <option value="all">All (Drop & Pause)</option>
+                <option value="drop">Drop Only</option>
+                <option value="pause">Pause Only</option>
+            </select>
+
+            <!-- View Mode Controls -->
+            <div class="view-mode-controls">
+                <label for="viewMode">📅 View Mode:</label>
+                <select id="viewMode">
+                    <option value="single">Single Month</option>
+                    <option value="year">Whole Year</option>
+                    <option value="range">12-Month Range</option>
+                </select>
+            </div>
+
+            <!-- Single Month Controls -->
+            <div id="singleMonthControls" class="single-month-controls">
+                <select id="filterMonth"></select>
+                <select id="filterYear"></select>
+            </div>
+
+            <!-- Range Controls -->
+            <div id="rangeControls" class="range-controls hidden">
+                <label for="rangeStartMonth">From:</label>
+                <select id="rangeStartMonth"></select>
+                <select id="rangeStartYear"></select>
+                <span id="rangeEndLabel" class="range-end-label"></span>
+            </div>
+        </div>
+
+        <!-- Tabs Container -->
+        <div class="tabs-container">
+            <div id="monthTabs" class="month-tabs"></div>
+            <div id="subjectTabs" class="subject-tabs"></div>
+        </div>
+
+        <div class="table-wrapper">
+            <table id="dropBookTable">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Student (CN)</th>
+                        <th>Nickname</th>
+                        <th>Date (Drop/Pause)</th>
+                        <th>Grade</th>
+                        <th>Subject</th>
+                        <th>Schedule</th>
+                        <th>Current Level</th>
+                        <th>Phone</th>
+                        <th>Reason</th>
+                        <th>Call</th>
+                    </tr>
+                </thead>
+                <tbody id="dropBookBody">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div id="detailModal" class="modal hidden">
+        <div class="modal-content dropbook-modal-content">
+            <span id="closeModal" class="close-modal">&times;</span>
+            <h2>Student Drop/Pause Details</h2>
+            
+            <div class="modal-grid">
+                <div class="info-group">
+                    <label>Student Name (CN)</label>
+                    <input type="text" id="mNameCn" readonly>
+                </div>
+                <div class="info-group">
+                    <label>Nickname</label>
+                    <input type="text" id="mNickname" readonly>
+                </div>
+                <div class="info-group">
+                    <label>Grade</label>
+                    <input type="text" id="mGrade" readonly>
+                </div>
+                <div class="info-group">
+                    <label>Subject</label>
+                    <input type="text" id="mSubject" readonly>
+                </div>
+                <div class="info-group">
+                    <label>Schedule</label>
+                    <input type="text" id="mSchedule" readonly>
+                </div>
+                <div class="info-group">
+                    <label>Current Level</label>
+                    <input type="text" id="mCurrentLevel" readonly>
+                </div>
+                <div class="info-group">
+                    <label>Phone</label>
+                    <input type="text" id="mPhone" readonly>
+                </div>
+                <div class="info-group">
+                    <label>Enrolment Date</label>
+                    <input type="text" id="mEnrolDate" readonly>
+                </div>
+                <div class="info-group full-width" id="mExpectedReturnGroup" style="display: none;">
+                    <label>Expected Return</label>
+                    <input type="text" id="mExpectedReturn" readonly>
+                </div>
+                <div class="info-group full-width">
+                    <label>Reason</label>
+                    <textarea id="mReason" rows="3"></textarea>
+                </div>
+            </div>
+
+            <h3>📞 Call Status</h3>
+            <div class="modal-grid">
+                <div class="info-group full-width">
+                    <button id="mCallStatusBtn" class="call-status-btn red">✖ Not Called</button>
+                </div>
+                <div class="info-group">
+                    <label>Called By</label>
+                    <input type="text" id="mCalledBy" placeholder="Staff name">
+                </div>
+                <div class="info-group full-width">
+                    <label>Notes</label>
+                    <textarea id="mNotes" rows="3" placeholder="Call notes..."></textarea>
+                </div>
+            </div>
+
+            <h3>📋 Exit Form</h3>
+            <div class="modal-grid">
+                <div class="info-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="mExitAutopay">
+                        <span>Confirm Autopay Cancellation</span>
+                    </label>
+                </div>
+                <div class="info-group">
+                    <label>Accounts</label>
+                    <input type="text" id="mAccounts" placeholder="Account notes">
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button id="cancelModalBtn" class="secondary">Cancel</button>
+                <button id="saveModalBtn" class="primary">💾 Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="dropbook.js"></script>
+</body>
+</html>

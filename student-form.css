@@ -142,16 +142,62 @@ DROPDOWN & "OTHER" INPUTS
 .other-input { display: none; margin-top: 0.5rem; animation: fadeIn 0.3s ease; }
 .other-input.visible { display: block; }
 /* ============================================
+🆕 MONTH/YEAR GROUP (Pause & Drop)
+============================================ */
+.month-year-group {
+display: flex;
+gap: 0.5rem;
+width: 100%;
+}
+.month-year-group select {
+flex: 1;
+min-width: 0;
+padding: 0.65rem 0.4rem;
+font-size: 0.9rem;
+}
+/* 🆕 Pause/Drop Reason Field */
+.pause-drop-reason-field {
+margin: 0.75rem 0;
+padding: 0.75rem 1rem;
+background: #fff8e1;
+border-radius: var(--radius);
+border-left: 4px solid #FFA000;
+animation: fadeIn 0.3s ease;
+}
+.pause-drop-reason-field label {
+display: block;
+font-size: 0.85rem;
+font-weight: 600;
+color: var(--text-light);
+margin-bottom: 0.4rem;
+}
+.pause-drop-reason-field input {
+width: 100%;
+padding: 0.65rem 0.75rem;
+border: 1px solid #ddd;
+border-radius: var(--radius);
+font-size: 0.95rem;
+background: #fff;
+}
+.pause-drop-reason-field input:focus {
+outline: none;
+border-color: #FFA000;
+box-shadow: 0 0 0 3px rgba(255, 160, 0, 0.15);
+}
+/* ============================================
 SUBJECT ENTRIES & COLOR CODING
 ============================================ */
 .subject-entry {
 background: #f8f9fa;
 padding: 1rem;
+padding-bottom: 4.5rem; /* Increased slightly for the bigger buttons */
 border-radius: var(--radius);
 margin: 0.5rem 0;
 border-left: 4px solid var(--primary);
 transition: background 0.2s ease, border-left-color 0.2s ease;
+position: relative; 
 }
+
 .subject-entry.subj-Math { background: #e0f7fa; border-left-color: #008B8B; }
 .subject-entry.subj-Chinese { background: #f1f8e9; border-left-color: #9ACD32; }
 .subject-entry.subj-ERP { background: #ffebee; border-left-color: #DC143C; }
@@ -232,7 +278,7 @@ min-width: 700px;
 padding: 0.8rem;
 border: 1px solid #e2e8f0;
 text-align: center;
-vertical-align: top;
+vertical-align: top; 
 font-size: 0.9rem;
 }
 .schedule-table th { background: var(--primary); color: var(--white); font-weight: 600; }
@@ -339,7 +385,7 @@ align-items: center;
 transition: all 0.2s ease;
 }
 #closeErrorBtn:hover {
-background: #3a6f9a; /* Slightly darker than --primary-dark */
+background: #3a6f9a;
 transform: translateY(-1px);
 box-shadow: 0 4px 12px rgba(70, 130, 180, 0.25);
 }
@@ -357,7 +403,7 @@ align-items: center;
 PARENT ORIENTATION LAYOUT (Overrides Grid)
 ============================================ */
 .po-layout-wrapper {
-grid-column: 1 / -1 !important; /* Spans full form width */
+grid-column: 1 / -1 !important;
 display: flex;
 flex-direction: column;
 gap: 0.75rem;
@@ -367,7 +413,7 @@ width: 100%;
 .po-main-row {
 display: flex;
 gap: 1rem;
-align-items: flex-end; /* Aligns inputs to bottom */
+align-items: flex-end;
 flex-wrap: wrap;
 width: 100%;
 }
@@ -420,62 +466,142 @@ animation: fadeIn 0.3s ease;
 margin-top: 0;
 animation: none;
 }
-
 /* ============================================
 DT & AT TAB STYLING (NEW)
 ============================================ */
 #tab-dt-at h3 {
-  font-size: 1.1rem;
-  color: var(--primary-dark);
-  border-bottom: 2px solid #e2e8f0;
-  padding-bottom: 0.5rem;
-  margin-bottom: 1rem;
+font-size: 1.1rem;
+color: var(--primary-dark);
+border-bottom: 2px solid #e2e8f0;
+padding-bottom: 0.5rem;
+margin-bottom: 1rem;
 }
-#dtTableBody tr, #atTableBody tr {
-  transition: background 0.2s;
+#dtTableBody tr, #atTableBody tr { 
+transition: background 0.2s;
 }
 #dtTableBody tr:hover {
-  background: #f8fafc;
+background: #f8fafc;
 }
 #atTableBody td {
-  color: var(--text-light);
-  font-size: 0.9rem;
+color: var(--text-light);
+font-size: 0.9rem;
 }
 #dtTable input, #dtTable select {
-  padding: 0.5rem;
-  font-size: 0.9rem;
+padding: 0.5rem;
+font-size: 0.9rem;
 }
-
 /* ============================================
 🔐 ACCESS DENIED SCREEN (For Page-Level Guards)
 ============================================ */
 .access-denied {
-  position: fixed; 
-  inset: 0; 
-  background: var(--secondary);
-  display: flex; 
-  align-items: center; 
-  justify-content: center;
-  z-index: 2000; 
-  padding: 2rem;
+position: fixed;
+inset: 0;
+background: var(--secondary);
+display: flex;
+align-items: center;
+justify-content: center;
+z-index: 2000;
+padding: 2rem;
 }
 .access-denied-content {
-  background: var(--white); 
-  padding: 2.5rem 3rem; 
-  border-radius: var(--radius);
-  box-shadow: 0 10px 40px rgba(0,0,0,0.15); 
-  text-align: center; 
-  max-width: 480px;
-  border-top: 4px solid #dc3545;
+background: var(--white);
+padding: 2.5rem 3rem;
+border-radius: var(--radius);
+box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+text-align: center;
+max-width: 480px;
+border-top: 4px solid #dc3545;
 }
-.access-denied h2 { 
-  color: #dc3545; 
-  margin-bottom: 1rem; 
+.access-denied h2 {
+color: #dc3545;
+margin-bottom: 1rem;
 }
-.access-denied p { 
-  margin: 0.75rem 0; 
-  color: var(--text-light); 
+.access-denied p {
+margin: 0.75rem 0;
+color: var(--text-light);
 }
-.access-denied .primary { 
-  margin-top: 1.5rem; 
+.access-denied .primary {
+margin-top: 1.5rem;
+}
+
+/* ============================================
+🆕 PENDING REQUEST BANNER & BUTTON
+============================================ */
+.pending-request-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #fff3cd;
+    border: 1px solid #ffeeba;
+    border-left: 4px solid #ffc107;
+    color: #856404;
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+    font-weight: 500;
+    animation: fadeIn 0.3s ease;
+}
+.pending-request-banner .banner-content {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.pending-request-banner .banner-icon { font-size: 1.2rem; }
+.cancel-pr-btn {
+    background: #dc3545 !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    padding: 0.3rem 0.6rem !important;
+    font-size: 0.8rem !important;
+}
+.cancel-pr-btn:hover { background: #c82333 !important; }
+
+.add-pr-btn { transition: all 0.2s; }
+.add-pr-btn:hover {
+    background: #ffeeba !important;
+    color: #664d03 !important;
+}
+
+/* ============================================
+🆕 BOTTOM ACTION BUTTONS (Remove & Drop/Pause)
+============================================ */
+.subject-entry .remove-subject,
+.subject-entry .add-pr-btn {
+    position: absolute !important;
+    bottom: 1rem !important;
+    
+    /* Make them bigger */
+    padding: 0.65rem 1.25rem !important; 
+    font-size: 0.95rem !important;
+    font-weight: 600 !important;
+    border-radius: 8px !important;
+    margin-top: 0 !important;
+    
+    /* Visual polish */
+    box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    z-index: 10;
+}
+
+/* Hover effect for both buttons */
+.subject-entry .remove-subject:hover,
+.subject-entry .add-pr-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+}
+
+/* Position Remove Subject on the bottom LEFT */
+.subject-entry .remove-subject {
+    left: 1rem !important;
+    right: auto !important;
+}
+
+/* Position Drop/Pause Request on the bottom RIGHT */
+.subject-entry .add-pr-btn {
+    right: 1rem !important;
+    left: auto !important;
 }

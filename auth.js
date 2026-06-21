@@ -21,7 +21,7 @@ export const db = getDatabase(app);
 export const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 
-const AUTO_LOGOUT_TIMEOUT = 20 * 60 * 1000;
+const AUTO_LOGOUT_TIMEOUT = 480 * 60 * 1000; // (480 minutes) auto-logout after 8 hours of inactivity
 let logoutTimer;
 let isAutoLogoutInitialized = false;
 let pendingUser = null; 
@@ -206,7 +206,7 @@ onAuthStateChanged(auth, async (user) => {
         isDisabled: false,
         permissions: {
           centers: { 'kumon-taipa-mei-keng': true, 'kumon-taipa-pac-tat': true },
-          dashboardCards: { studentManagement: true, timetable: true, monthlyReports: true, progressCharts: true, attendance: true, parentOrientation: true },
+          dashboardCards: { studentManagement: true, timetable: true, monthlyReports: true, progressCharts: true, attendance: true, parentOrientation: true, dropBook: true },
           centerAdminCards: { userManagement: true, centerSettings: true, financialReports: true }
         },
         createdAt: new Date().toISOString()
