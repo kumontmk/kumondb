@@ -9,11 +9,8 @@ let centerName = "";
 let calendarEventsMap = {};
 let currentCalendarYear = new Date().getFullYear();
 let currentScheduleYear = new Date().getFullYear();
-
-// ✅ NEW: Permission flag for holiday management
 let canEditHolidays = false;
 
-// Center Operating Hours (0 = Sunday, 6 = Saturday, 2 = Tuesday)
 const centerClosedDays = {
     'mei keng': [0],
     'pac tat': [0, 6],
@@ -27,7 +24,7 @@ const centerClosedDays = {
 document.addEventListener('DOMContentLoaded', async () => {
     const isAuth = requireAuth();
     if (!isAuth) return;
-    
+
     if (!centerId) {
         alert("No center selected. Redirecting to centers page.");
         window.location.href = "centers.html";
@@ -35,18 +32,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     await loadCenterDetails();
-    
-    // ✅ NEW: Check user permissions before setting up the UI
     await checkUserPermissions();
-    
+
     setupTabs();
     setupHolidayForm();
     setupYearControls();
+    setupPrintButtons();
 
     document.getElementById('calendarYearDisplay').textContent = currentCalendarYear;
     document.getElementById('scheduleYearDisplay').textContent = currentScheduleYear;
 
-    // Real-time listener for calendar events
     onValue(ref(db, `centers/${centerId}/calendar`), (snapshot) => {
         calendarEventsMap = snapshot.exists() ? snapshot.val() : {};
         renderYearCalendar(currentCalendarYear);
@@ -57,54 +52,41 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('page-loader').classList.add('hidden');
 });
 
-// ✅ NEW: Function to check if the current user is an Admin or Manager
+// ============================================
+// PERMISSIONS
+// ============================================
 async function checkUserPermissions() {
     const user = auth.currentUser;
     if (!user) return;
-
     try {
         let canEdit = false;
-        
-        // ✅ CHECK 1: Direct admin email from Firebase Auth
         if (user.email && user.email.toLowerCase() === 'kumonchamps@gmail.com') {
             canEdit = true;
         }
-        
-        // ✅ CHECK 2: Look in employees table for position
         if (!canEdit) {
             const employeeSnap = await get(ref(db, `employees/${user.uid}`));
-            
             if (employeeSnap.exists()) {
                 const employeeData = employeeSnap.val();
                 const position = employeeData.position;
-                
-                // Grant access if position is 'Manager' (case-insensitive)
                 if (position && position.toLowerCase() === 'manager') {
                     canEdit = true;
                 }
             }
         }
-        
         canEditHolidays = canEdit;
         applyHolidayUIRestrictions();
     } catch (error) {
         console.error("Error fetching employee permissions:", error);
-        canEditHolidays = false; // Fail secure
+        canEditHolidays = false;
     }
 }
 
-// ✅ NEW: Function to hide/show UI elements based on permissions
 function applyHolidayUIRestrictions() {
     const form = document.getElementById('holidayForm');
     const formCard = form ? form.closest('.card') : null;
-    
     if (!canEditHolidays) {
-        // Hide the "Add New Holiday" form card
-        if (formCard) {
-            formCard.style.display = 'none';
-        }
+        if (formCard) formCard.style.display = 'none';
         
-        // Optional: Add a read-only notice above the table
         const tableCard = document.getElementById('holidayTableBody')?.closest('.card');
         if (tableCard && !document.getElementById('readonly-notice')) {
             const notice = document.createElement('p');
@@ -150,13 +132,11 @@ function setupTabs() {
 function setupHolidayForm() {
     const form = document.getElementById('holidayForm');
     form.addEventListener('submit', async (e) => {
-        // ✅ SECURITY GUARD: Prevent submission if not authorized
         if (!canEditHolidays) {
             e.preventDefault();
             alert("You do not have permission to add holidays.");
             return;
         }
-
         e.preventDefault();
         const date = document.getElementById('holidayDate').value;
         const type = document.getElementById('holidayType').value;
@@ -186,7 +166,6 @@ function setupHolidayForm() {
 function renderHolidaysTable() {
     const tbody = document.getElementById('holidayTableBody');
     tbody.innerHTML = '';
-    
     const events = Object.entries(calendarEventsMap)
         .map(([key, val]) => {
             const isDateKey = /^\d{4}-\d{2}-\d{2}$/.test(key);
@@ -208,29 +187,26 @@ function renderHolidaysTable() {
         
         const typeDisplay = event.type === 'public' ? 'Public Holiday' : 'Center Holiday';
 
-        // ✅ CONDITIONAL RENDER: Only show Delete button if authorized
         const actionCell = canEditHolidays 
             ? `<button class="btn-danger" onclick="deleteHoliday('${event.id}')"><i class="fas fa-trash"></i> Delete</button>`
             : `<span style="color:#999; font-size:0.85rem;">Restricted</span>`;
 
         tr.innerHTML = `
-            <td>${event.date}</td>
-            <td>${typeDisplay}</td>
-            <td>${event.name || '-'}</td>
-            <td>${mucDisplay}</td>
-            <td>${actionCell}</td>
+             <td>${event.date}</td>
+             <td>${typeDisplay}</td>
+             <td>${event.name || '-'}</td>
+             <td>${mucDisplay}</td>
+             <td class="action-cell">${actionCell}</td> 
         `;
         tbody.appendChild(tr);
     });
 }
 
 window.deleteHoliday = async function(eventId) {
-    // ✅ SECURITY GUARD: Prevent deletion if not authorized
     if (!canEditHolidays) {
         alert("You do not have permission to delete holidays.");
         return;
     }
-
     if (!confirm("Are you sure you want to delete this holiday?")) return;
     try {
         await remove(ref(db, `centers/${centerId}/calendar/${eventId}`));
@@ -273,7 +249,7 @@ function renderYearCalendar(year) {
     const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const closedDays = getClosedDaysForCenter(centerName);
     const today = new Date();
-    
+
     monthNames.forEach((monthName, monthIndex) => {
         const monthDiv = document.createElement('div');
         monthDiv.className = 'month-calendar';
@@ -338,7 +314,7 @@ function renderClassSchedule(year) {
     const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     const closedDays = getClosedDaysForCenter(centerName);
     const openDays = [0, 1, 2, 3, 4, 5, 6].filter(d => !closedDays.includes(d));
-    
+
     monthNames.forEach((monthName, monthIndex) => {
         const monthDiv = document.createElement('div');
         monthDiv.className = 'schedule-month';
@@ -362,21 +338,21 @@ function renderClassSchedule(year) {
                 const validDates = datesInMonth.map(d => {
                     const dateStr = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                     const event = calendarEventsMap[dateStr];
-                      
+                       
                     if (event && !event.muc) {
-                        return null; // Skip regular holidays
+                        return null;
                     }
-                    return event && event.muc ? `${d}*` : `${d}`; // Mark MUC with *
+                    return event && event.muc ? `${d}*` : `${d}`;
                 }).filter(d => d !== null);
 
                 if (validDates.length > 0) {
                     bodyHtml += `
-                        <div class="schedule-day-group">
-                            <h5>${dayNames[dayOfWeek]}</h5>
-                            <div class="schedule-dates">
+                         <div class="schedule-day-group">
+                             <h5>${dayNames[dayOfWeek]}</h5>
+                             <div class="schedule-dates">
                                 ${validDates.map(d => d.includes('*') ? `<span class="muc-date">${d}</span>` : d).join(', ')}
-                            </div>
-                        </div>
+                             </div>
+                         </div>
                     `;
                 }
             }
@@ -404,5 +380,69 @@ function getClosedDaysForCenter(name) {
     if (lowerName.includes('pac tat')) return centerClosedDays['pac tat'];
     if (lowerName.includes('champs')) return centerClosedDays['champs'];
     if (lowerName.includes('tap siac')) return centerClosedDays['tap siac'];
-    return [0]; // Default fallback
+    return [0];
+}
+
+// ============================================
+// PRINT FUNCTIONALITY
+// ============================================
+function setupPrintButtons() {
+    const printHolidaysBtn = document.getElementById('printHolidaysBtn');
+    if (printHolidaysBtn) {
+        printHolidaysBtn.addEventListener('click', () => {
+            switchTabAndPrint('holidays', 'Holiday List');
+        });
+    }
+
+    const printCalendarBtn = document.getElementById('printCalendarBtn');
+    if (printCalendarBtn) {
+        printCalendarBtn.addEventListener('click', () => {
+            switchTabAndPrint('calendar', `${currentCalendarYear} Calendar`);
+        });
+    }
+
+    const printScheduleBtn = document.getElementById('printScheduleBtn');
+    if (printScheduleBtn) {
+        printScheduleBtn.addEventListener('click', () => {
+            switchTabAndPrint('schedule', `${currentScheduleYear} Class Schedule`);
+        });
+    }
+}
+
+function switchTabAndPrint(tabId, docTitle) {
+    // Step 1: Activate the correct tab
+    const tabs = document.querySelectorAll('.tab-btn');
+    const contents = document.querySelectorAll('.tab-content');
+    tabs.forEach(t => t.classList.remove('active'));
+    contents.forEach(c => c.classList.remove('active'));
+
+    const targetTab = document.querySelector(`.tab-btn[data-tab="${tabId}"]`);
+    const targetContent = document.getElementById(`tab-${tabId}`);
+
+    if (targetTab) targetTab.classList.add('active');
+    if (targetContent) targetContent.classList.add('active');
+
+    // Step 2: Update print header EXACTLY as requested: "(Center Name) (Year) Calendar"
+    const printCenterName = document.getElementById('printCenterName');
+    const printDocTitle = document.getElementById('printDocTitle');
+
+    let year = currentCalendarYear;
+    if (tabId === 'schedule') year = currentScheduleYear;
+    
+    // Format: "Kumon Taipa Mei Keng 2024 Calendar"
+    const headerText = `${centerName || 'Kumon Center'} ${year} Calendar`;
+    
+    if (printCenterName) {
+        printCenterName.textContent = headerText;
+    }
+    
+    // Hide the secondary title to keep the header clean and single-line
+    if (printDocTitle) {
+        printDocTitle.style.display = 'none'; 
+    }
+
+    // Step 3: Small delay to let DOM update, then trigger print
+    setTimeout(() => {
+        window.print();
+    }, 300);
 }
