@@ -160,6 +160,21 @@ input[readonly], input[disabled] {
     white-space: nowrap;
 }
 
+/* Add Request Button */
+.add-request-btn {
+    background: #10b981;
+    color: white;
+    padding: 0.6rem 1.2rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-left: auto;
+    box-shadow: 0 2px 5px rgba(16, 185, 129, 0.3);
+}
+
+.add-request-btn:hover {
+    background: #059669;
+}
+
 /* ============================================
 📑 TABS STYLING
 ============================================ */
@@ -335,6 +350,17 @@ input[readonly], input[disabled] {
     margin-left: 5px;
 }
 
+.status-badge-pending {
+    background: #e0f2fe;
+    color: #0369a1;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-left: 5px;
+    border: 1px solid #bae6fd;
+}
+
 /* ============================================
 🪟 MODAL STYLING
 ============================================ */
@@ -367,6 +393,14 @@ input[readonly], input[disabled] {
     max-width: 800px;
     width: 90%;
     max-height: 90vh;
+    overflow-y: auto;
+    text-align: left;
+}
+
+.search-modal-content {
+    max-width: 600px;
+    width: 90%;
+    max-height: 85vh;
     overflow-y: auto;
     text-align: left;
 }
@@ -432,6 +466,83 @@ input[readonly], input[disabled] {
     margin-top: 1.5rem;
     border-top: 1px solid #eee;
     padding-top: 1rem;
+}
+
+/* Confirm Drop Button in Modal */
+.confirm-drop-btn {
+    background: #28a745;
+    color: white;
+    padding: 0.6rem 1.2rem;
+    font-weight: 600;
+    margin-right: auto; /* Pushes to the left side of the flex container */
+}
+
+.confirm-drop-btn:hover {
+    background: #218838;
+}
+
+/* Confirm Button in Table Row */
+.confirm-row-btn {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+}
+
+.confirm-row-btn:hover {
+    background: #218838;
+}
+
+.confirm-row-btn.confirmed {
+    background: #e9ecef;
+    color: #6c757d;
+    cursor: not-allowed;
+}
+
+/* Search Modal Specifics */
+.search-results {
+    margin-top: 1rem;
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+}
+
+.search-result-item {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #f1f5f9;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.search-result-item:hover {
+    background: #f8fafc;
+}
+
+.search-result-item:last-child {
+    border-bottom: none;
+}
+
+.selected-student-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f1f5f9;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.selected-student-info h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--primary-dark);
 }
 
 /* ============================================
@@ -528,6 +639,11 @@ input[readonly], input[disabled] {
         width: 100%;
     }
     
+    .add-request-btn {
+        width: 100%;
+        margin-left: 0;
+    }
+    
     .month-tabs,
     .subject-tabs {
         justify-content: center;
@@ -541,5 +657,14 @@ input[readonly], input[disabled] {
     .sub-tab-btn {
         flex: 1 1 auto;
         min-width: 100px;
+    }
+    
+    .modal-actions {
+        flex-direction: column;
+    }
+    
+    .confirm-drop-btn {
+        margin-right: 0;
+        width: 100%;
     }
 }

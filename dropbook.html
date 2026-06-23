@@ -15,7 +15,7 @@
         <nav>
             <a href="dashboard.html">← Dashboard</a>
         </nav>
-                    <h2>📉 Drop Book</h2>
+                <h2>📉 Drop Book</h>
     </header>
 
     <div id="accessDenied" class="access-denied hidden">
@@ -57,6 +57,9 @@
                 <select id="rangeStartYear"></select>
                 <span id="rangeEndLabel" class="range-end-label"></span>
             </div>
+
+            <!-- Add Request Button -->
+            <button id="addRequestBtn" class="add-request-btn">➕ Add Request</button>
         </div>
 
         <!-- Tabs Container -->
@@ -80,6 +83,7 @@
                         <th>Phone</th>
                         <th>Reason</th>
                         <th>Call</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody id="dropBookBody">
@@ -143,11 +147,11 @@
                     <button id="mCallStatusBtn" class="call-status-btn red">✖ Not Called</button>
                 </div>
                 <div class="info-group">
-                    <label>Called By</label>
+                    <label>Called By *</label>
                     <input type="text" id="mCalledBy" placeholder="Staff name">
                 </div>
                 <div class="info-group full-width">
-                    <label>Notes</label>
+                    <label>Notes *</label>
                     <textarea id="mNotes" rows="3" placeholder="Call notes..."></textarea>
                 </div>
             </div>
@@ -167,8 +171,97 @@
             </div>
 
             <div class="modal-actions">
+                <button id="confirmDropBtn" class="confirm-drop-btn">✔️ Confirm Drop/Pause</button>
                 <button id="cancelModalBtn" class="secondary">Cancel</button>
                 <button id="saveModalBtn" class="primary">💾 Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search & Add Request Modal -->
+    <div id="searchRequestModal" class="modal hidden">
+        <div class="modal-content search-modal-content">
+            <span id="closeSearchModal" class="close-modal">&times;</span>
+            <h2>➕ Add Drop/Pause Request</h2>
+            
+            <!-- Step 1: Search -->
+            <div id="searchStep">
+                <input type="text" id="searchStudentInput" placeholder="Search by Name (CN), Nickname or Pinyin...">
+                <div id="searchResults" class="search-results">
+                    <div class="search-result-item" style="color:#999; text-align:center;">Type to search...</div>
+                </div>
+            </div>
+
+            <!-- Step 2: Select Subject & Details -->
+            <div id="detailsStep" class="hidden">
+                <div class="selected-student-info">
+                    <h3 id="selectedStudentName"></h3>
+                    <button id="backToSearchBtn" class="secondary" style="width:auto; padding:0.3rem 0.8rem; font-size:0.8rem;">← Change Student</button>
+                </div>
+                
+                <div class="modal-grid">
+                    <div class="info-group full-width">
+                        <label>Subject</label>
+                        <select id="reqSubjectSelect"></select>
+                    </div>
+                    <div class="info-group">
+                        <label>Request Type</label>
+                        <select id="reqType">
+                            <option value="pause">Pause</option>
+                            <option value="drop">Drop</option>
+                        </select>
+                    </div>
+                    <div class="info-group full-width">
+                        <label>Reason *</label>
+                        <input type="text" id="reqReason" placeholder="Enter reason...">
+                    </div>
+                </div>
+
+                <!-- Pause Fields -->
+                <div id="reqPauseFields" class="modal-grid">
+                    <div class="info-group">
+                        <label>Pause From *</label>
+                        <div style="display:flex; gap:0.5rem;">
+                            <select id="reqPauseFromMonth" class="req-month-select"></select>
+                            <select id="reqPauseFromYear" class="req-year-select"></select>
+                        </div>
+                    </div>
+                    <div class="info-group">
+                        <label>Pause To *</label>
+                        <div style="display:flex; gap:0.5rem;">
+                            <select id="reqPauseToMonth" class="req-month-select"></select>
+                            <select id="reqPauseToYear" class="req-year-select"></select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Drop Fields -->
+                <div id="reqDropFields" class="modal-grid hidden">
+                    <div class="info-group full-width">
+                        <label>Drop Month/Year *</label>
+                        <div style="display:flex; gap:0.5rem;">
+                            <select id="reqDropMonth" class="req-month-select"></select>
+                            <select id="reqDropYear" class="req-year-select"></select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button id="cancelReqBtn" class="secondary">Cancel</button>
+                    <button id="saveReqBtn" class="primary">💾 Save Request</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NEW: Confirmation Action Modal -->
+    <div id="confirmActionModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 400px; text-align: center;">
+            <h3 id="confirmTitle" style="margin-bottom: 1rem;">Confirm Action</h3>
+            <p id="confirmMessage" style="margin-bottom: 1.5rem; color: var(--text-light);">Are you sure?</p>
+            <div class="modal-actions" style="justify-content: center;">
+                <button id="cancelConfirmBtn" class="secondary">Cancel</button>
+                <button id="proceedConfirmBtn" class="primary">Proceed</button>
             </div>
         </div>
     </div>
