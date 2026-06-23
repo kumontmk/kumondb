@@ -387,19 +387,11 @@ function initApp() {
             // Math starts at 6A
             for (let i = 6; i >= 2; i--) levels.push(`${i}A`);
             levels = levels.concat(['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O']);
-        } 
-        else if (subject === 'English EFL') {
-            // English EFL starts at 7A
-            for (let i = 7; i >= 2; i--) levels.push(`${i}A`);
-            levels = levels.concat(['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O']);
-        } 
-        else if (subject.includes('Chinese') || subject === 'English ERP') {
-            // Chinese and English ERP start at 7A 
+        } else if (subject.includes('Chinese') || subject === 'English ERP') {
             for (let i = 7; i >= 2; i--) levels.push(`${i}A`);
             ['A','B','C','D','E','F','G','H'].forEach(l => { levels.push(`${l}I`); levels.push(`${l}II`); });
             levels.push('II', 'III', 'J', 'K', 'L');
         }
-
         let optionsHTML = '<option value="">Select Level</option>';
         levels.forEach(lvl => { 
             optionsHTML += `<option value="${lvl}" ${lvl === currentValue ? 'selected' : ''}>${lvl}</option>`; 
