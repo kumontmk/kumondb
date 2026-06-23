@@ -5,16 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Follow Ups - Kumon DB</title>
     <link rel="stylesheet" href="follow-ups.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <header>
-        <a href="dashboard.html">← Dashboard</a>
-        <h2>📋 Follow Ups</h2>
-        <button id="refreshBtn" title="Refresh">🔄 Refresh</button>
+        <nav>
+            <a href="dashboard.html">← Dashboard</a>
+            <button id="refreshBtn">🔄 Refresh</button>
+        </nav>
+                <h2>📋 Follow Ups</h2>
     </header>
 
-    <!-- 🔐 Access Denied Screen -->
     <div id="accessDenied" class="access-denied hidden">
         <div class="access-denied-content">
             <h2>🔐 Access Restricted</h2>
@@ -23,76 +23,105 @@
         </div>
     </div>
 
-    <div id="mainContent" class="hidden">
-        <div class="po-container">
-            <!-- ✅ TAB NAVIGATION -->
-            <div class="tabs">
-                <button class="tab-btn active" data-tab="po"><i class="fas fa-list"></i> Pending Parent Orientation</button>
-                <button class="tab-btn" data-tab="inquiries"><i class="fas fa-search"></i> Inquiries</button>
-            </div>
+    <div id="mainContent" class="po-container hidden">
+        <!-- ✅ TABS WITH COUNT BADGES -->
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="po">
+                Pending Parent Orientation
+                <span class="tab-badge" id="poBadge">0</span>
+            </button>
+            <button class="tab-btn" data-tab="inquiry">
+                Inquiries
+                <span class="tab-badge" id="inquiryBadge">0</span>
+            </button>
+            <button class="tab-btn" data-tab="pause">
+                Pause Follow-Up
+                <span class="tab-badge" id="pauseBadge">0</span>
+            </button>
+        </div>
 
-            <!-- Controls -->
+        <!-- TAB 1: PENDING PO -->
+        <div id="tab-po" class="tab-content active">
             <div class="controls">
-                <input type="text" id="searchInput" placeholder="🔍 Search students...">
+                <input type="text" id="searchInput" placeholder="🔍 Search by name, nickname, grade, subject...">
             </div>
-
-            <!-- TAB 1: PENDING PARENT ORIENTATION -->
-            <div id="tab-po" class="tab-content active">
-                <div class="table-wrapper" style="position: relative;">
-                    <table id="poTable">
-                        <thead>
-                            <tr>
-                                <th>Student Name</th>
-                                <th>Chinese Name</th>
-                                <th>Nickname</th>
-                                <th>Grade</th>
-                                <th>Subjects & Levels</th>
-                                <th>Enrol Date</th>
-                                <th>Reason / Notes</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="poTableBody">
-                            <tr><td colspan="8" class="empty-state">Loading students...</td></tr>
-                        </tbody>
-                    </table>
-                    <div id="noResults" class="empty-state">
-                        No students pending orientation.
-                    </div>
-                    <div id="poLoader" class="loader-overlay hidden">
-                        <div class="spinner"></div>
-                        <p>Loading...</p>
-                    </div>
+            <div class="table-wrapper" style="position: relative;">
+                <table id="poTable">
+                    <thead>
+                        <tr>
+                            <th>Student Name</th>
+                            <th>Chinese Name</th>
+                            <th>Nickname</th>
+                            <th>Grade</th>
+                            <th>Subjects & Levels</th>
+                            <th>Enrol Date</th>
+                            <th>Reason / Notes</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="poTableBody">
+                        <tr><td colspan="8" class="empty-state">Loading students...</td></tr>
+                    </tbody>
+                </table>
+                <div id="noResults" class="empty-state">No students pending orientation.</div>
+                <div id="poLoader" class="loader-overlay hidden">
+                    <div class="spinner"></div>
+                    <p>Loading...</p>
                 </div>
             </div>
+        </div>
 
-            <!-- TAB 2: INQUIRIES -->
-            <div id="tab-inquiries" class="tab-content">
-                <div class="table-wrapper" style="position: relative;">
-                    <table id="inquiryTable">
-                        <thead>
-                            <tr>
-                                <th>Student Name</th>
-                                <th>Chinese Name</th>
-                                <th>Nickname</th>
-                                <th>Grade</th>
-                                <th>Subjects & Levels</th>
-                                <th>Inquiry Date</th>
-                                <th>DT</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="inquiryTableBody">
-                            <tr><td colspan="8" class="empty-state">Loading inquiries...</td></tr>
-                        </tbody>
-                    </table>
-                    <div id="noInquiryResults" class="empty-state">
-                        No inquiries found.
-                    </div>
-                    <div id="inquiryLoader" class="loader-overlay hidden">
-                        <div class="spinner"></div>
-                        <p>Loading...</p>
-                    </div>
+        <!-- TAB 2: INQUIRIES -->
+        <div id="tab-inquiry" class="tab-content">
+            <div class="table-wrapper" style="position: relative;">
+                <table id="inquiryTable">
+                    <thead>
+                        <tr>
+                            <th>Student Name</th>
+                            <th>Chinese Name</th>
+                            <th>Nickname</th>
+                            <th>Grade</th>
+                            <th>Subjects & Levels</th>
+                            <th>Inquiry Date</th>
+                            <th>DT</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inquiryTableBody">
+                        <tr><td colspan="8" class="empty-state">Loading inquiries...</td></tr>
+                    </tbody>
+                </table>
+                <div id="noInquiryResults" class="empty-state">No inquiries found.</div>
+                <div id="inquiryLoader" class="loader-overlay hidden">
+                    <div class="spinner"></div>
+                    <p>Loading...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ✅ TAB 3: PAUSE FOLLOW-UP (NEW) -->
+        <div id="tab-pause" class="tab-content">
+            <div class="table-wrapper" style="position: relative;">
+                <table id="pauseTable">
+                    <thead>
+                        <tr>
+                            <th>Student Name</th>
+                            <th>Chinese Name</th>
+                            <th>Nickname</th>
+                            <th>Grade</th>
+                            <th>Subjects & Levels</th>
+                            <th>Pause Duration</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pauseTableBody">
+                        <tr><td colspan="7" class="empty-state">Loading pause follow-ups...</td></tr>
+                    </tbody>
+                </table>
+                <div id="noPauseResults" class="empty-state">No pause follow-ups at this time.</div>
+                <div id="pauseLoader" class="loader-overlay hidden">
+                    <div class="spinner"></div>
+                    <p>Loading...</p>
                 </div>
             </div>
         </div>
