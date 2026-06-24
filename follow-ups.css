@@ -429,3 +429,49 @@ tr:hover { background-color: #f8fafc; }
     transform: none !important;
     box-shadow: none !important;
 }
+
+/* ============================================
+🪟 MODAL STYLES
+============================================ */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+.modal-content {
+    background: var(--white);
+    padding: 2rem;
+    border-radius: var(--radius);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    width: 90%;
+    max-width: 400px;
+}
+.modal-content h3 {
+    margin-bottom: 1rem;
+    color: var(--primary-dark);
+}
+.modal-content p {
+    margin-bottom: 1.5rem;
+    color: var(--text-light);
+}
+
+/* ============================================
+✅ RETURN CONFIRMED BADGE
+============================================ */
+.return-confirmed-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 14px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+    background: #d1fae5;
+    color: #065f46;
+    margin-right: 0.5rem;
+}

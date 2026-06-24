@@ -102,22 +102,22 @@
         <!-- ✅ TAB 3: PAUSE FOLLOW-UP (NEW) -->
         <div id="tab-pause" class="tab-content">
             <div class="table-wrapper" style="position: relative;">
-                <table id="pauseTable">
-                    <thead>
-                        <tr>
-                            <th>Student Name</th>
-                            <th>Chinese Name</th>
-                            <th>Nickname</th>
-                            <th>Grade</th>
-                            <th>Subjects & Levels</th>
-                            <th>Pause Duration</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="pauseTableBody">
-                        <tr><td colspan="7" class="empty-state">Loading pause follow-ups...</td></tr>
-                    </tbody>
-                </table>
+                    <table id="pauseTable">
+                        <thead>
+                            <tr>
+                                <th>Student Name</th>
+                                <th>Chinese Name</th>
+                                <th>Nickname</th>
+                                <th>Grade</th>
+                                <th>Subject & Level</th>
+                                <th>Pause Duration</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pauseTableBody">
+                            <tr><td colspan="7" class="empty-state">Loading pause follow-ups...</td></tr>
+                        </tbody>
+                    </table>
                 <div id="noPauseResults" class="empty-state">No pause follow-ups at this time.</div>
                 <div id="pauseLoader" class="loader-overlay hidden">
                     <div class="spinner"></div>
@@ -127,6 +127,26 @@
         </div>
     </div>
 
+    <div id="confirmReturnModal" class="modal-overlay hidden">
+    <div class="modal-content">
+        <h3>Confirm Return Month</h3>
+         <p>Select the month the student will return:</p>
+            <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div>
+                    <label>Month</label>
+                    <select id="returnMonth"></select>
+                </div>
+                <div>
+                    <label>Year</label>
+                    <select id="returnYear"></select>
+                </div>
+            </div>
+            <div style="margin-top: 1.5rem; text-align: right; display: flex; gap: 0.5rem; justify-content: flex-end;">
+                <button id="cancelReturnBtn" class="secondary">Cancel</button>
+                <button id="saveReturnBtn" class="primary">Confirm Return</button>
+            </div>
+        </div>
+    </div>
     <script type="module" src="follow-ups.js"></script>
 </body>
 </html>
