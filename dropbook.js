@@ -32,7 +32,7 @@ onAuthStateChanged(auth, async (user) => {
             document.getElementById('mainContent')?.classList.remove('hidden');
             initApp();
         } else {
-            document.getElementById('accessDenied')?.classList.remove('hidden');
+            document.getElementById('accessDenied')?.remove('hidden');
             document.getElementById('mainContent')?.classList.add('hidden');
             document.getElementById('page-loader')?.classList.add('hidden');
             document.getElementById('backToDashboardBtn')?.addEventListener('click', () => window.location.href = 'dashboard.html');
@@ -74,12 +74,10 @@ function initApp() {
         rangeStartMonthSel.innerHTML += `<option value="${monthVal}">${m}</option>`;
     });
 
-    // Default to current month/year for the single-month filter
     const now = new Date();
     filterMonth.value = String(now.getMonth() + 1).padStart(2, '0');
     filterYear.value = now.getFullYear();
 
-    // Calculate next month for the default range
     let nextMonth = now.getMonth() + 2; 
     let nextYear = now.getFullYear();
     if (nextMonth > 12) {
@@ -91,10 +89,8 @@ function initApp() {
     rangeStartMonthSel.value = nextMonthStr;
     rangeStartYearSel.value = nextYear;
     
-    // Set the UI dropdown to match the default 'year' view mode
     viewModeSelect.value = 'year';
 
-    // Generate Subject Tabs
     function generateSubjectTabs() {
         subjectTabs.innerHTML = '';
         SUBJECT_FILTERS.forEach(subject => {
@@ -115,7 +111,6 @@ function initApp() {
         });
     }
 
-    // View Mode Change Handler
     viewModeSelect.addEventListener('change', () => {
         viewMode = viewModeSelect.value;
         
@@ -128,7 +123,6 @@ function initApp() {
         } else if (viewMode === 'year') {
             singleMonthControls.classList.add('hidden');
             rangeControls.classList.remove('hidden');
-            // FIXED: Removed forced '01' so it respects the dropdown
             updateRangeEndLabel();
             generateMonthTabs();
         } else if (viewMode === 'range') {
@@ -141,7 +135,6 @@ function initApp() {
         renderTable();
     });
 
-    // Range Controls Change Handlers
     rangeStartMonthSel.addEventListener('change', () => {
         updateRangeEndLabel();
         generateMonthTabs();
@@ -168,7 +161,6 @@ function initApp() {
         monthTabs.innerHTML = '';
         
         let startMonth, startYear;
-        // FIXED: Unified logic so 'year' respects the dropdown just like 'range'
         startMonth = parseInt(rangeStartMonthSel.value);
         startYear = parseInt(rangeStartYearSel.value);
 
@@ -251,7 +243,6 @@ function initApp() {
             subjects.forEach((sub, index) => {
                 let targetMonth, targetYear, reason, type, isPending = false;
                 
-                // 1. Check for Pending Request first
                 if (sub.pendingRequest) {
                     isPending = true;
                     type = sub.pendingRequest.type;
@@ -264,7 +255,6 @@ function initApp() {
                         targetYear = sub.pendingRequest.pauseFromYear;
                     }
                 } 
-                // 2. Check for actual Drop/Pause
                 else if (sub.status === 'drop' || sub.status === 'pause') {
                     type = sub.status;
                     reason = sub.status === 'drop' ? sub.dropReason : sub.pauseReason;
@@ -272,18 +262,13 @@ function initApp() {
                     targetYear = sub.status === 'drop' ? sub.dropYear : sub.pauseFromYear;
                 } 
                 else {
-                    return; // Skip current/inquiry without pending request
+                    return; 
                 }
 
-                // Filter by Status (Drop/Pause)
                 if (mStatus !== 'all' && type !== mStatus) return;
-                
-                // Subject filter
                 if (!matchesSubjectFilter(sub.name)) return;
-
                 if (!targetMonth || !targetYear) return;
 
-                // Filter based on view mode
                 if (viewMode === 'single') {
                     const mMonth = filterMonth.value;
                     const mYear = filterYear.value;
@@ -291,7 +276,6 @@ function initApp() {
                     if (mYear && targetYear !== mYear) return;
                 } else if (viewMode === 'year' || viewMode === 'range') {
                     let startMonth, startYear;
-                    // FIXED: Unified logic so 'year' respects the dropdown
                     startMonth = parseInt(rangeStartMonthSel.value);
                     startYear = parseInt(rangeStartYearSel.value);
 
@@ -307,12 +291,19 @@ function initApp() {
                     }
                 }
 
+                // 🆕 Check if the pending request was cancelled
+                let isCancelled = false;
+                if (sub.pendingRequest && sub.pendingRequest.cancelled) {
+                    isCancelled = true;
+                }
+
                 entries.push({ 
                     studentId: student.id, 
                     subjectIndex: index, 
                     student, 
                     subject: sub, 
                     isPending,
+                    isCancelled, 
                     targetMonth,
                     targetYear,
                     type,
@@ -343,7 +334,7 @@ function initApp() {
         }
 
         entries.forEach((entry, idx) => {
-            const { student, subject, isPending, type } = entry;
+            const { student, subject, isPending, type, isCancelled } = entry; 
             const sub = entry.subject;
             const tMonth = entry.targetMonth;
             const tYear = entry.targetYear;
@@ -357,14 +348,31 @@ function initApp() {
             
             const reason = entry.reason || '-';
             const isConfirmed = sub.dropBook?.confirmed;
-            // Only show Pending badge if NOT confirmed
-            const pendingBadge = (isPending && !isConfirmed) ? '<span class="status-badge-pending">⏳ Pending</span>' : '';
+            const pendingBadge = (isPending && !isConfirmed && !isCancelled) ? '<span class="status-badge-pending">⏳ Pending</span>' : '';
             
-            const actionBtn = isConfirmed 
-                ? `<button class="confirm-row-btn confirmed" disabled>✔️ Confirmed</button>` 
-                : `<button class="confirm-row-btn" data-student-id="${student.id}" data-sub-index="${entry.subjectIndex}">✔️ Confirm</button>`;
+            // 🆕 UPDATED ACTION BUTTON LOGIC (Includes Reinstate)
+            let actionBtn = '';
+            if (isCancelled) {
+                actionBtn = `
+                    <div style="display:flex; gap:4px; flex-wrap:wrap;">
+                        <button class="confirm-row-btn cancelled" disabled style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">❌ Cancelled</button>
+                        <button class="confirm-row-btn reinstate-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" data-student-id="${student.id}" data-sub-index="${entry.subjectIndex}" data-action="reinstate">🔄 Reinstate</button>
+                    </div>
+                `;
+            } else if (isConfirmed) {
+                actionBtn = `<button class="confirm-row-btn confirmed" disabled>✔️ Confirmed</button>`;
+            } else {
+                actionBtn = `
+                    <div style="display:flex; gap:4px; flex-wrap:wrap;">
+                        <button class="confirm-row-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" data-student-id="${student.id}" data-sub-index="${entry.subjectIndex}" data-action="confirm">✔️ Confirm</button>
+                        <button class="confirm-row-btn cancel-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" data-student-id="${student.id}" data-sub-index="${entry.subjectIndex}" data-action="cancel">❌ Cancel</button>
+                    </div>
+                `;
+            }
 
             const tr = document.createElement('tr');
+            if (isCancelled) tr.classList.add('cancelled-row'); 
+
             tr.innerHTML = `
                 <td>${idx + 1}</td>
                 <td>${student.nameCn || '-'}</td>
@@ -384,16 +392,87 @@ function initApp() {
         });
     }
 
-    // Event Delegation for Table Confirm Buttons
+    // 🆕 UPDATED EVENT DELEGATION FOR TABLE BUTTONS
     tbody.addEventListener('click', (e) => {
         const btn = e.target.closest('.confirm-row-btn');
         if (btn && !btn.disabled) {
-            e.stopPropagation(); // Prevent opening the detail modal
+            e.stopPropagation(); 
             const studentId = btn.dataset.studentId;
             const subjectIndex = parseInt(btn.dataset.subIndex);
-            triggerConfirmAction(studentId, subjectIndex);
+            const action = btn.dataset.action; 
+
+            if (action === 'cancel') {
+                triggerCancelAction(studentId, subjectIndex);
+            } else if (action === 'reinstate') {
+                triggerReinstateAction(studentId, subjectIndex); // 🆕 Handle reinstate
+            } else {
+                triggerConfirmAction(studentId, subjectIndex);
+            }
         }
     });
+
+    // 🆕 NEW FUNCTION: QUICK CANCEL FROM TABLE
+    async function triggerCancelAction(studentId, subjectIndex) {
+        if (!confirm('Are you sure you want to cancel this pending request? The entry will be crossed out.')) return;
+
+        try {
+            const studentRef = ref(db, `centers/${centerId}/students/${studentId}`);
+            const snap = await get(studentRef);
+            if (!snap.exists()) throw new Error("Student not found");
+            
+            const studentData = snap.val();
+            let subjects = Array.isArray(studentData.subjects) ? studentData.subjects : Object.values(studentData.subjects || {});
+            
+            if (subjects[subjectIndex] && subjects[subjectIndex].pendingRequest) {
+                subjects[subjectIndex].pendingRequest.cancelled = true;
+                subjects[subjectIndex].pendingRequest.cancelledAt = new Date().toISOString();
+            }
+            
+            studentData.subjects = subjects;
+            await set(studentRef, studentData);
+            
+            const localStudent = allStudentsData.find(s => s.id === studentId);
+            if (localStudent) localStudent.subjects = subjects;
+            
+            renderTable();
+            alert('✅ Request cancelled.');
+        } catch (err) {
+            console.error("Cancel error: ", err);
+            alert('❌ Failed to cancel: ' + err.message);
+        }
+    }
+
+    // 🆕 NEW FUNCTION: QUICK REINSTATE FROM TABLE
+    async function triggerReinstateAction(studentId, subjectIndex) {
+        if (!confirm('Are you sure you want to reinstate this cancelled request? It will become pending again.')) return;
+
+        try {
+            const studentRef = ref(db, `centers/${centerId}/students/${studentId}`);
+            const snap = await get(studentRef);
+            if (!snap.exists()) throw new Error("Student not found");
+            
+            const studentData = snap.val();
+            let subjects = Array.isArray(studentData.subjects) ? studentData.subjects : Object.values(studentData.subjects || {});
+            
+            if (subjects[subjectIndex] && subjects[subjectIndex].pendingRequest) {
+                // Remove the cancelled flags to reactivate the request
+                delete subjects[subjectIndex].pendingRequest.cancelled;
+                delete subjects[subjectIndex].pendingRequest.cancelledAt;
+            }
+            
+            studentData.subjects = subjects;
+            await set(studentRef, studentData);
+            
+            const localStudent = allStudentsData.find(s => s.id === studentId);
+            if (localStudent) localStudent.subjects = subjects;
+            
+            renderTable();
+            alert('✅ Request reinstated successfully.');
+        } catch (err) {
+            console.error("Reinstate error: ", err);
+            alert('❌ Failed to reinstate: ' + err.message);
+        }
+    }
 
     function openModal(entry) {
         const { student, subject, studentId, subjectIndex, isPending } = entry;
@@ -410,6 +489,7 @@ function initApp() {
 
         let reason = '';
         let expectedReturnMonth = '', expectedReturnYear = '';
+        let pauseFromMonth = '', pauseFromYear = '';
         let isPause = false;
         
         if (isPending) {
@@ -417,6 +497,8 @@ function initApp() {
             reason = pr.reason || '';
             isPause = pr.type === 'pause';
             if (isPause) {
+                pauseFromMonth = pr.pauseFromMonth;
+                pauseFromYear = pr.pauseFromYear;
                 expectedReturnMonth = pr.pauseToMonth;
                 expectedReturnYear = pr.pauseToYear;
             }
@@ -424,6 +506,8 @@ function initApp() {
             isPause = subject.status === 'pause';
             reason = subject.status === 'drop' ? subject.dropReason : subject.pauseReason;
             if (isPause) {
+                pauseFromMonth = subject.pauseFromMonth;
+                pauseFromYear = subject.pauseFromYear;
                 expectedReturnMonth = subject.pauseToMonth;
                 expectedReturnYear = subject.pauseToYear;
             }
@@ -431,6 +515,15 @@ function initApp() {
         
         document.getElementById('mReason').value = reason;
         
+        // 🆕 Handle Pause Month Display
+        const pauseFromGroup = document.getElementById('mPauseFromGroup');
+        if (isPause && pauseFromMonth && pauseFromYear) {
+            document.getElementById('mPauseFrom').value = `${MONTH_NAMES[parseInt(pauseFromMonth) - 1]} ${pauseFromYear}`;
+            pauseFromGroup.style.display = 'flex';
+        } else {
+            pauseFromGroup.style.display = 'none';
+        }
+
         const expectedReturnGroup = document.getElementById('mExpectedReturnGroup');
         if (isPause && expectedReturnMonth && expectedReturnYear) {
             let retMonth = parseInt(expectedReturnMonth) + 1;
@@ -449,12 +542,26 @@ function initApp() {
         document.getElementById('mExitAutopay').checked = dbInfo.exitFormAutopay || false;
         document.getElementById('mAccounts').value = dbInfo.accounts || '';
 
-        // Show/Hide Confirm Button based on confirmation status
         const confirmDropBtn = document.getElementById('confirmDropBtn');
         if (dbInfo.confirmed) {
             confirmDropBtn.style.display = 'none';
         } else {
             confirmDropBtn.style.display = 'inline-block';
+        }
+
+        // 🆕 Show/Hide Cancel OR Reinstate Request Button in Modal
+        const cancelRequestBtn = document.getElementById('cancelRequestBtn');
+        const reinstateRequestBtn = document.getElementById('reinstateRequestBtn');
+
+        if (isPending && !subject.pendingRequest.cancelled) {
+            cancelRequestBtn.style.display = 'inline-block';
+            reinstateRequestBtn.style.display = 'none';
+        } else if (isPending && subject.pendingRequest.cancelled) {
+            cancelRequestBtn.style.display = 'none';
+            reinstateRequestBtn.style.display = 'inline-block';
+        } else {
+            cancelRequestBtn.style.display = 'none';
+            reinstateRequestBtn.style.display = 'none';
         }
 
         modal.classList.remove('hidden');
@@ -491,7 +598,6 @@ function initApp() {
         const { studentId, subjectIndex, isPending } = currentEditContext;
         const saveBtn = document.getElementById('saveModalBtn');
         
-        // VALIDATION: Require Called By and Notes if Call Status is "Called"
         const isCalled = callStatusBtn.classList.contains('green');
         const calledBy = document.getElementById('mCalledBy').value.trim();
         const notes = document.getElementById('mNotes').value.trim();
@@ -531,7 +637,7 @@ function initApp() {
             }
 
             sub.dropBook = {
-                ...sub.dropBook, // Preserve existing dropBook data like 'confirmed'
+                ...sub.dropBook, 
                 callStatus: callStatusBtn.classList.contains('green'),
                 calledBy: calledBy,
                 notes: notes,
@@ -560,8 +666,90 @@ function initApp() {
         }
     });
 
+    // 🆕 CANCEL REQUEST FROM MODAL
+    document.getElementById('cancelRequestBtn').addEventListener('click', async () => {
+        if (!currentEditContext) return;
+        if (!confirm('Are you sure you want to cancel this pending request? The entry will be crossed out.')) return;
+
+        const { studentId, subjectIndex } = currentEditContext;
+        const btn = document.getElementById('cancelRequestBtn');
+        btn.disabled = true;
+        btn.textContent = 'Cancelling...';
+
+        try {
+            const studentRef = ref(db, `centers/${centerId}/students/${studentId}`);
+            const snap = await get(studentRef);
+            if (!snap.exists()) throw new Error("Student not found");
+            
+            const studentData = snap.val();
+            let subjects = Array.isArray(studentData.subjects) ? studentData.subjects : Object.values(studentData.subjects || {});
+            
+            if (subjects[subjectIndex] && subjects[subjectIndex].pendingRequest) {
+                subjects[subjectIndex].pendingRequest.cancelled = true;
+                subjects[subjectIndex].pendingRequest.cancelledAt = new Date().toISOString();
+            }
+            
+            studentData.subjects = subjects;
+            await set(studentRef, studentData);
+            
+            const localStudent = allStudentsData.find(s => s.id === studentId);
+            if (localStudent) localStudent.subjects = subjects;
+            
+            renderTable();
+            closeModal();
+            alert('✅ Request cancelled successfully.');
+        } catch (err) {
+            console.error("Cancel error:", err);
+            alert('❌ Failed to cancel: ' + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '❌ Cancel Request';
+        }
+    });
+
+    // 🆕 REINSTATE REQUEST FROM MODAL
+    document.getElementById('reinstateRequestBtn').addEventListener('click', async () => {
+        if (!currentEditContext) return;
+        if (!confirm('Are you sure you want to reinstate this cancelled request?')) return;
+
+        const { studentId, subjectIndex } = currentEditContext;
+        const btn = document.getElementById('reinstateRequestBtn');
+        btn.disabled = true;
+        btn.textContent = 'Reinstating...';
+
+        try {
+            const studentRef = ref(db, `centers/${centerId}/students/${studentId}`);
+            const snap = await get(studentRef);
+            if (!snap.exists()) throw new Error("Student not found");
+            
+            const studentData = snap.val();
+            let subjects = Array.isArray(studentData.subjects) ? studentData.subjects : Object.values(studentData.subjects || {});
+            
+            if (subjects[subjectIndex] && subjects[subjectIndex].pendingRequest) {
+                delete subjects[subjectIndex].pendingRequest.cancelled;
+                delete subjects[subjectIndex].pendingRequest.cancelledAt;
+            }
+            
+            studentData.subjects = subjects;
+            await set(studentRef, studentData);
+            
+            const localStudent = allStudentsData.find(s => s.id === studentId);
+            if (localStudent) localStudent.subjects = subjects;
+            
+            renderTable();
+            closeModal();
+            alert('✅ Request reinstated successfully.');
+        } catch (err) {
+            console.error("Reinstate error:", err);
+            alert('❌ Failed to reinstate: ' + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '🔄 Reinstate Request';
+        }
+    });
+
     // ==========================================
-    // 🆕 CONFIRM DROP/PAUSE LOGIC
+    // CONFIRM DROP/PAUSE LOGIC
     // ==========================================
     const confirmActionModal = document.getElementById('confirmActionModal');
     const confirmTitle = document.getElementById('confirmTitle');
@@ -598,19 +786,18 @@ function initApp() {
         if (!isCalled) {
             confirmTitle.textContent = '⚠️ Parents Not Called';
             confirmMessage.textContent = 'The parents haven\'t been called yet. Are you sure you want to confirm this drop/pause?';
-            proceedConfirmBtn.style.background = '#dc3545'; // Red for warning
+            proceedConfirmBtn.style.background = '#dc3545'; 
             proceedConfirmBtn.style.color = '#fff';
         } else {
             confirmTitle.textContent = '✔️ Confirm Drop/Pause';
             confirmMessage.textContent = 'Are you sure you want to confirm this drop/pause?';
-            proceedConfirmBtn.style.background = ''; // Default primary color
+            proceedConfirmBtn.style.background = ''; 
             proceedConfirmBtn.style.color = '';
         }
 
         confirmActionModal.classList.remove('hidden');
         confirmActionModal.style.display = 'flex';
 
-        // Clone button to prevent duplicate event listeners
         const newProceedBtn = proceedConfirmBtn.cloneNode(true);
         proceedConfirmBtn.parentNode.replaceChild(newProceedBtn, proceedConfirmBtn);
         proceedConfirmBtn = newProceedBtn;
@@ -623,7 +810,6 @@ function initApp() {
         });
     }
 
-    // 🛠️ FIXED: Save form data on confirm & Only execute immediately if target month is current/past
     async function executeConfirmDrop(studentId, subjectIndex) {
         try {
             const studentRef = ref(db, `centers/${centerId}/students/${studentId}`);
@@ -635,7 +821,6 @@ function initApp() {
             const sub = subjects[subjectIndex];
             if (!sub) throw new Error("Subject not found");
 
-            // 0. SAVE MODAL FORM DATA FIRST
             const isCalled = callStatusBtn.classList.contains('green');
             const calledBy = document.getElementById('mCalledBy').value.trim();
             const notes = document.getElementById('mNotes').value.trim();
@@ -650,11 +835,9 @@ function initApp() {
                 updatedAt: new Date().toISOString()
             };
 
-            // 1. Mark as confirmed
             sub.dropBook.confirmed = true;
             sub.dropBook.confirmedAt = new Date().toISOString();
 
-            // 2. Only execute the pending request immediately if the target month is current or past
             if (sub.pendingRequest) {
                 const pr = sub.pendingRequest;
                 let triggerMonth = '', triggerYear = '';
@@ -666,7 +849,6 @@ function initApp() {
                 const currentYear = String(now.getFullYear());
                 
                 if (triggerYear && triggerMonth) {
-                    // Check if the target month is current or in the past
                     if (triggerYear < currentYear || (triggerYear === currentYear && triggerMonth <= currentMonth)) {
                         sub.status = pr.type;
                         if (pr.type === 'drop') {
@@ -690,13 +872,11 @@ function initApp() {
 
             await set(studentRef, studentData);
 
-            // Update local cache
             const localStudent = allStudentsData.find(s => s.id === studentId);
             if (localStudent) localStudent.subjects = subjects;
 
             renderTable();
             
-            // If detail modal is open, close it
             const detailModal = document.getElementById('detailModal');
             if (!detailModal.classList.contains('hidden')) {
                 closeModal();
@@ -710,7 +890,7 @@ function initApp() {
     }
 
     // ==========================================
-    // 🆕 ADD REQUEST MODAL LOGIC
+    // ADD REQUEST MODAL LOGIC
     // ==========================================
     const searchModal = document.getElementById('searchRequestModal');
     const searchInput = document.getElementById('searchStudentInput');
@@ -719,7 +899,6 @@ function initApp() {
     const detailsStep = document.getElementById('detailsStep');
     const reqTypeSelect = document.getElementById('reqType');
 
-    // Populate Request Month/Year dropdowns
     function getReqMonthOptions() {
         let opts = '<option value="">Month</option>';
         MONTH_NAMES.forEach((m, i) => {
@@ -904,12 +1083,11 @@ function initApp() {
     // Initialize
     generateSubjectTabs();
     
-    // Force default view to 'year' and trigger its setup
     viewMode = 'year';
     singleMonthControls.classList.add('hidden');
     rangeControls.classList.remove('hidden');
     updateRangeEndLabel();
-    generateMonthTabs(); // Generates tabs and auto-clicks the first one
+    generateMonthTabs(); 
 
     loadData();
 }

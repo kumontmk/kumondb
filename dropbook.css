@@ -668,3 +668,82 @@ input[readonly], input[disabled] {
         width: 100%;
     }
 }
+
+
+/* ============================================
+🚫 CANCELLED ROWS (STRIKETHROUGH) & BUTTONS
+============================================ */
+
+/* 1. Apply gray background and text color to ALL columns in the row */
+.cancelled-row td {
+    color: #9ca3af !important;
+    background-color: #f8f9fa !important;
+}
+
+/* 2. Apply strikethrough ONLY to the first 11 columns (Excludes the Action column) */
+.cancelled-row td:not(:last-child) {
+    text-decoration: line-through;
+}
+
+/* Fade out the badges so they look cancelled without needing a line through them */
+.cancelled-row .status-badge-drop,
+.cancelled-row .status-badge-pause,
+.cancelled-row .status-badge-pending {
+    opacity: 0.6;
+    text-decoration: none !important; /* Force remove any inherited lines */
+}
+
+.cancelled-row .call-badge {
+    opacity: 0.5;
+}
+
+/* Cancel Button in Table Row */
+.confirm-row-btn.cancel-btn {
+    background: #dc3545;
+    color: white;
+}
+.confirm-row-btn.cancel-btn:hover {
+    background: #c82333;
+}
+
+/* Cancelled State Button (Disabled) */
+.confirm-row-btn.cancelled {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+    cursor: not-allowed;
+}
+
+/* Reinstate Button */
+.confirm-row-btn.reinstate-btn {
+    background: #0d6efd;
+    color: white;
+}
+.confirm-row-btn.reinstate-btn:hover {
+    background: #0b5ed7;
+}
+
+/* Modal Cancel Request Button Hover */
+.cancel-request-btn:hover {
+    background: #c82333 !important;
+}
+
+/* ============================================
+🔄 REINSTATE BUTTONS
+============================================ */
+
+.reinstate-request-btn {
+    background: #0d6efd !important;
+    color: white !important;
+}
+.reinstate-request-btn:hover {
+    background: #0b5ed7 !important;
+}
+
+.confirm-row-btn.reinstate-btn {
+    background: #0d6efd;
+    color: white;
+}
+.confirm-row-btn.reinstate-btn:hover {
+    background: #0b5ed7;
+}

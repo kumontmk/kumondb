@@ -87,6 +87,9 @@ function initApp() {
 
         subjects.forEach(sub => {
             if (sub.pendingRequest && (sub.status === 'current' || sub.status === 'inquiry')) {
+                // 🆕 Skip cancelled requests (synced with Drop Book)
+                if (sub.pendingRequest.cancelled) return;
+                
                 const pr = sub.pendingRequest;
                 let triggerMonth = '', triggerYear = '';
                 if (pr.type === 'drop') { triggerMonth = pr.dropMonth; triggerYear = pr.dropYear; } 
@@ -581,7 +584,8 @@ function initApp() {
             if (status === 'drop' || status === 'pause') {
                 addPrBtn.style.display = 'none';
                 // Clear pending request if manually overridden
-                if (entry.querySelector('.pr-type')?.value) {
+                if (entry.querySelector('.pr-type')?.value || entry.querySelector('.pr-cancelled')?.value === 'true') {
+                    entry.querySelector('.pr-cancelled').value = 'true';
                     entry.querySelectorAll('.pr-type, .pr-reason, .pr-pause-from-month, .pr-pause-from-year, .pr-pause-to-month, .pr-pause-to-year, .pr-drop-month, .pr-drop-year').forEach(el => el.value = '');
                     updatePRBanner(entry);
                 }
@@ -644,8 +648,12 @@ function initApp() {
                 dropReason: entry.querySelector('.drop-reason')?.value?.trim() || '',
                 // 🆕 Pending Request Data
                 pendingRequest: (() => {
+                    const isCancelled = entry.querySelector('.pr-cancelled')?.value === 'true';
+                    if (isCancelled) return { cancelled: true, cancelledAt: new Date().toISOString() };
+                    
                     const prType = entry.querySelector('.pr-type')?.value;
                     if (!prType) return null;
+                    
                     return {
                         type: prType,
                         pauseFromMonth: entry.querySelector('.pr-pause-from-month')?.value || '',
@@ -844,15 +852,16 @@ function initApp() {
              <button type="button" class="cancel-pr-btn danger">Cancel Request</button>
          </div>
 
-         <!-- 🆕 Hidden Inputs for Pending Request -->
-         <input type="hidden" class="pr-type" value="${data.pendingRequest?.type || ''}">
-         <input type="hidden" class="pr-pause-from-month" value="${data.pendingRequest?.pauseFromMonth || ''}">
-         <input type="hidden" class="pr-pause-from-year" value="${data.pendingRequest?.pauseFromYear || ''}">
-         <input type="hidden" class="pr-pause-to-month" value="${data.pendingRequest?.pauseToMonth || ''}">
-         <input type="hidden" class="pr-pause-to-year" value="${data.pendingRequest?.pauseToYear || ''}">
-         <input type="hidden" class="pr-drop-month" value="${data.pendingRequest?.dropMonth || ''}">
-         <input type="hidden" class="pr-drop-year" value="${data.pendingRequest?.dropYear || ''}">
-         <input type="hidden" class="pr-reason" value="${data.pendingRequest?.reason || ''}">
+         <!-- 🆕 Hidden Inputs for Pending Request (synced with Drop Book) -->
+         <input type="hidden" class="pr-cancelled" value="${data.pendingRequest?.cancelled ? 'true' : 'false'}">
+         <input type="hidden" class="pr-type" value="${data.pendingRequest?.cancelled ? '' : (data.pendingRequest?.type || '')}">
+         <input type="hidden" class="pr-pause-from-month" value="${data.pendingRequest?.cancelled ? '' : (data.pendingRequest?.pauseFromMonth || '')}">
+         <input type="hidden" class="pr-pause-from-year" value="${data.pendingRequest?.cancelled ? '' : (data.pendingRequest?.pauseFromYear || '')}">
+         <input type="hidden" class="pr-pause-to-month" value="${data.pendingRequest?.cancelled ? '' : (data.pendingRequest?.pauseToMonth || '')}">
+         <input type="hidden" class="pr-pause-to-year" value="${data.pendingRequest?.cancelled ? '' : (data.pendingRequest?.pauseToYear || '')}">
+         <input type="hidden" class="pr-drop-month" value="${data.pendingRequest?.cancelled ? '' : (data.pendingRequest?.dropMonth || '')}">
+         <input type="hidden" class="pr-drop-year" value="${data.pendingRequest?.cancelled ? '' : (data.pendingRequest?.dropYear || '')}">
+         <input type="hidden" class="pr-reason" value="${data.pendingRequest?.cancelled ? '' : (data.pendingRequest?.reason || '')}">
 
          <button type="button" class="add-pr-btn secondary" style="position:absolute; bottom:1rem; right:1rem; background:#fff3cd; color:#856404; border:1px solid #ffeeba; width:auto; padding:0.4rem 0.8rem; font-size:0.85rem; z-index:10;">🗓️ Drop/Pause Request</button>
          
@@ -934,6 +943,7 @@ function initApp() {
         const cancelPrBtn = div.querySelector('.cancel-pr-btn');
         if (cancelPrBtn) {
             cancelPrBtn.onclick = () => {
+                div.querySelector('.pr-cancelled').value = 'true';
                 div.querySelectorAll('.pr-type, .pr-reason, .pr-pause-from-month, .pr-pause-from-year, .pr-pause-to-month, .pr-pause-to-year, .pr-drop-month, .pr-drop-year').forEach(el => el.value = '');
                 updatePRBanner(div);
             };
@@ -1433,7 +1443,15 @@ function initApp() {
                 const oldSubjects = Array.isArray(existingData.subjects) ? existingData.subjects : Object.values(existingData.subjects || {});
                 studentData.subjects = studentData.subjects.map(newSub => {
                     const oldSub = oldSubjects.find(s => s.name === newSub.name);
-                    if (oldSub && Array.isArray(oldSub.progress)) return { ...newSub, progress: oldSub.progress };
+                    if (oldSub) {
+                        // Preserve progress data
+                        if (Array.isArray(oldSub.progress)) newSub.progress = oldSub.progress;
+                        
+                        // 🆕 Preserve pendingRequest if form didn't explicitly change/cancel it
+                        if (!newSub.pendingRequest && oldSub.pendingRequest) {
+                            newSub.pendingRequest = oldSub.pendingRequest;
+                        }
+                    }
                     return newSub;
                 });
                 if (existingData.poNote) studentData.poNote = existingData.poNote;
@@ -1523,6 +1541,7 @@ function initApp() {
         const reason = document.getElementById('prReason').value.trim();
         if (!reason) return showError('⚠️ Reason is required.');
         
+        activePREntry.querySelector('.pr-cancelled').value = 'false'; // Reset cancelled flag when creating new request
         activePREntry.querySelector('.pr-type').value = type;
         activePREntry.querySelector('.pr-reason').value = reason;
         

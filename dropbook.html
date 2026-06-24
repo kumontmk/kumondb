@@ -131,6 +131,10 @@
                     <label>Enrolment Date</label>
                     <input type="text" id="mEnrolDate" readonly>
                 </div>
+                <div class="info-group" id="mPauseFromGroup" style="display: none;">
+                    <label>Pause Month</label>
+                    <input type="text" id="mPauseFrom" readonly>
+                </div>
                 <div class="info-group full-width" id="mExpectedReturnGroup" style="display: none;">
                     <label>Expected Return</label>
                     <input type="text" id="mExpectedReturn" readonly>
@@ -171,6 +175,8 @@
             </div>
 
             <div class="modal-actions">
+                <button id="reinstateRequestBtn" class="reinstate-request-btn" style="display: none; background: #0d6efd; color: white; margin-right: auto;">🔄 Reinstate Request</button>
+                <button id="cancelRequestBtn" class="cancel-request-btn" style="display: none; background: #dc3545; color: white; margin-right: auto;">❌ Cancel Request</button>
                 <button id="confirmDropBtn" class="confirm-drop-btn">✔️ Confirm Drop/Pause</button>
                 <button id="cancelModalBtn" class="secondary">Cancel</button>
                 <button id="saveModalBtn" class="primary">💾 Save Changes</button>

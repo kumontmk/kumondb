@@ -113,6 +113,8 @@ button:hover { opacity: 0.9; }
 }
 
 .table-wrapper {
+    position: relative; /* ✅ CRUCIAL: Contains the absolute-positioned loader overlay */
+    min-height: 150px;  /* ✅ Ensures the loader has enough height to display nicely when the table is empty */
     overflow-x: auto;
     background: var(--white);
     border-radius: var(--radius);
