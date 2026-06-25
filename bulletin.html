@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Centre Bulletin Generator - Kumon DB</title>
+    <link rel="stylesheet" href="Bulletin.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+
+    <header>
+        <nav>
+            <a href="dashboard.html"><i class="fas fa-arrow-left"></i> Dashboard</a>
+        </nav>
+        <h2><i class="fas fa-newspaper"></i> Centre Bulletin Generator</h2>
+    </header>
+
+    <div class="main-container">
+        <aside class="control-panel">
+            <div class="card">
+                <h3><i class="fas fa-cog"></i> Settings</h3>
+                
+                <div class="form-group">
+                    <label>Month & Year</label>
+                    <input type="month" id="bulletinMonth">
+                </div>
+
+                <div class="form-group">
+                    <label>Background Image</label>
+                    <input type="file" id="bgUpload" accept="image/png, image/jpeg">
+                </div>
+
+                <div class="form-group">
+                    <label>Top-Right Image 1</label>
+                    <input type="file" id="img1Upload" accept="image/png">
+                </div>
+
+                <div class="form-group">
+                    <label>Top-Right Image 2</label>
+                    <input type="file" id="img2Upload" accept="image/png">
+                </div>
+            </div>
+
+            <div class="card">
+                <h3><i class="fas fa-font"></i> Text Formatting</h3>
+                <p style="font-size: 0.8rem; color: #666; margin-bottom: 10px;">Highlight text on the poster, then use these tools:</p>
+                
+                <div class="rich-text-toolbar" id="richTextToolbar">
+                    <div class="toolbar-row">
+                        <button data-cmd="bold" title="Bold"><i class="fas fa-bold"></i></button>
+                        <button data-cmd="italic" title="Italic"><i class="fas fa-italic"></i></button>
+                        <button data-cmd="underline" title="Underline"><i class="fas fa-underline"></i></button>
+                    </div>
+                    <div class="toolbar-row">
+                        <select data-cmd="fontSize" title="Font Size" class="font-size-select">
+                            <option value="1">8pt (Tiny)</option>
+                            <option value="2">10pt (Small)</option>
+                            <option value="3" selected>12pt (Normal)</option>
+                            <option value="4">14pt (Medium)</option>
+                            <option value="5">18pt (Large)</option>
+                            <option value="6">24pt (Extra Large)</option>
+                            <option value="7">36pt (Huge)</option>
+                        </select>
+                    </div>
+                    <div class="toolbar-row">
+                        <label style="font-size: 0.8rem; width: 100%;">Text Color:</label>
+                        <input type="color" data-cmd="foreColor" title="Text Color" value="#000000" style="width: 100%; height: 35px;">
+                    </div>
+                    <div class="toolbar-row">
+                        <button data-cmd="justifyLeft" title="Align Left"><i class="fas fa-align-left"></i></button>
+                        <button data-cmd="justifyCenter" title="Align Center"><i class="fas fa-align-center"></i></button>
+                        <button data-cmd="justifyRight" title="Align Right"><i class="fas fa-align-right"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <button id="saveContentBtn" class="btn-success">
+                    <i class="fas fa-save"></i> Save Text Content
+                </button>
+                <button id="downloadBtn" class="btn-primary">
+                    <i class="fas fa-download"></i> Download as JPEG (A2 Poster)
+                </button>
+            </div>
+
+            <div class="card">
+                <h3><i class="fas fa-info-circle"></i> Instructions</h3>
+                <ul>
+                    <li><strong>Edit Text:</strong> Click anywhere on the poster to type.</li>
+                    <li><strong>Format:</strong> Highlight text, then use the tools above.</li>
+                    <li><strong>Move Images:</strong> Drag the top-right images anywhere.</li>
+                    <li><strong>Resize Images:</strong> Hover over image and drag the blue dot.</li>
+                </ul>
+            </div>
+        </aside>
+
+        <main class="preview-area">
+            <div id="bulletin-canvas" class="poster-canvas">
+                
+                <div class="bulletin-header">
+                    <div class="header-text-box">
+                        <h2 class="center-name-cn editable" contenteditable="true" id="headerNameCn">公文式中心名稱</h2>
+                        <h3 class="center-name-en editable" contenteditable="true" id="headerNameEn">Kumon Center Name</h3>
+                        <h1 class="bulletin-title editable" contenteditable="true" id="bulletinTitle">2026 年 6 月教室通訊</h1>
+                        <p class="bulletin-subtitle editable" contenteditable="true" id="bulletinSubtitle">June 2026 Centre Bulletin</p>
+                    </div>
+                    <div class="header-images">
+                        <div class="img-container" id="container1">
+                            <img id="previewImg1" src="" alt="" class="decor-img hidden">
+                            <div class="resize-handle"></div>
+                        </div>
+                        <div class="img-container" id="container2">
+                            <img id="previewImg2" src="" alt="" class="decor-img hidden">
+                            <div class="resize-handle"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="calendar-section">
+                    <h3 class="calendar-title editable" contenteditable="true" id="calendarTitle">6 月份教室上課時段 June Class Schedule</h3>
+                    <div class="calendar-grid" id="calendarGrid"></div>
+                </div>
+
+                <div class="info-section">
+                    <div class="info-box left-box editable" id="leftBox" contenteditable="true">
+                        <h4>溫馨提示 Payment Notice</h4>
+                        <p>如欲於7月轉換教室或停學，須於6月20日或以前通知教室及填寫休會表格。</p>
+                        <p>Students who want to change their schedule or pause in July must notify us and fill out the suspension form on or before June 20th.</p>
+                        <p>5月31日前尚未辦理銀行自動轉帳者，請儘快向教室取各銀行自動轉帳授權書，填寫完整資料後，交由本中心代辦手續即可。</p>
+                        <p>Students who have not set up auto pay arrangements before May 31st must contact us as soon as possible. We will prepare the necessary documents on your behalf.</p>
+                    </div>
+                    <div class="info-box right-box editable" id="rightBox" contenteditable="true">
+                        <ul>
+                            <li>上課時請自備文具(如鉛筆、擦膠等)，中文及英文 EFL/ERP 學生請帶配備耳筒的平板/電話，用作使用公文語音學習程式。 Prepare your own stationery (pencils, erasers, etc.) For Chinese, EFL or ERP students, bring a tablet/phone with headphones for the Kumon app.</li>
+                            <li>使用 KUMON CONNECT 請帶備平板電腦及專用觸控筆，並提前充滿電源。 For students using Kumon Connect, please make sure to bring a compatible tablet and stylus pen that fully charged.</li>
+                            <li>進入教室時請測量體溫清潔雙手。 Sterilize your hands thoroughly and do a temperature check before coming.</li>
+                            <li>學生須準時到教室上課，如需調動時間及請假，敬請提前通知。 Please come on time based on your scheduled time slot. If there is a need to change your schedule, or request for a leave, please contact us in advance.</li>
+                        </ul>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="Bulletin.js"></script>
+</body>
+</html>

@@ -215,13 +215,40 @@ function initializeFollowUps() {
 
                 const subjectsList = safeArray(s.subjects);
                 const activeSubjects = [];
+                const allSubjectsDisplay = []; // 🆕 Track all subjects for display
                 const inquirySubjects = [];
                 const pausedSubjects = [];
                 let earliestEnrol = null;
                 let earliestInquiry = null;
+                
+                // 🆕 Track paused and dropped counts
+                let pausedCount = 0;
+                let droppedCount = 0;
 
                 subjectsList.forEach((sub, idx) => {
-                    if (sub.status === 'drop') return;
+                    if (!sub.name) return; // 🆕 Safety check
+
+                    const level = sub.currentLevel || sub.startLevel || '-';
+                    const cleanName = sub.name
+                        .replace('English ', '')
+                        .replace('Chinese (Trad)', 'Chinese')
+                        .replace('Chinese (Simp)', 'Chinese');
+
+                    // 🆕 Build display object for all subjects
+                    allSubjectsDisplay.push({
+                        name: cleanName,
+                        level: level,
+                        status: sub.status || 'current',
+                        displayText: `${cleanName} ${level}`
+                    });
+
+                    if (sub.status === 'drop') {
+                        droppedCount++;
+                        return;
+                    }
+                    if (sub.status === 'pause') {
+                        pausedCount++;
+                    }
 
                     const formatted = formatSubjectLevel(sub);
                     if (formatted) activeSubjects.push(formatted);
@@ -253,6 +280,7 @@ function initializeFollowUps() {
                     nickname: s.nickname || '-',
                     grade: s.grade || '-',
                     subjects: activeSubjects.length > 0 ? activeSubjects : ['No active subjects'],
+                    allSubjectsDisplay, // 🆕 Added
                     enrolDate: earliestEnrol || '-',
                     inquiryDate: earliestInquiry || '-',
                     hasInquiry: inquirySubjects.length > 0,
@@ -261,7 +289,9 @@ function initializeFollowUps() {
                     hasPausedSubjects: pausedSubjects.length > 0,
                     poReason: s.poReason?.trim() || 'No reason provided.',
                     parentOrientation: s.parentOrientation,
-                    rawData: s
+                    rawData: s,
+                    pausedCount,   // 🆕 Added
+                    droppedCount   // 🆕 Added
                 };
             });
 
@@ -354,7 +384,7 @@ function initializeFollowUps() {
     }
 
     // ==========================================
-    // 📋 RENDER TAB 1 & 2 (Unchanged)
+    // 📋 RENDER TAB 1 & 2
     // ==========================================
     function renderPOTable(filter = '') {
         const tbody = document.getElementById('poTableBody');
@@ -363,10 +393,11 @@ function initializeFollowUps() {
         tbody.innerHTML = '';
         const lf = filter.toLowerCase().trim();
 
+        // 🆕 Updated filter to search through all subjects (including dropped)
         const filtered = pendingPOList.filter(s =>
             s.name.toLowerCase().includes(lf) || s.nameCn.toLowerCase().includes(lf) ||
             s.nickname.toLowerCase().includes(lf) || s.grade.toLowerCase().includes(lf) ||
-            s.poReason.toLowerCase().includes(lf) || s.subjects.some(sub => sub.toLowerCase().includes(lf))
+            s.poReason.toLowerCase().includes(lf) || s.allSubjectsDisplay.some(sub => sub.displayText.toLowerCase().includes(lf))
         );
 
         if (filtered.length === 0) {
@@ -374,7 +405,20 @@ function initializeFollowUps() {
         } else {
             noResults.classList.remove('visible'); poTable.style.display = 'table';
             filtered.forEach(s => {
-                const pills = s.subjects.map(sub => `<span class="subj-pill ${getSubjectClass(sub)}">${sub}</span>`).join(' ');
+                // 🆕 Render pills with specific status badges attached
+                const pills = s.allSubjectsDisplay.map(sub => {
+                    let statusBadge = '';
+                    let extraClass = '';
+                    if (sub.status === 'drop') {
+                        statusBadge = '<span class="pill-status-badge drop">✖ Dropped</span>';
+                        extraClass = 'pill-dropped';
+                    } else if (sub.status === 'pause') {
+                        statusBadge = '<span class="pill-status-badge pause">⏸ Paused</span>';
+                        extraClass = 'pill-paused';
+                    }
+                    return `<span class="subj-pill ${getSubjectClass(sub.name)} ${extraClass}">${sub.displayText} ${statusBadge}</span>`;
+                }).join(' ');
+
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td><strong>${s.name}</strong></td><td>${s.nameCn}</td><td>${s.nickname}</td>

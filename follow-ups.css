@@ -85,7 +85,7 @@ button:hover { opacity: 0.9; }
 /* Inherits :root variables from student-form.css */
 .po-container {
     padding: 1.5rem;
-    max-width: 1200px;
+    max-width: 95%;
     margin: 0 auto;
 }
 
@@ -474,4 +474,31 @@ tr:hover { background-color: #f8fafc; }
     background: #d1fae5;
     color: #065f46;
     margin-right: 0.5rem;
+}
+
+/* ============================================
+🚦 STATUS INDICATORS (Paused/Dropped)
+============================================ */
+.status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-left: 0.4rem;
+    margin-top: 0.2rem;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+.status-indicator.paused {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fde68a;
+}
+.status-indicator.dropped {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
 }
