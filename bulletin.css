@@ -104,8 +104,8 @@ header a { color: white; text-decoration: none; background: rgba(255,255,255,0.2
 .calendar-grid .day-header:last-child { border-right: none; }
 .calendar-grid .day-cell { border: 2px solid var(--border-color); padding: 8px 5px; text-align: center; background: var(--bg-normal); display: flex; flex-direction: column; align-items: center; min-height: 140px; gap: 4px; }
 .calendar-grid .day-cell.empty { background: transparent; border: none; }
-.day-number { font-size: 40px; font-weight: 700; display: block; margin-bottom: 2px; }
-.day-time { font-size: 30px; color: #333; font-weight: 600; }
+.day-number { font-size: 35px; font-weight: 700; display: block; margin-bottom: 2px; }
+.day-time { font-size: 25px; color: #333; font-weight: 600; }
 .day-cell.holiday { background: var(--bg-holiday) !important; }
 .day-cell.holiday .day-time, .day-cell.holiday .holiday-name { color: var(--danger); font-weight: 700; }
 .day-cell.closed { background: var(--bg-closed) !important; }
