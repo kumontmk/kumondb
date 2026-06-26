@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Timetable - Kumon DB</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="centers.css">
+    <link rel="stylesheet" href="timetable.css">
 </head>
 <body>
     <!-- 🔐 ACCESS DENIED OVERLAY -->
@@ -21,9 +20,9 @@
         <div class="spinner"></div>
     </div>
 
-    <!-- ✅ MAIN CONTENT WRAPPER (Hidden by default until authorized) -->
+    <!-- ✅ MAIN CONTENT WRAPPER -->
     <div id="mainContent" class="hidden">
-        
+
         <header>
             <nav>
                 <a href="dashboard.html">← Dashboard</a>
@@ -31,7 +30,7 @@
             <h1>📅 Class Timetable</h1>
         </header>
 
-        <main class="dashboard">
+        <div class="main-content">
             <div class="timetable-controls">
                 <div class="control-group">
                     <label class="control-label">Select Day</label>
@@ -51,7 +50,7 @@
                 </button>
             </div>
 
-            <div class="table-wrapper">
+            <div class="timetable-wrapper">
                 <table id="timetableTable">
                     <thead>
                         <tr>
@@ -74,9 +73,9 @@
                     </tbody>
                 </table>
             </div>
-        </main>
+        </div>
 
-    </div> <!-- ✅ End of mainContent wrapper -->
+    </div>
 
     <script type="module" src="timetable.js"></script>
 </body>
