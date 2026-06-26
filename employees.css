@@ -391,3 +391,36 @@ tr.disabled-row td:first-child {
   border-radius: 4px;
   font-size: 0.85rem;
 }
+
+/* ============================================
+✅ INCOMPLETE TIMECARD REPORT
+============================================ */
+#incompleteTable .status-badge {
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+}
+#incompleteTable input[type="time"] {
+    font-size: 0.9rem;
+}
+#incompleteTable tr[style*="opacity"] {
+    transition: opacity 0.3s ease;
+}
+
+/* ============================================
+✅ TAB BADGES
+============================================ */
+.tab-badge {
+    display: inline-block;
+    background: #dc3545;
+    color: white;
+    border-radius: 50%;
+    min-width: 20px;
+    height: 20px;
+    line-height: 20px;
+    text-align: center;
+    font-size: 0.75rem;
+    font-weight: bold;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+    padding: 0 4px;
+}
