@@ -1,9 +1,7 @@
 /* ============================================
    TIMETABLE.CSS — Standalone Stylesheet
-   For timetable.html only
    ============================================ */
 
-/* === CSS VARIABLES === */
 :root {
   --primary: #87CEEB;
   --primary-dark: #4682B4;
@@ -16,14 +14,8 @@
   --side-padding: 2rem;
 }
 
-/* === RESET === */
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* === BASE === */
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: var(--secondary);
@@ -44,404 +36,114 @@ header {
   gap: 0.5rem;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
-
-header h1 {
-  font-size: 1.25rem;
-  font-weight: 600;
-}
-
-header nav {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
+header h1 { font-size: 1.25rem; font-weight: 600; }
+header nav { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
 header a {
-  color: var(--white);
-  text-decoration: none;
-  background: rgba(255,255,255,0.2);
-  padding: 0.5rem 1rem;
-  border-radius: var(--radius);
-  border: none;
-  cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 500;
-  transition: background 0.2s;
+  color: var(--white); text-decoration: none; background: rgba(255,255,255,0.2);
+  padding: 0.5rem 1rem; border-radius: var(--radius); border: none;
+  cursor: pointer; font-size: 0.9rem; font-weight: 500; transition: background 0.2s;
 }
+header a:hover { background: rgba(255,255,255,0.35); }
 
-header a:hover {
-  background: rgba(255,255,255,0.35);
-}
+/* === ACCESS DENIED & LOADER === */
+.access-denied { position: fixed; inset: 0; background: var(--secondary); display: flex; align-items: center; justify-content: center; z-index: 2000; padding: 2rem; }
+.access-denied-content { background: var(--white); padding: 2.5rem 3rem; border-radius: var(--radius); box-shadow: 0 10px 40px rgba(0,0,0,0.15); text-align: center; max-width: 480px; border-top: 4px solid #dc3545; }
+.access-denied h2 { color: #dc3545; margin-bottom: 1rem; }
+.access-denied p { margin: 0.75rem 0; color: var(--text-light); }
+.access-denied .primary { margin-top: 1.5rem; display: inline-block; padding: 0.75rem 1.5rem; background: var(--primary-dark); color: var(--white); border: none; border-radius: var(--radius); cursor: pointer; font-weight: 500; text-decoration: none; transition: background 0.2s; }
+.access-denied .primary:hover { background: #3a6f94; }
 
-/* === ACCESS DENIED === */
-.access-denied {
-  position: fixed;
-  inset: 0;
-  background: var(--secondary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
-  padding: 2rem;
-}
+#page-loader { position: fixed; inset: 0; background: rgba(255, 255, 255, 0.95); display: flex; align-items: center; justify-content: center; z-index: 9999; transition: opacity 0.3s ease; }
+#page-loader.hidden { opacity: 0; pointer-events: none; }
+.spinner { width: 48px; height: 48px; border: 4px solid #e2e8f0; border-top-color: var(--primary-dark); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-.access-denied-content {
-  background: var(--white);
-  padding: 2.5rem 3rem;
-  border-radius: var(--radius);
-  box-shadow: 0 10px 40px rgba(0,0,0,0.15);
-  text-align: center;
-  max-width: 480px;
-  border-top: 4px solid #dc3545;
-}
+/* === MAIN CONTENT === */
+.main-content { max-width: 1440px; margin: 0 auto; padding: 1.5rem var(--side-padding) 2rem; width: 100%; }
 
-.access-denied h2 {
-  color: #dc3545;
-  margin-bottom: 1rem;
-}
+/* === CONTROLS === */
+.timetable-controls { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; background: var(--white); padding: 1.25rem 1.5rem; border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 1.5rem; flex-wrap: wrap; }
+.timetable-controls .control-group { display: flex; flex-direction: column; gap: 0.4rem; flex: 1; min-width: 200px; max-width: 280px; }
+.timetable-controls .control-label { font-size: 0.85rem; font-weight: 600; color: var(--text-light); }
+.timetable-controls .day-select { padding: 0.7rem 0.9rem; font-size: 1rem; font-weight: 500; border: 1px solid #cbd5e1; border-radius: var(--radius); background: #fff; cursor: pointer; transition: all 0.2s ease; color: var(--text); }
+.timetable-controls .day-select:hover { border-color: var(--primary-dark); }
+.timetable-controls .day-select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.25); }
 
-.access-denied p {
-  margin: 0.75rem 0;
-  color: var(--text-light);
-}
+.print-btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.7rem 1.4rem; background: var(--primary-dark); color: var(--white); border: none; border-radius: var(--radius); font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 2px 4px rgba(70, 130, 180, 0.2); white-space: nowrap; height: fit-content; }
+.print-btn:hover { background: #3a6f94; transform: translateY(-1px); box-shadow: 0 4px 8px rgba(70, 130, 180, 0.3); }
 
-.access-denied .primary {
-  margin-top: 1.5rem;
-  display: inline-block;
-  padding: 0.75rem 1.5rem;
-  background: var(--primary-dark);
-  color: var(--white);
-  border: none;
-  border-radius: var(--radius);
-  cursor: pointer;
-  font-weight: 500;
-  text-decoration: none;
-  transition: background 0.2s;
-}
+/* === TABLE WRAPPER === */
+.timetable-wrapper { background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow); padding: 0; overflow-x: auto; }
 
-.access-denied .primary:hover {
-  background: #3a6f94;
-}
+#timetableTable { width: 100%; border: 2px solid #333; font-size: 12pt; table-layout: auto; border-collapse: collapse; }
 
-/* === PAGE LOADER === */
-#page-loader {
-  position: fixed;
-  inset: 0;
-  background: rgba(255, 255, 255, 0.95);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  transition: opacity 0.3s ease;
-}
-
-#page-loader.hidden {
-  opacity: 0;
-  pointer-events: none;
-}
-
-.spinner {
-  width: 48px;
-  height: 48px;
-  border: 4px solid #e2e8f0;
-  border-top-color: var(--primary-dark);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* === MAIN CONTENT WRAPPER === */
-.main-content {
-  max-width: 1440px;
-  margin: 0 auto;
-  padding: 1.5rem var(--side-padding) 2rem;
-  width: 100%;
-}
-
-/* === TIMETABLE CONTROLS === */
-.timetable-controls {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 1rem;
-  background: var(--white);
-  padding: 1.25rem 1.5rem;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  margin-bottom: 1.5rem;
-  flex-wrap: wrap;
-}
-
-.timetable-controls .control-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  flex: 1;
-  min-width: 200px;
-  max-width: 280px;
-}
-
-.timetable-controls .control-label {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-light);
-}
-
-.timetable-controls .day-select {
-  padding: 0.7rem 0.9rem;
-  font-size: 1rem;
-  font-weight: 500;
-  border: 1px solid #cbd5e1;
-  border-radius: var(--radius);
-  background: #fff;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  color: var(--text);
-}
-
-.timetable-controls .day-select:hover {
-  border-color: var(--primary-dark);
-}
-
-.timetable-controls .day-select:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.25);
-}
-
-/* === PRINT BUTTON === */
-.print-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.7rem 1.4rem;
-  background: var(--primary-dark);
-  color: var(--white);
-  border: none;
-  border-radius: var(--radius);
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(70, 130, 180, 0.2);
-  white-space: nowrap;
-  height: fit-content;
-}
-
-.print-btn:hover {
-  background: #3a6f94;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(70, 130, 180, 0.3);
-}
-
-.print-btn:active {
-  transform: translateY(0);
-}
-
-.print-btn .print-icon {
-  font-size: 1.1rem;
-  line-height: 1;
-}
-
-.print-btn .print-text {
-  line-height: 1;
-}
-
-/* === TIMETABLE TABLE WRAPPER === */
-.timetable-wrapper {
-  background: var(--white);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 0;
-  overflow-x: auto;
-}
-
-/* ✅ UPDATED: Larger font size (12pt) and adjusted padding */
-#timetableTable {
-  width: 100%;
-  border: 2px solid #333;
-  font-size: 12pt; /* Increased from 0.75rem */
-  table-layout: auto;
-  border-collapse: collapse;
-}
-
-#timetableTable th,
-#timetableTable td {
+#timetableTable th, #timetableTable td {
   border: 1px solid #333 !important;
-  padding: 4px 8px !important; /* Increased from 2px 4px */
-  line-height: 1.3 !important; /* Increased from 1.2 */
+  padding: 3px 5px !important; /* Tighter padding overall */
+  line-height: 1.2 !important;
   color: #000 !important;
   text-align: center;
   vertical-align: middle;
 }
 
-#timetableTable th {
-  background: #eee !important;
-  font-weight: 700 !important;
-  padding: 6px 8px !important; /* Increased from 0.5rem 0.4rem */
-  font-size: 12pt; /* Increased from 0.8rem */
-}
+#timetableTable th { background: #eee !important; font-weight: 700 !important; padding: 5px 5px !important; font-size: 12pt; }
 
 /* === SUBJECT HEADER COLORS === */
-.th-math {
-  background: #008B8B !important;
-  color: #fff !important;
+.th-math { background: #008B8B !important; color: #fff !important; }
+.th-english { background: #DC143C !important; color: #fff !important; }
+.th-chinese { background: #9ACD32 !important; color: #333 !important; }
+
+/* ============================================
+   ✅ COLUMN WIDTHS (Using Colgroup Classes)
+   ============================================ */
+/* Force Time, Grade, and Level to be as small as possible */
+.col-time, .col-grade, .col-level {
+  width: 1% !important;
+  white-space: nowrap !important;
 }
 
-.th-english {
-  background: #DC143C !important;
-  color: #fff !important;
+/* Let Name columns take up all remaining space */
+.col-name {
+  width: auto !important;
+  min-width: 100px;
 }
 
-.th-chinese {
-  background: #9ACD32 !important;
-  color: #333 !important;
-}
+/* Specific styling for Time cell to keep it distinct */
+.time-cell { font-weight: 600; background: #f8f9fa !important; border-right: 2px solid #cbd5e1 !important; }
+.empty-cell { background: transparent !important; }
 
-/* === TIME CELL === */
-.time-cell {
-  font-weight: 600;
-  background: #f8f9fa !important;
-  width: 90px; /* Increased from 80px */
-  min-width: 90px;
-  border-right: 2px solid #cbd5e1 !important;
-  padding: 6px 8px !important; /* Increased from 4px 6px */
-}
-
-/* === EMPTY CELL === */
-.empty-cell {
-  background: transparent !important;
-}
-
-/* === ROW HOVER === */
-#timetableTable tbody tr:hover {
-  background-color: #f1f5f9;
-}
-
-/* === UTILITY === */
-.hidden {
-  display: none !important;
-}
+#timetableTable tbody tr:hover { background-color: #f1f5f9; }
+.hidden { display: none !important; }
 
 /* === RESPONSIVE === */
 @media (max-width: 768px) {
-  :root {
-    --side-padding: 1rem;
-  }
-
-  header {
-    padding: 1rem var(--side-padding);
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  header nav {
-    width: 100%;
-    justify-content: space-between;
-    margin-top: 0.5rem;
-  }
-
-  .main-content {
-    padding: 1rem var(--side-padding) 1.5rem;
-  }
-
-  .timetable-controls {
-    flex-direction: column;
-    align-items: stretch;
-    padding: 1rem;
-  }
-
-  .timetable-controls .control-group {
-    max-width: 100%;
-  }
-
-  .print-btn {
-    justify-content: center;
-    width: 100%;
-  }
+  :root { --side-padding: 1rem; }
+  header { padding: 1rem var(--side-padding); flex-direction: column; align-items: flex-start; }
+  header nav { width: 100%; justify-content: space-between; margin-top: 0.5rem; }
+  .main-content { padding: 1rem var(--side-padding) 1.5rem; }
+  .timetable-controls { flex-direction: column; align-items: stretch; padding: 1rem; }
+  .timetable-controls .control-group { max-width: 100%; }
+  .print-btn { justify-content: center; width: 100%; }
 }
 
 @media (max-width: 480px) {
-  :root {
-    --side-padding: 0.75rem;
-  }
-
-  .timetable-controls {
-    padding: 0.75rem;
-  }
-
-  /* Keep font readable on very small screens but slightly smaller */
-  #timetableTable {
-    font-size: 10pt; 
-  }
-
-  #timetableTable th,
-  #timetableTable td {
-    padding: 3px 4px !important;
-  }
+  :root { --side-padding: 0.75rem; }
+  .timetable-controls { padding: 0.75rem; }
+  #timetableTable { font-size: 10pt; }
+  #timetableTable th, #timetableTable td { padding: 2px 3px !important; }
 }
 
 /* === PRINT STYLES === */
 @media print {
-  header,
-  #page-loader,
-  .timetable-controls,
-  .access-denied {
-    display: none !important;
-  }
+  header, #page-loader, .timetable-controls, .access-denied { display: none !important; }
+  *, *::before, *::after { font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimSun', 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', sans-serif !important; color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { background: white; margin: 0; padding: 0.5cm; }
+  .main-content { padding: 0; max-width: 100%; }
+  .timetable-wrapper { box-shadow: none; border-radius: 0; }
 
-  *, *::before, *::after {
-    font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimSun', 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', sans-serif !important;
-    color: #000 !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  body {
-    background: white;
-    margin: 0;
-    padding: 0.5cm;
-  }
-
-  .main-content {
-    padding: 0;
-    max-width: 100%;
-  }
-
-  .timetable-wrapper {
-    box-shadow: none;
-    border-radius: 0;
-  }
-
-  #timetableTable {
-    width: 100% !important;
-    border: 2px solid #333;
-    font-size: 10pt; /* Slightly smaller for print to fit on paper */
-    table-layout: auto;
-  }
-
-  #timetableTable th,
-  #timetableTable td {
-    border: 1px solid #333 !important;
-    padding: 2px 4px !important;
-    line-height: 1.2 !important;
-    color: #000 !important;
-  }
-
-  #timetableTable th {
-    background: #eee !important;
-    font-weight: 700 !important;
-  }
-
-  .time-cell {
-    background: #eee !important;
-  }
-
-  .empty-cell {
-    background: transparent !important;
-  }
+  #timetableTable { width: 100% !important; border: 2px solid #333; font-size: 10pt; table-layout: auto; }
+  #timetableTable th, #timetableTable td { border: 1px solid #333 !important; padding: 2px 3px !important; line-height: 1.1 !important; color: #000 !important; }
+  #timetableTable th { background: #eee !important; font-weight: 700 !important; }
+  .time-cell { background: #eee !important; }
+  .empty-cell { background: transparent !important; }
 }

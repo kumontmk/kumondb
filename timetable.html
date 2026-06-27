@@ -52,6 +52,19 @@
 
             <div class="timetable-wrapper">
                 <table id="timetableTable">
+                    <!-- ✅ COLGROUP: This is the magic fix for column widths -->
+                    <colgroup>
+                        <col class="col-time">
+                        <!-- Math Low -->
+                        <col class="col-grade"><col class="col-name"><col class="col-level">
+                        <!-- Math High -->
+                        <col class="col-grade"><col class="col-name"><col class="col-level">
+                        <!-- English -->
+                        <col class="col-grade"><col class="col-name"><col class="col-level">
+                        <!-- Chinese -->
+                        <col class="col-grade"><col class="col-name"><col class="col-level">
+                    </colgroup>
+                    
                     <thead>
                         <tr>
                             <th>Time</th>
@@ -62,10 +75,10 @@
                         </tr>
                         <tr>
                             <th></th>
-                            <th>Grade</th><th>Name</th><th>Level</th>
-                            <th>Grade</th><th>Name</th><th>Level</th>
-                            <th>Grade</th><th>Name</th><th>Level</th>
-                            <th>Grade</th><th>Name</th><th>Level</th>
+                            <th>Gr</th><th>Name</th><th>Lvl</th>
+                            <th>Gr</th><th>Name</th><th>Lvl</th>
+                            <th>Gr</th><th>Name</th><th>Lvl</th>
+                            <th>Gr</th><th>Name</th><th>Lvl</th>
                         </tr>
                     </thead>
                     <tbody id="timetableBody">
