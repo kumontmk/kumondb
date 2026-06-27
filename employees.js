@@ -9,25 +9,68 @@ const mainContent = document.getElementById('mainContent');
 const accessDenied = document.getElementById('accessDenied');
 const backToDashboardBtn = document.getElementById('backToDashboard');
 
-function checkAuthorization(user) {
-  console.log('🔐 Auth Check:', { email: user?.email, uid: user?.uid, isVerified: user?.emailVerified, required: AUTHORIZED_EMAIL });
-  if (!user) {
+async function checkAuthorization(user) {
+  console.log('🔐 Auth Check Started for:', user?.email);
+  if (!user) { 
     showAccessDenied('🔐 Please log in first', 'No user session found.');
     return false;
   }
+  
   const actualEmail = user.email?.toLowerCase() || '';
   const requiredEmail = AUTHORIZED_EMAIL.toLowerCase();
-  if (actualEmail !== requiredEmail) {
-    showAccessDenied('🔐 Access Restricted', `<p><strong>${user.email || 'Not available'} is not authorized to access this page.</strong></p><p style="margin-top:1rem;color:#666;font-size:0.9rem;">Please log in with an authorized account or contact your administrator if you believe this is an error.</p>`);
-    return false;
+  
+  // 1. Check if it's the main admin email
+  if (actualEmail === requiredEmail) {
+    console.log('✅ Access granted: Main Admin Email');
+    grantAccess();
+    return true;
   }
+
+  // 2. Check database for Manager role
+  try {
+    // Check users node by UID
+    console.log('🔍 Checking users node for UID:', user.uid);
+    const userSnap = await get(ref(db, `users/${user.uid}`));
+    const userData = userSnap.val();
+    console.log('📦 Users node data:', userData);
+    
+    if (userData && userData.position?.trim().toLowerCase() === 'manager') {
+      console.log('✅ Access granted via users node (Manager)');
+      grantAccess();
+      return true;
+    }
+
+    // 🌟 FIX: Check employees node by EMAIL (because IDs often mismatch)
+    console.log('🔍 Checking employees node for email:', user.email);
+    const empSnap = await get(ref(db, 'employees'));
+    const empData = empSnap.val();
+    if (empData) {
+      const matchingEmp = Object.values(empData).find(e => e.email?.toLowerCase() === user.email?.toLowerCase());
+      console.log('📦 Matching employee data:', matchingEmp);
+      
+      if (matchingEmp && matchingEmp.position?.trim().toLowerCase() === 'manager') {
+        console.log('✅ Access granted via employees node (Manager)');
+        grantAccess();
+        return true;
+      }
+    }
+  } catch (err) {
+    console.error('❌ Error checking user role:', err);
+  }
+
+  // 3. Deny access
+  console.log('❌ Access Denied: User is not admin or manager');
+  showAccessDenied('🔐 Access Restricted', `<p><strong>${user.email || 'Not available'} is not authorized to access this page.</strong></p><p style="margin-top:1rem;color:#666;font-size:0.9rem;">This page is only accessible to administrators and managers. Please contact your administrator if you believe this is an error.</p>`);
+  return false;
+}
+
+function grantAccess() {
   if (accessDenied) accessDenied.classList.add('hidden');
   if (mainContent) {
     mainContent.classList.remove('hidden');
     mainContent.style.opacity = '1';
     mainContent.style.pointerEvents = 'auto';
   }
-  return true;
 }
 
 function showAccessDenied(title, messageHtml) {
@@ -44,8 +87,8 @@ function showAccessDenied(title, messageHtml) {
   });
 }
 
-onAuthStateChanged(auth, (user) => {
-  const isAuthorized = checkAuthorization(user);
+onAuthStateChanged(auth, async (user) => {
+  const isAuthorized = await checkAuthorization(user);
   if (isAuthorized) {
     initApp();
   }
@@ -54,8 +97,8 @@ onAuthStateChanged(auth, (user) => {
 function initApp() {
   let employees = {};
   let currentQrData = "";
-  let availableCenters = []; 
-  let currentTimeclockEmpId = null; 
+  let availableCenters = [];
+  let currentTimeclockEmpId = null;
 
   function openModal(id) {
     const el = document.getElementById(id);
@@ -79,7 +122,6 @@ function initApp() {
   const timeclockBody = document.getElementById('timeclockHistoryBody');
   const exportBtn = document.getElementById('exportExcelBtn');
   const monthPicker = document.getElementById('exportMonthPicker');
-  
   const timeclockDateFilter = document.getElementById('timeclockDateFilter');
   const clearTimeclockFilter = document.getElementById('clearTimeclockFilter');
 
@@ -96,8 +138,8 @@ function initApp() {
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     monthPicker.value = `${yyyy}-${mm}`;
   }
+  
   exportBtn?.addEventListener('click', exportToExcel);
-
   natSelect?.addEventListener('change', e => natOther.classList.toggle('visible', e.target.value === 'Others'));
   saveBtn?.addEventListener('click', saveEmployee);
   searchInput?.addEventListener('input', e => renderTable(e.target.value));
@@ -122,11 +164,9 @@ function initApp() {
     onValue(ref(db, 'employees'), (snapshot) => {
       employees = snapshot.val() || {};
       renderTable();
-      
-      // 🌟 Calculate incomplete badge once on initial load
       if (!initialLoadDone) {
-          initialLoadDone = true;
-          updateIncompleteBadge();
+        initialLoadDone = true;
+        updateIncompleteBadge();
       }
     }, { onlyOnce: false });
   }
@@ -139,21 +179,21 @@ function initApp() {
       tbody.innerHTML = '';
       const pending = Object.entries(users).filter(([uid, u]) => !u.isVerified);
       
-      // 🌟 Update verifications badge
       const vBadge = document.getElementById('verificationsBadge');
       if (vBadge) {
-          if (pending.length > 0) {
-              vBadge.textContent = pending.length > 99 ? '99+' : pending.length;
-              vBadge.style.display = 'inline-block';
-          } else {
-              vBadge.style.display = 'none';
-          }
+        if (pending.length > 0) {
+          vBadge.textContent = pending.length > 99 ? '99+' : pending.length;
+          vBadge.style.display = 'inline-block';
+        } else {
+          vBadge.style.display = 'none';
+        }
       }
 
       if (pending.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No pending verifications.</td></tr>';
         return;
       }
+      
       pending.forEach(([uid, u]) => {
         const row = document.createElement('tr');
         row.innerHTML = `
@@ -252,7 +292,7 @@ function initApp() {
     const lower = filter.toLowerCase();
     const filtered = Object.entries(employees).filter(([_, e]) =>
       e.englishName?.toLowerCase().includes(lower) ||
-      (e.chineseName||'').toLowerCase().includes(lower) ||
+      (e.chineseName || '').toLowerCase().includes(lower) ||
       e.position?.toLowerCase().includes(lower) ||
       e.email?.toLowerCase().includes(lower)
     );
@@ -285,7 +325,7 @@ function initApp() {
     });
   }
 
-  function openEmployeeModal(id) {
+  async function openEmployeeModal(id) {
     openModal('employeeModal');
     document.getElementById('modalTitle').textContent = id ? 'Edit Employee' : 'Add Employee';
 
@@ -303,8 +343,8 @@ function initApp() {
       document.getElementById('empEnglish').value = e.englishName || '';
       document.getElementById('empChinese').value = e.chineseName || '';
       document.getElementById('empEmail').value = e.email || '';
-      document.getElementById('empNationality').value = ['Filipino','Chinese','Portuguese'].includes(e.nationality) ? e.nationality : 'Others';
-      if (!['Filipino','Chinese','Portuguese'].includes(e.nationality)) natOther.value = e.nationality || '';
+      document.getElementById('empNationality').value = ['Filipino', 'Chinese', 'Portuguese'].includes(e.nationality) ? e.nationality : 'Others';
+      if (!['Filipino', 'Chinese', 'Portuguese'].includes(e.nationality)) natOther.value = e.nationality || '';
       document.getElementById('empPosition').value = e.position || '';
       document.getElementById('empDate').value = e.employmentDate || new Date().toISOString().split('T')[0];
       document.getElementById('empTerms').value = e.terms || 'Full-time';
@@ -325,20 +365,45 @@ function initApp() {
     } else {
       document.getElementById('empId').value = '';
       document.getElementById('empDate').value = new Date().toISOString().split('T')[0];
-      currentQrData = `EMP_${crypto.randomUUID().slice(0,8)}`;
+      currentQrData = `EMP_${crypto.randomUUID().slice(0, 8)}`;
       setTimeout(() => {
         document.querySelectorAll('#tab-permissions input').forEach(cb => cb.checked = false);
       }, 100);
     }
 
     const currentUserEmail = auth.currentUser?.email?.toLowerCase();
-    const isAdmin = currentUserEmail === 'kumonchamps@gmail.com';
+    let isAdmin = currentUserEmail === 'kumonchamps@gmail.com';
+    
+    if (!isAdmin && auth.currentUser) {
+      try {
+        const userSnap = await get(ref(db, `users/${auth.currentUser.uid}`));
+        const userData = userSnap.val();
+        if (userData && userData.position?.trim().toLowerCase() === 'manager') {
+          isAdmin = true;
+        }
+
+        if (!isAdmin) {
+          const empSnap = await get(ref(db, 'employees'));
+          const empData = empSnap.val();
+          if (empData) {
+            const matchingEmp = Object.values(empData).find(e => e.email?.toLowerCase() === currentUserEmail);
+            if (matchingEmp && matchingEmp.position?.trim().toLowerCase() === 'manager') {
+              isAdmin = true;
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error checking admin status:', err);
+      }
+    }
+
     const permInputs = document.querySelectorAll('#tab-permissions input');
     const permMsg = document.getElementById('permissionsLockedMsg');
 
     if (!isAdmin) {
       permInputs.forEach(input => input.disabled = true);
       permMsg.style.display = 'block';
+      permMsg.textContent = '🔒 Only administrators and managers can edit permissions.';
     } else {
       permInputs.forEach(input => input.disabled = false);
       permMsg.style.display = 'none';
@@ -444,12 +509,19 @@ function initApp() {
       await set(empRef, employeeData);
 
       if (empId) {
-        const userRef = ref(db, `users/${empId}`);
-        const userSnap = await get(userRef);
-        if (userSnap.exists()) {
-          await update(userRef, {
-            permissions: { centers, dashboardCards }
-          });
+        // 🌟 FIX: Find the actual Auth UID by matching email, because empId might be a push ID
+        const usersSnap = await get(ref(db, 'users'));
+        const usersData = usersSnap.val();
+        if (usersData) {
+          const matchingUserUid = Object.keys(usersData).find(uid => usersData[uid].email?.toLowerCase() === employeeData.email.toLowerCase());
+          if (matchingUserUid) {
+            const userRef = ref(db, `users/${matchingUserUid}`);
+            await update(userRef, {
+              permissions: { centers, dashboardCards },
+              position: position // Sync position
+            });
+            console.log(`✅ Synced position and permissions to users/${matchingUserUid}`);
+          }
         }
       }
 
@@ -473,7 +545,7 @@ function initApp() {
 
   function minutesToTime(mins) {
     if (mins < 0) mins = 0;
-    if (mins > 1439) mins = 1439; 
+    if (mins > 1439) mins = 1439;
     const h = Math.floor(mins / 60);
     const m = mins % 60;
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
@@ -488,25 +560,22 @@ function initApp() {
     return `${h}h ${m}m`;
   }
 
-  // 🌟 UPDATED CORE LOGIC: Auto-fix missing clock-outs/ins based on Terms
   function autoFixLogs(logs, terms = 'Full-time') {
     if (!logs || logs.length === 0) return { logs, changed: false };
-    
     const sorted = [...logs].sort((a, b) => a.time.localeCompare(b.time));
     const fixedLogs = [];
     let changed = false;
-    let currentInLog = null; 
-    
+    let currentInLog = null;
+
     for (let i = 0; i < sorted.length; i++) {
       const log = sorted[i];
-      
       if (log.type === 'in') {
         if (currentInLog && currentInLog.location !== log.location) {
           if (terms === 'Full-time') {
             const inTimeMins = timeToMinutes(log.time);
-            const autoOutMins = Math.max(0, inTimeMins - 1); 
+            const autoOutMins = Math.max(0, inTimeMins - 1);
             fixedLogs.push({
-              type: 'out', time: minutesToTime(autoOutMins), 
+              type: 'out', time: minutesToTime(autoOutMins),
               location: currentInLog.location, autoGenerated: true
             });
             changed = true;
@@ -514,8 +583,7 @@ function initApp() {
         }
         currentInLog = log;
         fixedLogs.push(log);
-      } 
-      else if (log.type === 'out') {
+      } else if (log.type === 'out') {
         if (currentInLog) {
           currentInLog = null;
           fixedLogs.push(log);
@@ -528,7 +596,6 @@ function initApp() {
     return { logs: fixedLogs, changed };
   }
 
-  // 🌟 UPDATED: Only pair IN and OUT if they are at the exact same center
   function getLogsRows(logs) {
     const sortedLogs = [...logs].sort((a, b) => a.time.localeCompare(b.time));
     const rows = [];
@@ -549,12 +616,10 @@ function initApp() {
         if (currentRow.outTime !== '') {
           rows.push(currentRow);
           currentRow = { inTime: '', inIndex: -1, outTime: log.time, outIndex: i, inLocation: '' };
-        } 
-        else if (currentRow.inTime !== '' && currentRow.inLocation !== log.location) {
-          rows.push(currentRow); 
-          currentRow = { inTime: '', inIndex: -1, outTime: log.time, outIndex: i, inLocation: '' }; 
-        } 
-        else {
+        } else if (currentRow.inTime !== '' && currentRow.inLocation !== log.location) {
+          rows.push(currentRow);
+          currentRow = { inTime: '', inIndex: -1, outTime: log.time, outIndex: i, inLocation: '' };
+        } else {
           currentRow.outTime = log.time;
           currentRow.outIndex = i;
         }
@@ -564,13 +629,11 @@ function initApp() {
     if (currentRow.inTime !== '' || currentRow.outTime !== '') {
       rows.push(currentRow);
     }
-
     return rows;
   }
 
   function loadTimeclock(empId, filterDate = null) {
-    currentTimeclockEmpId = empId; 
-    
+    currentTimeclockEmpId = empId;
     let fetchPromise;
     if (filterDate) {
       fetchPromise = get(ref(db, `timecards/${filterDate}/${empId}`)).then(snap => {
@@ -592,8 +655,7 @@ function initApp() {
       Object.entries(all).forEach(([date, dayData]) => {
         if (dayData[empId]?.logs?.length) {
           const rawLogs = dayData[empId].logs;
-          const { logs: fixedLogs } = autoFixLogs(rawLogs, employees[empId]?.terms || 'Full-time'); 
-          
+          const { logs: fixedLogs } = autoFixLogs(rawLogs, employees[empId]?.terms || 'Full-time');
           const sortedLogs = [...fixedLogs].sort((a, b) => a.time.localeCompare(b.time));
           const rows = getLogsRows(sortedLogs);
 
@@ -604,14 +666,13 @@ function initApp() {
           let totalMinutes = 0;
           let hasValidCycle = false;
           let currentIn = null;
-          let currentInLocation = null; // 🌟 Track center
+          let currentInLocation = null;
 
           for (const log of sortedLogs) {
             if (log.type === 'in') {
               currentIn = timeToMinutes(log.time);
               currentInLocation = log.location;
             } else if (log.type === 'out') {
-              // 🌟 Only calculate hours if the OUT is at the same center as the IN
               if (currentIn !== null && currentInLocation === log.location) {
                 const outMins = timeToMinutes(log.time);
                 if (outMins !== null && outMins >= currentIn) {
@@ -627,7 +688,6 @@ function initApp() {
             }
           }
           const durationText = hasValidCycle ? formatDuration(totalMinutes) : '-';
-
           records.push({ date, rows, durationText });
         }
       });
@@ -700,7 +760,7 @@ function initApp() {
 
             const modalContent = document.querySelector('#employeeModal .modal-content');
             let dropdownContainer = modalContent?.querySelector('.center-selector-container');
-            
+
             if (!dropdownContainer) {
               dropdownContainer = document.createElement('div');
               dropdownContainer.className = 'center-selector-container';
@@ -721,7 +781,6 @@ function initApp() {
                 modalContent.appendChild(dropdownContainer);
               }
             }
-
           } else {
             btn.textContent = 'Saving...';
             btn.disabled = true;
@@ -758,7 +817,6 @@ function initApp() {
                 } else {
                   if (mod.newTime) {
                     let matchedLocation = 'Manual Edit';
-
                     if (selectedCenter !== 'auto') {
                       matchedLocation = selectedCenter;
                     } else {
@@ -769,7 +827,6 @@ function initApp() {
                       currentLogs.forEach(existingLog => {
                         const existingTimeMins = timeToMinutes(existingLog.time);
                         const timeDiff = Math.abs(existingTimeMins - newTimeMins);
-
                         if (timeDiff < 120 && timeDiff < minTimeDiff) {
                           minTimeDiff = timeDiff;
                           closestLog = existingLog;
@@ -791,7 +848,6 @@ function initApp() {
               });
 
               logsToSave.sort((a, b) => a.time.localeCompare(b.time));
-
               await update(ref(db, `timecards/${date}/${empId}`), { logs: logsToSave });
 
               mainRow.dataset.editing = 'false';
@@ -820,7 +876,6 @@ function initApp() {
           }
         });
       });
-
     }).catch(err => {
       console.error("Error loading timeclock:", err);
       timeclockBody.innerHTML = '<tr><td colspan="9" class="empty-state">Error loading records</td></tr>';
@@ -836,7 +891,6 @@ function initApp() {
     if (!selectedMonth) return alert('⚠️ Please select a month to export.');
 
     const [year, month] = selectedMonth.split('-');
-
     const originalText = exportBtn.textContent;
     exportBtn.textContent = 'Exporting...';
     exportBtn.disabled = true;
@@ -846,12 +900,10 @@ function initApp() {
       const timecards = timecardsSnap.val() || {};
       const employeesSnap = await get(ref(db, 'employees'));
       const employeesData = employeesSnap.val() || {};
-
       const empData = {};
 
       Object.entries(timecards).forEach(([date, dayData]) => {
         if (!date.startsWith(selectedMonth)) return;
-
         Object.entries(dayData).forEach(([empId, empDayData]) => {
           if (!empData[empId]) {
             const emp = employeesData[empId] || {};
@@ -864,7 +916,7 @@ function initApp() {
           }
 
           const rawLogs = empDayData.logs || [];
-          const { logs } = autoFixLogs(rawLogs, employeesData[empId]?.terms || 'Full-time'); 
+          const { logs } = autoFixLogs(rawLogs, employeesData[empId]?.terms || 'Full-time');
           const centerLogs = {};
 
           logs.forEach(log => {
@@ -878,11 +930,8 @@ function initApp() {
             if (!empData[empId].centers[abbr]) {
               empData[empId].centers[abbr] = { minutes: 0, records: [] };
             }
-
             cLogs.sort((a, b) => a.time.localeCompare(b.time));
-
             const rows = getLogsRows(cLogs);
-
             let dayTotalMinutes = 0;
             const cycles = [];
 
@@ -904,7 +953,6 @@ function initApp() {
 
             empData[empId].centers[abbr].minutes += dayTotalMinutes;
             empData[empId].totalMinutes += dayTotalMinutes;
-
             if (cycles.length > 0) {
               empData[empId].centers[abbr].records.push({ date, cycles });
             }
@@ -920,7 +968,6 @@ function initApp() {
       }
 
       const wb = XLSX.utils.book_new();
-
       const summaryData = [['Name', 'Position', 'Total Hours', 'C', 'PT', 'MK', 'TS']];
       Object.values(empData).forEach(emp => {
         summaryData.push([
@@ -939,7 +986,6 @@ function initApp() {
       Object.entries(empData).forEach(([empId, emp]) => {
         Object.entries(emp.centers).forEach(([abbr, centerData]) => {
           if (centerData.records.length === 0) return;
-
           let maxCycles = 0;
           centerData.records.forEach(rec => {
             if (rec.cycles.length > maxCycles) maxCycles = rec.cycles.length;
@@ -955,7 +1001,6 @@ function initApp() {
           centerData.records.forEach(rec => {
             const row = [rec.date];
             let dayMins = 0;
-
             for (let i = 0; i < maxCycles; i++) {
               const cycle = rec.cycles[i];
               if (cycle) {
@@ -983,7 +1028,6 @@ function initApp() {
 
       XLSX.writeFile(wb, `Kumon_Timeclock_Records_${month}-${year}.xlsx`);
       alert('✅ Export successful!');
-
     } catch (err) {
       console.error('Export error:', err);
       alert('❌ Failed to export. Check console for details.');
@@ -1017,10 +1061,8 @@ function initApp() {
         document.querySelectorAll('[id^="main-tab-"]').forEach(c => c.classList.remove('active'));
         btn.classList.add('active');
         document.getElementById(`main-tab-${btn.dataset.mainTab}`)?.classList.add('active');
-        
-        // 🌟 Auto-load incomplete timecards when tab is opened
         if (btn.dataset.mainTab === 'incomplete') {
-            loadIncompleteTimecards();
+          loadIncompleteTimecards();
         }
       });
     });
@@ -1034,60 +1076,55 @@ function initApp() {
     });
   }
 
-  // 🌟 BACKGROUND BADGE UPDATER
   async function updateIncompleteBadge() {
-      if (Object.keys(employees).length === 0) return;
-      try {
-          const timecardsSnap = await get(ref(db, 'timecards'));
-          const timecards = timecardsSnap.val() || {};
-          let count = 0;
+    if (Object.keys(employees).length === 0) return;
+    try {
+      const timecardsSnap = await get(ref(db, 'timecards'));
+      const timecards = timecardsSnap.val() || {};
+      let count = 0;
 
-          Object.entries(timecards).forEach(([date, dayData]) => {
-              Object.entries(dayData).forEach(([empId, empData]) => {
-                  const emp = employees[empId];
-                  if (!emp) return;
+      Object.entries(timecards).forEach(([date, dayData]) => {
+        Object.entries(dayData).forEach(([empId, empData]) => {
+          const emp = employees[empId];
+          if (!emp) return;
 
-                  const rawLogs = empData.logs || [];
-                  const { logs: fixedLogs } = autoFixLogs(rawLogs, emp.terms || 'Full-time');
-                  const sortedLogs = [...fixedLogs].sort((a, b) => a.time.localeCompare(b.time));
+          const rawLogs = empData.logs || [];
+          const { logs: fixedLogs } = autoFixLogs(rawLogs, emp.terms || 'Full-time');
+          const sortedLogs = [...fixedLogs].sort((a, b) => a.time.localeCompare(b.time));
 
-                  let currentIn = null;
-                  for (const log of sortedLogs) {
-                      if (log.type === 'in') {
-                          if (currentIn !== null) count++;
-                          currentIn = log;
-                      } else if (log.type === 'out') {
-                          // 🌟 Only pair if centers match
-                          if (currentIn !== null && currentIn.location === log.location) {
-                              currentIn = null;
-                          } else {
-                              if (currentIn !== null) count++; // Count the abandoned IN
-                              count++; // Count the orphaned OUT
-                              currentIn = null;
-                          }
-                      }
-                  }
-                  if (currentIn !== null) count++;
-              });
-          });
-
-          const badge = document.getElementById('incompleteBadge');
-          if (badge) {
-              if (count > 0) {
-                  badge.textContent = count > 99 ? '99+' : count;
-                  badge.style.display = 'inline-block';
+          let currentIn = null;
+          for (const log of sortedLogs) {
+            if (log.type === 'in') {
+              if (currentIn !== null) count++;
+              currentIn = log;
+            } else if (log.type === 'out') {
+              if (currentIn !== null && currentIn.location === log.location) {
+                currentIn = null;
               } else {
-                  badge.style.display = 'none';
+                if (currentIn !== null) count++;
+                count++;
+                currentIn = null;
               }
+            }
           }
-      } catch (err) {
-          console.error('Error updating incomplete badge:', err);
+          if (currentIn !== null) count++;
+        });
+      });
+
+      const badge = document.getElementById('incompleteBadge');
+      if (badge) {
+        if (count > 0) {
+          badge.textContent = count > 99 ? '99+' : count;
+          badge.style.display = 'inline-block';
+        } else {
+          badge.style.display = 'none';
+        }
       }
+    } catch (err) {
+      console.error('Error updating incomplete badge:', err);
+    }
   }
-  
-  // ==========================================
-  // ✅ INCOMPLETE TIMECARD REPORT
-  // ==========================================
+
   async function loadIncompleteTimecards() {
     const tbody = document.getElementById('incompleteTableBody');
     if (!tbody) return;
@@ -1121,9 +1158,8 @@ function initApp() {
               }
               currentIn = log;
             } else if (log.type === 'out') {
-              // 🌟 Only consider it a "complete pair" if the centers match
               if (currentIn !== null && currentIn.location === log.location) {
-                currentIn = null; 
+                currentIn = null;
               } else {
                 if (currentIn !== null) {
                   incompleteRecords.push({
@@ -1230,8 +1266,7 @@ function initApp() {
               tr.style.textDecoration = 'line-through';
             }, 500);
 
-            updateIncompleteBadge(); // 🌟 Refresh the badge count immediately
-
+            updateIncompleteBadge();
           } catch (err) {
             console.error('Save incomplete error:', err);
             alert('❌ Failed to save. Check console.');
@@ -1240,7 +1275,6 @@ function initApp() {
           }
         });
       });
-
     } catch (err) {
       console.error('Error loading incomplete timecards:', err);
       tbody.innerHTML = '<tr><td colspan="8" class="empty-state">❌ Error loading records</td></tr>';
