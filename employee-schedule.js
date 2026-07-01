@@ -1245,22 +1245,38 @@ function renderCenterBody(dates) {
     const tableWrapper = document.getElementById('centerTableWrapper');
     if (!tbody) return;
 
-    // Filter employees who have at least one shift at this center in this period
     const sorted = getSortedEmployees();
     const employeesWithShifts = [];
 
+    // Filter employees who have at least one shift at this center in this period
     sorted.forEach(emp => {
         let hasShiftHere = false;
         for (const dateStr of dates) {
+            const dateObj = parseDate(dateStr);
+            const dow = dateObj.getDay();
+            
             const sched = mergedSchedules[emp.uid]?.[dateStr];
+            const tmpl = templates[emp.uid]?.[dow];
+            
+            let currentShifts = [];
+            let currentStatus = 'scheduled';
+            let sourceCenter = null;
+            
             if (sched) {
-                const shifts = sched._shifts || extractShifts(sched);
-                const hasCenterShift = shifts.some(s => s.center === selectedCenterForView);
-                const isStatusHere = sched.status && sched.status !== 'scheduled' && sched._sourceCenter === selectedCenterForView;
-                if (hasCenterShift || isStatusHere) {
-                    hasShiftHere = true;
-                    break;
-                }
+                currentShifts = sched._shifts || extractShifts(sched);
+                currentStatus = sched.status || 'scheduled';
+                sourceCenter = sched._sourceCenter;
+            } else if (tmpl) {
+                currentShifts = tmpl._shifts || extractShifts(tmpl);
+                currentStatus = tmpl.status || 'scheduled';
+            }
+
+            const hasCenterShift = currentShifts.some(s => s.center === selectedCenterForView);
+            const isStatusHere = currentStatus !== 'scheduled' && sourceCenter === selectedCenterForView;
+            
+            if (hasCenterShift || isStatusHere) {
+                hasShiftHere = true;
+                break;
             }
         }
         if (hasShiftHere) {
@@ -1286,7 +1302,7 @@ function renderCenterBody(dates) {
     today.setHours(0,0,0,0);
 
     let lastTerms = null;
-    const dailyCounts = {}; // { dateStr: count }
+    const dailyCounts = {};
     dates.forEach(d => dailyCounts[d] = 0);
 
     employeesWithShifts.forEach(emp => {
@@ -1318,45 +1334,60 @@ function renderCenterBody(dates) {
             const isHoliday = event && !event.muc;
             const isClosed = closedDays.includes(dow) && !event;
             const isToday = dateObj.getTime() === today.getTime();
-            const isWeekend = dow === 0 || dow === 6;
 
             if (isToday) td.style.outline = '2px solid #27ae60';
 
             const sched = mergedSchedules[emp.uid]?.[dateStr];
+            const tmpl = templates[emp.uid]?.[dow];
+            
+            let shifts = [];
+            let status = 'scheduled';
+            let notes = '';
+            let isTemplate = false;
+
+            if (sched) {
+                shifts = sched._shifts || extractShifts(sched);
+                status = sched.status || 'scheduled';
+                notes = sched.notes || '';
+            } else if (tmpl) {
+                shifts = tmpl._shifts || extractShifts(tmpl);
+                status = tmpl.status || 'scheduled';
+                notes = tmpl.notes || '';
+                isTemplate = true;
+            }
+
             let hasShiftToday = false;
 
-                if (sched) {
-                    const shifts = sched._shifts || extractShifts(sched);
-                    const centerShifts = shifts.filter(s => s.center === selectedCenterForView);
-                    const status = sched.status || 'scheduled';
-
-                    if (status !== 'scheduled') {
-                        // ✅ FIX: Show status but DON'T count as staff working
-                        // hasShiftToday remains false
-                        renderStatusCell(td, status, sched.notes);
-                    } else if (centerShifts.length > 0) {
-                        hasShiftToday = true;  // ✅ Only count if actually has shifts
-                        renderCenterShiftCell(td, centerShifts, isHoliday, event);
-                    } else if (isClosed) {
-                        td.classList.add('is-closed');
-                        td.innerHTML = '<div class="cell-content"><span class="status-label">Closed</span></div>';
-                    } else if (isHoliday) {
-                        td.classList.add('is-holiday');
-                        td.innerHTML = `<div class="cell-content"><span class="status-label">🎌 ${event.name || 'Holiday'}</span></div>`;
-                    } else {
-                        td.classList.add('empty-cell');
-                        td.innerHTML = '<div class="cell-content">—</div>';
-                    }
+            if (shifts.length > 0 || status !== 'scheduled') {
+                const centerShifts = shifts.filter(s => s.center === selectedCenterForView);
+                
+                if (status !== 'scheduled') {
+                    renderStatusCell(td, status, notes);
+                    if (isTemplate) td.style.opacity = '0.5';
+                } else if (centerShifts.length > 0) {
+                    hasShiftToday = true;
+                    renderCenterShiftCell(td, centerShifts, isHoliday, event);
+                    if (isTemplate) td.style.opacity = '0.5';
+                } else if (isClosed) {
+                    td.classList.add('is-closed');
+                    td.innerHTML = `<div class="cell-content"><span class="status-label">Closed</span></div>`;
+                } else if (isHoliday) {
+                    td.classList.add('is-holiday');
+                    td.innerHTML = `<div class="cell-content"><span class="status-label"> ${event.name || 'Holiday'}</span></div>`;
                 } else {
+                    td.classList.add('empty-cell');
+                    td.innerHTML = `<div class="cell-content">—</div>`;
+                }
+            } else {
                 if (isClosed) {
                     td.classList.add('is-closed');
-                    td.innerHTML = '<div class="cell-content"><span class="status-label">Closed</span></div>';
+                    td.innerHTML = `<div class="cell-content"><span class="status-label">Closed</span></div>`;
                 } else if (isHoliday) {
                     td.classList.add('is-holiday');
                     td.innerHTML = `<div class="cell-content"><span class="status-label">🎌 ${event.name || 'Holiday'}</span></div>`;
                 } else {
                     td.classList.add('empty-cell');
-                    td.innerHTML = '<div class="cell-content">—</div>';
+                    td.innerHTML = `<div class="cell-content">—</div>`;
                 }
             }
 
@@ -1372,7 +1403,7 @@ function renderCenterBody(dates) {
     // Summary row
     const summaryRow = document.createElement('tr');
     summaryRow.className = 'section-divider summary-row';
-    summaryRow.innerHTML = '<td style="font-weight:700;">Staff Count</td>';
+    summaryRow.innerHTML = `<td style="font-weight:700;">Staff Count</td>`;
     dates.forEach((d, idx) => {
         const cls = idx === 7 ? 'week-separator' : '';
         summaryRow.innerHTML += `<td class="${cls}" style="text-align:center;">${dailyCounts[d]}</td>`;
@@ -1428,7 +1459,6 @@ function printCenterSchedule() {
         alert('Please select a center first.');
         return;
     }
-
     const centerObj = allCenters.find(c => c.id === selectedCenterForView);
     const centerNamePrint = centerObj ? centerObj.name : 'Center';
     const dates = get14Days(centerViewDate);
@@ -1441,17 +1471,37 @@ function printCenterSchedule() {
     const centerCalEvents = calendarEvents[selectedCenterForView] || {};
     const closedDays = getClosedDaysForCenter(centerNamePrint);
 
-    // Get employees with shifts at this center
+    // ✅ FIX: Get employees with shifts at this center (including templates)
     const sorted = getSortedEmployees();
     const employeesWithShifts = [];
     sorted.forEach(emp => {
         let hasShift = false;
         for (const dateStr of dates) {
+            const dateObj = parseDate(dateStr);
+            const dow = dateObj.getDay();
+            
             const sched = mergedSchedules[emp.uid]?.[dateStr];
+            const tmpl = templates[emp.uid]?.[dow];
+            
+            let currentShifts = [];
+            let currentStatus = 'scheduled';
+            let sourceCenter = null;
+            
             if (sched) {
-                const shifts = sched._shifts || extractShifts(sched);
-                if (shifts.some(s => s.center === selectedCenterForView)) { hasShift = true; break; }
-                if (sched.status && sched.status !== 'scheduled' && sched._sourceCenter === selectedCenterForView) { hasShift = true; break; }
+                currentShifts = sched._shifts || extractShifts(sched);
+                currentStatus = sched.status || 'scheduled';
+                sourceCenter = sched._sourceCenter;
+            } else if (tmpl) {
+                currentShifts = tmpl._shifts || extractShifts(tmpl);
+                currentStatus = tmpl.status || 'scheduled';
+            }
+
+            const hasCenterShift = currentShifts.some(s => s.center === selectedCenterForView);
+            const isStatusHere = currentStatus !== 'scheduled' && sourceCenter === selectedCenterForView;
+            
+            if (hasCenterShift || isStatusHere) {
+                hasShift = true;
+                break;
             }
         }
         if (hasShift) employeesWithShifts.push(emp);
@@ -1527,14 +1577,31 @@ function printCenterSchedule() {
             if (isToday) cellCls += ' today-cell';
             else if (isWeekend) cellCls += ' weekend-cell';
 
+            // ✅ FIX: Check both schedules and templates for print
             const sched = mergedSchedules[emp.uid]?.[dateStr];
-            let cellContent = '';
+            const tmpl = templates[emp.uid]?.[dow];
+            
+            let shifts = [];
+            let status = 'scheduled';
+            let notes = '';
+            let isTemplate = false;
 
             if (sched) {
-                const shifts = sched._shifts || extractShifts(sched);
-                const centerShifts = shifts.filter(s => s.center === selectedCenterForView);
-                const status = sched.status || 'scheduled';
+                shifts = sched._shifts || extractShifts(sched);
+                status = sched.status || 'scheduled';
+                notes = sched.notes || '';
+            } else if (tmpl) {
+                shifts = tmpl._shifts || extractShifts(tmpl);
+                status = tmpl.status || 'scheduled';
+                notes = tmpl.notes || '';
+                isTemplate = true;
+            }
 
+            let cellContent = '';
+
+            if (shifts.length > 0 || status !== 'scheduled') {
+                const centerShifts = shifts.filter(s => s.center === selectedCenterForView);
+                
                 if (status !== 'scheduled') {
                     const statusLabels = { 'other-center': '📍 Other', 'leave': '🏖 Leave', 'sick': '🤒 Sick', 'off': '😴 Off' };
                     const statusCls = status === 'leave' ? 'leave' : status === 'sick' ? 'sick' : status === 'off' ? 'off' : 'other';
@@ -1549,6 +1616,10 @@ function printCenterSchedule() {
                             cellContent += `<div class="print-shift"><span class="time">${s.start}-${s.end}</span></div>`;
                         }
                     });
+                    // Optional: indicate it's a pattern in print
+                    if (isTemplate) {
+                        cellContent += `<div style="font-size:5pt;color:#888;font-style:italic;">(Pattern)</div>`;
+                    }
                 } else if (isClosed) {
                     cellContent = '<span style="color:#999;font-size:6pt;">Closed</span>';
                 } else if (isHoliday) {
@@ -1588,16 +1659,13 @@ function printCenterSchedule() {
             Printed: ${new Date().toLocaleString()} | Kumon DB Employee Schedule System
         </div>`;
 
-    // ✅ INJECT INTO THE EXISTING HIDDEN CONTAINER (No screen flash!)
     const printArea = document.getElementById('printArea');
     if (printArea) {
         printArea.innerHTML = html;
     }
 
-    // ✅ TRIGGER BROWSER PRINT DIALOG IMMEDIATELY
     window.print();
 
-    // ✅ CLEAN UP AFTER PRINT DIALOG CLOSES
     setTimeout(() => {
         if (printArea) printArea.innerHTML = '';
     }, 1000);
