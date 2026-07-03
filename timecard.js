@@ -1,9 +1,11 @@
 import { db, logout, requireAuth } from './auth.js';
 import { ref, get, update, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js"; 
 
 if (!requireAuth()) throw new Error("Auth required");
 
-// ✅ Safely check if logoutBtn exists before adding event listener
+const auth = getAuth(); 
+
 const logoutBtn = document.getElementById('logoutBtn');
 if (logoutBtn) {
     logoutBtn.addEventListener('click', logout);
@@ -15,20 +17,21 @@ const CENTERS = [
     { name: "Kumon Champs", lat: 22.202188413699155, lng: 113.54954818278166 },
     { name: "Kumon Tap Siac", lat: 22.19974168219132, lng: 113.54570239996973 }
 ];
-const MAX_DIST_KM = 0.05; // 50 meters geofence radius
+const MAX_DIST_KM = 0.05; 
 
-// 📊 State Management
 let employees = {};
-let currentDayLogs = {}; // Holds real-time timecard data for the selected date
-let timecardUnsubscribe = null; // Stores the onValue detach function
-
+let currentDayLogs = {}; 
+let timecardUnsubscribe = null; 
 let html5QrCode = null;
 let isScanning = false;
 let lastScannedCode = '';
 let lastScanTimestamp = 0;
 const SCAN_COOLDOWN_MS = 3000;
 
-// 🕐 Time conversion helpers (needed for cross-center auto-fix)
+let currentEmployeeId = null;
+let currentEmployeeData = null;
+let hasFullAccess = false; 
+
 function timeToMinutes(timeStr) {
     if (!timeStr) return null;
     const [hours, minutes] = timeStr.split(':').map(Number);
@@ -54,53 +57,104 @@ const stopScanBtn = document.getElementById('stopScanBtn');
 window.addEventListener('DOMContentLoaded', () => {
     if (datePicker) datePicker.value = new Date().toISOString().split('T')[0];
     loadEmployees();
-    // 🟢 Initialize real-time listener for today's date
     if (datePicker) setupTimecardListener(datePicker.value);
 });
 
-// ✅ Employees are already real-time
 function loadEmployees() {
     onValue(ref(db, 'employees'), snapshot => {
         employees = snapshot.val() || {};
+        identifyCurrentUser(); 
         renderTimecardTable();
     });
 }
 
-// 🟢 NEW: Real-time Timecard Listener
+// 🔒 PERMISSION CONTROL: Identify current user and their access level
+function identifyCurrentUser() {
+    const user = auth.currentUser;
+    if (!user) return;
+    
+    currentEmployeeId = null;
+    currentEmployeeData = null;
+    hasFullAccess = false;
+
+    // 1. Try to find by Firebase UID as the database key
+    if (employees[user.uid]) {
+        currentEmployeeId = user.uid;
+        currentEmployeeData = employees[user.uid];
+    } 
+    // 2. Try to find by 'uid' or 'email' field inside the employee record
+    else {
+        for (const [id, emp] of Object.entries(employees)) {
+            if (emp.uid === user.uid || (user.email && emp.email === user.email)) {
+                currentEmployeeId = id;
+                currentEmployeeData = emp;
+                break;
+            }
+        }
+    }
+
+    // 3. Determine if they have full access based on their DB record
+    if (currentEmployeeData) {
+        // Check multiple possible field names for the center/branch
+        const centerStr = (
+            currentEmployeeData.center || 
+            currentEmployeeData.branch || 
+            currentEmployeeData.location || 
+            currentEmployeeData.centerName || 
+            ''
+        ).toLowerCase();
+        
+        const isChamps = centerStr.includes('champs');
+        const isManager = (currentEmployeeData.position || '').toLowerCase() === 'manager';
+        
+        hasFullAccess = isChamps || isManager;
+    }
+
+    // 4. Fallback: If we couldn't find them in the DB, check their Firebase login email
+    if (!hasFullAccess && user.email && user.email.toLowerCase().includes('champs')) {
+        hasFullAccess = true;
+    }
+
+    // 🐛 DEBUG: Print to console to help troubleshoot if it's still failing
+    console.log("🔒 [Auth Debug] User:", user.email, "| Found in DB:", !!currentEmployeeData, "| Full Access:", hasFullAccess);
+    if (!hasFullAccess && !currentEmployeeData) {
+        console.warn("⚠️ User not found in employees database. They will see an empty table.");
+    }
+}
+
 function setupTimecardListener(date) {
-    // Detach previous listener to prevent memory leaks & duplicate renders
     if (timecardUnsubscribe) {
         timecardUnsubscribe();
         timecardUnsubscribe = null;
     }
+    currentDayLogs = {}; 
+    renderTimecardTable(); 
 
-    currentDayLogs = {}; // Clear cache for new date
-    renderTimecardTable(); // Show empty/loading state immediately
-
-    // Subscribe to changes at timecards/{date}
     timecardUnsubscribe = onValue(ref(db, `timecards/${date}`), snapshot => {
         currentDayLogs = snapshot.val() || {};
-        renderTimecardTable(); // Auto-renders whenever data changes
+        renderTimecardTable(); 
     });
 }
 
 function renderTimecardTable() {
     const tbody = document.getElementById('timecardBody');
     if (!tbody) return;
-
+    
     const filterTxt = searchInput ? searchInput.value.toLowerCase() : '';
     const filterPos = posFilter ? posFilter.value : '';
-
-    // Use in-memory data instead of async get() calls
-    const allLogs = [];
     
+    const allLogs = [];
     Object.entries(employees).forEach(([id, e]) => {
+        if (!hasFullAccess && id !== currentEmployeeId) {
+            return; 
+        }
+
         if (filterTxt && !e.englishName.toLowerCase().includes(filterTxt) && !(e.chineseName || '').toLowerCase().includes(filterTxt)) return;
         if (filterPos && e.position !== filterPos) return;
         
         const logs = currentDayLogs[id]?.logs || [];
         if (logs.length === 0) return;
-
+        
         logs.forEach(log => {
             allLogs.push({
                 chineseName: e.chineseName || '-',
@@ -112,7 +166,7 @@ function renderTimecardTable() {
             });
         });
     });
-
+    
     allLogs.sort((a, b) => b.time.localeCompare(a.time));
     renderRows(allLogs);
 }
@@ -121,12 +175,13 @@ function renderRows(logs) {
     const tbody = document.getElementById('timecardBody');
     if (!tbody) return;
     tbody.innerHTML = '';
-
+    
     if (logs.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No attendance records for this date</td></tr>';
+        const msg = !hasFullAccess ? 'No personal attendance records for this date' : 'No attendance records for this date';
+        tbody.innerHTML = `<tr><td colspan="6" class="empty-state">${msg}</td></tr>`;
         return;
     }
-
+    
     logs.forEach(log => {
         const statusClass = log.type === 'in' ? 'status-in' : log.type === 'out' ? 'status-out' : 'status-none';
         const tr = document.createElement('tr');
@@ -143,18 +198,15 @@ function renderRows(logs) {
     });
 }
 
-// 📅 Handle date changes
 if (datePicker) {
     datePicker.addEventListener('change', (e) => {
         setupTimecardListener(e.target.value);
     });
 }
 
-// 🔍 Filters still trigger re-render using cached data
 if (searchInput) searchInput.addEventListener('input', renderTimecardTable);
 if (posFilter) posFilter.addEventListener('change', renderTimecardTable);
 
-// 📷 Scanner Logic (Unchanged)
 async function closeScanner() {
     if (html5QrCode) {
         try {
@@ -173,13 +225,9 @@ async function closeScanner() {
     }
 }
 
-// ============================================================
-// ✅ NEW: Choice Modal (Camera vs Upload)
-// ============================================================
 function ensureChoiceModal() {
     let modal = document.getElementById('scanChoiceModal');
     if (modal) return modal;
-
     modal = document.createElement('div');
     modal.id = 'scanChoiceModal';
     modal.className = 'result-modal hidden';
@@ -188,21 +236,14 @@ function ensureChoiceModal() {
             <div class="result-icon" style="color:#4682B4;">📷</div>
             <div class="result-text" style="margin-bottom:1.2rem;">Choose scan method</div>
             <div style="display:flex; flex-direction:column; gap:0.6rem;">
-                <button id="choiceCameraBtn" class="scan-btn" style="justify-content:center; width:100%;">
-                    📷 Scan with Camera
-                </button>
-                <button id="choiceUploadBtn" class="scan-btn" style="justify-content:center; width:100%; background:#6c757d;">
-                    🖼️ Upload QR Image
-                </button>
-                <button id="choiceCancelBtn" style="padding:0.5rem; background:transparent; color:#666; border:none; cursor:pointer;">
-                    Cancel
-                </button>
+                <button id="choiceCameraBtn" class="scan-btn" style="justify-content:center; width:100%;">📷 Scan with Camera</button>
+                <button id="choiceUploadBtn" class="scan-btn" style="justify-content:center; width:100%; background:#6c757d;">🖼️ Upload QR Image</button>
+                <button id="choiceCancelBtn" style="padding:0.5rem; background:transparent; color:#666; border:none; cursor:pointer;">Cancel</button>
             </div>
         </div>
     `;
     document.body.appendChild(modal);
-
-    // Hidden file input for uploads
+    
     let fileInput = document.getElementById('qrFileInput');
     if (!fileInput) {
         fileInput = document.createElement('input');
@@ -212,7 +253,7 @@ function ensureChoiceModal() {
         fileInput.style.display = 'none';
         document.body.appendChild(fileInput);
     }
-
+    
     document.getElementById('choiceCameraBtn').addEventListener('click', async () => {
         modal.classList.add('hidden');
         await startCameraScan();
@@ -224,21 +265,16 @@ function ensureChoiceModal() {
     document.getElementById('choiceCancelBtn').addEventListener('click', () => {
         modal.classList.add('hidden');
     });
-
-    // File input handler
+    
     fileInput.addEventListener('change', async (e) => {
         const file = e.target.files[0];
-        fileInput.value = ''; // reset so same file can be re-selected
+        fileInput.value = ''; 
         if (!file) return;
         await handleUploadedQr(file);
     });
-
     return modal;
 }
 
-// ============================================================
-// ✅ NEW: Upload QR Image → decode → reuse handleScanSuccess
-// ============================================================
 async function handleUploadedQr(file) {
     if (typeof Html5Qrcode === 'undefined') {
         showResultModal(false, '❌ Scanner library not loaded.');
@@ -248,8 +284,7 @@ async function handleUploadedQr(file) {
         showResultModal(false, '⏳ Employee database still loading...');
         return;
     }
-
-    // Use a hidden reader element for file scanning (separate from camera #reader)
+    
     let uploadReaderEl = document.getElementById('qrUploadReader');
     if (!uploadReaderEl) {
         uploadReaderEl = document.createElement('div');
@@ -257,17 +292,12 @@ async function handleUploadedQr(file) {
         uploadReaderEl.style.display = 'none';
         document.body.appendChild(uploadReaderEl);
     }
-
+    
     showResultModal(true, '⏳ Reading uploaded image...');
-
     try {
         const scanner = new Html5Qrcode('qrUploadReader', { verbose: false });
         const decodedText = await scanner.scanFile(file, false);
-        
-        // ✅ FIX: scanner.clear() does NOT return a Promise. 
-        // Wrap it in a standard try/catch instead of using .catch()
         try { scanner.clear(); } catch (e) { console.warn("Scanner clear warning:", e); }
-        
         if (!decodedText) throw new Error('No QR code found in image.');
         await handleScanSuccess(decodedText);
     } catch (err) {
@@ -276,10 +306,6 @@ async function handleUploadedQr(file) {
     }
 }
 
-// ============================================================
-// ✅ REFACTORED: Camera scan moved into its own function
-//    (LOGIC IS 100% UNCHANGED — just wrapped)
-// ============================================================
 async function startCameraScan() {
     if (scanModal) scanModal.classList.remove('hidden');
     if (isScanning) return;
@@ -292,12 +318,11 @@ async function startCameraScan() {
         showResultModal(false, '❌ Scanner library not loaded.');
         return;
     }
-
+    
     try {
         html5QrCode = new Html5Qrcode("reader");
         const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0, disableFlip: false };
         let started = false;
-
         try {
             const devices = await Html5Qrcode.getCameras();
             if (devices && devices.length > 0) {
@@ -307,13 +332,13 @@ async function startCameraScan() {
                 started = true;
             }
         } catch (e) { console.warn("Camera enumeration failed, falling back", e); }
-
+        
         if (!started) {
             await html5QrCode.start({ facingMode: "environment" }, config, handleScanSuccess, handleScanFailure);
             started = true;
         }
         if (!started) await html5QrCode.start({ facingMode: "user" }, config, handleScanSuccess, handleScanFailure);
-
+        
         if (started) {
             isScanning = true;
             startScanBtn.textContent = "📷 Scanning Active";
@@ -326,9 +351,6 @@ async function startCameraScan() {
     }
 }
 
-// ============================================================
-// 🔁 UPDATED: startScanBtn now opens the choice modal
-// ============================================================
 if (startScanBtn) {
     startScanBtn.addEventListener('click', async () => {
         const choiceModal = ensureChoiceModal();
@@ -339,17 +361,17 @@ if (startScanBtn) {
 async function handleScanSuccess(decodedText) {
     const scanned = decodedText.trim();
     const now = Date.now();
-    if (scanned === lastScannedCode && (now - lastScanTimestamp) < SCAN_COOLDOWN_MS) return;
     
+    if (scanned === lastScannedCode && (now - lastScanTimestamp) < SCAN_COOLDOWN_MS) return;
     lastScannedCode = scanned;
     lastScanTimestamp = now;
-
+    
     if (Object.keys(employees).length === 0) {
         await closeScanner();
         showResultModal(false, '⏳ Employee database still loading...');
         return;
     }
-
+    
     let matchedKey = null;
     let matchedEmp = null;
     for (const [firebaseKey, emp] of Object.entries(employees)) {
@@ -359,22 +381,28 @@ async function handleScanSuccess(decodedText) {
             break;
         }
     }
-
+    
     if (!matchedEmp) {
         await closeScanner();
         showResultModal(false, `❌ Unknown QR Code: ${scanned}`);
         return;
     }
 
+    if (!hasFullAccess && matchedKey !== currentEmployeeId) {
+        await closeScanner();
+        showResultModal(false, '🚫 You can only clock in/out for yourself.');
+        return;
+    }
+    
     await closeScanner();
     await processAttendance(matchedKey, matchedEmp);
 }
 
 function handleScanFailure(errorMessage) {}
+
 if (closeScanBtn) closeScanBtn.onclick = async () => { await closeScanner(); };
 if (stopScanBtn) stopScanBtn.onclick = async () => { await closeScanner(); };
 
-// ✅ Manual QR Submission
 const manualQrInput = document.getElementById('manualQrInput');
 const submitManualQrBtn = document.getElementById('manualQrBtn');
 if (submitManualQrBtn && manualQrInput) {
@@ -382,13 +410,19 @@ if (submitManualQrBtn && manualQrInput) {
         const scanned = manualQrInput.value.trim();
         if (!scanned) { showResultModal(false, '❌ Please enter a QR code.'); return; }
         if (Object.keys(employees).length === 0) { showResultModal(false, '⏳ Employee database still loading...'); return; }
-
+        
         let matchedKey = null, matchedEmp = null;
         for (const [firebaseKey, emp] of Object.entries(employees)) {
             if ((emp.qrCode || '').trim() === scanned) { matchedKey = firebaseKey; matchedEmp = emp; break; }
         }
+        
         if (!matchedEmp) { showResultModal(false, `❌ Unknown QR Code: ${scanned}`); return; }
 
+        if (!hasFullAccess && matchedKey !== currentEmployeeId) {
+            showResultModal(false, '🚫 You can only clock in/out for yourself.');
+            return;
+        }
+        
         manualQrInput.value = '';
         await closeScanner();
         await processAttendance(matchedKey, matchedEmp);
@@ -396,7 +430,6 @@ if (submitManualQrBtn && manualQrInput) {
     manualQrInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') submitManualQrBtn.click(); });
 }
 
-// 📍 Geolocation (Unchanged)
 async function getLocationWithRetry(maxAttempts = 2) {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
@@ -422,7 +455,6 @@ async function processAttendance(empId, emp) {
             showResultModal(false, `🚫 Outside 50m range. Closest: ${distances.sort((a,b)=>a.dist-b.dist)[0].name} (${distances[0].dist.toFixed(3)}km)`);
             return;
         }
-
         await saveAttendance(empId, matchedCenter.name);
     } catch (err) {
         const messages = { 1: '❌ Location permission denied.', 2: '❌ Location unavailable.', 3: '❌ Location request timed out.' };
@@ -430,7 +462,6 @@ async function processAttendance(empId, emp) {
     }
 }
 
-// 🌟 UPDATED: Cross-center logic & auto OUT generation
 async function saveAttendance(empId, locationName) {
     try {
         const date = datePicker.value;
@@ -439,22 +470,17 @@ async function saveAttendance(empId, locationName) {
         const current = snap.val() || { logs: [] };
         const now = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
         const lastLog = current.logs.length > 0 ? current.logs[current.logs.length - 1] : null;
-
+        
         let nextType;
         let autoOutLog = null;
-
+        
         if (!lastLog || lastLog.type === 'out') {
-            // No prior log or last was OUT → normal IN
             nextType = 'in';
         } 
         else if (lastLog.type === 'in' && lastLog.location !== locationName) {
-            // 🌟 SCENARIO 1: Last log was IN at a DIFFERENT center
-            // → This scan is a new TIME IN, not a time out
             nextType = 'in';
-
             const empTerms = employees[empId]?.terms || 'Full-time';
             if (empTerms === 'Full-time') {
-                // Auto-generate OUT at previous center = new IN time minus 1 minute
                 const nowMins = timeToMinutes(now);
                 const autoOutMins = Math.max(0, nowMins - 1);
                 autoOutLog = {
@@ -464,28 +490,21 @@ async function saveAttendance(empId, locationName) {
                     autoGenerated: true
                 };
             }
-            // For part-time: do nothing — previous IN stays incomplete
-            // It will appear in the Incomplete Timecard report
         } 
         else {
-            // Last was IN at SAME center → normal OUT
             nextType = 'out';
         }
-
+        
         const newLogs = [...current.logs];
-        if (autoOutLog) {
-            newLogs.push(autoOutLog);
-        }
+        if (autoOutLog) newLogs.push(autoOutLog);
         newLogs.push({ type: nextType, time: now, location: locationName });
-
+        
         await update(tcRef, { logs: newLogs });
-
+        
         let msg = `✅ ${nextType.toUpperCase()} at ${locationName}`;
-        if (autoOutLog) {
-            msg += `\n⚡ Auto-clocked OUT at ${autoOutLog.location} (${autoOutLog.time})`;
-        }
+        if (autoOutLog) msg += `\n⚡ Auto-clocked OUT at ${autoOutLog.location} (${autoOutLog.time})`;
+        
         showResultModal(true, msg);
-
     } catch (err) {
         console.error('💥 Firebase update failed:', err);
         showResultModal(false, `❌ Failed to save: ${err.message}`);
@@ -512,7 +531,6 @@ function showResultModal(success, message) {
     setTimeout(() => modal.classList.add('hidden'), 4000);
 }
 
-// 📥 Export CSV (Optimized to use cached real-time data)
 if (exportCsvBtn) {
     exportCsvBtn.addEventListener('click', () => {
         const date = datePicker.value;
@@ -522,9 +540,11 @@ if (exportCsvBtn) {
             alert('No attendance data loaded for this date.');
             return;
         }
-
+        
         let csv = "Date,Employee ID,English Name,Chinese Name,Position,Type,Time,Location\n";
         Object.entries(currentDayLogs).forEach(([empId, data]) => {
+            if (!hasFullAccess && empId !== currentEmployeeId) return;
+
             if (!employees[empId] || (filterPos && employees[empId].position !== filterPos)) return;
             const emp = employees[empId];
             data.logs?.forEach(log => {

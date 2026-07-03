@@ -68,15 +68,13 @@ function initApp() {
 
     const now = new Date();
     filterMonth.value = String(now.getMonth() + 1).padStart(2, '0');
-    filterYear.value = currentYear; // ✅ Reuse the 'currentYear' declared at the top
+    filterYear.value = currentYear;
     
-    // ✅ DEFAULT TO CURRENT MONTH
     let currentMonth = now.getMonth() + 1; 
     rangeStartMonthSel.value = String(currentMonth).padStart(2, '0');
     rangeStartYearSel.value = currentYear;
     viewModeSelect.value = 'year';
 
-    // ✅ FIXED: Correctly calculate the end month (wraps around the year properly)
     function updateRangeEndLabel() {
         const startMonth = parseInt(rangeStartMonthSel.value);
         const startYear = parseInt(rangeStartYearSel.value);
@@ -250,9 +248,14 @@ function initApp() {
             const { student, subject, subjectIndex } = entry;
             const sub = subject;
             
-            let dtDisplay = `<button class="dt-cell-btn" data-student="${student.id}" data-subidx="${subjectIndex}">Select DT</button>`;
+            // Show subject name inside the DT button
+            let dtDisplay = `<button class="dt-cell-btn" data-student="${student.id}" data-subidx="${subjectIndex}">Select DT<br><small>${sub.name || ''}</small></button>`;
             if (sub.selectedDT) {
-                dtDisplay = `<button class="dt-cell-btn has-dt" data-student="${student.id}" data-subidx="${subjectIndex}">${sub.selectedDT.date || '-'}<br><small>${sub.selectedDT.test || ''}</small></button>`;
+                dtDisplay = `<button class="dt-cell-btn has-dt" data-student="${student.id}" data-subidx="${subjectIndex}">
+                    <strong>${sub.name || '-'}</strong><br>
+                    <span>${sub.selectedDT.date || '-'}</span><br>
+                    <small>${sub.selectedDT.test || ''}</small>
+                </button>`;
             }
 
             const tr = document.createElement('tr');
@@ -371,11 +374,24 @@ function initApp() {
         const student = allStudentsData.find(s => s.id === currentDtContext.studentId);
         if (!student) return;
 
+        // Get Subject and Student Details for the Header
+        let subjects = Array.isArray(student.subjects) ? student.subjects : Object.values(student.subjects || {});
+        const currentSubject = subjects[currentDtContext.subjectIndex];
+        const subjectName = currentSubject?.name || 'Unknown Subject';
+        const studentName = getDisplayName(student);
+        
+        // Update Modal Title and Hint
+        const modalTitle = document.getElementById('dtModalTitle');
+        if (modalTitle) modalTitle.textContent = `Select DT for: ${subjectName}`;
+        
+        const modalHint = document.getElementById('dtModalHint');
+        if (modalHint) modalHint.textContent = `Student: ${studentName} | Click a row to assign it.`;
+
         dtModalBody.innerHTML = '';
         const dts = student.diagnosticTests || [];
         
         if (dts.length === 0) {
-            dtModalBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:1rem;">No Diagnostic Tests recorded for this student.</td></tr>';
+            dtModalBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:1rem;">No Diagnostic Tests recorded for this student.</td></tr>';
         } else {
             dts.forEach((dt, idx) => {
                 const tr = document.createElement('tr');
@@ -383,9 +399,13 @@ function initApp() {
                                    student.subjects[currentDtContext.subjectIndex]?.selectedDT?.test === dt.test;
                 if (isSelected) tr.classList.add('selected');
 
+                // ✅ FIX: Read the subject directly from the DT object saved by the Student Form
+                const dtSubjectName = dt.subject || '-';
+
                 tr.innerHTML = `
                     <td>${dt.date || '-'}</td>
                     <td>${dt.test || '-'}</td>
+                    <td>${dtSubjectName}</td>
                     <td>${dt.time || '-'}</td>
                     <td>${dt.score || '-'}</td>
                     <td>${dt.suggestedStart || dt.actualStart || '-'}</td>

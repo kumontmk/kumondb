@@ -99,16 +99,17 @@
 
     <!-- DT Selection Modal -->
     <div id="dtModal" class="modal hidden">
-        <div class="modal-content" style="max-width: 800px; text-align: left;">
+        <div class="modal-content" style="max-width: 900px; text-align: left;">
             <span id="closeDtModal" class="close-modal">&times;</span>
-            <h3>Select Diagnostic Test (DT)</h3>
-            <p class="hint">Click a row to select it for this subject.</p>
+            <h3 id="dtModalTitle">Select Diagnostic Test (DT)</h3>
+            <p id="dtModalHint" class="hint">Click a row to select it for this subject.</p>
             <div class="table-wrapper" style="max-height: 400px; margin-top: 1rem;">
                 <table id="dtModalTable">
                     <thead>
                         <tr>
                             <th>DATE</th>
                             <th>DT</th>
+                            <th>SUBJECT</th>
                             <th>TIME</th>
                             <th>SCR</th>
                             <th>STRT LVL</th>
