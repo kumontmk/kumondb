@@ -234,6 +234,7 @@ function initApp() {
         return false;
     }
 
+    // 🆕 UPDATED: Robustly handles Direct Drops, Pending Requests, and Cancelled Requests
     function getFilteredEntries() {
         const mStatus = filterStatus.value;
         const entries = [];
@@ -243,7 +244,11 @@ function initApp() {
             subjects.forEach((sub, index) => {
                 let targetMonth, targetYear, reason, type, isPending = false;
                 
-                if (sub.pendingRequest) {
+                // Check if there is an ACTIVE (non-cancelled) pending request
+                const hasActivePendingRequest = sub.pendingRequest && !sub.pendingRequest.cancelled && sub.pendingRequest.type;
+                const isDirectDropPause = sub.status === 'drop' || sub.status === 'pause';
+
+                if (hasActivePendingRequest) {
                     isPending = true;
                     type = sub.pendingRequest.type;
                     reason = sub.pendingRequest.reason;
@@ -255,12 +260,21 @@ function initApp() {
                         targetYear = sub.pendingRequest.pauseFromYear;
                     }
                 } 
-                else if (sub.status === 'drop' || sub.status === 'pause') {
+                else if (isDirectDropPause) {
+                    // 🆕 Handles direct drops/pauses changed manually in Student Form
                     type = sub.status;
                     reason = sub.status === 'drop' ? sub.dropReason : sub.pauseReason;
                     targetMonth = sub.status === 'drop' ? sub.dropMonth : sub.pauseFromMonth;
                     targetYear = sub.status === 'drop' ? sub.dropYear : sub.pauseFromYear;
                 } 
+                else if (sub.pendingRequest && sub.pendingRequest.cancelled) {
+                    // Handles requests that were cancelled but status hasn't changed yet
+                    isPending = true;
+                    type = sub.pendingRequest.type || 'drop'; 
+                    reason = sub.pendingRequest.reason || 'Cancelled';
+                    targetMonth = sub.pendingRequest.dropMonth || sub.pendingRequest.pauseFromMonth;
+                    targetYear = sub.pendingRequest.dropYear || sub.pendingRequest.pauseFromYear;
+                }
                 else {
                     return; 
                 }
@@ -291,9 +305,9 @@ function initApp() {
                     }
                 }
 
-                // 🆕 Check if the pending request was cancelled
+                // 🆕 Only mark as cancelled if it's NOT already a direct drop/pause
                 let isCancelled = false;
-                if (sub.pendingRequest && sub.pendingRequest.cancelled) {
+                if (sub.pendingRequest && sub.pendingRequest.cancelled && !isDirectDropPause) {
                     isCancelled = true;
                 }
 
@@ -350,7 +364,7 @@ function initApp() {
             const isConfirmed = sub.dropBook?.confirmed;
             const pendingBadge = (isPending && !isConfirmed && !isCancelled) ? '<span class="status-badge-pending">⏳ Pending</span>' : '';
             
-            // 🆕 UPDATED ACTION BUTTON LOGIC (Includes Reinstate)
+            // 🆕 UPDATED ACTION BUTTON LOGIC (Now handles Direct Drops/Pauses)
             let actionBtn = '';
             if (isCancelled) {
                 actionBtn = `
@@ -362,10 +376,15 @@ function initApp() {
             } else if (isConfirmed) {
                 actionBtn = `<button class="confirm-row-btn confirmed" disabled>✔️ Confirmed</button>`;
             } else {
+                // 🆕 Show "Cancel" button for pending requests OR direct drops/pauses
+                const isDirectDropPause = (sub.status === 'drop' || sub.status === 'pause') && !isPending;
+                const showCancelBtn = isPending || isDirectDropPause;
+                const cancelBtnText = isPending ? '❌ Cancel Request' : '❌ Cancel Drop/Pause';
+                
                 actionBtn = `
                     <div style="display:flex; gap:4px; flex-wrap:wrap;">
                         <button class="confirm-row-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" data-student-id="${student.id}" data-sub-index="${entry.subjectIndex}" data-action="confirm">✔️ Confirm</button>
-                        <button class="confirm-row-btn cancel-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" data-student-id="${student.id}" data-sub-index="${entry.subjectIndex}" data-action="cancel">❌ Cancel</button>
+                        ${showCancelBtn ? `<button class="confirm-row-btn cancel-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" data-student-id="${student.id}" data-sub-index="${entry.subjectIndex}" data-action="cancel">${cancelBtnText}</button>` : ''}
                     </div>
                 `;
             }
@@ -404,16 +423,30 @@ function initApp() {
             if (action === 'cancel') {
                 triggerCancelAction(studentId, subjectIndex);
             } else if (action === 'reinstate') {
-                triggerReinstateAction(studentId, subjectIndex); // 🆕 Handle reinstate
+                triggerReinstateAction(studentId, subjectIndex);
             } else {
                 triggerConfirmAction(studentId, subjectIndex);
             }
         }
     });
 
-    // 🆕 NEW FUNCTION: QUICK CANCEL FROM TABLE
+    // 🆕 UPDATED: Now handles both Pending Requests and Direct Drops/Pauses
     async function triggerCancelAction(studentId, subjectIndex) {
-        if (!confirm('Are you sure you want to cancel this pending request? The entry will be crossed out.')) return;
+        const student = allStudentsData.find(s => s.id === studentId);
+        if (!student) return;
+        const subjects = Array.isArray(student.subjects) ? student.subjects : Object.values(student.subjects || {});
+        const sub = subjects[subjectIndex];
+        if (!sub) return;
+
+        const hasActivePending = sub.pendingRequest && !sub.pendingRequest.cancelled && sub.pendingRequest.type;
+        const isDirectDropPause = sub.status === 'drop' || sub.status === 'pause';
+
+        let confirmMsg = 'Are you sure you want to cancel this pending request? The entry will be crossed out.';
+        if (isDirectDropPause && !hasActivePending) {
+            confirmMsg = 'Are you sure you want to cancel this drop/pause? The subject status will be reverted to "Current".';
+        }
+
+        if (!confirm(confirmMsg)) return;
 
         try {
             const studentRef = ref(db, `centers/${centerId}/students/${studentId}`);
@@ -421,28 +454,44 @@ function initApp() {
             if (!snap.exists()) throw new Error("Student not found");
             
             const studentData = snap.val();
-            let subjects = Array.isArray(studentData.subjects) ? studentData.subjects : Object.values(studentData.subjects || {});
+            let subjectsData = Array.isArray(studentData.subjects) ? studentData.subjects : Object.values(studentData.subjects || {});
             
-            if (subjects[subjectIndex] && subjects[subjectIndex].pendingRequest) {
-                subjects[subjectIndex].pendingRequest.cancelled = true;
-                subjects[subjectIndex].pendingRequest.cancelledAt = new Date().toISOString();
+            if (subjectsData[subjectIndex]) {
+                if (hasActivePending) {
+                    subjectsData[subjectIndex].pendingRequest.cancelled = true;
+                    subjectsData[subjectIndex].pendingRequest.cancelledAt = new Date().toISOString();
+                } 
+                else if (isDirectDropPause) {
+                    // Revert direct drop/pause to 'current' and wipe data
+                    subjectsData[subjectIndex].status = 'current';
+                    delete subjectsData[subjectIndex].dropMonth;
+                    delete subjectsData[subjectIndex].dropYear;
+                    delete subjectsData[subjectIndex].dropReason;
+                    delete subjectsData[subjectIndex].pauseFromMonth;
+                    delete subjectsData[subjectIndex].pauseFromYear;
+                    delete subjectsData[subjectIndex].pauseToMonth;
+                    delete subjectsData[subjectIndex].pauseToYear;
+                    delete subjectsData[subjectIndex].pauseReason;
+                    
+                    if (subjectsData[subjectIndex].pendingRequest) delete subjectsData[subjectIndex].pendingRequest;
+                    if (subjectsData[subjectIndex].dropBook) delete subjectsData[subjectIndex].dropBook;
+                }
             }
             
-            studentData.subjects = subjects;
+            studentData.subjects = subjectsData;
             await set(studentRef, studentData);
             
             const localStudent = allStudentsData.find(s => s.id === studentId);
-            if (localStudent) localStudent.subjects = subjects;
+            if (localStudent) localStudent.subjects = subjectsData;
             
             renderTable();
-            alert('✅ Request cancelled.');
+            alert('✅ Drop/Pause cancelled successfully.');
         } catch (err) {
             console.error("Cancel error: ", err);
             alert('❌ Failed to cancel: ' + err.message);
         }
     }
 
-    // 🆕 NEW FUNCTION: QUICK REINSTATE FROM TABLE
     async function triggerReinstateAction(studentId, subjectIndex) {
         if (!confirm('Are you sure you want to reinstate this cancelled request? It will become pending again.')) return;
 
@@ -455,7 +504,6 @@ function initApp() {
             let subjects = Array.isArray(studentData.subjects) ? studentData.subjects : Object.values(studentData.subjects || {});
             
             if (subjects[subjectIndex] && subjects[subjectIndex].pendingRequest) {
-                // Remove the cancelled flags to reactivate the request
                 delete subjects[subjectIndex].pendingRequest.cancelled;
                 delete subjects[subjectIndex].pendingRequest.cancelledAt;
             }
@@ -492,7 +540,7 @@ function initApp() {
         let pauseFromMonth = '', pauseFromYear = '';
         let isPause = false;
         
-        if (isPending) {
+        if (isPending && subject.pendingRequest.type) {
             const pr = subject.pendingRequest;
             reason = pr.reason || '';
             isPause = pr.type === 'pause';
@@ -515,7 +563,6 @@ function initApp() {
         
         document.getElementById('mReason').value = reason;
         
-        // 🆕 Handle Pause Month Display
         const pauseFromGroup = document.getElementById('mPauseFromGroup');
         if (isPause && pauseFromMonth && pauseFromYear) {
             document.getElementById('mPauseFrom').value = `${MONTH_NAMES[parseInt(pauseFromMonth) - 1]} ${pauseFromYear}`;
@@ -549,16 +596,23 @@ function initApp() {
             confirmDropBtn.style.display = 'inline-block';
         }
 
-        // 🆕 Show/Hide Cancel OR Reinstate Request Button in Modal
+        // 🆕 UPDATED: Show/Hide Cancel OR Reinstate Request Button in Modal
         const cancelRequestBtn = document.getElementById('cancelRequestBtn');
         const reinstateRequestBtn = document.getElementById('reinstateRequestBtn');
+        
+        const isDirectDropPause = (subject.status === 'drop' || subject.status === 'pause') && !isPending;
 
         if (isPending && !subject.pendingRequest.cancelled) {
             cancelRequestBtn.style.display = 'inline-block';
+            cancelRequestBtn.textContent = '❌ Cancel Request';
             reinstateRequestBtn.style.display = 'none';
         } else if (isPending && subject.pendingRequest.cancelled) {
             cancelRequestBtn.style.display = 'none';
             reinstateRequestBtn.style.display = 'inline-block';
+        } else if (isDirectDropPause) {
+            cancelRequestBtn.style.display = 'inline-block';
+            cancelRequestBtn.textContent = '❌ Cancel Drop/Pause';
+            reinstateRequestBtn.style.display = 'none';
         } else {
             cancelRequestBtn.style.display = 'none';
             reinstateRequestBtn.style.display = 'none';
@@ -628,7 +682,7 @@ function initApp() {
             const sub = subjects[subjectIndex];
             const newReason = document.getElementById('mReason').value.trim();
             
-            if (isPending) {
+            if (isPending && sub.pendingRequest.type) {
                 sub.pendingRequest.reason = newReason;
             } else {
                 const isDrop = sub.status === 'drop';
@@ -666,14 +720,30 @@ function initApp() {
         }
     });
 
-    // 🆕 CANCEL REQUEST FROM MODAL
+    // 🆕 UPDATED: Now handles both Pending Requests and Direct Drops/Pauses
     document.getElementById('cancelRequestBtn').addEventListener('click', async () => {
         if (!currentEditContext) return;
-        if (!confirm('Are you sure you want to cancel this pending request? The entry will be crossed out.')) return;
-
         const { studentId, subjectIndex } = currentEditContext;
+        
+        const student = allStudentsData.find(s => s.id === studentId);
+        if (!student) return;
+        const subjects = Array.isArray(student.subjects) ? student.subjects : Object.values(student.subjects || {});
+        const sub = subjects[subjectIndex];
+        if (!sub) return;
+
+        const hasActivePending = sub.pendingRequest && !sub.pendingRequest.cancelled && sub.pendingRequest.type;
+        const isDirectDropPause = sub.status === 'drop' || sub.status === 'pause';
+
+        let confirmMsg = 'Are you sure you want to cancel this pending request? The entry will be crossed out.';
+        if (isDirectDropPause && !hasActivePending) {
+            confirmMsg = 'Are you sure you want to cancel this drop/pause? The subject status will be reverted to "Current".';
+        }
+
+        if (!confirm(confirmMsg)) return;
+
         const btn = document.getElementById('cancelRequestBtn');
         btn.disabled = true;
+        const originalText = btn.textContent;
         btn.textContent = 'Cancelling...';
 
         try {
@@ -682,32 +752,48 @@ function initApp() {
             if (!snap.exists()) throw new Error("Student not found");
             
             const studentData = snap.val();
-            let subjects = Array.isArray(studentData.subjects) ? studentData.subjects : Object.values(studentData.subjects || {});
+            let subjectsData = Array.isArray(studentData.subjects) ? studentData.subjects : Object.values(studentData.subjects || {});
             
-            if (subjects[subjectIndex] && subjects[subjectIndex].pendingRequest) {
-                subjects[subjectIndex].pendingRequest.cancelled = true;
-                subjects[subjectIndex].pendingRequest.cancelledAt = new Date().toISOString();
+            if (subjectsData[subjectIndex]) {
+                if (hasActivePending) {
+                    subjectsData[subjectIndex].pendingRequest.cancelled = true;
+                    subjectsData[subjectIndex].pendingRequest.cancelledAt = new Date().toISOString();
+                } 
+                else if (isDirectDropPause) {
+                    // Revert direct drop/pause to 'current' and wipe data
+                    subjectsData[subjectIndex].status = 'current';
+                    delete subjectsData[subjectIndex].dropMonth;
+                    delete subjectsData[subjectIndex].dropYear;
+                    delete subjectsData[subjectIndex].dropReason;
+                    delete subjectsData[subjectIndex].pauseFromMonth;
+                    delete subjectsData[subjectIndex].pauseFromYear;
+                    delete subjectsData[subjectIndex].pauseToMonth;
+                    delete subjectsData[subjectIndex].pauseToYear;
+                    delete subjectsData[subjectIndex].pauseReason;
+                    
+                    if (subjectsData[subjectIndex].pendingRequest) delete subjectsData[subjectIndex].pendingRequest;
+                    if (subjectsData[subjectIndex].dropBook) delete subjectsData[subjectIndex].dropBook;
+                }
             }
             
-            studentData.subjects = subjects;
+            studentData.subjects = subjectsData;
             await set(studentRef, studentData);
             
             const localStudent = allStudentsData.find(s => s.id === studentId);
-            if (localStudent) localStudent.subjects = subjects;
+            if (localStudent) localStudent.subjects = subjectsData;
             
             renderTable();
             closeModal();
-            alert('✅ Request cancelled successfully.');
+            alert('✅ Drop/Pause cancelled successfully.');
         } catch (err) {
             console.error("Cancel error:", err);
             alert('❌ Failed to cancel: ' + err.message);
         } finally {
             btn.disabled = false;
-            btn.textContent = '❌ Cancel Request';
+            btn.textContent = originalText;
         }
     });
 
-    // 🆕 REINSTATE REQUEST FROM MODAL
     document.getElementById('reinstateRequestBtn').addEventListener('click', async () => {
         if (!currentEditContext) return;
         if (!confirm('Are you sure you want to reinstate this cancelled request?')) return;
@@ -748,9 +834,6 @@ function initApp() {
         }
     });
 
-    // ==========================================
-    // CONFIRM DROP/PAUSE LOGIC
-    // ==========================================
     const confirmActionModal = document.getElementById('confirmActionModal');
     const confirmTitle = document.getElementById('confirmTitle');
     const confirmMessage = document.getElementById('confirmMessage');
@@ -821,17 +904,30 @@ function initApp() {
             const sub = subjects[subjectIndex];
             if (!sub) throw new Error("Subject not found");
 
-            const isCalled = callStatusBtn.classList.contains('green');
-            const calledBy = document.getElementById('mCalledBy').value.trim();
-            const notes = document.getElementById('mNotes').value.trim();
+            let isCalled, calledBy, notes, exitFormAutopay, accounts;
+            
+            if (currentEditContext && currentEditContext.studentId === studentId && currentEditContext.subjectIndex === subjectIndex) {
+                isCalled = callStatusBtn.classList.contains('green');
+                calledBy = document.getElementById('mCalledBy').value.trim();
+                notes = document.getElementById('mNotes').value.trim();
+                exitFormAutopay = document.getElementById('mExitAutopay').checked;
+                accounts = document.getElementById('mAccounts').value.trim();
+            } else {
+                const dbInfo = sub.dropBook || {};
+                isCalled = dbInfo.callStatus || false;
+                calledBy = dbInfo.calledBy || '';
+                notes = dbInfo.notes || '';
+                exitFormAutopay = dbInfo.exitFormAutopay || false;
+                accounts = dbInfo.accounts || '';
+            }
 
             sub.dropBook = {
                 ...(sub.dropBook || {}),
                 callStatus: isCalled,
                 calledBy: calledBy,
                 notes: notes,
-                exitFormAutopay: document.getElementById('mExitAutopay').checked,
-                accounts: document.getElementById('mAccounts').value.trim(),
+                exitFormAutopay: exitFormAutopay,
+                accounts: accounts,
                 updatedAt: new Date().toISOString()
             };
 
@@ -864,6 +960,8 @@ function initApp() {
                         }
                         delete sub.pendingRequest;
                     }
+                } else if (sub.status === 'drop' || sub.status === 'pause') {
+                    delete sub.pendingRequest;
                 }
             }
 
@@ -889,9 +987,6 @@ function initApp() {
         }
     }
 
-    // ==========================================
-    // ADD REQUEST MODAL LOGIC
-    // ==========================================
     const searchModal = document.getElementById('searchRequestModal');
     const searchInput = document.getElementById('searchStudentInput');
     const searchResults = document.getElementById('searchResults');

@@ -8,9 +8,7 @@
     --shadow: 0 2px 10px rgba(0,0,0,0.1);
     --radius: 8px;
 }
-
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: var(--secondary);
@@ -20,7 +18,6 @@ body {
     display: flex;
     flex-direction: column;
 }
-
 header {
     background: var(--primary);
     color: var(--white);
@@ -47,7 +44,6 @@ header nav a, header nav button {
     transition: background 0.2s;
 }
 header nav a:hover, header nav button:hover { background: rgba(255,255,255,0.35); }
-
 #page-loader {
     position: fixed; top: 0; left: 0;
     width: 100%; height: 100vh;
@@ -65,9 +61,7 @@ header nav a:hover, header nav button:hover { background: rgba(255,255,255,0.35)
     animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
-
 .schedule-dashboard { padding: 1.5rem 2rem; max-width: 100%; margin: 0 auto; width: 100%; flex: 1; }
-
 .schedule-tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid #e2e8f0; }
 .schedule-tabs .tab-btn {
     padding: 0.75rem 1.5rem;
@@ -88,7 +82,6 @@ header nav a:hover, header nav button:hover { background: rgba(255,255,255,0.35)
 .schedule-tabs .tab-btn.active { color: var(--primary-dark); border-bottom-color: var(--primary-dark); }
 .tab-content { display: none; }
 .tab-content.active { display: block; }
-
 .schedule-toolbar {
     display: flex;
     justify-content: space-between;
@@ -120,11 +113,9 @@ header nav a:hover, header nav button:hover { background: rgba(255,255,255,0.35)
 .action-btn { padding: 0.5rem 1rem; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.15s; }
 .action-btn.primary { background: var(--primary-dark); color: var(--white); }
 .action-btn.primary:hover { background: #3a6d94; }
-
 .employee-selector { display: flex; align-items: center; gap: 0.5rem; }
 .employee-selector label { font-size: 0.85rem; font-weight: 600; color: var(--text-light); white-space: nowrap; }
 .employee-selector select { padding: 0.4rem 0.8rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; min-width: 220px; }
-
 .table-wrapper {
     overflow-x: auto;
     background: var(--white);
@@ -181,7 +172,6 @@ header nav a:hover, header nav button:hover { background: rgba(255,255,255,0.35)
 }
 .terms-full { background: #d4edda; color: #155724; }
 .terms-part { background: #fff3cd; color: #856404; }
-
 .schedule-table tr.section-divider td {
     background: #f0f4f8;
     font-weight: 700;
@@ -191,7 +181,6 @@ header nav a:hover, header nav button:hover { background: rgba(255,255,255,0.35)
     padding: 0.4rem 0.75rem;
     border-top: 2px solid var(--primary);
 }
-
 .schedule-cell { cursor: pointer; transition: background 0.15s; position: relative; }
 .schedule-cell:hover { background: #e8f4fd !important; }
 .schedule-cell.empty-cell { background: #fafafa; color: #ccc; font-size: 0.7rem; }
@@ -201,7 +190,6 @@ header nav a:hover, header nav button:hover { background: rgba(255,255,255,0.35)
 .schedule-cell.status-sick { background: #fce4ec; }
 .schedule-cell.status-off { background: #f5f5f5; }
 .schedule-cell.status-other { background: #f3e5f5; }
-
 .cell-content { font-size: 0.65rem; line-height: 1.3; text-align: left; padding: 2px; }
 .cell-content .shift-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 1px; }
 .cell-content .shift-time { font-weight: 600; color: var(--text); }
@@ -218,7 +206,9 @@ header nav a:hover, header nav button:hover { background: rgba(255,255,255,0.35)
 .cell-content .shift-center.c-PT { background: #9b59b6; }
 .cell-content .shift-center.c-TS { background: #e67e22; }
 .cell-content .shift-center.c-C  { background: #27ae60; }
-.cell-content .shift-center.c-OTHER { background: #95a5a6; }
+/* ✅ NEW: T11 and AO Colors */
+.cell-content .shift-center.c-T11 { background: #16a085; }
+.cell-content .shift-center.c-AO  { background: #d35400; }
 
 .cell-content .lunch-line { color: #999; font-style: italic; }
 .cell-content .status-label { font-weight: 600; font-size: 0.7rem; }
@@ -229,10 +219,8 @@ header nav a:hover, header nav button:hover { background: rgba(255,255,255,0.35)
     font-weight: 600;
     margin-top: 2px;
 }
-
 .empty-state { text-align: center; padding: 3rem; color: var(--text-light); }
 .empty-state.hidden { display: none; }
-
 .modal-overlay {
     position: fixed; top: 0; left: 0;
     width: 100%; height: 100%;
@@ -279,7 +267,6 @@ header nav a:hover, header nav button:hover { background: rgba(255,255,255,0.35)
     border-radius: 6px; padding: 0.5rem 0.75rem;
     font-size: 0.8rem; color: #c0392b; margin-bottom: 0.5rem;
 }
-
 .shift-group { border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 0.75rem; }
 .shift-group legend { font-size: 0.85rem; font-weight: 600; color: var(--primary-dark); padding: 0 0.4rem; }
 .lunch-group { background: #fafafa; }
@@ -290,7 +277,6 @@ header nav a:hover, header nav button:hover { background: rgba(255,255,255,0.35)
 textarea { width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; resize: vertical; font-family: inherit; margin-top: 0.4rem; }
 .pattern-option { background: #e8f4fd; padding: 0.6rem 1rem; border-radius: 6px; margin-top: 0.5rem; }
 .pattern-option label { font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; }
-
 .modal-footer {
     display: flex; justify-content: space-between; align-items: center;
     padding: 1rem 1.5rem;
@@ -306,7 +292,6 @@ textarea { width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1; border-radiu
 .btn-secondary:hover { background: #cbd5e1; }
 .btn-danger { background: #e74c3c; color: var(--white); }
 .btn-danger:hover { background: #c0392b; }
-
 @media (max-width: 768px) {
     header { padding: 1rem; flex-direction: column; align-items: flex-start; }
     .schedule-dashboard { padding: 1rem; }
@@ -316,286 +301,136 @@ textarea { width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1; border-radiu
     .modal-footer { flex-direction: column; gap: 0.5rem; }
     .modal-footer-right { width: 100%; justify-content: flex-end; }
 }
-
 /* Dynamic Shifts */
-.shifts-container {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    margin-bottom: 0.75rem;
-}
-
+.shifts-container { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 0.75rem; }
 .shift-item {
-    display: flex;
-    gap: 0.5rem;
-    align-items: flex-end;
-    padding: 0.75rem;
-    background: #f8f9fa;
-    border: 1px solid #e2e8f0;
-    border-radius: 6px;
-    position: relative;
-    flex-wrap: wrap;
+    display: flex; gap: 0.5rem; align-items: flex-end; padding: 0.75rem;
+    background: #f8f9fa; border: 1px solid #e2e8f0; border-radius: 6px;
+    position: relative; flex-wrap: wrap;
 }
-
-.shift-item.break-shift {
-    background: #fff8e1;
-    border-color: #ffc107;
-}
-
+.shift-item.break-shift { background: #fff8e1; border-color: #ffc107; }
 .shift-item .shift-field {
-    display: flex;
-    flex-direction: column;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--text-light);
-    gap: 0.2rem;
-    flex: 1;
-    min-width: 90px;
+    display: flex; flex-direction: column; font-size: 0.75rem;
+    font-weight: 600; color: var(--text-light); gap: 0.2rem; flex: 1; min-width: 90px;
 }
-
-.shift-item .shift-field input,
-.shift-item .shift-field select {
-    padding: 0.4rem 0.5rem;
-    border: 1px solid #cbd5e1;
-    border-radius: 6px;
-    font-size: 0.85rem;
+.shift-item .shift-field input, .shift-item .shift-field select {
+    padding: 0.4rem 0.5rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem;
 }
-
 .shift-item .remove-shift-btn {
-    background: #fee2e2;
-    color: #dc3545;
-    border: none;
-    width: 32px;
-    height: 32px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 1rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s;
-    flex-shrink: 0;
+    background: #fee2e2; color: #dc3545; border: none; width: 32px; height: 32px;
+    border-radius: 6px; cursor: pointer; font-size: 1rem;
+    display: flex; align-items: center; justify-content: center; transition: background 0.2s; flex-shrink: 0;
 }
-
-.shift-item .remove-shift-btn:hover {
-    background: #fecaca;
-}
-
+.shift-item .remove-shift-btn:hover { background: #fecaca; }
 .add-shift-btn {
-    background: var(--primary);
-    color: var(--white);
-    border: none;
-    padding: 0.5rem 1rem;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.85rem;
-    font-weight: 600;
-    transition: background 0.2s;
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
+    background: var(--primary); color: var(--white); border: none;
+    padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer;
+    font-size: 0.85rem; font-weight: 600; transition: background 0.2s;
+    display: flex; align-items: center; gap: 0.4rem;
 }
-
-.add-shift-btn:hover {
-    background: var(--primary-dark);
-}
-
-/* Multi-shift cell display */
-.cell-content .shift-line {
-    margin-bottom: 2px;
-}
-
-.cell-content .break-line {
-    color: #999;
-    font-style: italic;
-    font-size: 0.6rem;
-}
-
-/* Holiday/Closed indicators in cells */
+.add-shift-btn:hover { background: var(--primary-dark); }
+.cell-content .shift-line { margin-bottom: 2px; }
+.cell-content .break-line { color: #999; font-style: italic; font-size: 0.6rem; }
 .cell-content .holiday-indicator {
-    background: #e74c3c;
-    color: white;
-    padding: 1px 4px;
-    border-radius: 3px;
-    font-size: 0.6rem;
-    font-weight: 600;
-    display: inline-block;
-    margin-top: 2px;
+    background: #e74c3c; color: white; padding: 1px 4px;
+    border-radius: 3px; font-size: 0.6rem; font-weight: 600;
+    display: inline-block; margin-top: 2px;
 }
-
 .cell-content .closed-indicator {
-    background: #95a5a6;
-    color: white;
-    padding: 1px 4px;
-    border-radius: 3px;
-    font-size: 0.6rem;
-    font-weight: 600;
+    background: #95a5a6; color: white; padding: 1px 4px;
+    border-radius: 3px; font-size: 0.6rem; font-weight: 600;
     display: inline-block;
 }
 
 /* =========================================
    PER CENTER VIEW
-   ========================================= */
-.center-view-table th.day-header {
-    min-width: 120px;
-}
-
-.center-view-table td {
-    min-height: 90px;
-    height: 90px;
-}
-
-.print-btn {
-    background: #27ae60 !important;
-    color: var(--white) !important;
-}
-
-.print-btn:hover {
-    background: #219a52 !important;
-}
-
-/* Week separator in per-center view */
-.center-view-table th.week-separator {
-    border-left: 3px solid rgba(255,255,255,0.6);
-}
-
-.center-view-table td.week-separator {
-    border-left: 3px solid #cbd5e1;
-}
-
-/* Summary row at bottom */
+========================================= */
+.center-view-table th.day-header { min-width: 120px; }
+.center-view-table td { min-height: 90px; height: 90px; }
+.print-btn { background: #27ae60 !important; color: var(--white) !important; }
+.print-btn:hover { background: #219a52 !important; }
+.center-view-table th.week-separator { border-left: 3px solid rgba(255,255,255,0.6); }
+.center-view-table td.week-separator { border-left: 3px solid #cbd5e1; }
 .center-view-table tr.summary-row td {
-    background: #f0f4f8;
-    font-weight: 700;
-    font-size: 0.7rem;
-    color: var(--primary-dark);
-    text-align: center;
-    padding: 0.4rem 0.25rem;
-    border-top: 2px solid var(--primary);
-    height: auto;
-    min-height: auto;
+    background: #f0f4f8; font-weight: 700; font-size: 0.7rem;
+    color: var(--primary-dark); text-align: center;
+    padding: 0.4rem 0.25rem; border-top: 2px solid var(--primary);
+    height: auto; min-height: auto;
 }
 
 /* =========================================
-   PRINT STYLES — A4 LANDSCAPE COLORED
-   ========================================= */
-/* ✅ FORCE HIDE PRINT AREA ON SCREEN */
-#printArea {
-    display: none !important;
+   PER SUBJECT VIEW
+========================================= */
+.subject-view-table th.day-header { min-width: 120px; }
+.subject-view-table td { min-height: 90px; height: 90px; }
+.subject-view-table tr.subject-divider td {
+    background: #f0f4f8; font-weight: 700; font-size: 0.8rem;
+    color: var(--white); text-align: left; padding: 0.5rem 0.75rem;
+    border-top: 3px solid var(--primary); letter-spacing: 0.5px;
+}
+.subject-view-table tr.subject-divider.english-divider td { background: linear-gradient(135deg, #2980b9, #3498db); }
+.subject-view-table tr.subject-divider.math-divider td { background: linear-gradient(135deg, #27ae60, #2ecc71); }
+.subject-view-table tr.subject-divider.chinese-divider td { background: linear-gradient(135deg, #e67e22, #f39c12); }
+.subject-view-table tr.subject-divider.other-divider td { background: linear-gradient(135deg, #8e44ad, #9b59b6); }
+.subject-view-table tr.subject-divider td .subject-icon { margin-right: 0.5rem; font-size: 0.9rem; }
+.subject-view-table tr.subject-divider td .subject-count {
+    float: right; background: rgba(255,255,255,0.25);
+    padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: 600;
+}
+.subject-view-table tr.subject-summary-row td {
+    background: #f0f4f8; font-weight: 700; font-size: 0.7rem;
+    color: var(--primary-dark); text-align: center;
+    padding: 0.4rem 0.25rem; border-top: 2px solid var(--primary);
+    height: auto; min-height: auto;
 }
 
 /* =========================================
-   PRINT STYLES — A4 LANDSCAPE COLORED
-   ========================================= */
+   PRINT STYLES
+========================================= */
+#printArea { display: none !important; }
 @media print {
-    @page {
-        size: A4 landscape;
-        margin: 10mm;
+    @page { size: A4 landscape; margin: 10mm; }
+    body > *:not(#printArea), header, .schedule-tabs, .schedule-toolbar, .modal-overlay, #page-loader, .empty-state, button, nav, footer, .print-btn {
+        display: none !important; visibility: hidden !important; height: 0 !important;
     }
-
-    /* ✅ HIDE EVERYTHING EXCEPT PRINT AREA */
-    body > *:not(#printArea),
-    header, .schedule-tabs, .schedule-toolbar, .modal-overlay,
-    #page-loader, .empty-state, button, nav, footer, .print-btn {
-        display: none !important;
-        visibility: hidden !important;
-        height: 0 !important;
+    #printArea { display: block !important; visibility: visible !important; position: static !important; width: 100% !important; background: white !important; }
+    #printArea * { visibility: visible !important; }
+    .print-header { text-align: center; margin-bottom: 6mm; page-break-after: avoid; }
+    .print-header h1 { font-size: 14pt; color: #1a5276; margin: 0 0 2mm 0; font-family: Arial, sans-serif; }
+    .print-header .print-subtitle { font-size: 9pt; color: #555; margin: 0; }
+    .print-header .print-date-range { font-size: 10pt; color: #333; font-weight: 700; margin: 2mm 0 0 0; }
+    .print-table-wrapper { width: 100%; overflow: visible; }
+    .print-schedule-table, .print-subject-table {
+        width: 100%; border-collapse: collapse; font-size: 7.5pt;
+        font-family: Arial, sans-serif; table-layout: fixed;
     }
-
-    /* ✅ SHOW ONLY PRINT AREA */
-    #printArea {
-        display: block !important;
-        visibility: visible !important;
-        position: static !important;
-        width: 100% !important;
-        background: white !important;
+    .print-schedule-table th, .print-subject-table th {
+        background: #1a5276 !important; color: white !important; padding: 3px 2px;
+        text-align: center; font-size: 6.5pt; font-weight: 700;
+        border: 1px solid #ccc; -webkit-print-color-adjust: exact !important;
     }
-
-    #printArea * {
-        visibility: visible !important;
-    }
-
-    /* Print header */
-    .print-header {
-        text-align: center;
-        margin-bottom: 6mm;
-        page-break-after: avoid;
-    }
-    .print-header h1 {
-        font-size: 14pt;
-        color: #1a5276;
-        margin: 0 0 2mm 0;
-        font-family: Arial, sans-serif;
-    }
-    .print-header .print-subtitle {
-        font-size: 9pt;
-        color: #555;
-        margin: 0;
-    }
-    .print-header .print-date-range {
-        font-size: 10pt;
-        color: #333;
-        font-weight: 700;
-        margin: 2mm 0 0 0;
-    }
-
-    /* Print table */
-    .print-table-wrapper {
-        width: 100%;
-        overflow: visible;
-    }
-    .print-schedule-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 7.5pt;
-        font-family: Arial, sans-serif;
-        table-layout: fixed;
-    }
-    .print-schedule-table th {
-        background: #1a5276 !important;
-        color: white !important;
-        padding: 3px 2px;
-        text-align: center;
-        font-size: 6.5pt;
-        font-weight: 700;
-        border: 1px solid #ccc;
-        -webkit-print-color-adjust: exact !important;
-    }
-    .print-schedule-table th.employee-col {
-        width: 15%;
-        text-align: left;
-        padding-left: 5px;
-        background: #154360 !important;
+    .print-schedule-table th.employee-col, .print-subject-table th.employee-col {
+        width: 15%; text-align: left; padding-left: 5px; background: #154360 !important;
     }
     .print-schedule-table th.weekend-col { background: #5dade2 !important; }
     .print-schedule-table th.today-col { background: #27ae60 !important; }
     .print-schedule-table th.week-sep { border-left: 3px solid #fff; }
-
-    .print-schedule-table td {
-        padding: 2px;
-        border: 1px solid #ccc;
-        vertical-align: top;
-        text-align: left;
-        height: 38px;
-        font-size: 7pt;
+    .print-schedule-table td, .print-subject-table td {
+        padding: 2px; border: 1px solid #ccc; vertical-align: top;
+        text-align: left; height: 38px; font-size: 7pt;
     }
-    .print-schedule-table td.employee-col {
-        background: #f8f9fa !important;
-        font-weight: 700;
-        font-size: 7pt;
-        border-right: 2px solid #1a5276;
-        padding-left: 5px;
-        -webkit-print-color-adjust: exact !important;
+    .print-schedule-table td.employee-col, .print-subject-table td.employee-col {
+        background: #f8f9fa !important; font-weight: 700; font-size: 7pt;
+        border-right: 2px solid #1a5276; padding-left: 5px; -webkit-print-color-adjust: exact !important;
     }
-    .print-schedule-table td .role-tag { font-weight: 400; font-size: 6pt; color: #777; display: block; }
-    .print-schedule-table td .terms-tag { font-size: 5pt; padding: 0 2px; border-radius: 2px; font-weight: 700; display: inline-block; margin-left: 3px; }
-    .print-schedule-table td .terms-tag.ft { background: #d4edda !important; color: #155724 !important; -webkit-print-color-adjust: exact !important; }
-    .print-schedule-table td .terms-tag.pt { background: #fff3cd !important; color: #856404 !important; -webkit-print-color-adjust: exact !important; }
+    .print-schedule-table td .role-tag, .print-subject-table td .role-tag { font-weight: 400; font-size: 6pt; color: #777; display: block; }
+    .print-schedule-table td .terms-tag, .print-subject-table td .terms-tag { font-size: 5pt; padding: 0 2px; border-radius: 2px; font-weight: 700; display: inline-block; margin-left: 3px; }
+    .print-schedule-table td .terms-tag.ft, .print-subject-table td .terms-tag.ft { background: #d4edda !important; color: #155724 !important; -webkit-print-color-adjust: exact !important; }
+    .print-schedule-table td .terms-tag.pt, .print-subject-table td .terms-tag.pt { background: #fff3cd !important; color: #856404 !important; -webkit-print-color-adjust: exact !important; }
     .print-schedule-table td.week-sep { border-left: 3px solid #aaa; }
     .print-schedule-table td.weekend-cell { background: #eaf2f8 !important; -webkit-print-color-adjust: exact !important; }
     .print-schedule-table td.today-cell { background: #e8f8e8 !important; -webkit-print-color-adjust: exact !important; }
     .print-schedule-table td.empty-cell { background: #fafafa !important; color: #ccc; text-align: center; }
-
     .print-shift { font-size: 6.5pt; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .print-shift .time { font-weight: 700; color: #1a1a1a; }
     .print-shift.break-shift { color: #888; font-style: italic; }
@@ -604,384 +439,27 @@ textarea { width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1; border-radiu
     .print-status.sick { color: #e74c3c; }
     .print-status.off { color: #999; }
     .print-status.other { color: #8e44ad; }
-
     .print-schedule-table tr.section-row td {
-        background: #d5e8f0 !important;
-        font-weight: 700;
-        font-size: 6.5pt;
-        color: #1a5276;
-        text-align: left;
-        padding: 2px 5px;
-        border-top: 2px solid #1a5276;
-        height: auto;
-        -webkit-print-color-adjust: exact !important;
-    }
-    .print-schedule-table tr.summary-row td {
-        background: #eaf2f8 !important;
-        font-weight: 700;
-        font-size: 6pt;
-        color: #1a5276;
-        text-align: center;
-        padding: 2px;
-        border-top: 2px solid #1a5276;
-        height: auto;
-        -webkit-print-color-adjust: exact !important;
-    }
-
-    .print-footer {
-        margin-top: 4mm;
-        font-size: 6.5pt;
-        color: #999;
-        text-align: right;
-        font-family: Arial, sans-serif;
-        page-break-inside: avoid;
-    }
-    .print-legend {
-        display: flex !important;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-top: 4mm;
-        padding: 4px 0;
-        page-break-inside: avoid;
-    }
-    .print-legend-item {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        margin-right: 12px;
-        font-size: 7pt;
-        font-family: Arial, sans-serif;
-    }    
-    .print-legend-color {
-            width: 10px;
-            height: 10px;
-            border-radius: 2px;
-            display: inline-block;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-            color-adjust: exact !important;
-            border: 1px solid #ccc;
-    }
-    .print-schedule-table, .print-schedule-table tr { page-break-inside: avoid; }
-}
-
-/* =========================================
-   MOBILE RESPONSIVE FIXES
-   ========================================= */
-@media (max-width: 768px) {
-    /* Header */
-    header {
-        padding: 0.75rem 1rem;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.5rem;
-    }
-    
-    header h1 {
-        font-size: 1rem;
-    }
-    
-    header nav {
-        width: 100%;
-        justify-content: space-between;
-    }
-    
-    header nav a, header nav button {
-        font-size: 0.8rem;
-        padding: 0.4rem 0.75rem;
-    }
-
-    /* Dashboard padding */
-    .schedule-dashboard {
-        padding: 0.75rem;
-    }
-
-    /* Tabs - make them scrollable */
-    .schedule-tabs {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        margin-bottom: 1rem;
-        border-bottom: 2px solid #e2e8f0;
-        padding-bottom: 0;
-    }
-    
-    .schedule-tabs .tab-btn {
-        padding: 0.6rem 1rem;
-        font-size: 0.8rem;
-        white-space: nowrap;
-        flex-shrink: 0;
-    }
-    
-    .schedule-tabs .tab-btn i {
-        display: none; /* Hide icons on mobile to save space */
-    }
-
-    /* Toolbar - stack everything */
-    .schedule-toolbar {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 0.75rem;
-        padding: 0.75rem;
-    }
-    
-    .schedule-toolbar .nav-group {
-        width: 100%;
-        justify-content: center;
-        flex-wrap: wrap;
-    }
-    
-    .schedule-toolbar .action-group {
-        width: 100%;
-        display: flex;
-        justify-content: center;
-    }
-    
-    .schedule-toolbar .action-btn {
-        width: 100%;
-        max-width: 280px;
-    }
-
-    /* Nav buttons */
-    .nav-btn {
-        padding: 0.4rem 0.6rem;
-        font-size: 0.75rem;
-    }
-    
-    .week-range {
-        font-size: 0.8rem;
-        min-width: auto;
-        text-align: center;
-    }
-
-    /* Employee selector */
-    .employee-selector {
-        width: 100%;
-        flex-direction: column;
-        align-items: stretch;
-        gap: 0.4rem;
-    }
-    
-    .employee-selector label {
-        font-size: 0.8rem;
-    }
-    
-    .employee-selector select {
-        width: 100%;
-        min-width: auto;
-        font-size: 0.85rem;
-    }
-
-    /* Table wrapper - enable horizontal scroll */
-    .table-wrapper {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        max-height: none;
-        border-radius: 8px;
-    }
-
-    /* Table - smaller fonts */
-    .schedule-table {
-        font-size: 0.7rem;
-        min-width: 600px; /* Force minimum width for scroll */
-    }
-    
-    .schedule-table th {
-        padding: 0.3rem 0.2rem;
-        font-size: 0.65rem;
-    }
-    
-    .schedule-table th.day-header {
-        min-width: 60px;
-    }
-    
-    .schedule-table th.employee-header {
-        min-width: 120px;
-        font-size: 0.7rem;
-    }
-    
-    .schedule-table td {
-        padding: 0.15rem;
-        height: 50px;
-        font-size: 0.65rem;
-    }
-    
-    .schedule-table td.employee-name-cell {
-        min-width: 120px;
-        padding: 0.3rem 0.5rem;
-        font-size: 0.7rem;
-    }
-    
-    .schedule-table td.employee-name-cell .emp-role {
-        font-size: 0.6rem;
-    }
-    
-    .schedule-table td.employee-name-cell .emp-terms {
-        font-size: 0.55rem;
-    }
-
-    /* Cell content */
-    .cell-content {
-        font-size: 0.55rem;
-        line-height: 1.2;
-    }
-    
-    .cell-content .shift-time {
-        font-size: 0.6rem;
-    }
-    
-    .cell-content .shift-center {
-        font-size: 0.5rem;
-        padding: 0 2px;
-    }
-    
-    .cell-content .status-label {
-        font-size: 0.6rem;
-    }
-    
-    .cell-content .lunch-line {
-        font-size: 0.5rem;
-    }
-    
-    .cell-content .holiday-indicator {
-        font-size: 0.5rem;
-        padding: 1px 2px;
-    }
-    
-    .cell-content .multi-center-indicator {
-        font-size: 0.5rem;
-    }
-
-    /* Section divider */
-    .schedule-table tr.section-divider td {
-        font-size: 0.65rem;
-        padding: 0.3rem 0.5rem;
-    }
-
-    /* Modal - full screen on mobile */
-    .modal-overlay {
-        padding: 0;
-        align-items: flex-start;
-    }
-    
-    .modal-box {
-        max-width: 100%;
-        max-height: 100vh;
-        height: 100vh;
-        border-radius: 0;
-        overflow-y: auto;
-    }
-    
-    .modal-header {
-        padding: 0.75rem 1rem;
-    }
-    
-    .modal-header h2 {
-        font-size: 1rem;
-    }
-    
-    .modal-body {
-        padding: 1rem;
-    }
-    
-    .modal-footer {
-        padding: 0.75rem 1rem;
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-    
-    .modal-footer-right {
-        width: 100%;
-        justify-content: flex-end;
-    }
-
-    /* Shift items in modal */
-    .shift-item {
-        flex-direction: column;
-        align-items: stretch;
-        padding: 0.5rem;
-    }
-    
-    .shift-item .shift-field {
-        min-width: auto;
-    }
-    
-    .shift-item .remove-shift-btn {
-        align-self: flex-end;
-    }
-
-    /* Modal date info */
-    .modal-date-info {
-        font-size: 0.75rem;
-        padding: 0.5rem 0.75rem;
-    }
-
-    /* Shift group */
-    .shift-group {
-        padding: 0.5rem 0.75rem;
-    }
-    
-    .shift-group legend {
-        font-size: 0.8rem;
-    }
-    
-    .shift-fields {
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-    
-    .shift-fields label {
-        min-width: auto;
-    }
-
-    /* Empty state */
-    .empty-state {
-        padding: 2rem 1rem;
-    }
-    
-    .empty-state i {
-        font-size: 2rem;
-    }
-    
-    .empty-state p {
-        font-size: 0.85rem;
-    }
-
-    /* Center view table */
-    .center-view-table td {
-        height: 50px;
-    }
-}
-
-/* Extra small screens */
-@media (max-width: 480px) {
-    header h1 {
-        font-size: 0.9rem;
-    }
-    
-    .schedule-tabs .tab-btn {
-        padding: 0.5rem 0.75rem;
-        font-size: 0.75rem;
-    }
-    
-    .schedule-table {
-        font-size: 0.65rem;
-        min-width: 500px;
-    }
-    
-    .schedule-table th.day-header {
-        min-width: 50px;
-    }
-    
-    .schedule-table td {
-        height: 45px;
-    }
-    
-    .nav-btn {
-        padding: 0.3rem 0.5rem;
-        font-size: 0.7rem;
-    }
-    
-    .week-range {
-        font-size: 0.75rem;
-    }
+        background: #d5e8f0 !important; font-weight: 700; font-size: 6.5pt;
+        color: #1a5276; text-align: left; padding: 2px 5px;
+        border-top: 2px solid #1a5276; height: auto; -webkit-print-color-adjust: exact !important;
+    }
+    .print-schedule-table tr.summary-row td, .print-subject-table tr.summary-row td {
+        background: #eaf2f8 !important; font-weight: 700; font-size: 6pt;
+        color: #1a5276; text-align: center; padding: 2px;
+        border-top: 2px solid #1a5276; height: auto; -webkit-print-color-adjust: exact !important;
+    }
+    .print-subject-table tr.print-subject-divider td {
+        font-weight: 700; font-size: 7pt; color: white; text-align: left;
+        padding: 3px 5px; border-top: 2px solid #1a5276; -webkit-print-color-adjust: exact !important;
+    }
+    .print-subject-table tr.print-subject-divider.english td { background: #2980b9 !important; }
+    .print-subject-table tr.print-subject-divider.math td { background: #27ae60 !important; }
+    .print-subject-table tr.print-subject-divider.chinese td { background: #e67e22 !important; }
+    .print-subject-table tr.print-subject-divider.other td { background: #8e44ad !important; }
+    .print-footer { margin-top: 4mm; font-size: 6.5pt; color: #999; text-align: right; font-family: Arial, sans-serif; page-break-inside: avoid; }
+    .print-legend { display: flex !important; flex-wrap: wrap; gap: 8px; margin-top: 4mm; padding: 4px 0; page-break-inside: avoid; }
+    .print-legend-item { display: inline-flex; align-items: center; gap: 4px; margin-right: 12px; font-size: 7pt; font-family: Arial, sans-serif; }    
+    .print-legend-color { width: 10px; height: 10px; border-radius: 2px; display: inline-block; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; border: 1px solid #ccc; }
+    .print-schedule-table, .print-schedule-table tr, .print-subject-table, .print-subject-table tr { page-break-inside: avoid; }
 }

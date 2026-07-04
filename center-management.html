@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Center Management - Kumon DB</title>
+    <link rel="stylesheet" href="center-management.css">
+    <!-- Firebase SDKs -->
+    <script type="module" src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"></script>
+    <script type="module" src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js"></script>
+    <script type="module" src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js"></script>
+</head>
+<body>
+    <div id="page-loader">Loading...</div>
+
+    <header class="header">
+        <div>
+            <a href="centers.html">← Centers</a>
+        </div>
+        <h1>🏢 Center Management</h1>
+    </header>
+
+    <!-- Access Denied View -->
+    <div id="accessDenied" class="access-denied hidden">
+        <div class="access-denied-content">
+            <h2>🔐 Access Restricted</h2>
+            <p>This page is only accessible to Administrators and Managers.</p>
+            <button id="backToDashboard" class="btn btn-primary" style="margin-top:1rem">← Back to Dashboard</button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main id="mainContent" class="container hidden">
+        <div class="top-bar">
+            <h2>Manage Centers & NFC Tags</h2>
+            <button id="addCenterBtn" class="btn btn-primary">+ Add New Center</button>
+        </div>
+        
+        <div id="centersGrid" class="centers-grid">
+            <!-- Centers will be injected here -->
+        </div>
+    </main>
+
+    <!-- Add/Edit Center Modal -->
+    <div id="centerModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <button class="close-modal" id="closeModalBtn">&times;</button>
+            <h2 id="modalTitle">Add Center</h2>
+            
+            <form id="centerForm">
+                <input type="hidden" id="centerId">
+                
+                <div class="form-group">
+                    <label for="centerName">Center Name *</label>
+                    <input type="text" id="centerName" required placeholder="e.g., Kumon Taipa Mei Keng">
+                </div>
+
+                <div class="form-group">
+                    <label for="centerAddress">Address</label>
+                    <textarea id="centerAddress" rows="2" placeholder="Full address"></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="centerLat">GPS Latitude</label>
+                        <input type="number" step="any" id="centerLat" placeholder="e.g., 22.1568">
+                    </div>
+                    <div class="form-group">
+                        <label for="centerLng">GPS Longitude</label>
+                        <input type="number" step="any" id="centerLng" placeholder="e.g., 113.5531">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="centerPhone">Phone / Contact</label>
+                        <input type="text" id="centerPhone" placeholder="+853 ...">
+                    </div>
+                    <div class="form-group">
+                        <label for="centerHours">Operating Hours</label>
+                        <input type="text" id="centerHours" placeholder="e.g., Mon-Fri 10:00-19:00">
+                    </div>
+                </div>
+
+                <!-- NFC Section -->
+                <div class="nfc-section">
+                    <h4>📡 NFC Tag Registration</h4>
+                    <div id="nfcWarning" class="nfc-warning hidden">
+                        ⚠️ Web NFC is not supported on this device/browser. Please use <strong>Chrome on Android</strong> over <strong>HTTPS</strong> to read/write NFC tags.
+                    </div>
+                    
+                    <p style="font-size: 0.85rem; color: var(--text-light); margin: 0 0 0.5rem 0;">
+                        Tap an NFC sticker to read its UID, or write this Center's ID to a new sticker.
+                    </p>
+                    
+                    <div class="nfc-status" id="nfcStatusBox">
+                        <span id="nfcStatusText">No NFC tag registered</span>
+                    </div>
+
+                    <div class="nfc-actions">
+                        <button type="button" id="readNfcBtn" class="btn btn-secondary">📖 Read Tag UID</button>
+                        <button type="button" id="writeNfcBtn" class="btn btn-success">✍️ Write to Tag</button>
+                        <button type="button" id="clearNfcBtn" class="btn btn-danger" style="display:none;">Clear UID</button>
+                    </div>
+                </div>
+
+                <div style="margin-top: 1.5rem; display: flex; gap: 1rem; justify-content: flex-end;">
+                    <button type="button" id="cancelBtn" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" id="saveBtn" class="btn btn-primary">Save Center</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="module" src="center-management.js"></script>
+</body>
+</html>

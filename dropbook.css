@@ -747,3 +747,13 @@ input[readonly], input[disabled] {
 .confirm-row-btn.reinstate-btn:hover {
     background: #0b5ed7;
 }
+
+.status-badge-direct {
+  background: #e3f2fd;
+  color: #1565c0;
+  border: 1px solid #90caf9;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
