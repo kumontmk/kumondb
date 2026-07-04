@@ -176,3 +176,41 @@ th { background: var(--primary); color: var(--white); font-weight: 600; }
 .result-text { font-size: 1.1rem; font-weight: 600; color: #333; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+/* 📡 NFC SCAN BUTTON */
+.nfc-btn {
+    display: inline-flex; 
+    align-items: center; 
+    gap: 0.5rem; 
+    padding: 0.7rem 1.4rem;
+    background: #059669; /* Green to distinguish from QR (Blue) */
+    color: var(--white); 
+    border: none; 
+    border-radius: var(--radius);
+    font-size: 0.95rem; 
+    font-weight: 600; 
+    cursor: pointer; 
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(5, 150, 105, 0.2); 
+    white-space: nowrap; 
+    height: fit-content;
+}
+.nfc-btn:hover { 
+    background: #047857; 
+    transform: translateY(-1px); 
+    box-shadow: 0 4px 8px rgba(5, 150, 105, 0.3); 
+}
+.nfc-btn:active { transform: translateY(0); }
+.nfc-btn:disabled { 
+    background: #9ca3af; 
+    cursor: wait; 
+    transform: none; 
+    box-shadow: none; 
+}
+
+@media (max-width: 768px) {
+    .nfc-btn { 
+        justify-content: center; 
+        width: 100%; 
+    }
+}
