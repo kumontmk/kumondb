@@ -352,7 +352,7 @@ async function readNfcTag() {
 }
 
 async function writeNfcTag() {
-    if (!('NDEFWriter' in window)) return alert('Web NFC not supported.');
+    if (!('NDEFWriter' in window)) return alert('Web NFC not supported. Please use Chrome on Android.');
     
     const centerId = document.getElementById('centerId').value;
     const centerName = document.getElementById('centerName').value.trim();
@@ -361,14 +361,17 @@ async function writeNfcTag() {
         return alert('⚠️ Please save the center details first before writing to an NFC tag.');
     }
 
-    const payload = `KUMON_CENTER:${centerId || centerName.toLowerCase().replace(/\s+/g, '-')}`;
+    // 🆕 Create a URL that points to the timecard page with the center ID
+    const baseUrl = window.location.origin + window.location.pathname.replace('center-management.html', 'timecard.html');
+    const nfcUrl = `${baseUrl}?nfc_clock=1&center=${centerId}`;
 
     try {
         const writer = new NDEFWriter();
+        // 🆕 Write as a URL record so iOS/Android automatically opens the browser when tapped
         await writer.write({
-            records: [{ recordType: "text", data: payload }]
+            records: [{ recordType: "url", data: nfcUrl }]
         });
-        alert(`✅ Successfully wrote to NFC Tag!\nData: ${payload}`);
+        alert(`✅ Successfully wrote URL to NFC Tag!\nAny phone tapped to this sticker will open:\n${nfcUrl}\n\nNote: The hardware UID is still readable by Android devices for direct in-app clock-in.`);
     } catch (err) {
         if (err.name === 'NotAllowedError') {
             alert('⚠️ NFC permission denied.');

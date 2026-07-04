@@ -19,7 +19,7 @@ const CENTERS = [
 const MAX_DIST_KM = 0.05;
 
 let employees = {};
-let firebaseCenters = {}; // Loaded from Firebase to map NFC UIDs to Center Names
+let firebaseCenters = {}; // 🆕 Loaded from Firebase for NFC URL mapping
 let currentDayLogs = {};
 let timecardUnsubscribe = null;
 let html5QrCode = null;
@@ -31,7 +31,6 @@ const SCAN_COOLDOWN_MS = 3000;
 let currentEmployeeId = null;
 let currentEmployeeData = null;
 let hasFullAccess = false;
-let nfcAbortController = null; 
 
 function timeToMinutes(timeStr) {
     if (!timeStr) return null;
@@ -51,7 +50,6 @@ const datePicker = document.getElementById('datePicker');
 const searchInput = document.getElementById('searchInput');
 const posFilter = document.getElementById('positionFilter');
 const startScanBtn = document.getElementById('startScanBtn');
-const startNfcBtn = document.getElementById('startNfcBtn'); 
 const exportCsvBtn = document.getElementById('exportCsvBtn');
 const scanModal = document.getElementById('scanModal');
 const closeScanBtn = document.getElementById('closeScan');
@@ -60,11 +58,13 @@ const stopScanBtn = document.getElementById('stopScanBtn');
 window.addEventListener('DOMContentLoaded', () => {
     if (datePicker) datePicker.value = new Date().toISOString().split('T')[0];
     loadEmployees();
-    loadFirebaseCenters(); 
+    loadFirebaseCenters(); // 🆕 Load centers for NFC URL mapping
     if (datePicker) setupTimecardListener(datePicker.value);
+    
+    checkNfcUrlClockIn(); // 🆕 Check if user arrived via NFC tap
 });
 
-// Load centers from Firebase to map NFC UIDs to Center Names
+// 🆕 Load centers from Firebase to map NFC URL center IDs to Center Names
 function loadFirebaseCenters() {
     onValue(ref(db, 'centers'), (snapshot) => {
         firebaseCenters = snapshot.val() || {};
@@ -79,7 +79,7 @@ function loadEmployees() {
     });
 }
 
-// 🔒 PERMISSION CONTROL
+// 🔒 PERMISSION CONTROL: Identify current user and their access level
 function identifyCurrentUser() {
     const user = auth.currentUser;
     if (!user) return;
@@ -196,85 +196,43 @@ if (searchInput) searchInput.addEventListener('input', renderTimecardTable);
 if (posFilter) posFilter.addEventListener('change', renderTimecardTable);
 
 // ==========================================
-// 📡 NFC CLOCK-IN/OUT LOGIC (READS HARDWARE UID)
+// 📡 AUTO CLOCK-IN FOR iOS / URL-BASED NFC TAGS
 // ==========================================
-if (startNfcBtn) {
-    startNfcBtn.addEventListener('click', async () => {
-        if (!('NDEFReader' in window)) {
-            showResultModal(false, '❌ NFC is not supported on this device/browser.<br>Please use <strong>Chrome on Android</strong> over HTTPS.');
-            return;
-        }
+function checkNfcUrlClockIn() {
+    const params = new URLSearchParams(window.location.search);
+    
+    // If the URL contains our NFC trigger
+    if (params.get('nfc_clock') === '1' && params.get('center')) {
+        const centerId = params.get('center');
+        
+        // Clean the URL immediately so refreshing the page doesn't double-clock them
+        window.history.replaceState({}, document.title, window.location.pathname);
+        
+        // Show a loading message
+        showResultModal(true, '📡 NFC Tag Detected!<br>Verifying employee...');
 
-        if (!currentEmployeeId) {
-            showResultModal(false, '🚫 You must be logged in as a registered employee to use NFC clock-in.');
-            return;
-        }
-
-        if (nfcAbortController) nfcAbortController.abort();
-        nfcAbortController = new AbortController();
-
-        try {
-            const reader = new NDEFReader();
-            
-            reader.onreading = async (event) => {
-                if (nfcAbortController) nfcAbortController.abort();
-                resetNfcButton();
-
-                // 1. Read the unique hardware UID (Serial Number) of the sticker
-                const uid = Array.from(event.serialNumber)
-                    .map(b => b.toString(16).padStart(2, '0'))
-                    .join(':')
-                    .toUpperCase();
-
-                console.log("📡 Read NFC UID:", uid);
-
-                // 2. Find which center has this UID registered in the database
-                let matchedCenterName = null;
-                for (const [id, data] of Object.entries(firebaseCenters)) {
-                    if (data.nfcUid && data.nfcUid.toUpperCase() === uid) {
-                        matchedCenterName = data.name || id;
-                        break;
-                    }
-                }
-
-                // 3. If the UID isn't in the database, reject it
-                if (!matchedCenterName) {
-                    showResultModal(false, '❌ Unregistered NFC Tag.<br>This sticker has not been assigned to a center yet.<br>Please contact an admin to register it in Center Management.');
+        // We must wait for Firebase data (employees & centers) to finish loading
+        const tryClockIn = setInterval(() => {
+            if (Object.keys(employees).length > 0 && Object.keys(firebaseCenters).length > 0) {
+                clearInterval(tryClockIn);
+                
+                if (!currentEmployeeId) {
+                    showResultModal(false, '🚫 You must be logged in.<br>Please log in to the web app, then tap the NFC tag again.');
                     return;
                 }
 
-                // 4. Clock the logged-in employee in/out at this specific center
-                await saveAttendance(currentEmployeeId, matchedCenterName);
-            };
-
-            reader.onreadingerror = () => {
-                resetNfcButton();
-                showResultModal(false, '❌ Could not read NFC tag. Please try again.');
-            };
-
-            await reader.scan({ signal: nfcAbortController.signal });
-            
-            startNfcBtn.textContent = "📡 Waiting for tap...";
-            startNfcBtn.disabled = true;
-            
-            setTimeout(resetNfcButton, 15000);
-
-        } catch (err) {
-            resetNfcButton();
-            if (err.name === 'AbortError') return;
-            if (err.name === 'NotAllowedError') {
-                showResultModal(false, '⚠️ NFC permission denied.<br>Please allow NFC access in your browser settings.');
-            } else {
-                showResultModal(false, `❌ NFC Error: ${err.message}`);
+                const centerData = firebaseCenters[centerId];
+                if (centerData) {
+                    // Automatically clock them in!
+                    saveAttendance(currentEmployeeId, centerData.name);
+                } else {
+                    showResultModal(false, '❌ Center ID not found in database.');
+                }
             }
-        }
-    });
-}
+        }, 200);
 
-function resetNfcButton() {
-    if (startNfcBtn) {
-        startNfcBtn.textContent = "📡 Tap NFC to Clock In/Out";
-        startNfcBtn.disabled = false;
+        // Failsafe: stop checking after 5 seconds if data never loads
+        setTimeout(() => clearInterval(tryClockIn), 5000);
     }
 }
 
@@ -529,7 +487,7 @@ async function processAttendance(empId, emp) {
     }
 }
 
-// Shared saving logic (Used by both QR and NFC)
+// Shared saving logic (Used by QR, Android NFC UID, and iOS NFC URL)
 async function saveAttendance(empId, locationName) {
     try {
         const date = datePicker.value;
