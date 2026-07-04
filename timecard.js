@@ -10,7 +10,6 @@ if (logoutBtn) {
     logoutBtn.addEventListener('click', logout);
 }
 
-// We still keep the hardcoded CENTERS for GPS fallback/QR scanning
 const CENTERS = [
     { name: "Kumon Taipa Mei Keng", lat: 22.15680419404832, lng: 113.55310261763758 },
     { name: "Kumon Taipa Pac Tat", lat: 22.15864298997591, lng: 113.54896029627456 },
@@ -20,7 +19,7 @@ const CENTERS = [
 const MAX_DIST_KM = 0.05;
 
 let employees = {};
-let firebaseCenters = {}; // 🆕 Loaded from Firebase for NFC mapping
+let firebaseCenters = {}; // Loaded from Firebase to map NFC UIDs to Center Names
 let currentDayLogs = {};
 let timecardUnsubscribe = null;
 let html5QrCode = null;
@@ -32,7 +31,7 @@ const SCAN_COOLDOWN_MS = 3000;
 let currentEmployeeId = null;
 let currentEmployeeData = null;
 let hasFullAccess = false;
-let nfcAbortController = null; // 🆕 Controls NFC scanning lifecycle
+let nfcAbortController = null; 
 
 function timeToMinutes(timeStr) {
     if (!timeStr) return null;
@@ -52,7 +51,7 @@ const datePicker = document.getElementById('datePicker');
 const searchInput = document.getElementById('searchInput');
 const posFilter = document.getElementById('positionFilter');
 const startScanBtn = document.getElementById('startScanBtn');
-const startNfcBtn = document.getElementById('startNfcBtn'); // 🆕
+const startNfcBtn = document.getElementById('startNfcBtn'); 
 const exportCsvBtn = document.getElementById('exportCsvBtn');
 const scanModal = document.getElementById('scanModal');
 const closeScanBtn = document.getElementById('closeScan');
@@ -61,11 +60,11 @@ const stopScanBtn = document.getElementById('stopScanBtn');
 window.addEventListener('DOMContentLoaded', () => {
     if (datePicker) datePicker.value = new Date().toISOString().split('T')[0];
     loadEmployees();
-    loadFirebaseCenters(); // 🆕
+    loadFirebaseCenters(); 
     if (datePicker) setupTimecardListener(datePicker.value);
 });
 
-// 🆕 Load centers from Firebase to map NFC tag IDs to Center Names
+// Load centers from Firebase to map NFC UIDs to Center Names
 function loadFirebaseCenters() {
     onValue(ref(db, 'centers'), (snapshot) => {
         firebaseCenters = snapshot.val() || {};
@@ -80,7 +79,7 @@ function loadEmployees() {
     });
 }
 
-// 🔒 PERMISSION CONTROL: Identify current user and their access level
+// 🔒 PERMISSION CONTROL
 function identifyCurrentUser() {
     const user = auth.currentUser;
     if (!user) return;
@@ -197,66 +196,55 @@ if (searchInput) searchInput.addEventListener('input', renderTimecardTable);
 if (posFilter) posFilter.addEventListener('change', renderTimecardTable);
 
 // ==========================================
-// 📡 NFC CLOCK-IN/OUT LOGIC
+// 📡 NFC CLOCK-IN/OUT LOGIC (READS HARDWARE UID)
 // ==========================================
 if (startNfcBtn) {
     startNfcBtn.addEventListener('click', async () => {
-        // 1. Check Browser Support
         if (!('NDEFReader' in window)) {
             showResultModal(false, '❌ NFC is not supported on this device/browser.<br>Please use <strong>Chrome on Android</strong> over HTTPS.');
             return;
         }
 
-        // 2. Check if user is logged in as an employee
         if (!currentEmployeeId) {
             showResultModal(false, '🚫 You must be logged in as a registered employee to use NFC clock-in.');
             return;
         }
 
-        // 3. Abort any previous scan
-        if (nfcAbortController) {
-            nfcAbortController.abort();
-        }
+        if (nfcAbortController) nfcAbortController.abort();
         nfcAbortController = new AbortController();
 
         try {
             const reader = new NDEFReader();
             
             reader.onreading = async (event) => {
-                // Stop scanning immediately after successful read
                 if (nfcAbortController) nfcAbortController.abort();
                 resetNfcButton();
 
-                const decoder = new TextDecoder();
-                let centerId = null;
-                
-                // Parse the NFC tag data
-                for (const record of event.message.records) {
-                    if (record.recordType === "text") {
-                        const text = decoder.decode(record.data);
-                        if (text.startsWith("KUMON_CENTER:")) {
-                            centerId = text.replace("KUMON_CENTER:", "");
-                            break;
-                        }
+                // 1. Read the unique hardware UID (Serial Number) of the sticker
+                const uid = Array.from(event.serialNumber)
+                    .map(b => b.toString(16).padStart(2, '0'))
+                    .join(':')
+                    .toUpperCase();
+
+                console.log("📡 Read NFC UID:", uid);
+
+                // 2. Find which center has this UID registered in the database
+                let matchedCenterName = null;
+                for (const [id, data] of Object.entries(firebaseCenters)) {
+                    if (data.nfcUid && data.nfcUid.toUpperCase() === uid) {
+                        matchedCenterName = data.name || id;
+                        break;
                     }
                 }
 
-                if (!centerId) {
-                    showResultModal(false, '❌ Invalid NFC Tag.<br>This tag is not registered to a Kumon Center.');
+                // 3. If the UID isn't in the database, reject it
+                if (!matchedCenterName) {
+                    showResultModal(false, '❌ Unregistered NFC Tag.<br>This sticker has not been assigned to a center yet.<br>Please contact an admin to register it in Center Management.');
                     return;
                 }
 
-                // Map Center ID to Center Name from Firebase
-                const centerInfo = firebaseCenters[centerId];
-                if (!centerInfo) {
-                    showResultModal(false, `❌ Center ID "${centerId}" not found in the database.<br>Please contact an admin to register this center.`);
-                    return;
-                }
-
-                const centerName = centerInfo.name || centerId;
-                
-                // Bypass GPS because physical NFC tap proves presence at the center
-                await saveAttendance(currentEmployeeId, centerName);
+                // 4. Clock the logged-in employee in/out at this specific center
+                await saveAttendance(currentEmployeeId, matchedCenterName);
             };
 
             reader.onreadingerror = () => {
@@ -264,18 +252,16 @@ if (startNfcBtn) {
                 showResultModal(false, '❌ Could not read NFC tag. Please try again.');
             };
 
-            // Start scanning
             await reader.scan({ signal: nfcAbortController.signal });
             
             startNfcBtn.textContent = "📡 Waiting for tap...";
             startNfcBtn.disabled = true;
             
-            // Auto-reset button after 15 seconds if no tap
             setTimeout(resetNfcButton, 15000);
 
         } catch (err) {
             resetNfcButton();
-            if (err.name === 'AbortError') return; // Ignore manual aborts
+            if (err.name === 'AbortError') return;
             if (err.name === 'NotAllowedError') {
                 showResultModal(false, '⚠️ NFC permission denied.<br>Please allow NFC access in your browser settings.');
             } else {
@@ -293,7 +279,7 @@ function resetNfcButton() {
 }
 
 // ==========================================
-// 📷 QR CODE SCANNER LOGIC (Unchanged)
+// 📷 QR CODE SCANNER LOGIC
 // ==========================================
 async function closeScanner() {
     if (html5QrCode) {
