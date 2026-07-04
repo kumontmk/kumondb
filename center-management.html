@@ -14,9 +14,9 @@
     <div id="page-loader">Loading...</div>
 
     <header class="header">
-        <div>
-            <a href="centers.html">← Centers</a>
-        </div>
+        <nav>
+            <a href="centers.html">← Back to Centers</a>
+        </nav>
         <h1>🏢 Center Management</h1>
     </header>
 
@@ -25,7 +25,7 @@
         <div class="access-denied-content">
             <h2>🔐 Access Restricted</h2>
             <p>This page is only accessible to Administrators and Managers.</p>
-            <button id="backToDashboard" class="btn btn-primary" style="margin-top:1rem">← Back to Dashboard</button>
+            <button id="backToDashboard" class="primary" style="margin-top:1.5rem">← Back to Dashboard</button>
         </div>
     </div>
 
@@ -33,7 +33,7 @@
     <main id="mainContent" class="container hidden">
         <div class="top-bar">
             <h2>Manage Centers & NFC Tags</h2>
-            <button id="addCenterBtn" class="btn btn-primary">+ Add New Center</button>
+            <button id="addCenterBtn" class="primary">+ Add New Center</button>
         </div>
         
         <div id="centersGrid" class="centers-grid">
@@ -86,11 +86,11 @@
                 <div class="nfc-section">
                     <h4>📡 NFC Tag Registration</h4>
                     <div id="nfcWarning" class="nfc-warning hidden">
-                        ⚠️ Web NFC is not supported on this device/browser. Please use <strong>Chrome on Android</strong> over <strong>HTTPS</strong> to read/write NFC tags.
+                        ⚠️ Web NFC is not supported on this device/browser. Please use <strong>Chrome on Android</strong> over <strong>HTTPS</strong> to read/write NFC tags, or paste the UID manually below.
                     </div>
                     
                     <p style="font-size: 0.85rem; color: var(--text-light); margin: 0 0 0.5rem 0;">
-                        Tap an NFC sticker to read its UID, or write this Center's ID to a new sticker.
+                        Tap an NFC sticker to read its UID, write this Center's ID to a new sticker, or paste the UID manually.
                     </p>
                     
                     <div class="nfc-status" id="nfcStatusBox">
@@ -98,15 +98,21 @@
                     </div>
 
                     <div class="nfc-actions">
-                        <button type="button" id="readNfcBtn" class="btn btn-secondary">📖 Read Tag UID</button>
-                        <button type="button" id="writeNfcBtn" class="btn btn-success">✍️ Write to Tag</button>
-                        <button type="button" id="clearNfcBtn" class="btn btn-danger" style="display:none;">Clear UID</button>
+                        <button type="button" id="readNfcBtn" class="secondary">📖 Read Tag UID</button>
+                        <button type="button" id="writeNfcBtn" class="success">✍️ Write to Tag</button>
+                        <button type="button" id="clearNfcBtn" class="danger" style="display:none;">Clear UID</button>
+                    </div>
+
+                    <!-- Manual Input Field -->
+                    <div class="form-group" style="margin-top: 0.75rem; margin-bottom: 0;">
+                        <label for="manualNfcUid" style="font-size: 0.85rem;">Or paste UID manually:</label>
+                        <input type="text" id="manualNfcUid" placeholder="e.g., 04:A2:3B:..." style="font-family: monospace; font-size: 0.9rem;">
                     </div>
                 </div>
 
-                <div style="margin-top: 1.5rem; display: flex; gap: 1rem; justify-content: flex-end;">
-                    <button type="button" id="cancelBtn" class="btn btn-secondary">Cancel</button>
-                    <button type="submit" id="saveBtn" class="btn btn-primary">Save Center</button>
+                <div class="modal-footer">
+                    <button type="button" id="cancelBtn" class="secondary">Cancel</button>
+                    <button type="submit" id="saveBtn" class="primary">Save Center</button>
                 </div>
             </form>
         </div>

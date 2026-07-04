@@ -1,5 +1,5 @@
-import { db, logout, requireAuth } from './auth.js';
-import { ref, set, get, update, onValue, push } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { db, requireAuth } from './auth.js';
+import { ref, set, get, update, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 if (!requireAuth()) throw new Error("Auth required");
@@ -15,9 +15,10 @@ const pageLoader = document.getElementById('page-loader');
 
 let centers = {};
 let currentNfcUid = '';
+let nfcAbortController = null; // FIX: Controls NFC scanning lifecycle
 
 // ==========================================
-// 1. AUTHORIZATION CHECK (Same as employees)
+// 1. AUTHORIZATION CHECK
 // ==========================================
 async function checkAuthorization(user) {
     if (!user) {
@@ -94,6 +95,12 @@ function initApp() {
     document.getElementById('readNfcBtn').addEventListener('click', readNfcTag);
     document.getElementById('writeNfcBtn').addEventListener('click', writeNfcTag);
     document.getElementById('clearNfcBtn').addEventListener('click', clearNfcUid);
+    
+    // Manual UID Input
+    document.getElementById('manualNfcUid').addEventListener('input', (e) => {
+        currentNfcUid = e.target.value.trim();
+        updateNfcUi();
+    });
 
     checkNfcSupport();
     loadCenters();
@@ -102,7 +109,28 @@ function initApp() {
 function loadCenters() {
     onValue(ref(db, 'centers'), (snapshot) => {
         centers = snapshot.val() || {};
+        migrateCenterCoordinates(); // Auto-fix missing GPS
         renderCenters();
+    });
+}
+
+// FIX: Auto-populate GPS for existing centers that are missing it
+function migrateCenterCoordinates() {
+    const knownCoords = {
+        'Kumon Taipa Mei Keng': { lat: 22.15680419404832, lng: 113.55310261763758 },
+        'Kumon Taipa Pac Tat': { lat: 22.15864298997591, lng: 113.54896029627456 },
+        'Kumon Champs': { lat: 22.202188413699155, lng: 113.54954818278166 },
+        'Kumon Tap Siac': { lat: 22.19974168219132, lng: 113.54570239996973 }
+    };
+
+    Object.entries(centers).forEach(([id, data]) => {
+        if ((!data.lat || !data.lng) && knownCoords[data.name]) {
+            console.log(`📍 Auto-migrating coordinates for ${data.name}`);
+            update(ref(db, `centers/${id}`), {
+                lat: knownCoords[data.name].lat,
+                lng: knownCoords[data.name].lng
+            });
+        }
     });
 }
 
@@ -120,12 +148,12 @@ function renderCenters() {
         card.className = `center-card-item ${isDisabled ? 'disabled' : ''}`;
         
         const statusBadge = isDisabled 
-            ? `<span class="status-badge badge-disabled">Disabled</span>` 
-            : `<span class="status-badge badge-active">Active</span>`;
+            ? `<span class="status-badge disabled">Disabled</span>` 
+            : `<span class="status-badge active">Active</span>`;
 
         const nfcStatus = data.nfcUid 
-            ? `<div class="nfc-status registered">📡 UID: <code>${data.nfcUid}</code></div>`
-            : `<div class="nfc-status">📡 No NFC Tag Registered</div>`;
+            ? `<div class="nfc-status registered"><span>📡 UID:</span> <code>${data.nfcUid}</code></div>`
+            : `<div class="nfc-status"><span>📡 No NFC Tag Registered</span></div>`;
 
         card.innerHTML = `
             <h3>${data.name || id} ${statusBadge}</h3>
@@ -135,8 +163,8 @@ function renderCenters() {
             <p><strong>Hours:</strong> ${data.hours || '-'}</p>
             ${nfcStatus}
             <div class="actions">
-                <button class="btn btn-secondary edit-btn" data-id="${id}">Edit</button>
-                <button class="btn ${isDisabled ? 'btn-success' : 'btn-danger'} toggle-btn" data-id="${id}" data-disable="${!isDisabled}">
+                <button class="secondary edit-btn" data-id="${id}">Edit</button>
+                <button class="${isDisabled ? 'success' : 'danger'} toggle-btn" data-id="${id}" data-disable="${!isDisabled}">
                     ${isDisabled ? 'Enable' : 'Disable'}
                 </button>
             </div>
@@ -184,6 +212,11 @@ function openModal(id) {
 
 function closeModal() {
     centerModal.classList.add('hidden');
+    // FIX: Abort NFC scan when closing modal to prevent background reading
+    if (nfcAbortController) {
+        nfcAbortController.abort();
+        nfcAbortController = null;
+    }
 }
 
 async function saveCenter(e) {
@@ -254,6 +287,7 @@ function updateNfcUi() {
     const statusText = document.getElementById('nfcStatusText');
     const statusBox = document.getElementById('nfcStatusBox');
     const clearBtn = document.getElementById('clearNfcBtn');
+    const manualInput = document.getElementById('manualNfcUid');
 
     if (currentNfcUid) {
         statusText.innerHTML = `📡 Registered UID: <code>${currentNfcUid}</code>`;
@@ -263,6 +297,11 @@ function updateNfcUi() {
         statusText.textContent = 'No NFC tag registered';
         statusBox.classList.remove('registered');
         clearBtn.style.display = 'none';
+    }
+
+    // Sync manual input field
+    if (manualInput && manualInput.value !== currentNfcUid) {
+        manualInput.value = currentNfcUid;
     }
 }
 
@@ -274,10 +313,15 @@ function clearNfcUid() {
 async function readNfcTag() {
     if (!('NDEFReader' in window)) return alert('Web NFC not supported.');
     
+    // FIX: Abort any existing scan before starting a new one
+    if (nfcAbortController) {
+        nfcAbortController.abort();
+    }
+    nfcAbortController = new AbortController();
+
     try {
         const reader = new NDEFReader();
         reader.onreading = (event) => {
-            // Extract UID (Serial Number)
             const uid = Array.from(event.serialNumber)
                 .map(b => b.toString(16).padStart(2, '0'))
                 .join(':')
@@ -286,14 +330,19 @@ async function readNfcTag() {
             currentNfcUid = uid;
             updateNfcUi();
             alert(`✅ Successfully read NFC Tag!\nUID: ${uid}`);
+            
+            // Stop scanning after successful read
+            if (nfcAbortController) nfcAbortController.abort();
         };
         
         reader.onreadingerror = () => {
             alert('❌ Cannot read data from this NFC tag.');
         };
 
-        await reader.scan();
+        // Pass the abort signal to the scan method
+        await reader.scan({ signal: nfcAbortController.signal });
     } catch (err) {
+        if (err.name === 'AbortError') return; // Ignore manual aborts
         if (err.name === 'NotAllowedError') {
             alert('⚠️ NFC permission denied. Please allow NFC access in your browser settings.');
         } else {
@@ -312,7 +361,6 @@ async function writeNfcTag() {
         return alert('⚠️ Please save the center details first before writing to an NFC tag.');
     }
 
-    // Data to write: KUMON_CENTER:{id_or_name}
     const payload = `KUMON_CENTER:${centerId || centerName.toLowerCase().replace(/\s+/g, '-')}`;
 
     try {

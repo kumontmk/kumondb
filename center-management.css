@@ -175,12 +175,21 @@ input:focus, select:focus, textarea:focus {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap; /* FIX: Allows wrapping for long UIDs */
+  gap: 0.5rem;
 }
 .nfc-status.registered { 
   border-color: var(--success); 
   color: var(--success); 
   background: #ecfdf5;
   border-style: solid;
+}
+/* FIX: Prevents long UIDs from overflowing the container */
+.nfc-status span, .nfc-status code {
+  word-break: break-all;
+  overflow-wrap: break-word;
+  max-width: 100%;
+  display: inline-block;
 }
 .nfc-status code {
   background: rgba(0,0,0,0.05);
