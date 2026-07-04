@@ -15,7 +15,7 @@ const pageLoader = document.getElementById('page-loader');
 
 let centers = {};
 let currentNfcUid = '';
-let nfcAbortController = null; // FIX: Controls NFC scanning lifecycle
+let nfcAbortController = null; 
 
 // ==========================================
 // 1. AUTHORIZATION CHECK
@@ -109,12 +109,11 @@ function initApp() {
 function loadCenters() {
     onValue(ref(db, 'centers'), (snapshot) => {
         centers = snapshot.val() || {};
-        migrateCenterCoordinates(); // Auto-fix missing GPS
+        migrateCenterCoordinates(); 
         renderCenters();
     });
 }
 
-// FIX: Auto-populate GPS for existing centers that are missing it
 function migrateCenterCoordinates() {
     const knownCoords = {
         'Kumon Taipa Mei Keng': { lat: 22.15680419404832, lng: 113.55310261763758 },
@@ -172,7 +171,6 @@ function renderCenters() {
         centersGrid.appendChild(card);
     });
 
-    // Attach event listeners
     document.querySelectorAll('.edit-btn').forEach(btn => {
         btn.addEventListener('click', (e) => openModal(e.target.dataset.id));
     });
@@ -212,7 +210,6 @@ function openModal(id) {
 
 function closeModal() {
     centerModal.classList.add('hidden');
-    // FIX: Abort NFC scan when closing modal to prevent background reading
     if (nfcAbortController) {
         nfcAbortController.abort();
         nfcAbortController = null;
@@ -271,6 +268,7 @@ async function toggleCenterStatus(id, disable) {
 // 4. NFC FUNCTIONALITY (Web NFC API)
 // ==========================================
 function checkNfcSupport() {
+    // FIX: Check for NDEFReader (which handles both reading and writing)
     const isSupported = 'NDEFReader' in window;
     const warning = document.getElementById('nfcWarning');
     const readBtn = document.getElementById('readNfcBtn');
@@ -299,7 +297,6 @@ function updateNfcUi() {
         clearBtn.style.display = 'none';
     }
 
-    // Sync manual input field
     if (manualInput && manualInput.value !== currentNfcUid) {
         manualInput.value = currentNfcUid;
     }
@@ -313,7 +310,6 @@ function clearNfcUid() {
 async function readNfcTag() {
     if (!('NDEFReader' in window)) return alert('Web NFC not supported.');
     
-    // FIX: Abort any existing scan before starting a new one
     if (nfcAbortController) {
         nfcAbortController.abort();
     }
@@ -322,6 +318,8 @@ async function readNfcTag() {
     try {
         const reader = new NDEFReader();
         reader.onreading = (event) => {
+            if (nfcAbortController) nfcAbortController.abort();
+            
             const uid = Array.from(event.serialNumber)
                 .map(b => b.toString(16).padStart(2, '0'))
                 .join(':')
@@ -330,19 +328,15 @@ async function readNfcTag() {
             currentNfcUid = uid;
             updateNfcUi();
             alert(`✅ Successfully read NFC Tag!\nUID: ${uid}`);
-            
-            // Stop scanning after successful read
-            if (nfcAbortController) nfcAbortController.abort();
         };
         
         reader.onreadingerror = () => {
             alert('❌ Cannot read data from this NFC tag.');
         };
 
-        // Pass the abort signal to the scan method
         await reader.scan({ signal: nfcAbortController.signal });
     } catch (err) {
-        if (err.name === 'AbortError') return; // Ignore manual aborts
+        if (err.name === 'AbortError') return;
         if (err.name === 'NotAllowedError') {
             alert('⚠️ NFC permission denied. Please allow NFC access in your browser settings.');
         } else {
@@ -352,7 +346,8 @@ async function readNfcTag() {
 }
 
 async function writeNfcTag() {
-    if (!('NDEFWriter' in window)) return alert('Web NFC not supported. Please use Chrome on Android.');
+    // FIX: Check for NDEFReader, not NDEFWriter
+    if (!('NDEFReader' in window)) return alert('Web NFC not supported. Please use Chrome on Android.');
     
     const centerId = document.getElementById('centerId').value;
     const centerName = document.getElementById('centerName').value.trim();
@@ -361,17 +356,19 @@ async function writeNfcTag() {
         return alert('⚠️ Please save the center details first before writing to an NFC tag.');
     }
 
-    // 🆕 Create a URL that points to the timecard page with the center ID
     const baseUrl = window.location.origin + window.location.pathname.replace('center-management.html', 'timecard.html');
     const nfcUrl = `${baseUrl}?nfc_clock=1&center=${centerId}`;
 
     try {
-        const writer = new NDEFWriter();
-        // 🆕 Write as a URL record so iOS/Android automatically opens the browser when tapped
-        await writer.write({
+        // FIX: Use NDEFReader for writing, exactly like the official Google sample
+        const ndef = new NDEFReader();
+        
+        // Write the URL as a URL record
+        await ndef.write({
             records: [{ recordType: "url", data: nfcUrl }]
         });
-        alert(`✅ Successfully wrote URL to NFC Tag!\nAny phone tapped to this sticker will open:\n${nfcUrl}\n\nNote: The hardware UID is still readable by Android devices for direct in-app clock-in.`);
+        
+        alert(`✅ Successfully wrote URL to NFC Tag!\nAny phone tapped to this sticker will open:\n${nfcUrl}`);
     } catch (err) {
         if (err.name === 'NotAllowedError') {
             alert('⚠️ NFC permission denied.');
