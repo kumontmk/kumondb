@@ -1,6 +1,6 @@
 import { db, logout, requireAuth } from './auth.js';
 import { ref, get, update, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 if (!requireAuth()) throw new Error("Auth required");
 const auth = getAuth();
@@ -32,6 +32,17 @@ let currentEmployeeId = null;
 let currentEmployeeData = null;
 let hasFullAccess = false;
 let nfcAbortController = null; // 🆕 Controls NFC scanning lifecycle
+
+// 🆕 Track when Firebase Auth has fully resolved the user session
+let authInitialized = false;
+onAuthStateChanged(auth, () => {
+    authInitialized = true;
+    // Re-evaluate current user in case auth resolved after employees loaded
+    if (Object.keys(employees).length > 0) {
+        identifyCurrentUser();
+        renderTimecardTable(); 
+    }
+});
 
 function timeToMinutes(timeStr) {
     if (!timeStr) return null;
@@ -286,22 +297,34 @@ function resetNfcButton() {
 // ==========================================
 function checkNfcUrlClockIn() {
     const params = new URLSearchParams(window.location.search);
-    
-    // If the URL contains our NFC trigger
-    if (params.get('nfc_clock') === '1' && params.get('center')) {
-        const centerId = params.get('center');
-        
-        // Clean the URL immediately so refreshing the page doesn't double-clock them
-        window.history.replaceState({}, document.title, window.location.pathname);
-        
-        // Show a loading message
-        showResultModal(true, '📡 NFC Tag Detected!<br>Verifying employee...');
+    let centerId = params.get('center');
+    let isNfcTrigger = params.get('nfc_clock') === '1';
 
-        // We must wait for Firebase data (employees & centers) to finish loading
-        const tryClockIn = setInterval(() => {
-            if (Object.keys(employees).length > 0 && Object.keys(firebaseCenters).length > 0) {
-                clearInterval(tryClockIn);
+    // 1. If triggered via URL, save to sessionStorage immediately before any auth redirects
+    if (isNfcTrigger && centerId) {
+        sessionStorage.setItem('pendingNfcCenter', centerId);
+    }
+
+    // 2. Check if we have a pending NFC center (either from URL just now, or from sessionStorage after login)
+    if (!centerId) {
+        centerId = sessionStorage.getItem('pendingNfcCenter');
+    }
+
+    if (centerId) {
+        showResultModal(true, '📡 NFC Tag Detected!<br>Loading data & verifying...');
+
+        const checkInterval = setInterval(() => {
+            const employeesLoaded = Object.keys(employees).length > 0;
+            const centersLoaded = Object.keys(firebaseCenters).length > 0;
+            
+            // Wait for Auth, Employees, and Centers to all be fully loaded
+            if (employeesLoaded && centersLoaded && authInitialized) {
+                clearInterval(checkInterval);
                 
+                // Clean up URL and sessionStorage
+                window.history.replaceState({}, document.title, window.location.pathname);
+                sessionStorage.removeItem('pendingNfcCenter');
+
                 if (!currentEmployeeId) {
                     showResultModal(false, '🚫 You must be logged in.<br>Please log in to the web app, then tap the NFC tag again.');
                     return;
@@ -317,8 +340,10 @@ function checkNfcUrlClockIn() {
             }
         }, 200);
 
-        // Failsafe: stop checking after 5 seconds if data never loads
-        setTimeout(() => clearInterval(tryClockIn), 5000);
+        // Failsafe: stop checking after 8 seconds to prevent infinite loops
+        setTimeout(() => {
+            clearInterval(checkInterval);
+        }, 8000);
     }
 }
 

@@ -79,7 +79,7 @@ function showAccessDenied(title, messageHtml) {
     accessDenied.classList.remove('hidden');
     const content = accessDenied.querySelector('.access-denied-content');
     if (content) {
-      content.innerHTML = `<h2>${title}</h2>${messageHtml}<button id="backToDashboard" class="primary" style="margin-top:1rem">← Back to Dashboard</button>`;
+      content.innerHTML = `<h2>${title}</h2>${messageHtml}<button id="backToDashboard" class="primary" style="margin-top:1rem">← Back to Centers</button>`;
     }
   }
   document.getElementById('backToDashboard')?.addEventListener('click', () => {

@@ -70,7 +70,22 @@ function showAccessDenied(title, messageHtml) {
     if (accessDenied) {
         accessDenied.classList.remove('hidden');
         if(pageLoader) pageLoader.classList.add('hidden');
+        
+        // Dynamically inject the content and the working button
+        const content = accessDenied.querySelector('.access-denied-content');
+        if (content) {
+            content.innerHTML = `
+                <h2>${title}</h2>
+                ${messageHtml}
+                <button id="backToCenters" class="primary" style="margin-top:1rem">← Back to Centers</button>
+            `;
+        }
     }
+    
+    // Attach the event listener immediately after injecting the button
+    document.getElementById('backToCenters')?.addEventListener('click', () => {
+        window.location.href = 'centers.html';
+    });
 }
 
 // ==========================================
@@ -83,9 +98,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-function initApp() {
-    document.getElementById('backToDashboard')?.addEventListener('click', () => window.location.href = 'centers.html');
-    
+function initApp() {    
     document.getElementById('addCenterBtn').addEventListener('click', () => openModal(null));
     document.getElementById('closeModalBtn').addEventListener('click', closeModal);
     document.getElementById('cancelBtn').addEventListener('click', closeModal);
