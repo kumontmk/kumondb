@@ -29,7 +29,7 @@ onAuthStateChanged(auth, async (user) => {
             initApp();
         } else {
             document.getElementById('accessDenied')?.classList.remove('hidden');
-            document.getElementById('mainContent')?.classList.add('hidden');
+            document.getElementById('mainContent')?.add('hidden');
             document.getElementById('page-loader')?.classList.add('hidden');
 
             document.getElementById('backToStudentsBtn')?.addEventListener('click', () => {
@@ -109,6 +109,7 @@ function initApp() {
         return changed;
     }
 
+
     let subjectCount = 0;
     let html5QrCode = null;
     let scannerActive = false;
@@ -119,6 +120,286 @@ function initApp() {
     const isEdit = !!studentId;
     const formTitleEl = document.getElementById('formTitle');
     if (formTitleEl) formTitleEl.textContent = isEdit ? '✏️ Edit Student' : '➕ Add Student';
+
+    // ==========================================
+    // 🧭 NAVIGATION & AUTOCOMPLETE SEARCH LOGIC
+    // ==========================================
+    let allStudentsList = [];
+    let filteredStudentsList = [];
+    let currentListIndex = -1;
+    const searchParam = urlParams.get('search') || '';
+    const searchInput = document.getElementById('studentSearchInput');
+    const searchDropdown = document.getElementById('searchDropdown');
+    let activeDropdownIndex = -1;
+
+    async function fetchStudentList() {
+        try {
+            const snap = await get(ref(db, `centers/${centerId}/students`));
+            if (!snap.exists()) return [];
+            const list = [];
+            snap.forEach(child => {
+                const val = child.val();
+                list.push({
+                    id: child.key,
+                    namePinyin: val.namePinyin || '',
+                    nameCn: val.nameCn || '',
+                    grade: val.grade || '',
+                    studentNumber: val.studentNumber || ''
+                });
+            });
+            return list;
+        } catch (err) {
+            console.error("Error fetching student list:", err);
+            return [];
+        }
+    }
+
+    function sortStudentList(list) {
+        return list.sort((a, b) => {
+            const nameA = (a.namePinyin || a.nameCn || '').toLowerCase();
+            const nameB = (b.namePinyin || b.nameCn || '').toLowerCase();
+            if (nameA < nameB) return -1;
+            if (nameA > nameB) return 1;
+            
+            const gradeA = GRADE_ORDER.indexOf(a.grade);
+            const gradeB = GRADE_ORDER.indexOf(b.grade);
+            const gA = gradeA === -1 ? 999 : gradeA;
+            const gB = gradeB === -1 ? 999 : gradeB;
+            if (gA < gB) return -1;
+            if (gA > gB) return 1;
+            
+            const numA = a.studentNumber || '';
+            const numB = b.studentNumber || '';
+            if (numA < numB) return -1;
+            if (numA > numB) return 1;
+            
+            return 0;
+        });
+    }
+
+    function updateNavUI() {
+        const prevBtn = document.getElementById('prevStudentBtn');
+        const nextBtn = document.getElementById('nextStudentBtn');
+        const indicator = document.getElementById('studentPositionIndicator');
+        
+        if (currentListIndex === -1) {
+            if (prevBtn) prevBtn.disabled = true;
+            if (nextBtn) nextBtn.disabled = true;
+            if (indicator) indicator.textContent = 'Not in list';
+            return;
+        }
+        
+        if (prevBtn) prevBtn.disabled = currentListIndex === 0;
+        if (nextBtn) nextBtn.disabled = currentListIndex >= filteredStudentsList.length - 1;
+        if (indicator) indicator.textContent = `${currentListIndex + 1} / ${filteredStudentsList.length}`;
+    }
+
+    function navigateToStudent(direction) {
+        let newIndex = currentListIndex + direction;
+        if (newIndex < 0 || newIndex >= filteredStudentsList.length) return;
+        
+        const newStudentId = filteredStudentsList[newIndex].id;
+        navigateToStudentById(newStudentId);
+    }
+
+    function navigateToStudentById(id) {
+        hideSearchDropdown();
+        if (id === studentId) return;
+        const url = new URL(window.location);
+        url.searchParams.set('id', id);
+        // Keep the search term in the URL so the list remains filtered on the new page
+        window.location.href = url.toString(); 
+    }
+
+    function updateSearchDropdown(term) {
+        if (!searchDropdown) return;
+        
+        if (!term) {
+            hideSearchDropdown();
+            filteredStudentsList = [...allStudentsList];
+            currentListIndex = filteredStudentsList.findIndex(s => s.id === studentId);
+            updateNavUI();
+            return;
+        }
+
+        const lowerTerm = term.toLowerCase();
+        const matches = allStudentsList.filter(s => 
+            (s.namePinyin || '').toLowerCase().includes(lowerTerm) ||
+            (s.nameCn || '').toLowerCase().includes(lowerTerm) ||
+            (s.studentNumber || '').toLowerCase().includes(lowerTerm)
+        );
+
+        // Update the filtered list for Prev/Next navigation
+        filteredStudentsList = matches;
+        currentListIndex = filteredStudentsList.findIndex(s => s.id === studentId);
+        updateNavUI();
+
+        searchDropdown.innerHTML = '';
+        activeDropdownIndex = -1;
+
+        if (matches.length === 0) {
+            searchDropdown.innerHTML = '<li class="no-results">No students found</li>';
+        } else {
+            matches.slice(0, 50).forEach(s => { // Limit to 50 for performance
+                const li = document.createElement('li');
+                li.setAttribute('data-id', s.id);
+                
+                const nameContainer = document.createElement('span');
+                nameContainer.className = 'student-name-container';
+                
+                const cnSpan = document.createElement('span');
+                cnSpan.className = 'student-name-cn';
+                cnSpan.textContent = s.nameCn || 'N/A';
+                
+                const pySpan = document.createElement('span');
+                pySpan.className = 'student-name-pinyin';
+                pySpan.textContent = s.namePinyin || '';
+                
+                nameContainer.appendChild(cnSpan);
+                nameContainer.appendChild(pySpan);
+                
+                const gradeSpan = document.createElement('span');
+                gradeSpan.className = 'student-grade';
+                gradeSpan.textContent = s.grade || '';
+                
+                li.appendChild(nameContainer);
+                li.appendChild(gradeSpan);
+                
+                // Use mousedown to prevent input blur before click registers
+                li.addEventListener('mousedown', (e) => {
+                    e.preventDefault(); 
+                    navigateToStudentById(s.id);
+                });
+                
+                searchDropdown.appendChild(li);
+            });
+        }
+        
+        searchDropdown.classList.remove('hidden');
+    }
+
+    function updateActiveDropdownItem(items) {
+        items.forEach((item, idx) => {
+            if (idx === activeDropdownIndex) {
+                item.classList.add('active');
+                item.scrollIntoView({ block: 'nearest' });
+            } else {
+                item.classList.remove('active');
+            }
+        });
+    }
+
+    function hideSearchDropdown() {
+        if (searchDropdown) {
+            searchDropdown.classList.add('hidden');
+            activeDropdownIndex = -1;
+        }
+    }
+
+    async function initNavigation() {
+        const navBar = document.getElementById('student-nav-bar');
+        
+        if (!isEdit) {
+            if (navBar) navBar.style.display = 'none';
+            return;
+        }
+        
+        allStudentsList = sortStudentList(await fetchStudentList());
+        
+        if (searchInput) {
+            searchInput.value = searchParam; 
+            
+            searchInput.addEventListener('input', (e) => {
+                const term = e.target.value;
+                const url = new URL(window.location);
+                if (term) {
+                    url.searchParams.set('search', term);
+                } else {
+                    url.searchParams.delete('search');
+                }
+                window.history.replaceState({}, '', url); 
+                updateSearchDropdown(term);
+            });
+
+            // Show dropdown when focusing if there's already text
+            searchInput.addEventListener('focus', () => {
+                if (searchInput.value) {
+                    updateSearchDropdown(searchInput.value);
+                }
+            });
+
+            // Handle keyboard navigation inside the search input
+            searchInput.addEventListener('keydown', (e) => {
+                if (!searchDropdown || searchDropdown.classList.contains('hidden')) {
+                    // If dropdown is hidden, let ArrowLeft/Right navigate students
+                    if (e.key === 'ArrowLeft') navigateToStudent(-1);
+                    if (e.key === 'ArrowRight') navigateToStudent(1);
+                    return;
+                }
+                
+                const items = searchDropdown.querySelectorAll('li[data-id]');
+                if (items.length === 0) return;
+
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    activeDropdownIndex = (activeDropdownIndex + 1) % items.length;
+                    updateActiveDropdownItem(items);
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    activeDropdownIndex = (activeDropdownIndex - 1 + items.length) % items.length;
+                    updateActiveDropdownItem(items);
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (activeDropdownIndex >= 0 && items[activeDropdownIndex]) {
+                        const selectedId = items[activeDropdownIndex].getAttribute('data-id');
+                        navigateToStudentById(selectedId);
+                    }
+                } else if (e.key === 'Escape') {
+                    hideSearchDropdown();
+                    searchInput.blur();
+                }
+            });
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.search-input-wrapper')) {
+                hideSearchDropdown();
+            }
+        });
+        
+        document.getElementById('prevStudentBtn')?.addEventListener('click', () => navigateToStudent(-1));
+        document.getElementById('nextStudentBtn')?.addEventListener('click', () => navigateToStudent(1));
+        
+        // Global keyboard shortcuts (only when not typing in inputs)
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+            if (e.key === 'ArrowLeft') navigateToStudent(-1);
+            if (e.key === 'ArrowRight') navigateToStudent(1);
+        });
+
+        // Initialize filter based on URL param (but don't show dropdown automatically on page load)
+        if (searchParam) {
+            const lowerTerm = searchParam.toLowerCase();
+            filteredStudentsList = allStudentsList.filter(s => 
+                (s.namePinyin || '').toLowerCase().includes(lowerTerm) ||
+                (s.nameCn || '').toLowerCase().includes(lowerTerm) ||
+                (s.studentNumber || '').toLowerCase().includes(lowerTerm)
+            );
+            currentListIndex = filteredStudentsList.findIndex(s => s.id === studentId);
+            updateNavUI();
+        } else {
+            filteredStudentsList = [...allStudentsList];
+            currentListIndex = filteredStudentsList.findIndex(s => s.id === studentId);
+            updateNavUI();
+        }
+    }
+
+    // Initialize the navigation system
+    initNavigation();
+    // ==========================================
+    // END NAVIGATION & SEARCH LOGIC
+    // ==========================================
 
     function showError(msg) {
         const modal = document.getElementById('errorModal');

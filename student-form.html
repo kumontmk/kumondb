@@ -27,6 +27,22 @@
         <h2 id="formTitle">✏️ Add Student</h2>
     </header>
 
+    <!-- Search and Navigation -->
+  <div id="student-nav-bar" class="nav-bar-container">
+      <button id="prevStudentBtn" class="nav-btn" title="Previous Student (←)">◀ Prev</button>
+      
+      <div class="search-container">
+          <div class="search-input-wrapper">
+              <input type="text" id="studentSearchInput" placeholder="Search name, ID..." autocomplete="off" />
+              <!-- 🆕 Autocomplete Dropdown List -->
+              <ul id="searchDropdown" class="search-dropdown hidden"></ul>
+          </div>
+          <span id="studentPositionIndicator" class="position-indicator">0 / 0</span>
+      </div>
+      
+      <button id="nextStudentBtn" class="nav-btn" title="Next Student (→)">Next ▶</button>
+  </div>
+
   <main class="form-container">
     <form id="studentForm">
       <!-- 1. Basic Information -->

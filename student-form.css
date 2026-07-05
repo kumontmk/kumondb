@@ -605,3 +605,111 @@ margin-top: 1.5rem;
     right: 1rem !important;
     left: auto !important;
 }
+
+/* ============================================
+🧭 STUDENT NAVIGATION & SEARCH BAR
+============================================ */
+.nav-bar-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    background: #fff;
+    border-bottom: 1px solid #e2e8f0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    flex-wrap: wrap;
+}
+.nav-btn {
+    padding: 0.5rem 1rem;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.2s;
+    white-space: nowrap;
+}
+.nav-btn:hover { background: var(--primary-dark); }
+.nav-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+/* ============================================
+🔍 AUTOCOMPLETE SEARCH DROPDOWN
+============================================ */
+.search-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    max-width: 500px;
+    min-width: 250px;
+}
+.search-input-wrapper {
+    position: relative;
+    flex: 1;
+}
+.search-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #ddd;
+    border-top: none;
+    border-radius: 0 0 var(--radius) var(--radius);
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 1000;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.search-dropdown li {
+    padding: 0.6rem 1rem;
+    cursor: pointer;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9rem;
+    transition: background 0.1s;
+}
+.search-dropdown li:last-child { border-bottom: none; }
+.search-dropdown li:hover, .search-dropdown li.active {
+    background: #f0f8ff;
+}
+.search-dropdown .student-name-container {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+}
+.search-dropdown .student-name-cn {
+    font-weight: 600;
+    color: #333;
+}
+.search-dropdown .student-name-pinyin {
+    color: #888;
+    font-size: 0.8rem;
+    margin-top: 2px;
+}
+.search-dropdown .student-grade {
+    background: #e2e8f0;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    color: #555;
+    font-weight: 500;
+    white-space: nowrap;
+}
+.search-dropdown .no-results {
+    text-align: center;
+    color: #999;
+    padding: 1rem;
+    font-style: italic;
+    justify-content: center;
+}
