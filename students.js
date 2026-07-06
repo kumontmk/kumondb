@@ -381,13 +381,16 @@ function initializePage(isAdmin = false) {
       pageData.forEach(row => {
         const dobDisplay = row.rawDob ? new Date(row.rawDob).toLocaleDateString('en-CA') : '-';
         const enrolDisplay = row.rawEnrolDate ? new Date(row.rawEnrolDate).toLocaleDateString('en-CA') : '-';
+        const isKC = row.worksheetType === 'Kumon Connect';
+        const kcBadge = isKC ? '<span class="kc-badge" title="Kumon Connect">KC</span>' : '';
+
         
         const tr = document.createElement('tr');
         tr.className = 'student-row';
         tr.innerHTML = `
           <td>${row.subjectName}</td>
           <td>${row.studentNumber || '-'}</td>
-          <td>${row.namePinyin || '-'}</td>
+          <td>${kcBadge}${row.namePinyin || '-'}</td>
           <td>${row.nameCn || '-'}</td>
           <td>${dobDisplay}</td>
           <td>${row.grade || '-'}</td>

@@ -103,11 +103,17 @@ function initializeTimetable() {
         return slots;
     }
 
+    // ============================================
+    // ✅ UPDATED: More forgiving subject grouping
+    // ============================================
     function getSubjectGroup(name) {
         if (!name) return null;
-        if (name === 'Math' || name.startsWith('Math')) return 'Math';
-        if (name.includes('English') || name === 'ERP' || name === 'EFL') return 'English';
-        if (name === 'Chinese') return 'Chinese';
+        const lowerName = name.toLowerCase().trim();
+        
+        if (lowerName.includes('math')) return 'Math';
+        if (lowerName.includes('english') || lowerName.includes('erp') || lowerName.includes('efl')) return 'English';
+        if (lowerName.includes('chinese') || lowerName.includes('mandarin')) return 'Chinese';
+        
         return null;
     }
 
@@ -127,12 +133,16 @@ function initializeTimetable() {
         return String(next);
     }
 
+
+    // ============================================
+    // ✅ UPDATED: Safer indicator letter assignment
+    // ============================================
     function getDaySubjectOrder(subjects, currentDay) {
         const daySubjects = [];
         const seen = new Set();
         
         subjects.forEach(sub => {
-            // ✅ UPDATED: Only include 'current' students
+            // ✅ Only include 'current' students
             if (sub.status !== 'current' || !sub.timeslots) return; 
             
             const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
@@ -141,20 +151,25 @@ function initializeTimetable() {
             if (dayTs.length > 0) {
                 const earliestTime = dayTs.reduce((min, ts) => ts.time < min ? ts.time : min, '23:59');
                 const group = getSubjectGroup(sub.name);
-                let letter = 'E';
+                
+                // ✅ Start with an empty string instead of defaulting to 'E'
+                let letter = '';
+                const lowerName = sub.name.toLowerCase().trim();
+                
                 if (group === 'Math') letter = 'M';
                 else if (group === 'Chinese') letter = 'C';
-                else if (sub.name.includes('ERP')) letter = 'R';
-                else if (sub.name.includes('EFL')) letter = 'L';
+                else if (lowerName.includes('erp')) letter = 'R';
+                else if (lowerName.includes('efl')) letter = 'L';
                 else if (group === 'English') letter = 'E';
-
-                if (!seen.has(letter)) {
+                
+                // ✅ Only add to the indicator string if we successfully found a valid letter
+                if (letter && !seen.has(letter)) {
                     seen.add(letter);
                     daySubjects.push({ letter, time: earliestTime });
                 }
             }
         });
-
+        
         daySubjects.sort((a, b) => a.time.localeCompare(b.time));
         return daySubjects.map(s => s.letter).join('');
     }

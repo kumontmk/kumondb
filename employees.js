@@ -1,55 +1,44 @@
-import { db, logout, requireAuth } from './auth.js';
+import { db, logout, requireAuth, firebaseConfig } from './auth.js';
 import { ref, set, get, update, onValue, push } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getAuth, onAuthStateChanged, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth as getSecondaryAuth, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+// 🆕 SECONDARY APP FOR BACKGROUND USER CREATION
+const secondaryApp = initializeApp(firebaseConfig, 'SecondaryApp');
+const secondaryAuth = getSecondaryAuth(secondaryApp);
 
 const AUTHORIZED_EMAIL = "kumonchamps@gmail.com";
 const auth = getAuth();
-
 const mainContent = document.getElementById('mainContent');
 const accessDenied = document.getElementById('accessDenied');
-const backToDashboardBtn = document.getElementById('backToDashboard');
 
 async function checkAuthorization(user) {
-  console.log('🔐 Auth Check Started for:', user?.email);
-  if (!user) { 
+  if (!user) {
     showAccessDenied('🔐 Please log in first', 'No user session found.');
     return false;
   }
-  
   const actualEmail = user.email?.toLowerCase() || '';
   const requiredEmail = AUTHORIZED_EMAIL.toLowerCase();
-  
-  // 1. Check if it's the main admin email
+
   if (actualEmail === requiredEmail) {
-    console.log('✅ Access granted: Main Admin Email');
     grantAccess();
     return true;
   }
 
-  // 2. Check database for Manager role
   try {
-    // Check users node by UID
-    console.log('🔍 Checking users node for UID:', user.uid);
     const userSnap = await get(ref(db, `users/${user.uid}`));
     const userData = userSnap.val();
-    console.log('📦 Users node data:', userData);
-    
-    if (userData && userData.position?.trim().toLowerCase() === 'manager') {
-      console.log('✅ Access granted via users node (Manager)');
+    if (userData && (userData.position?.trim().toLowerCase() === 'manager' || userData.position?.trim().toLowerCase() === 'master admin')) {
       grantAccess();
       return true;
     }
 
-    // 🌟 FIX: Check employees node by EMAIL (because IDs often mismatch)
-    console.log('🔍 Checking employees node for email:', user.email);
     const empSnap = await get(ref(db, 'employees'));
     const empData = empSnap.val();
     if (empData) {
       const matchingEmp = Object.values(empData).find(e => e.email?.toLowerCase() === user.email?.toLowerCase());
-      console.log('📦 Matching employee data:', matchingEmp);
-      
-      if (matchingEmp && matchingEmp.position?.trim().toLowerCase() === 'manager') {
-        console.log('✅ Access granted via employees node (Manager)');
+      if (matchingEmp && (matchingEmp.position?.trim().toLowerCase() === 'manager' || matchingEmp.position?.trim().toLowerCase() === 'master admin')) {
         grantAccess();
         return true;
       }
@@ -58,9 +47,7 @@ async function checkAuthorization(user) {
     console.error('❌ Error checking user role:', err);
   }
 
-  // 3. Deny access
-  console.log('❌ Access Denied: User is not admin or manager');
-  showAccessDenied('🔐 Access Restricted', `<p><strong>${user.email || 'Not available'} is not authorized to access this page.</strong></p><p style="margin-top:1rem;color:#666;font-size:0.9rem;">This page is only accessible to administrators and managers. Please contact your administrator if you believe this is an error.</p>`);
+  showAccessDenied('🔐 Access Restricted', `<p><strong>${user.email || 'Not available'} is not authorized to access this page.</strong></p>`);
   return false;
 }
 
@@ -99,6 +86,7 @@ function initApp() {
   let currentQrData = "";
   let availableCenters = [];
   let currentTimeclockEmpId = null;
+  let initialLoadDone = false; // ✅ FIX: Moved to top to prevent Temporal Dead Zone error
 
   function openModal(id) {
     const el = document.getElementById(id);
@@ -127,18 +115,13 @@ function initApp() {
 
   document.getElementById('logoutBtn')?.addEventListener('click', logout);
 
-  loadEmployees();
-  loadVerifications();
-  loadCentersForPermissions();
-  setupTabs();
-
   if (monthPicker) {
     const now = new Date();
     const yyyy = now.getFullYear();
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     monthPicker.value = `${yyyy}-${mm}`;
   }
-  
+
   exportBtn?.addEventListener('click', exportToExcel);
   natSelect?.addEventListener('change', e => natOther.classList.toggle('visible', e.target.value === 'Others'));
   saveBtn?.addEventListener('click', saveEmployee);
@@ -146,96 +129,24 @@ function initApp() {
   addBtn?.addEventListener('click', () => openEmployeeModal(null));
 
   timeclockDateFilter?.addEventListener('change', (e) => {
-    if (currentTimeclockEmpId) {
-      loadTimeclock(currentTimeclockEmpId, e.target.value || null);
-    }
+    if (currentTimeclockEmpId) loadTimeclock(currentTimeclockEmpId, e.target.value || null);
   });
-
   clearTimeclockFilter?.addEventListener('click', (e) => {
     e.preventDefault();
     if (timeclockDateFilter) timeclockDateFilter.value = '';
-    if (currentTimeclockEmpId) {
-      loadTimeclock(currentTimeclockEmpId, null);
-    }
+    if (currentTimeclockEmpId) loadTimeclock(currentTimeclockEmpId, null);
   });
 
-  let initialLoadDone = false;
-  function loadEmployees() {
-    onValue(ref(db, 'employees'), (snapshot) => {
-      employees = snapshot.val() || {};
-      renderTable();
-      if (!initialLoadDone) {
-        initialLoadDone = true;
-        updateIncompleteBadge();
-      }
-    }, { onlyOnce: false });
-  }
-
-  function loadVerifications() {
-    onValue(ref(db, 'users'), (snapshot) => {
-      const users = snapshot.val() || {};
-      const tbody = document.getElementById('verificationsTableBody');
-      if (!tbody) return;
-      tbody.innerHTML = '';
-      const pending = Object.entries(users).filter(([uid, u]) => !u.isVerified);
-      
-      const vBadge = document.getElementById('verificationsBadge');
-      if (vBadge) {
-        if (pending.length > 0) {
-          vBadge.textContent = pending.length > 99 ? '99+' : pending.length;
-          vBadge.style.display = 'inline-block';
-        } else {
-          vBadge.style.display = 'none';
-        }
-      }
-
-      if (pending.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No pending verifications.</td></tr>';
-        return;
-      }
-      
-      pending.forEach(([uid, u]) => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-          <td>${u.email || '-'}</td>
-          <td>${u.englishName || '-'}</td>
-          <td>${u.position || '-'}</td>
-          <td>${u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '-'}</td>
-          <td class="student-actions">
-            <button class="primary" onclick="window.verifyUser('${uid}', true)">✅ Verify</button>
-            <button class="danger" onclick="window.verifyUser('${uid}', false)">❌ Reject</button>
-          </td>`;
-        tbody.appendChild(row);
-      });
-    });
-  }
-
-  async function loadCentersForPermissions() {
-    const centerPermsContainer = document.getElementById('centerPermissions');
-    if (!centerPermsContainer) return;
-
+  // 🆕 RESET PASSWORD FUNCTION
+  window.resetPassword = async (email) => {
+    if (!confirm(`Send a password reset email to ${email}?`)) return;
     try {
-      const centersSnap = await get(ref(db, 'centers'));
-      if (centersSnap.exists()) {
-        const centers = centersSnap.val();
-        availableCenters = Object.entries(centers).map(([id, data]) => ({ id, name: data.name || id }));
-        centerPermsContainer.innerHTML = '';
-
-        Object.entries(centers).forEach(([centerId, centerData]) => {
-          const label = document.createElement('label');
-          const checkbox = document.createElement('input');
-          checkbox.type = 'checkbox';
-          checkbox.value = centerId;
-
-          label.appendChild(checkbox);
-          label.appendChild(document.createTextNode(` ${centerData.name || centerId}`));
-          centerPermsContainer.appendChild(label);
-        });
-      }
+      await sendPasswordResetEmail(auth, email);
+      alert('✅ Password reset email sent successfully!');
     } catch (err) {
-      console.error("Error loading centers for permissions:", err);
+      alert('❌ Failed to send reset email: ' + err.message);
     }
-  }
+  };
 
   window.verifyUser = async (uid, isVerified) => {
     if (!confirm(`Are you sure you want to ${isVerified ? 'verify' : 'reject'} this account?`)) return;
@@ -288,6 +199,107 @@ function initApp() {
     }
   };
 
+  // 🆕 SEED MASTER ADMIN
+  async function seedMasterAdmin() {
+    const empSnap = await get(ref(db, 'employees'));
+    const empData = empSnap.val() || {};
+    const hasMaster = Object.values(empData).some(e => e.email?.toLowerCase() === 'kumonchamps@gmail.com');
+    if (!hasMaster) {
+      const usersSnap = await get(ref(db, 'users'));
+      const usersData = usersSnap.val() || {};
+      let masterUid = Object.keys(usersData).find(uid => usersData[uid].email?.toLowerCase() === 'kumonchamps@gmail.com');
+      if (masterUid) {
+        await set(ref(db, `employees/${masterUid}`), {
+          englishName: 'Kumon Master Admin',
+          email: 'kumonchamps@gmail.com',
+          position: 'Master Admin',
+          terms: 'Full-time',
+          employmentDate: new Date().toISOString().split('T')[0],
+          isVerified: true,
+          mustChangePassword: false,
+          permissions: { centers: {}, dashboardCards: {} }
+        });
+      }
+    }
+  }
+
+  function loadEmployees() {
+    onValue(ref(db, 'employees'), (snapshot) => {
+      employees = snapshot.val() || {};
+      renderTable();
+      if (!initialLoadDone) {
+        initialLoadDone = true;
+        updateIncompleteBadge();
+      }
+    }, { onlyOnce: false });
+  }
+
+  function loadVerifications() {
+    onValue(ref(db, 'users'), (snapshot) => {
+      const users = snapshot.val() || {};
+      const tbody = document.getElementById('verificationsTableBody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+      const pending = Object.entries(users).filter(([uid, u]) => !u.isVerified);
+      const vBadge = document.getElementById('verificationsBadge');
+      if (vBadge) {
+        if (pending.length > 0) {
+          vBadge.textContent = pending.length > 99 ? '99+' : pending.length;
+          vBadge.style.display = 'inline-block';
+        } else {
+          vBadge.style.display = 'none';
+        }
+      }
+      if (pending.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No pending verifications.</td></tr>';
+        return;
+      }
+      pending.forEach(([uid, u]) => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${u.email || '-'}</td>
+          <td>${u.englishName || '-'}</td>
+          <td>${u.position || '-'}</td>
+          <td>${u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '-'}</td>
+          <td class="student-actions">
+            <button class="primary" onclick="window.verifyUser('${uid}', true)">✅ Verify</button>
+            <button class="danger" onclick="window.verifyUser('${uid}', false)">❌ Reject</button>
+          </td>`;
+        tbody.appendChild(row);
+      });
+    });
+  }
+
+  async function loadCentersForPermissions() {
+    const centerPermsContainer = document.getElementById('centerPermissions');
+    if (!centerPermsContainer) return;
+    try {
+      const centersSnap = await get(ref(db, 'centers'));
+      if (centersSnap.exists()) {
+        const centers = centersSnap.val();
+        availableCenters = Object.entries(centers).map(([id, data]) => ({ id, name: data.name || id }));
+        centerPermsContainer.innerHTML = '';
+        Object.entries(centers).forEach(([centerId, centerData]) => {
+          const label = document.createElement('label');
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.value = centerId;
+          label.appendChild(checkbox);
+          label.appendChild(document.createTextNode(` ${centerData.name || centerId}`));
+          centerPermsContainer.appendChild(label);
+        });
+      }
+    } catch (err) {
+      console.error("Error loading centers for permissions:", err);
+    }
+  }
+
+  loadEmployees();
+  loadVerifications();
+  loadCentersForPermissions();
+  setupTabs();
+  seedMasterAdmin();
+
   function renderTable(filter = '') {
     const lower = filter.toLowerCase();
     const filtered = Object.entries(employees).filter(([_, e]) =>
@@ -297,9 +309,8 @@ function initApp() {
       e.email?.toLowerCase().includes(lower)
     );
     tableBody.innerHTML = filtered.length === 0
-      ? '<tr><td colspan="6" class="empty-state">No employees found</td></tr>'
+      ? '<tr><td colspan="7" class="empty-state">No employees found</td></tr>'
       : '';
-
     filtered.forEach(([id, e]) => {
       const isDisabled = e.isDisabled === true;
       const rowClass = isDisabled ? 'disabled-row' : '';
@@ -308,7 +319,6 @@ function initApp() {
         : `<span class="status-badge active">Active</span>`;
       const toggleBtnText = isDisabled ? 'Enable' : 'Disable';
       const toggleBtnClass = isDisabled ? 'secondary' : 'danger';
-
       const row = document.createElement('tr');
       row.className = rowClass;
       row.innerHTML = `
@@ -318,7 +328,8 @@ function initApp() {
         <td>${e.position || ''}</td>
         <td>${e.terms || ''}</td>
         <td class="student-actions">
-          <button class="secondary" onclick="window.editEmp('${id}')">Edit/View</button>
+          <button class="secondary" onclick="window.editEmp('${id}')">Edit</button>
+          <button class="secondary" onclick="window.resetPassword('${e.email}')" title="Send Password Reset Email" style="background:#f8f9fa;color:#4682B4;border:1px solid #cbd5e1;">🔑 Reset</button>
           <button class="${toggleBtnClass}" onclick="window.toggleEmpStatus('${id}', ${!isDisabled})">${toggleBtnText}</button>
         </td>`;
       tableBody.appendChild(row);
@@ -328,14 +339,19 @@ function initApp() {
   async function openEmployeeModal(id) {
     openModal('employeeModal');
     document.getElementById('modalTitle').textContent = id ? 'Edit Employee' : 'Add Employee';
-
     document.querySelectorAll('#employeeModal .tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('#employeeModal .tab-content').forEach(c => c.classList.remove('active'));
     document.querySelector('#employeeModal .tab-btn[data-tab="details"]').classList.add('active');
     document.getElementById('tab-details').classList.add('active');
-
     form.reset();
     natOther.classList.remove('visible');
+
+    // 🆕 Show/Hide Password Field
+    const pwField = document.getElementById('passwordFieldContainer');
+    if (pwField) {
+      pwField.style.display = id ? 'none' : 'block';
+      if (!id) document.getElementById('empPassword').value = 'Kumon123';
+    }
 
     if (id && employees[id]) {
       const e = employees[id];
@@ -349,19 +365,15 @@ function initApp() {
       document.getElementById('empDate').value = e.employmentDate || new Date().toISOString().split('T')[0];
       document.getElementById('empTerms').value = e.terms || 'Full-time';
       currentQrData = e.qrCode || `EMP_${id}`;
-      
       const selectedDate = timeclockDateFilter?.value || null;
       loadTimeclock(id, selectedDate);
-
       const perms = e.permissions || {};
       const centerPerms = perms.centers || {};
       const dashPerms = perms.dashboardCards || {};
-
       setTimeout(() => {
         document.querySelectorAll('#centerPermissions input').forEach(cb => cb.checked = !!centerPerms[cb.value]);
         document.querySelectorAll('#dashboardPermissions input').forEach(cb => cb.checked = !!dashPerms[cb.value]);
       }, 100);
-
     } else {
       document.getElementById('empId').value = '';
       document.getElementById('empDate').value = new Date().toISOString().split('T')[0];
@@ -373,37 +385,27 @@ function initApp() {
 
     const currentUserEmail = auth.currentUser?.email?.toLowerCase();
     let isAdmin = currentUserEmail === 'kumonchamps@gmail.com';
-    
     if (!isAdmin && auth.currentUser) {
       try {
         const userSnap = await get(ref(db, `users/${auth.currentUser.uid}`));
         const userData = userSnap.val();
-        if (userData && userData.position?.trim().toLowerCase() === 'manager') {
-          isAdmin = true;
-        }
-
+        if (userData && (userData.position?.trim().toLowerCase() === 'manager' || userData.position?.trim().toLowerCase() === 'master admin')) isAdmin = true;
         if (!isAdmin) {
           const empSnap = await get(ref(db, 'employees'));
           const empData = empSnap.val();
           if (empData) {
             const matchingEmp = Object.values(empData).find(e => e.email?.toLowerCase() === currentUserEmail);
-            if (matchingEmp && matchingEmp.position?.trim().toLowerCase() === 'manager') {
-              isAdmin = true;
-            }
+            if (matchingEmp && (matchingEmp.position?.trim().toLowerCase() === 'manager' || matchingEmp.position?.trim().toLowerCase() === 'master admin')) isAdmin = true;
           }
         }
-      } catch (err) {
-        console.error('Error checking admin status:', err);
-      }
+      } catch (err) { console.error('Error checking admin status:', err); }
     }
 
     const permInputs = document.querySelectorAll('#tab-permissions input');
     const permMsg = document.getElementById('permissionsLockedMsg');
-
     if (!isAdmin) {
       permInputs.forEach(input => input.disabled = true);
       permMsg.style.display = 'block';
-      permMsg.textContent = '🔒 Only administrators and managers can edit permissions.';
     } else {
       permInputs.forEach(input => input.disabled = false);
       permMsg.style.display = 'none';
@@ -424,11 +426,7 @@ function initApp() {
     qrImg.style.opacity = '0.5';
     qrImg.alt = 'Generating...';
     qrImg.src = '';
-    if (typeof window.QRCode === 'undefined') {
-      console.error('❌ qrcodejs library not loaded');
-      qrImg.alt = 'Library Missing';
-      return;
-    }
+    if (typeof window.QRCode === 'undefined') return;
     try {
       const tempDiv = document.createElement('div');
       tempDiv.style.cssText = 'position:absolute;left:-9999px;top:-9999px;visibility:hidden;';
@@ -443,10 +441,7 @@ function initApp() {
         }
         tempDiv.remove();
       }, 100);
-    } catch (e) {
-      console.error('QR Generation Error:', e);
-      qrImg.alt = 'Generation Failed';
-    }
+    } catch (e) { console.error('QR Generation Error:', e); }
   }
 
   downloadQrBtn?.addEventListener('click', () => {
@@ -480,6 +475,7 @@ function initApp() {
     const position = document.getElementById('empPosition')?.value;
     const employmentDate = document.getElementById('empDate')?.value;
     const terms = document.getElementById('empTerms')?.value;
+    const initialPassword = document.getElementById('empPassword')?.value || 'Kumon123';
 
     if (!englishName || !nationality || !position || !employmentDate || !email) {
       return alert('Please fill in all required fields.');
@@ -504,23 +500,56 @@ function initApp() {
     };
 
     try {
-      const empRef = empId ? ref(db, `employees/${empId}`) : push(ref(db, 'employees'));
-      const saveId = empId || empRef.key;
+      let saveId = empId;
+
+      if (!empId) {
+        // 🆕 CREATE NEW FIREBASE AUTH USER IN BACKGROUND
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Creating Account...';
+        try {
+          const userCred = await createUserWithEmailAndPassword(secondaryAuth, email, initialPassword);
+          const newUid = userCred.user.uid;
+          await signOut(secondaryAuth); // Clean up secondary session
+
+          // Save to users node
+          await set(ref(db, `users/${newUid}`), {
+            email,
+            englishName,
+            chineseName,
+            nationality,
+            position,
+            employmentDate,
+            terms,
+            isVerified: true,
+            mustChangePassword: true, // 🆕 Force password change
+            createdAt: new Date().toISOString()
+          });
+
+          saveId = newUid; // Use Auth UID as Employee ID
+          employeeData.authUid = newUid;
+        } catch (authErr) {
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save Employee';
+          if (authErr.code === 'auth/email-already-in-use') {
+            return alert('❌ This email is already registered in the system.');
+          }
+          throw authErr;
+        }
+      }
+
+      const empRef = ref(db, `employees/${saveId}`);
       await set(empRef, employeeData);
 
       if (empId) {
-        // 🌟 FIX: Find the actual Auth UID by matching email, because empId might be a push ID
         const usersSnap = await get(ref(db, 'users'));
         const usersData = usersSnap.val();
         if (usersData) {
           const matchingUserUid = Object.keys(usersData).find(uid => usersData[uid].email?.toLowerCase() === employeeData.email.toLowerCase());
           if (matchingUserUid) {
-            const userRef = ref(db, `users/${matchingUserUid}`);
-            await update(userRef, {
+            await update(ref(db, `users/${matchingUserUid}`), {
               permissions: { centers, dashboardCards },
-              position: position // Sync position
+              position: position
             });
-            console.log(`✅ Synced position and permissions to users/${matchingUserUid}`);
           }
         }
       }
@@ -528,14 +557,21 @@ function initApp() {
       employees[saveId] = { ...employeeData, id: saveId };
       renderTable(searchInput?.value || '');
       closeModal('employeeModal');
-      alert(`✅ Employee ${empId ? 'updated' : 'added'} successfully!`);
+      alert(`✅ Employee ${empId ? 'updated' : 'added'} successfully!${!empId ? '\n\nThey can now log in with the default password. They will be prompted to change it on first login.' : ''}`);
     } catch (err) {
       console.error('Save error:', err);
-      alert('❌ Failed to save employee. Check console for details.');
+      alert('❌ Failed to save employee: ' + err.message);
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save Employee';
     }
   }
 
   cancelBtn.onclick = closeBtn.onclick = () => closeModal('employeeModal');
+
+  // ==========================================
+  // ALL ORIGINAL FUNCTIONS RESTORED BELOW
+  // ==========================================
 
   function timeToMinutes(timeStr) {
     if (!timeStr) return null;
@@ -566,7 +602,6 @@ function initApp() {
     const fixedLogs = [];
     let changed = false;
     let currentInLog = null;
-
     for (let i = 0; i < sorted.length; i++) {
       const log = sorted[i];
       if (log.type === 'in') {
@@ -600,7 +635,6 @@ function initApp() {
     const sortedLogs = [...logs].sort((a, b) => a.time.localeCompare(b.time));
     const rows = [];
     let currentRow = { inTime: '', inIndex: -1, outTime: '', outIndex: -1, inLocation: '' };
-
     for (let i = 0; i < sortedLogs.length; i++) {
       const log = sortedLogs[i];
       if (log.type === 'in') {
@@ -625,7 +659,6 @@ function initApp() {
         }
       }
     }
-
     if (currentRow.inTime !== '' || currentRow.outTime !== '') {
       rows.push(currentRow);
     }
@@ -646,28 +679,23 @@ function initApp() {
     } else {
       fetchPromise = get(ref(db, 'timecards')).then(snap => snap.val() || {});
     }
-
     fetchPromise.then(all => {
       timeclockBody.innerHTML = '';
       const records = [];
       let maxCycles = 3;
-
       Object.entries(all).forEach(([date, dayData]) => {
         if (dayData[empId]?.logs?.length) {
           const rawLogs = dayData[empId].logs;
           const { logs: fixedLogs } = autoFixLogs(rawLogs, employees[empId]?.terms || 'Full-time');
           const sortedLogs = [...fixedLogs].sort((a, b) => a.time.localeCompare(b.time));
           const rows = getLogsRows(sortedLogs);
-
           if (rows.length > maxCycles) {
             maxCycles = rows.length;
           }
-
           let totalMinutes = 0;
           let hasValidCycle = false;
           let currentIn = null;
           let currentInLocation = null;
-
           for (const log of sortedLogs) {
             if (log.type === 'in') {
               currentIn = timeToMinutes(log.time);
@@ -691,14 +719,11 @@ function initApp() {
           records.push({ date, rows, durationText });
         }
       });
-
       records.sort((a, b) => b.date.localeCompare(a.date));
-
       if (records.length === 0) {
         timeclockBody.innerHTML = `<tr><td colspan="${maxCycles * 2 + 3}" class="empty-state">No records found</td></tr>`;
         return;
       }
-
       const table = timeclockBody.parentElement;
       let theadHtml = `<thead id="timeclockThead"><tr><th rowspan="2">Date</th>`;
       for (let i = 0; i < maxCycles; i++) {
@@ -711,19 +736,16 @@ function initApp() {
         theadHtml += `<th>In</th><th>Out</th>`;
       }
       theadHtml += `</tr></thead>`;
-
       const existingThead = table.querySelector('thead');
       if (existingThead) {
         existingThead.outerHTML = theadHtml;
       } else {
         table.insertAdjacentHTML('afterbegin', theadHtml);
       }
-
       records.forEach(r => {
         const row = document.createElement('tr');
         row.dataset.editing = 'false';
         row.dataset.date = r.date;
-
         let rowHtml = `<td>${r.date}</td>`;
         for (let i = 0; i < maxCycles; i++) {
           const cycle = r.rows[i] || { inTime: '', inIndex: -1, outTime: '', outIndex: -1 };
@@ -739,7 +761,6 @@ function initApp() {
         row.innerHTML = rowHtml;
         timeclockBody.appendChild(row);
       });
-
       document.querySelectorAll('.edit-log-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           e.preventDefault();
@@ -747,7 +768,6 @@ function initApp() {
           const isEditing = mainRow.dataset.editing === 'true';
           const date = btn.dataset.date;
           const inputs = mainRow.querySelectorAll('.tc-input');
-
           if (!isEditing) {
             mainRow.dataset.editing = 'true';
             inputs.forEach(input => {
@@ -757,10 +777,8 @@ function initApp() {
             btn.textContent = 'Save';
             btn.classList.remove('secondary');
             btn.classList.add('primary');
-
             const modalContent = document.querySelector('#employeeModal .modal-content');
             let dropdownContainer = modalContent?.querySelector('.center-selector-container');
-
             if (!dropdownContainer) {
               dropdownContainer = document.createElement('div');
               dropdownContainer.className = 'center-selector-container';
@@ -784,15 +802,12 @@ function initApp() {
           } else {
             btn.textContent = 'Saving...';
             btn.disabled = true;
-
             try {
               const daySnap = await get(ref(db, `timecards/${date}/${empId}`));
               let currentLogs = daySnap.val()?.logs || [];
               if (!Array.isArray(currentLogs)) currentLogs = Object.values(currentLogs);
-
               const { logs: logsToSaveBase } = autoFixLogs(currentLogs, employees[empId]?.terms || 'Full-time');
               let logsToSave = [...logsToSaveBase];
-
               const modifications = [];
               inputs.forEach(input => {
                 modifications.push({
@@ -801,12 +816,9 @@ function initApp() {
                   newTime: input.value
                 });
               });
-
               modifications.sort((a, b) => b.idx - a.idx);
-
               const centerSelect = document.getElementById('newEntryCenter');
               const selectedCenter = centerSelect?.value || 'auto';
-
               modifications.forEach(mod => {
                 if (mod.idx !== -1) {
                   if (mod.newTime) {
@@ -823,7 +835,6 @@ function initApp() {
                       const newTimeMins = timeToMinutes(mod.newTime);
                       let closestLog = null;
                       let minTimeDiff = Infinity;
-
                       currentLogs.forEach(existingLog => {
                         const existingTimeMins = timeToMinutes(existingLog.time);
                         const timeDiff = Math.abs(existingTimeMins - newTimeMins);
@@ -832,12 +843,10 @@ function initApp() {
                           closestLog = existingLog;
                         }
                       });
-
                       if (closestLog && closestLog.location && closestLog.location !== 'Manual Edit') {
                         matchedLocation = closestLog.location;
                       }
                     }
-
                     logsToSave.push({
                       type: mod.type,
                       time: mod.newTime,
@@ -846,27 +855,21 @@ function initApp() {
                   }
                 }
               });
-
               logsToSave.sort((a, b) => a.time.localeCompare(b.time));
               await update(ref(db, `timecards/${date}/${empId}`), { logs: logsToSave });
-
               mainRow.dataset.editing = 'false';
               inputs.forEach(input => {
                 input.disabled = true;
                 input.style.borderColor = '#cbd5e1';
               });
-
               const dropdown = document.querySelector('#employeeModal .modal-content .center-selector-container');
               if (dropdown) dropdown.remove();
-
               btn.textContent = 'Edit';
               btn.classList.remove('primary');
               btn.classList.add('secondary');
               btn.disabled = false;
-
               const selectedDate = timeclockDateFilter?.value || null;
               loadTimeclock(empId, selectedDate);
-
             } catch (err) {
               console.error("Error saving timeclock:", err);
               alert("Failed to save. Check console.");
@@ -886,22 +889,18 @@ function initApp() {
     if (typeof XLSX === 'undefined') {
       return alert('❌ Excel library not loaded. Please check your internet connection or script tags.');
     }
-
     const selectedMonth = monthPicker?.value;
     if (!selectedMonth) return alert('⚠️ Please select a month to export.');
-
     const [year, month] = selectedMonth.split('-');
     const originalText = exportBtn.textContent;
     exportBtn.textContent = 'Exporting...';
     exportBtn.disabled = true;
-
     try {
       const timecardsSnap = await get(ref(db, 'timecards'));
       const timecards = timecardsSnap.val() || {};
       const employeesSnap = await get(ref(db, 'employees'));
       const employeesData = employeesSnap.val() || {};
       const empData = {};
-
       Object.entries(timecards).forEach(([date, dayData]) => {
         if (!date.startsWith(selectedMonth)) return;
         Object.entries(dayData).forEach(([empId, empDayData]) => {
@@ -914,18 +913,15 @@ function initApp() {
               centers: {}
             };
           }
-
           const rawLogs = empDayData.logs || [];
           const { logs } = autoFixLogs(rawLogs, employeesData[empId]?.terms || 'Full-time');
           const centerLogs = {};
-
           logs.forEach(log => {
             const abbr = getCenterAbbr(log.location);
             if (abbr === 'Unknown') return;
             if (!centerLogs[abbr]) centerLogs[abbr] = [];
             centerLogs[abbr].push(log);
           });
-
           Object.entries(centerLogs).forEach(([abbr, cLogs]) => {
             if (!empData[empId].centers[abbr]) {
               empData[empId].centers[abbr] = { minutes: 0, records: [] };
@@ -934,7 +930,6 @@ function initApp() {
             const rows = getLogsRows(cLogs);
             let dayTotalMinutes = 0;
             const cycles = [];
-
             rows.forEach(row => {
               if (row.inTime && row.outTime) {
                 const inMins = timeToMinutes(row.inTime);
@@ -950,7 +945,6 @@ function initApp() {
                 cycles.push({ in: '', out: row.outTime });
               }
             });
-
             empData[empId].centers[abbr].minutes += dayTotalMinutes;
             empData[empId].totalMinutes += dayTotalMinutes;
             if (cycles.length > 0) {
@@ -959,14 +953,12 @@ function initApp() {
           });
         });
       });
-
       if (Object.keys(empData).length === 0) {
         alert('⚠️ No records found for the selected month.');
         exportBtn.textContent = originalText;
         exportBtn.disabled = false;
         return;
       }
-
       const wb = XLSX.utils.book_new();
       const summaryData = [['Name', 'Position', 'Total Hours', 'C', 'PT', 'MK', 'TS']];
       Object.values(empData).forEach(emp => {
@@ -982,7 +974,6 @@ function initApp() {
       });
       const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
       XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
-
       Object.entries(empData).forEach(([empId, emp]) => {
         Object.entries(emp.centers).forEach(([abbr, centerData]) => {
           if (centerData.records.length === 0) return;
@@ -990,13 +981,11 @@ function initApp() {
           centerData.records.forEach(rec => {
             if (rec.cycles.length > maxCycles) maxCycles = rec.cycles.length;
           });
-
           const headers = ['Date'];
           for (let i = 1; i <= maxCycles; i++) {
             headers.push(`In${i}`, `Out${i}`);
           }
           headers.push('Overall Total');
-
           const sheetData = [headers];
           centerData.records.forEach(rec => {
             const row = [rec.date];
@@ -1019,13 +1008,11 @@ function initApp() {
             row.push(formatExcelTime(dayMins));
             sheetData.push(row);
           });
-
           const sheet = XLSX.utils.aoa_to_sheet(sheetData);
           const tabName = `${abbr}_${emp.name}`.substring(0, 31);
           XLSX.utils.book_append_sheet(wb, sheet, tabName);
         });
       });
-
       XLSX.writeFile(wb, `Kumon_Timeclock_Records_${month}-${year}.xlsx`);
       alert('✅ Export successful!');
     } catch (err) {
@@ -1082,16 +1069,13 @@ function initApp() {
       const timecardsSnap = await get(ref(db, 'timecards'));
       const timecards = timecardsSnap.val() || {};
       let count = 0;
-
       Object.entries(timecards).forEach(([date, dayData]) => {
         Object.entries(dayData).forEach(([empId, empData]) => {
           const emp = employees[empId];
           if (!emp) return;
-
           const rawLogs = empData.logs || [];
           const { logs: fixedLogs } = autoFixLogs(rawLogs, emp.terms || 'Full-time');
           const sortedLogs = [...fixedLogs].sort((a, b) => a.time.localeCompare(b.time));
-
           let currentIn = null;
           for (const log of sortedLogs) {
             if (log.type === 'in') {
@@ -1110,7 +1094,6 @@ function initApp() {
           if (currentIn !== null) count++;
         });
       });
-
       const badge = document.getElementById('incompleteBadge');
       if (badge) {
         if (count > 0) {
@@ -1129,21 +1112,17 @@ function initApp() {
     const tbody = document.getElementById('incompleteTableBody');
     if (!tbody) return;
     tbody.innerHTML = '<tr><td colspan="8" class="empty-state">⏳ Loading...</td></tr>';
-
     try {
       const timecardsSnap = await get(ref(db, 'timecards'));
       const timecards = timecardsSnap.val() || {};
       const incompleteRecords = [];
-
       Object.entries(timecards).forEach(([date, dayData]) => {
         Object.entries(dayData).forEach(([empId, empData]) => {
           const emp = employees[empId];
           if (!emp) return;
-
           const rawLogs = empData.logs || [];
           const { logs: fixedLogs } = autoFixLogs(rawLogs, emp.terms || 'Full-time');
           const sortedLogs = [...fixedLogs].sort((a, b) => a.time.localeCompare(b.time));
-
           let currentIn = null;
           for (let i = 0; i < sortedLogs.length; i++) {
             const log = sortedLogs[i];
@@ -1189,26 +1168,21 @@ function initApp() {
           }
         });
       });
-
       incompleteRecords.sort((a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name));
-
       tbody.innerHTML = '';
       if (incompleteRecords.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" class="empty-state">🎉 No incomplete timecards found!</td></tr>';
         return;
       }
-
       incompleteRecords.forEach((rec, idx) => {
         const tr = document.createElement('tr');
         tr.dataset.empId = rec.empId;
         tr.dataset.date = rec.date;
         tr.dataset.missingType = rec.missingType;
         tr.dataset.center = rec.center;
-
         const typeLabel = rec.type === 'IN'
           ? `<span class="status-badge" style="background:#dbeafe;color:#1e40af;">IN only</span>`
           : `<span class="status-badge" style="background:#fef3c7;color:#92400e;">OUT only</span>`;
-
         tr.innerHTML = `
           <td>${rec.name} ${rec.chineseName ? '(' + rec.chineseName + ')' : ''}</td>
           <td>${rec.position}</td>
@@ -1221,51 +1195,41 @@ function initApp() {
         `;
         tbody.appendChild(tr);
       });
-
       document.querySelectorAll('.save-incomplete-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
           const tr = btn.closest('tr');
           const input = tr.querySelector('.incomplete-time-input');
           const newTime = input.value.trim();
-
           if (!newTime) {
             alert('⚠️ Please enter the missing time.');
             input.focus();
             return;
           }
-
           const empId = tr.dataset.empId;
           const date = tr.dataset.date;
           const missingType = tr.dataset.missingType;
           const center = tr.dataset.center;
-
           btn.disabled = true;
           btn.textContent = 'Saving...';
-
           try {
             const daySnap = await get(ref(db, `timecards/${date}/${empId}`));
             let currentLogs = daySnap.val()?.logs || [];
             if (!Array.isArray(currentLogs)) currentLogs = Object.values(currentLogs);
-
             currentLogs.push({
               type: missingType,
               time: newTime,
               location: center || 'Manual Fix'
             });
             currentLogs.sort((a, b) => a.time.localeCompare(b.time));
-
             await update(ref(db, `timecards/${date}/${empId}`), { logs: currentLogs });
-
             btn.textContent = '✅ Saved';
             btn.classList.remove('primary');
             btn.style.background = '#059669';
             input.disabled = true;
-
             setTimeout(() => {
               tr.style.opacity = '0.4';
               tr.style.textDecoration = 'line-through';
             }, 500);
-
             updateIncompleteBadge();
           } catch (err) {
             console.error('Save incomplete error:', err);

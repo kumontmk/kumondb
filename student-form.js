@@ -470,6 +470,38 @@ function initApp() {
         return opts;
     }
 
+    // 🆕 Worksheet Type & KC No Logic
+    function updateWorksheetUI() {
+        const typeSelect = document.getElementById('worksheetType');
+        const kcWrapper = document.getElementById('kcNoWrapper');
+        const kcInput = document.getElementById('kcNo');
+        const kcHint = document.getElementById('kcNoHint');
+        
+        if (!typeSelect || !kcWrapper || !kcInput) return;
+        
+        const type = typeSelect.value;
+        const hasKcNo = kcInput.value.trim() !== '';
+        
+        if (type === 'Kumon Connect') {
+            kcWrapper.style.display = 'block';
+            kcInput.required = true;
+            if (kcHint) kcHint.style.display = 'none';
+        } else {
+            // Paper
+            if (hasKcNo) {
+                kcWrapper.style.display = 'block'; // Keep visible if previously entered
+                if (kcHint) kcHint.style.display = 'inline';
+                kcInput.required = false;
+            } else {
+                kcWrapper.style.display = 'none'; // Hide if empty
+                kcInput.required = false;
+            }
+        }
+    }
+
+    document.getElementById('worksheetType')?.addEventListener('change', updateWorksheetUI);
+    document.getElementById('kcNo')?.addEventListener('input', updateWorksheetUI);
+
     function initOtherInputs() {
         const fields = ['grade', 'school', 'nationality'];
         fields.forEach(fieldId => {
@@ -988,6 +1020,8 @@ function initApp() {
                 own: document.getElementById('phoneOwn')?.value?.trim() || ''
             },
             qrCode: document.getElementById('qrCodeInput')?.value?.trim() || '',
+            worksheetType: document.getElementById('worksheetType')?.value || 'Paper',
+            kcNo: document.getElementById('kcNo')?.value?.trim() || '',
             subjects,
             diagnosticTests
         };
@@ -1462,6 +1496,12 @@ function initApp() {
                     }
                 };
                 ['studentNumber','nickname','namePinyin','nameCn','email','address','gender'].forEach(id => setVal(id, s[id]));
+                
+                // 🆕 Load Worksheet & KC No
+                setVal('worksheetType', s.worksheetType || 'Paper');
+                setVal('kcNo', s.kcNo || '');
+                updateWorksheetUI(); // Initialize visibility based on loaded data
+                
                 if (s.grade) setFieldWithOther('grade', s.grade);
                 if (s.school) setFieldWithOther('school', s.school);
                 if (s.nationality) setFieldWithOther('nationality', s.nationality);
@@ -1606,6 +1646,13 @@ function initApp() {
         if (poVal === 'No') {
             const poReasonEl = document.getElementById('poReason');
             if (poReasonEl && !poReasonEl.value?.trim()) return showError('⚠️ Please provide a reason for no Parent Orientation.');
+        }
+
+        // 🆕 Validate Worksheet Type
+        const wsType = document.getElementById('worksheetType')?.value;
+        const kcNoVal = document.getElementById('kcNo')?.value?.trim();
+        if (wsType === 'Kumon Connect' && !kcNoVal) {
+            return showError('⚠️ KC No. is required for Kumon Connect students.');
         }
         
         const pencilCount = Array.from(document.querySelectorAll('.pencil-skill-entry')).filter(el => el.style.display !== 'none').length;
@@ -1847,4 +1894,4 @@ function initApp() {
     if (isEdit) loadStudentData(); else { addSubjectField(); hideLoader(); }
      
     document.getElementById('logoutBtn')?.addEventListener('click', logout);
-}
+}   

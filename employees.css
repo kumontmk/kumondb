@@ -424,3 +424,30 @@ tr.disabled-row td:first-child {
     vertical-align: middle;
     padding: 0 4px;
 }
+
+/* 🆕 Forgot Password & Auth Links */
+#forgotPasswordLink {
+  display: block;
+  text-align: center;
+  margin-top: 0.5rem;
+  color: var(--primary-dark);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+#forgotPasswordLink:hover {
+  text-decoration: underline;
+}
+
+/* 🆕 Reset Password Button in Table */
+.student-actions button.secondary[title*="Reset"] {
+  background: #f8f9fa;
+  color: #4682B4;
+  border: 1px solid #cbd5e1;
+}
+
+.student-actions button.secondary[title*="Reset"]:hover {
+  background: #4682B4;
+  color: white;
+  border-color: #4682B4;
+}

@@ -713,3 +713,20 @@ margin-top: 1.5rem;
     font-style: italic;
     justify-content: center;
 }
+
+/* ============================================
+🆕 WORKSHEET TYPE & KC NO
+============================================ */
+.kc-no-wrapper {
+    animation: fadeIn 0.3s ease;
+}
+.kc-hint {
+    font-size: 0.75rem;
+    color: #FF8C00;
+    font-weight: 500;
+    background: #fff3e0;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+}

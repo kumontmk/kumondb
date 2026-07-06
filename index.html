@@ -4,35 +4,50 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Kumon Center DB - Login</title>
-  <link rel="icon" href="data:,"> <!-- ✅ Prevents favicon.ico 404 error -->
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
-  <div id="page-loader" class="hidden"><div class="spinner"></div></div>
-  <div class="login-page">
-    <div class="login-container">
-      <!-- Replace src with your actual logo path -->
-      <img src="logo.png" alt="Kumon Logo" class="login-logo">
-      <h2>Sign in to manage students & reports</h2>
-      
-      <!-- Auth Form -->
-      <div id="authFormContainer">
-        <form id="emailAuthForm" class="auth-form">
-          <input type="email" id="email" placeholder="Email address" autocomplete="email" required>
-          <input type="password" id="password" placeholder="Password" autocomplete="current-password" required> <!-- ✅ ADDED autocomplete -->
-          <button type="submit" id="submitBtn">Sign In</button>
-        </form>
-        <p id="errorMsg" class="error"></p>
-        <button id="authToggleBtn" class="auth-toggle">Don't have an account? Sign Up</button>
-      </div>
+<body class="login-page">
+  <div id="page-loader"><div class="spinner"></div></div>
 
-      <!-- Profile Completion Form (Hidden by default) -->
-      <div id="profileFormContainer" class="hidden">
-        <h3>Complete Your Profile</h3>
-        <p class="hint">Please provide your details for admin verification.</p>
-        <form id="profileForm" class="auth-form">
-          <input type="text" id="profEnglishName" placeholder="English Name *" required>
-          <input type="text" id="profChineseName" placeholder="Chinese Name">
+  <div class="login-container">
+    <img src="logo.png" alt="Kumon Logo" class="login-logo" onerror="this.style.display='none'">
+    <h2>Kumon Center DB</h2>
+    <p>Sign in to manage students & reports</p>
+
+    <div id="authFormContainer">
+      <button id="googleSignInBtn" class="google-btn">
+        <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        Continue with Google
+      </button>
+
+      <div class="divider">or</div>
+
+      <form id="emailAuthForm" class="auth-form">
+        <input type="email" id="email" placeholder="Email Address" required>
+        <input type="password" id="password" placeholder="Password" required>
+        <button type="submit" id="submitBtn" class="primary">Sign In</button>
+      </form>
+
+      <button id="authToggleBtn" class="auth-toggle">Don't have an account? Sign Up</button>
+      <a href="#" id="forgotPasswordLink" class="auth-toggle" style="display: block; margin-top: 0.5rem; color: #4682B4;">Forgot Password?</a>
+      <p id="errorMsg" class="error"></p>
+    </div>
+
+    <div id="forgotPasswordForm" class="hidden" style="text-align: left;">
+      <h3 style="text-align: center; margin-bottom: 1rem;">Reset Password</h3>
+      <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">Enter your email address and we'll send you a link to reset your password.</p>
+      <input type="email" id="forgotPwEmail" placeholder="Email Address" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 1rem;">
+      <button id="submitForgotPwBtn" class="primary" style="width: 100%; padding: 0.75rem; font-weight: 600;">Send Reset Link</button>
+      <button id="backToLoginBtn" class="auth-toggle" style="display: block; width: 100%; text-align: center; margin-top: 1rem;">← Back to Login</button>
+    </div>
+
+    <div id="profileFormContainer" class="hidden">
+      <h3>Complete Your Profile</h3>
+      <p>Please provide your details for admin verification.</p>
+      <form id="profileForm" class="auth-form">
+        <input type="text" id="profEnglishName" placeholder="English Name *" required>
+        <input type="text" id="profChineseName" placeholder="Chinese Name">
+        <div class="select-wrapper">
           <select id="profNationality" required>
             <option value="">Nationality *</option>
             <option value="Filipino">Filipino</option>
@@ -40,7 +55,9 @@
             <option value="Portuguese">Portuguese</option>
             <option value="Others">Others</option>
           </select>
-          <input type="text" id="profNationalityOther" class="other-input" placeholder="Specify Nationality">
+        </div>
+        <input type="text" id="profNationalityOther" class="other-input" placeholder="Specify Nationality">
+        <div class="select-wrapper">
           <select id="profPosition" required>
             <option value="">Position *</option>
             <option value="English Teacher">English Teacher</option>
@@ -49,20 +66,20 @@
             <option value="Admin">Admin</option>
             <option value="Manager">Manager</option>
           </select>
-          <label style="text-align:left; font-size:0.85rem; color:#666; margin-top:0.5rem;">Employment Date *</label>
-          <input type="date" id="profEmploymentDate" required>
+        </div>
+        <input type="date" id="profEmploymentDate" required>
+        <div class="select-wrapper">
           <select id="profTerms" required>
-            <option value="">Employment Terms *</option>
             <option value="Full-time">Full-time</option>
             <option value="Part-time">Part-time</option>
           </select>
-          <button type="submit" id="submitProfileBtn" class="primary" style="margin-top:1rem;">Submit for Verification</button>
-        </form>
-        <button id="cancelProfileBtn" class="auth-toggle" style="margin-top: 1rem;">Cancel</button>
-      </div>
-
+        </div>
+        <button type="submit" id="submitProfileBtn" class="primary">Submit for Verification</button>
+        <button type="button" id="cancelProfileBtn" class="secondary">Cancel</button>
+      </form>
     </div>
   </div>
+
   <script type="module" src="auth.js"></script>
 </body>
 </html>
