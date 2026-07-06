@@ -511,7 +511,7 @@ function initApp() {
           const newUid = userCred.user.uid;
           await signOut(secondaryAuth); // Clean up secondary session
 
-          // Save to users node
+          // ✅ FIX: Save to users node WITH permissions!
           await set(ref(db, `users/${newUid}`), {
             email,
             englishName,
@@ -521,7 +521,8 @@ function initApp() {
             employmentDate,
             terms,
             isVerified: true,
-            mustChangePassword: true, // 🆕 Force password change
+            mustChangePassword: true,
+            permissions: { centers, dashboardCards }, // 🌟 THIS WAS MISSING PREVIOUSLY!
             createdAt: new Date().toISOString()
           });
 
@@ -541,15 +542,29 @@ function initApp() {
       await set(empRef, employeeData);
 
       if (empId) {
+        // ✅ FIX: More robust update to the users node
         const usersSnap = await get(ref(db, 'users'));
         const usersData = usersSnap.val();
         if (usersData) {
-          const matchingUserUid = Object.keys(usersData).find(uid => usersData[uid].email?.toLowerCase() === employeeData.email.toLowerCase());
-          if (matchingUserUid) {
-            await update(ref(db, `users/${matchingUserUid}`), {
+          // 1. Try direct match (since empId is usually the Auth UID)
+          if (usersData[empId]) {
+            await update(ref(db, `users/${empId}`), {
               permissions: { centers, dashboardCards },
               position: position
             });
+            console.log(`✅ Synced permissions to users/${empId} (Direct Match)`);
+          } else {
+            // 2. Fallback to email search (for older push-ID based employees)
+            const matchingUserUid = Object.keys(usersData).find(uid => usersData[uid].email?.toLowerCase() === employeeData.email.toLowerCase());
+            if (matchingUserUid) {
+              await update(ref(db, `users/${matchingUserUid}`), {
+                permissions: { centers, dashboardCards },
+                position: position
+              });
+              console.log(`✅ Synced permissions to users/${matchingUserUid} (Email Match)`);
+            } else {
+              console.warn('⚠️ Could not find matching user in users node to sync permissions!');
+            }
           }
         }
       }
