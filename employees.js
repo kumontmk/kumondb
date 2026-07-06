@@ -13,6 +13,13 @@ const auth = getAuth();
 const mainContent = document.getElementById('mainContent');
 const accessDenied = document.getElementById('accessDenied');
 
+// 🆕 Helper to handle both new (array) and old (string) position data
+function getEmpPositions(emp) {
+  if (Array.isArray(emp.positions)) return emp.positions;
+  if (emp.position) return [emp.position];
+  return [];
+}
+
 async function checkAuthorization(user) {
   if (!user) {
     showAccessDenied('🔐 Please log in first', 'No user session found.');
@@ -29,18 +36,26 @@ async function checkAuthorization(user) {
   try {
     const userSnap = await get(ref(db, `users/${user.uid}`));
     const userData = userSnap.val();
-    if (userData && (userData.position?.trim().toLowerCase() === 'manager' || userData.position?.trim().toLowerCase() === 'master admin')) {
-      grantAccess();
-      return true;
+    if (userData) {
+      // 🆕 Check if user has 'manager' or 'master admin' in their positions array
+      const userPositions = getEmpPositions(userData).map(p => p.trim().toLowerCase());
+      if (userPositions.includes('manager') || userPositions.includes('master admin')) {
+        grantAccess();
+        return true;
+      }
     }
 
     const empSnap = await get(ref(db, 'employees'));
     const empData = empSnap.val();
     if (empData) {
       const matchingEmp = Object.values(empData).find(e => e.email?.toLowerCase() === user.email?.toLowerCase());
-      if (matchingEmp && (matchingEmp.position?.trim().toLowerCase() === 'manager' || matchingEmp.position?.trim().toLowerCase() === 'master admin')) {
-        grantAccess();
-        return true;
+      if (matchingEmp) {
+        // 🆕 Check if employee has 'manager' or 'master admin' in their positions array
+        const empPositions = getEmpPositions(matchingEmp).map(p => p.trim().toLowerCase());
+        if (empPositions.includes('manager') || empPositions.includes('master admin')) {
+          grantAccess();
+          return true;
+        }
       }
     }
   } catch (err) {
@@ -86,7 +101,7 @@ function initApp() {
   let currentQrData = "";
   let availableCenters = [];
   let currentTimeclockEmpId = null;
-  let initialLoadDone = false; // ✅ FIX: Moved to top to prevent Temporal Dead Zone error
+  let initialLoadDone = false; 
 
   function openModal(id) {
     const el = document.getElementById(id);
@@ -137,7 +152,6 @@ function initApp() {
     if (currentTimeclockEmpId) loadTimeclock(currentTimeclockEmpId, null);
   });
 
-  // 🆕 RESET PASSWORD FUNCTION
   window.resetPassword = async (email) => {
     if (!confirm(`Send a password reset email to ${email}?`)) return;
     try {
@@ -163,7 +177,8 @@ function initApp() {
               chineseName: userData.chineseName || '',
               email: userData.email || '',
               nationality: userData.nationality || '',
-              position: userData.position || '',
+              positions: userData.positions || (userData.position ? [userData.position] : []),
+              position: userData.position || (userData.positions ? userData.positions[0] : ''),
               employmentDate: userData.employmentDate || new Date().toISOString().split('T')[0],
               terms: userData.terms || 'Full-time',
               qrCode: `EMP_${uid.slice(0, 8)}`,
@@ -199,7 +214,6 @@ function initApp() {
     }
   };
 
-  // 🆕 SEED MASTER ADMIN
   async function seedMasterAdmin() {
     const empSnap = await get(ref(db, 'employees'));
     const empData = empSnap.val() || {};
@@ -212,6 +226,7 @@ function initApp() {
         await set(ref(db, `employees/${masterUid}`), {
           englishName: 'Kumon Master Admin',
           email: 'kumonchamps@gmail.com',
+          positions: ['Master Admin'],
           position: 'Master Admin',
           terms: 'Full-time',
           employmentDate: new Date().toISOString().split('T')[0],
@@ -256,10 +271,11 @@ function initApp() {
       }
       pending.forEach(([uid, u]) => {
         const row = document.createElement('tr');
+        const userPositions = getEmpPositions(u).join(', ') || '-';
         row.innerHTML = `
           <td>${u.email || '-'}</td>
           <td>${u.englishName || '-'}</td>
-          <td>${u.position || '-'}</td>
+          <td>${userPositions}</td>
           <td>${u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '-'}</td>
           <td class="student-actions">
             <button class="primary" onclick="window.verifyUser('${uid}', true)">✅ Verify</button>
@@ -302,15 +318,18 @@ function initApp() {
 
   function renderTable(filter = '') {
     const lower = filter.toLowerCase();
-    const filtered = Object.entries(employees).filter(([_, e]) =>
-      e.englishName?.toLowerCase().includes(lower) ||
-      (e.chineseName || '').toLowerCase().includes(lower) ||
-      e.position?.toLowerCase().includes(lower) ||
-      e.email?.toLowerCase().includes(lower)
-    );
+    const filtered = Object.entries(employees).filter(([_, e]) => {
+      const positionsStr = getEmpPositions(e).join(' ').toLowerCase();
+      return e.englishName?.toLowerCase().includes(lower) ||
+        (e.chineseName || '').toLowerCase().includes(lower) ||
+        positionsStr.includes(lower) ||
+        e.email?.toLowerCase().includes(lower);
+    });
+    
     tableBody.innerHTML = filtered.length === 0
       ? '<tr><td colspan="7" class="empty-state">No employees found</td></tr>'
       : '';
+      
     filtered.forEach(([id, e]) => {
       const isDisabled = e.isDisabled === true;
       const rowClass = isDisabled ? 'disabled-row' : '';
@@ -319,13 +338,15 @@ function initApp() {
         : `<span class="status-badge active">Active</span>`;
       const toggleBtnText = isDisabled ? 'Enable' : 'Disable';
       const toggleBtnClass = isDisabled ? 'secondary' : 'danger';
+      const positionsText = getEmpPositions(e).join(', ') || '-'; 
+      
       const row = document.createElement('tr');
       row.className = rowClass;
       row.innerHTML = `
         <td>${e.englishName || ''} ${statusBadge}</td>
         <td>${e.chineseName || '-'}</td>
         <td>${e.email || '-'}</td>
-        <td>${e.position || ''}</td>
+        <td>${positionsText}</td>
         <td>${e.terms || ''}</td>
         <td class="student-actions">
           <button class="secondary" onclick="window.editEmp('${id}')">Edit</button>
@@ -346,7 +367,6 @@ function initApp() {
     form.reset();
     natOther.classList.remove('visible');
 
-    // 🆕 Show/Hide Password Field
     const pwField = document.getElementById('passwordFieldContainer');
     if (pwField) {
       pwField.style.display = id ? 'none' : 'block';
@@ -361,7 +381,15 @@ function initApp() {
       document.getElementById('empEmail').value = e.email || '';
       document.getElementById('empNationality').value = ['Filipino', 'Chinese', 'Portuguese'].includes(e.nationality) ? e.nationality : 'Others';
       if (!['Filipino', 'Chinese', 'Portuguese'].includes(e.nationality)) natOther.value = e.nationality || '';
-      document.getElementById('empPosition').value = e.position || '';
+      
+      // 🆕 Check positions
+      document.querySelectorAll('#empPositionsGroup input').forEach(cb => cb.checked = false);
+      const empPositions = getEmpPositions(e);
+      empPositions.forEach(pos => {
+        const cb = document.querySelector(`#empPositionsGroup input[value="${pos}"]`);
+        if (cb) cb.checked = true;
+      });
+
       document.getElementById('empDate').value = e.employmentDate || new Date().toISOString().split('T')[0];
       document.getElementById('empTerms').value = e.terms || 'Full-time';
       currentQrData = e.qrCode || `EMP_${id}`;
@@ -378,6 +406,7 @@ function initApp() {
       document.getElementById('empId').value = '';
       document.getElementById('empDate').value = new Date().toISOString().split('T')[0];
       currentQrData = `EMP_${crypto.randomUUID().slice(0, 8)}`;
+      document.querySelectorAll('#empPositionsGroup input').forEach(cb => cb.checked = false);
       setTimeout(() => {
         document.querySelectorAll('#tab-permissions input').forEach(cb => cb.checked = false);
       }, 100);
@@ -389,13 +418,19 @@ function initApp() {
       try {
         const userSnap = await get(ref(db, `users/${auth.currentUser.uid}`));
         const userData = userSnap.val();
-        if (userData && (userData.position?.trim().toLowerCase() === 'manager' || userData.position?.trim().toLowerCase() === 'master admin')) isAdmin = true;
+        if (userData) {
+          const userPositions = getEmpPositions(userData).map(p => p.trim().toLowerCase());
+          if (userPositions.includes('manager') || userPositions.includes('master admin')) isAdmin = true;
+        }
         if (!isAdmin) {
           const empSnap = await get(ref(db, 'employees'));
           const empData = empSnap.val();
           if (empData) {
             const matchingEmp = Object.values(empData).find(e => e.email?.toLowerCase() === currentUserEmail);
-            if (matchingEmp && (matchingEmp.position?.trim().toLowerCase() === 'manager' || matchingEmp.position?.trim().toLowerCase() === 'master admin')) isAdmin = true;
+            if (matchingEmp) {
+              const empPositions = getEmpPositions(matchingEmp).map(p => p.trim().toLowerCase());
+              if (empPositions.includes('manager') || empPositions.includes('master admin')) isAdmin = true;
+            }
           }
         }
       } catch (err) { console.error('Error checking admin status:', err); }
@@ -472,12 +507,20 @@ function initApp() {
     const email = document.getElementById('empEmail')?.value.trim();
     let nationality = document.getElementById('empNationality')?.value;
     if (nationality === 'Others') nationality = document.getElementById('empNationalityOther')?.value.trim();
-    const position = document.getElementById('empPosition')?.value;
+    
+    // 🆕 Read checked positions
+    const positions = [];
+    document.querySelectorAll('#empPositionsGroup input:checked').forEach(cb => positions.push(cb.value));
+    if (positions.length === 0) {
+      return alert('Please select at least one position.');
+    }
+    const position = positions[0]; // For backward compatibility
+
     const employmentDate = document.getElementById('empDate')?.value;
     const terms = document.getElementById('empTerms')?.value;
     const initialPassword = document.getElementById('empPassword')?.value || 'Kumon123';
 
-    if (!englishName || !nationality || !position || !employmentDate || !email) {
+    if (!englishName || !nationality || positions.length === 0 || !employmentDate || !email) {
       return alert('Please fill in all required fields.');
     }
 
@@ -491,7 +534,8 @@ function initApp() {
       chineseName: chineseName || '',
       email,
       nationality,
-      position,
+      positions: positions,
+      position: position,
       employmentDate,
       terms,
       qrCode: currentQrData,
@@ -503,30 +547,29 @@ function initApp() {
       let saveId = empId;
 
       if (!empId) {
-        // 🆕 CREATE NEW FIREBASE AUTH USER IN BACKGROUND
         saveBtn.disabled = true;
         saveBtn.textContent = 'Creating Account...';
         try {
           const userCred = await createUserWithEmailAndPassword(secondaryAuth, email, initialPassword);
           const newUid = userCred.user.uid;
-          await signOut(secondaryAuth); // Clean up secondary session
+          await signOut(secondaryAuth); 
 
-          // ✅ FIX: Save to users node WITH permissions!
           await set(ref(db, `users/${newUid}`), {
             email,
             englishName,
             chineseName,
             nationality,
-            position,
+            positions: positions,
+            position: position,
             employmentDate,
             terms,
             isVerified: true,
             mustChangePassword: true,
-            permissions: { centers, dashboardCards }, // 🌟 THIS WAS MISSING PREVIOUSLY!
+            permissions: { centers, dashboardCards },
             createdAt: new Date().toISOString()
           });
 
-          saveId = newUid; // Use Auth UID as Employee ID
+          saveId = newUid; 
           employeeData.authUid = newUid;
         } catch (authErr) {
           saveBtn.disabled = false;
@@ -542,23 +585,22 @@ function initApp() {
       await set(empRef, employeeData);
 
       if (empId) {
-        // ✅ FIX: More robust update to the users node
         const usersSnap = await get(ref(db, 'users'));
         const usersData = usersSnap.val();
         if (usersData) {
-          // 1. Try direct match (since empId is usually the Auth UID)
           if (usersData[empId]) {
             await update(ref(db, `users/${empId}`), {
               permissions: { centers, dashboardCards },
+              positions: positions,
               position: position
             });
             console.log(`✅ Synced permissions to users/${empId} (Direct Match)`);
           } else {
-            // 2. Fallback to email search (for older push-ID based employees)
             const matchingUserUid = Object.keys(usersData).find(uid => usersData[uid].email?.toLowerCase() === employeeData.email.toLowerCase());
             if (matchingUserUid) {
               await update(ref(db, `users/${matchingUserUid}`), {
                 permissions: { centers, dashboardCards },
+                positions: positions,
                 position: position
               });
               console.log(`✅ Synced permissions to users/${matchingUserUid} (Email Match)`);
@@ -923,7 +965,7 @@ function initApp() {
             const emp = employeesData[empId] || {};
             empData[empId] = {
               name: emp.englishName || 'Unknown',
-              position: emp.position || 'Unknown',
+              position: getEmpPositions(emp).join(', ') || 'Unknown',
               totalMinutes: 0,
               centers: {}
             };
@@ -1146,7 +1188,7 @@ function initApp() {
                 incompleteRecords.push({
                   empId, date,
                   name: emp.englishName || '', chineseName: emp.chineseName || '',
-                  position: emp.position || '', terms: emp.terms || 'Full-time',
+                  position: getEmpPositions(emp).join(', ') || '', terms: emp.terms || 'Full-time',
                   center: currentIn.location || '', type: 'IN', time: currentIn.time, missingType: 'out'
                 });
               }
@@ -1159,14 +1201,14 @@ function initApp() {
                   incompleteRecords.push({
                     empId, date,
                     name: emp.englishName || '', chineseName: emp.chineseName || '',
-                    position: emp.position || '', terms: emp.terms || 'Full-time',
+                    position: getEmpPositions(emp).join(', ') || '', terms: emp.terms || 'Full-time',
                     center: currentIn.location || '', type: 'IN', time: currentIn.time, missingType: 'out'
                   });
                 }
                 incompleteRecords.push({
                   empId, date,
                   name: emp.englishName || '', chineseName: emp.chineseName || '',
-                  position: emp.position || '', terms: emp.terms || 'Full-time',
+                  position: getEmpPositions(emp).join(', ') || '', terms: emp.terms || 'Full-time',
                   center: log.location || '', type: 'OUT', time: log.time, missingType: 'in'
                 });
                 currentIn = null;
@@ -1177,7 +1219,7 @@ function initApp() {
             incompleteRecords.push({
               empId, date,
               name: emp.englishName || '', chineseName: emp.chineseName || '',
-              position: emp.position || '', terms: emp.terms || 'Full-time',
+              position: getEmpPositions(emp).join(', ') || '', terms: emp.terms || 'Full-time',
               center: currentIn.location || '', type: 'IN', time: currentIn.time, missingType: 'out'
             });
           }

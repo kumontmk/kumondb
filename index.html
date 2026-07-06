@@ -57,16 +57,17 @@
           </select>
         </div>
         <input type="text" id="profNationalityOther" class="other-input" placeholder="Specify Nationality">
-        <div class="select-wrapper">
-          <select id="profPosition" required>
-            <option value="">Position *</option>
-            <option value="English Teacher">English Teacher</option>
-            <option value="Math Teacher">Math Teacher</option>
-            <option value="Chinese Teacher">Chinese Teacher</option>
-            <option value="Admin">Admin</option>
-            <option value="Manager">Manager</option>
-          </select>
-        </div>
+          <div>
+            <label>Positions *</label>
+            <div class="checkbox-group" id="profPositionsGroup">
+              <label><input type="checkbox" value="English Teacher"> English Teacher</label>
+              <label><input type="checkbox" value="Math Teacher"> Math Teacher</label>
+              <label><input type="checkbox" value="Chinese Teacher"> Chinese Teacher</label>
+              <label><input type="checkbox" value="Tutorial Teacher"> Tutorial Teacher</label>
+              <label><input type="checkbox" value="Admin"> Admin</label>
+              <label><input type="checkbox" value="Custodian"> Custodian</label>
+            </div>
+          </div>
         <input type="date" id="profEmploymentDate" required>
         <div class="select-wrapper">
           <select id="profTerms" required>

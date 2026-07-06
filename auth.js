@@ -231,12 +231,23 @@ window.addEventListener('DOMContentLoaded', () => {
     const submitProfileBtn = document.getElementById('submitProfileBtn');
     setLoading(submitProfileBtn, true, 'Submitting...');
     const nationality = profNatSelect.value === 'Others' ? profNatOther.value.trim() : profNatSelect.value;
+    
+    // 🆕 Read checked positions from the new checkbox group
+    const positions = [];
+    document.querySelectorAll('#profPositionsGroup input:checked').forEach(cb => positions.push(cb.value));
+    if (positions.length === 0) {
+      alert('Please select at least one position.');
+      setLoading(submitProfileBtn, false, 'Submit for Verification', true);
+      return;
+    }
+
     const userData = {
       email: pendingUser.email,
       englishName: document.getElementById('profEnglishName').value.trim(),
       chineseName: document.getElementById('profChineseName').value.trim(),
       nationality: nationality,
-      position: document.getElementById('profPosition').value,
+      positions: positions,       // 🆕 Save as array
+      position: positions[0],     // 🔄 Keep first one as string for backward compatibility
       employmentDate: document.getElementById('profEmploymentDate').value,
       terms: document.getElementById('profTerms').value,
       isVerified: false, 
@@ -290,7 +301,8 @@ onAuthStateChanged(auth, async (user) => {
         englishName: user.displayName || 'Kumon Admin',
         chineseName: '',
         nationality: 'Other',
-        position: 'Master Admin',
+        positions: ['Master Admin'], // 🆕 Added array format
+        position: 'Master Admin',    // 🔄 Kept string format for backward compatibility
         employmentDate: new Date().toISOString().split('T')[0],
         terms: 'Full-time',
         isVerified: true, 

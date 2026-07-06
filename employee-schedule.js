@@ -7,7 +7,7 @@ import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/
 // ============================================
 const AUTHORIZED_EMAIL = "kumonchamps@gmail.com";
 const auth = getAuth();
-const ROLE_ORDER = ['English Teacher', 'Math Teacher', 'Chinese Teacher', 'Admin', 'Manager'];
+const ROLE_ORDER = ['Master Admin', 'Manager', 'Admin', 'English Teacher', 'Math Teacher', 'Chinese Teacher', 'Tutorial Teacher', 'Custodian'];
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -24,9 +24,17 @@ const CENTER_CLOSED_DAYS = {
 
 const SUBJECT_CONFIG = {
     'English Teacher': { label: 'English Teachers', icon: '📖', cls: 'english-divider', color: '#2980b9' },
-    'Math Teacher':    { label: 'Math Teachers',    icon: '', cls: 'math-divider',    color: '#27ae60' },
+    'Math Teacher':    { label: 'Math Teachers',    icon: '🔢', cls: 'math-divider',    color: '#27ae60' },
     'Chinese Teacher': { label: 'Chinese Teachers',  icon: '🀄', cls: 'chinese-divider', color: '#e67e22' },
+    'Tutorial Teacher': { label: 'Tutorial Teachers', icon: '📚', cls: 'tutorial-divider', color: '#8e44ad' },
 };
+
+// 🆕 Helper to handle both new (array) and old (string) position data
+function getEmpPositions(emp) {
+    if (Array.isArray(emp.positions)) return emp.positions;
+    if (emp.position) return [emp.position];
+    return [];
+}
 
 // ============================================
 // GLOBAL STATE
@@ -100,8 +108,10 @@ async function checkPermissions(user) {
     try {
         const snap = await get(ref(db, `employees/${user.uid}`));
         if (snap.exists()) {
-            const pos = (snap.val().position || '').toLowerCase();
-            if (pos === 'manager' || pos === 'admin') {
+            const emp = snap.val();
+            // 🆕 Check if any of their positions grant admin/manager access
+            const positions = getEmpPositions(emp).map(p => (p || '').toLowerCase());
+            if (positions.includes('manager') || positions.includes('admin') || positions.includes('master admin')) {
                 isAdminOrManager = true;
             }
         }
@@ -142,7 +152,6 @@ async function loadAllCenters() {
         }));
     }
     
-    // ✅ Ensure T11 and AO always exist in the dropdown
     const existingIds = allCenters.map(c => c.id.toLowerCase());
     if (!existingIds.includes('t11')) {
         allCenters.push({ id: 't11', name: 'Kumon T11' });
@@ -344,10 +353,21 @@ function getSortedEmployees() {
         const termsA = a.terms === 'Full-time' ? 0 : 1;
         const termsB = b.terms === 'Full-time' ? 0 : 1;
         if (termsA !== termsB) return termsA - termsB;
-        const roleA = ROLE_ORDER.indexOf(a.position);
-        const roleB = ROLE_ORDER.indexOf(b.position);
-        const rA = roleA === -1 ? 99 : roleA;
-        const rB = roleB === -1 ? 99 : roleB;
+        
+        // 🆕 Find the highest priority role for sorting
+        const getHighestRoleIndex = (emp) => {
+            const positions = getEmpPositions(emp);
+            let minIndex = 99;
+            positions.forEach(p => {
+                const idx = ROLE_ORDER.indexOf(p);
+                if (idx !== -1 && idx < minIndex) minIndex = idx;
+            });
+            return minIndex;
+        };
+
+        const rA = getHighestRoleIndex(a);
+        const rB = getHighestRoleIndex(b);
+        
         if (rA !== rB) return rA - rB;
         return (a.englishName || '').localeCompare(b.englishName || '');
     });
@@ -417,7 +437,7 @@ function renderAdminBody(dates) {
         tr.innerHTML = `<td class="employee-name-cell">
             ${emp.englishName || 'Unknown'}
             <span class="emp-terms ${termsClass}">${termsLabel}</span>
-            <span class="emp-role">${emp.position || ''}</span>
+            <span class="emp-role">${getEmpPositions(emp).join(', ') || ''}</span>
         </td>`;
         dates.forEach(dateStr => {
             const td = document.createElement('td');
@@ -565,7 +585,7 @@ function renderEmployeeView() {
         sorted.forEach(emp => {
             const opt = document.createElement('option');
             opt.value = emp.uid;
-            opt.textContent = `${emp.englishName} (${emp.position})`;
+            opt.textContent = `${emp.englishName} (${getEmpPositions(emp).join(', ')})`;
             dropdown.appendChild(opt);
         });
         if (!currentVal && employees[currentUser.uid]) {
@@ -623,7 +643,7 @@ function renderEmployeeBody(dates, empId) {
     let hasAnySchedule = false;
     const tr = document.createElement('tr');
     const emp = employees[empId];
-    const empLabel = emp ? `${emp.englishName} — ${emp.position}` : 'Schedule';
+    const empLabel = emp ? `${emp.englishName} — ${getEmpPositions(emp).join(', ')}` : 'Schedule';
     tr.innerHTML = `<td class="employee-name-cell">${empLabel}</td>`;
     dates.forEach(dateStr => {
         const td = document.createElement('td');
@@ -689,18 +709,31 @@ function renderSubjectBody(dates) {
 
     const sorted = getSortedEmployees();
     const subjectGroups = {};
-    const subjectOrder = ['English Teacher', 'Math Teacher', 'Chinese Teacher'];
+    const subjectOrder = ['English Teacher', 'Math Teacher', 'Chinese Teacher', 'Tutorial Teacher'];
+    const adminRoles = ['Admin', 'Manager', 'Master Admin', 'Custodian'];
     const otherTeachers = [];
+    const addedEmpIds = new Set();
 
+    // 🆕 Group employees by their teaching subjects
     sorted.forEach(emp => {
-        const pos = emp.position || '';
-        if (SUBJECT_CONFIG[pos]) {
-            if (!subjectGroups[pos]) subjectGroups[pos] = [];
-            subjectGroups[pos].push(emp);
-        } else if (pos === 'Admin' || pos === 'Manager') {
-            // Skip
-        } else {
-            otherTeachers.push(emp);
+        const positions = getEmpPositions(emp);
+        let matchedSubject = false;
+        
+        for (const subj of subjectOrder) {
+            if (positions.includes(subj)) {
+                if (!subjectGroups[subj]) subjectGroups[subj] = [];
+                subjectGroups[subj].push(emp);
+                matchedSubject = true;
+                addedEmpIds.add(emp.uid);
+            }
+        }
+        
+        if (!matchedSubject && !addedEmpIds.has(emp.uid)) {
+            const hasAdminRole = positions.some(p => adminRoles.includes(p));
+            if (!hasAdminRole) {
+                otherTeachers.push(emp);
+                addedEmpIds.add(emp.uid);
+            }
         }
     });
 
@@ -753,7 +786,7 @@ function renderSubjectBody(dates) {
             tr.innerHTML = `<td class="employee-name-cell">
                 ${emp.englishName || 'Unknown'}
                 <span class="emp-terms ${termsClass}">${termsLabel}</span>
-                <span class="emp-role">${emp.position || ''}</span>
+                <span class="emp-role">${getEmpPositions(emp).join(', ') || ''}</span>
             </td>`;
 
             dates.forEach(dateStr => {
@@ -809,16 +842,30 @@ function printSubjectSchedule() {
 
     const sorted = getSortedEmployees();
     const subjectGroups = {};
-    const subjectOrder = ['English Teacher', 'Math Teacher', 'Chinese Teacher'];
+    const subjectOrder = ['English Teacher', 'Math Teacher', 'Chinese Teacher', 'Tutorial Teacher'];
+    const adminRoles = ['Admin', 'Manager', 'Master Admin', 'Custodian'];
     const otherTeachers = [];
+    const addedEmpIds = new Set();
 
     sorted.forEach(emp => {
-        const pos = emp.position || '';
-        if (SUBJECT_CONFIG[pos]) {
-            if (!subjectGroups[pos]) subjectGroups[pos] = [];
-            subjectGroups[pos].push(emp);
-        } else if (pos !== 'Admin' && pos !== 'Manager') {
-            otherTeachers.push(emp);
+        const positions = getEmpPositions(emp);
+        let matchedSubject = false;
+        
+        for (const subj of subjectOrder) {
+            if (positions.includes(subj)) {
+                if (!subjectGroups[subj]) subjectGroups[subj] = [];
+                subjectGroups[subj].push(emp);
+                matchedSubject = true;
+                addedEmpIds.add(emp.uid);
+            }
+        }
+        
+        if (!matchedSubject && !addedEmpIds.has(emp.uid)) {
+            const hasAdminRole = positions.some(p => adminRoles.includes(p));
+            if (!hasAdminRole) {
+                otherTeachers.push(emp);
+                addedEmpIds.add(emp.uid);
+            }
         }
     });
 
@@ -885,7 +932,7 @@ function printSubjectSchedule() {
                 <td class="employee-col">
                     ${emp.englishName || 'Unknown'}
                     <span class="terms-tag ${termsCls}">${termsLbl}</span>
-                    <span class="role-tag">${emp.position || ''}</span>
+                    <span class="role-tag">${getEmpPositions(emp).join(', ') || ''}</span>
                 </td>`;
 
             dates.forEach(dateStr => {
@@ -1517,7 +1564,7 @@ function renderCenterBody(dates) {
         tr.innerHTML = `<td class="employee-name-cell">
             ${emp.englishName || 'Unknown'}
             <span class="emp-terms ${termsClass}">${termsLabel}</span>
-            <span class="emp-role">${emp.position || ''}</span>
+            <span class="emp-role">${getEmpPositions(emp).join(', ') || ''}</span>
         </td>`;
         dates.forEach((dateStr, idx) => {
             const td = document.createElement('td');
@@ -1715,7 +1762,7 @@ function printCenterSchedule() {
             <td class="employee-col">
                 ${emp.englishName || 'Unknown'}
                 <span class="terms-tag ${termsCls}">${termsLbl}</span>
-                <span class="role-tag">${emp.position || ''}</span>
+                <span class="role-tag">${getEmpPositions(emp).join(', ') || ''}</span>
             </td>`;
         dates.forEach((dateStr, idx) => {
             const dateObj = parseDate(dateStr);

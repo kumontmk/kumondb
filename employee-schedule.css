@@ -463,3 +463,6 @@ textarea { width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1; border-radiu
     .print-legend-color { width: 10px; height: 10px; border-radius: 2px; display: inline-block; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; border: 1px solid #ccc; }
     .print-schedule-table, .print-schedule-table tr, .print-subject-table, .print-subject-table tr { page-break-inside: avoid; }
 }
+/* 🆕 Tutorial Teacher Divider Colors */
+.subject-view-table tr.subject-divider.tutorial-divider td { background: linear-gradient(135deg, #8e44ad, #9b59b6); }
+.print-subject-table tr.print-subject-divider.tutorial td { background: #8e44ad !important; }

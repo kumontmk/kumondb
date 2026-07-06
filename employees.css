@@ -451,3 +451,58 @@ tr.disabled-row td:first-child {
   color: white;
   border-color: #4682B4;
 }
+
+/* ============================================
+✅ POSITIONS CHECKBOX GROUP STYLING
+============================================ */
+.checkbox-group {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr); /* 2 columns on desktop */
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.checkbox-group label {
+  display: flex !important;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem !important;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.9rem !important;
+  font-weight: 500 !important;
+  color: #333;
+  margin: 0 !important;
+}
+
+.checkbox-group label:hover {
+  background: #e8f0fe;
+  border-color: #4682B4;
+}
+
+.checkbox-group input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #4682B4; /* Matches your primary dark blue theme */
+  margin: 0 !important;
+}
+
+/* Make the wrapper span across the entire form grid width */
+.form-grid > div:has(.checkbox-group) {
+  grid-column: 1 / -1;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 600px) {
+  .checkbox-group {
+    grid-template-columns: 1fr; /* 1 column on mobile */
+  }
+}
