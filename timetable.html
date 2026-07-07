@@ -7,33 +7,48 @@
     <link rel="stylesheet" href="timetable.css">
 </head>
 <body>
-    <!-- 🔐 ACCESS DENIED OVERLAY -->
+    <!-- Page Loader -->
+    <div id="page-loader">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Access Denied -->
     <div id="accessDenied" class="access-denied hidden">
         <div class="access-denied-content">
             <h2>🔐 Access Restricted</h2>
             <p>You do not have permission to view the Timetable.</p>
-            <button id="backToDashboardBtn" class="primary" style="margin-top:1rem">← Back to Dashboard</button>
+            <button id="backToDashboardBtn" class="primary">← Back to Dashboard</button>
         </div>
     </div>
 
-    <div id="page-loader" class="hidden">
-        <div class="spinner"></div>
-    </div>
+    <!-- Header -->
+    <header>
+        <nav>
+            <a href="dashboard.html">← Dashboard</a>
+        </nav>
+        <h1>📅 Class Timetable</h1>
+    </header>
 
-    <!-- ✅ MAIN CONTENT WRAPPER -->
-    <div id="mainContent" class="hidden">
+    <!-- Main Content -->
+    <div id="mainContent" class="main-content hidden">
+        
+        <!-- Global Controls (Only Print Button now) -->
+        <div class="timetable-controls">
+            <button id="printTimetable" class="print-btn">🖨️ Print Timetable</button>
+        </div>
 
-        <header>
-            <nav>
-                <a href="dashboard.html">← Dashboard</a>
-            </nav>
-            <h1>📅 Class Timetable</h1>
-        </header>
+        <!-- Tab Navigation -->
+        <div class="tab-navigation">
+            <button class="tab-btn active" data-tab="dayView">Day View</button>
+            <button class="tab-btn" data-tab="weekView">Whole Week View</button>
+        </div>
 
-        <div class="main-content">
-            <div class="timetable-controls">
+        <!-- Day View Container -->
+        <div id="dayViewContainer" class="tab-content active">
+            <!-- ✅ Day Selection moved here so it only shows in Day View -->
+            <div class="day-view-controls">
                 <div class="control-group">
-                    <label class="control-label">Select Day</label>
+                    <label class="control-label" for="timetableDay">Select Day</label>
                     <select id="timetableDay" class="day-select">
                         <option value="Monday">Monday</option>
                         <option value="Tuesday">Tuesday</option>
@@ -44,37 +59,26 @@
                         <option value="Sunday">Sunday</option>
                     </select>
                 </div>
-                <button id="printTimetable" class="print-btn">
-                    <span class="print-icon">🖨️</span>
-                    <span class="print-text">Print Timetable</span>
-                </button>
             </div>
 
             <div class="timetable-wrapper">
                 <table id="timetableTable">
-                    <!-- ✅ COLGROUP: This is the magic fix for column widths -->
                     <colgroup>
                         <col class="col-time">
-                        <!-- Math Low -->
                         <col class="col-grade"><col class="col-name"><col class="col-level">
-                        <!-- Math High -->
                         <col class="col-grade"><col class="col-name"><col class="col-level">
-                        <!-- English -->
                         <col class="col-grade"><col class="col-name"><col class="col-level">
-                        <!-- Chinese -->
                         <col class="col-grade"><col class="col-name"><col class="col-level">
                     </colgroup>
-                    
                     <thead>
                         <tr>
-                            <th>Time</th>
+                            <th rowspan="2">Time</th>
                             <th colspan="3" class="th-math">Math (6A–E)</th>
                             <th colspan="3" class="th-math">Math (F+)</th>
                             <th colspan="3" class="th-english">English</th>
                             <th colspan="3" class="th-chinese">Chinese</th>
                         </tr>
                         <tr>
-                            <th></th>
                             <th>Gr</th><th>Name</th><th>Lvl</th>
                             <th>Gr</th><th>Name</th><th>Lvl</th>
                             <th>Gr</th><th>Name</th><th>Lvl</th>
@@ -82,12 +86,40 @@
                         </tr>
                     </thead>
                     <tbody id="timetableBody">
-                        <tr><td colspan="13" class="hint" style="text-align:center;">Loading timetable...</td></tr>
+                        <tr>
+                            <td colspan="13" style="text-align:center; padding:2rem;">Loading timetable...</td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
         </div>
 
+        <!-- Week View Container -->
+        <div id="weekViewContainer" class="tab-content">
+            <div class="week-view-info">
+                <span id="weekRangeLabel" class="week-range-label"></span>
+            </div>
+            <div class="timetable-wrapper">
+                <table id="weekTimetableTable">
+                    <colgroup>
+                        <col class="col-time">
+                        <col class="col-weekday" span="7">
+                    </colgroup>
+                    <thead>
+                        <tr id="weekDateRow">
+                            <th rowspan="2" class="th-time">Time</th>
+                        </tr>
+                        <tr id="weekDayRow">
+                        </tr>
+                    </thead>
+                    <tbody id="weekTimetableBody">
+                        <tr>
+                            <td colspan="8" style="text-align:center; padding:2rem;">Select "Whole Week View" tab to load.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
     <script type="module" src="timetable.js"></script>
