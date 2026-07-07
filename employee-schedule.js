@@ -18,8 +18,8 @@ const CENTER_CLOSED_DAYS = {
     'pac tat': [0, 6],
     'champs': [0],
     'tap siac': [2],
-    't11': [0],
-    'ao': [0]
+    't11': [],
+    'ao': []
 };
 
 const SUBJECT_CONFIG = {
