@@ -911,6 +911,7 @@ function initApp() {
         renderSchedule();
         updateSubjectEntry(entry); 
         updateCurrentLevelsSummary();
+        renderTeachersTab();
     }
 
     /* ============================================
@@ -999,6 +1000,13 @@ function initApp() {
             if (select.value === 'Other' && other) return other.value?.trim() || '';
             return select.value?.trim() || '';
         };
+        const assignedTeachers = {};
+        document.querySelectorAll('.teacher-checkbox:checked').forEach(cb => {
+            const subj = cb.dataset.subject;
+            const uid = cb.dataset.uid;
+            if (!assignedTeachers[subj]) assignedTeachers[subj] = [];
+            assignedTeachers[subj].push(uid);
+        });
         return {
             gender: document.getElementById('gender')?.value || '',
             studentNumber: document.getElementById('studentNumber')?.value?.trim() || '',
@@ -1023,7 +1031,8 @@ function initApp() {
             worksheetType: document.getElementById('worksheetType')?.value || 'Paper',
             kcNo: document.getElementById('kcNo')?.value?.trim() || '',
             subjects,
-            diagnosticTests
+            diagnosticTests,
+            assignedTeachers 
         };
     }
 
@@ -1272,6 +1281,7 @@ function initApp() {
             removeSubjectBtn.onclick = () => {
                 div.remove();
                 subjectCount--;
+                renderTeachersTab();
                 updateOverallStatus();
                 renderSchedule();
                 updateCurrentLevelsSummary();
@@ -1289,6 +1299,7 @@ function initApp() {
                 validateConflict(e.target);
                 renderSchedule();
                 updateSubjectEntry(div);
+                renderTeachersTab();
                 updateCurrentLevelsSummary();
                 document.querySelectorAll('.subject-entry').forEach(entry => {
                     const select = entry.querySelector('.subject-name');
@@ -1532,6 +1543,7 @@ function initApp() {
                 if (typeof togglePO === 'function') togglePO();
                 updateOverallStatus();
                 updateCurrentLevelsSummary();
+                renderTeachersTab(); // Populate checkboxes with saved data
                 originalFormData = collectFormData();
             } else {
                 showError('Student not found in database.');
@@ -1891,7 +1903,154 @@ function initApp() {
         prModal.classList.add('hidden');
     });
 
-    if (isEdit) loadStudentData(); else { addSubjectField(); hideLoader(); }
+// ==========================================
+// 👩‍🏫 TEACHERS TAB LOGIC
+// ==========================================
+const SUBJECT_TO_POSITION = {
+    'Math': 'Math Teacher',
+    'Chinese (Trad)': 'Chinese Teacher',
+    'Chinese (Simp)': 'Chinese Teacher',
+    'English ERP': 'English Teacher',
+    'English EFL': 'English Teacher'
+};
+
+let allTeachersCache = [];
+
+async function fetchTeachers() {
+    try {
+        const snap = await get(ref(db, 'employees'));
+        if (snap.exists()) {
+            allTeachersCache = Object.entries(snap.val()).map(([uid, data]) => ({
+                uid,
+                name: data.englishName || data.chineseName || 'Unknown',
+                positions: data.positions || (data.position ? [data.position] : []),
+                isDisabled: data.isDisabled
+            })).filter(t => !t.isDisabled); // Only show active teachers
+        }
+    } catch (err) {
+        console.error("Error fetching teachers:", err);
+    }
+}
+
+function setupTeachersTab() {
+    // 1. Inject Tab Button
+    const tabsContainer = document.querySelector('.tabs');
+    if (tabsContainer && !document.getElementById('tab-teachers-btn')) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'tab-btn';
+        btn.dataset.tab = 'teachers';
+        btn.id = 'tab-teachers-btn';
+        btn.textContent = '👩‍ Teachers';
+        tabsContainer.appendChild(btn);
+
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('tab-teachers').classList.add('active');
+        });
+    }
+
+    // 2. Inject Tab Content - Insert BEFORE the form action buttons
+    const formContainer = document.querySelector('.form-container');
+    if (formContainer && !document.getElementById('tab-teachers')) {
+        const contentDiv = document.createElement('div');
+        contentDiv.id = 'tab-teachers';
+        contentDiv.className = 'tab-content';
+        contentDiv.innerHTML = `
+            <h3 style="color: var(--primary-dark); margin-bottom: 1rem;">Assign Teachers</h3>
+            <p class="hint" style="margin-bottom: 1rem;">Tick the boxes to assign teachers to this student based on their enrolled subjects.</p>
+            <div id="teachers-list-container" style="display: flex; flex-direction: column; gap: 1.5rem;"></div>
+        `;
+        
+        // Find the action buttons container and insert before it
+        const actionButtons = document.querySelector('.form-actions') || 
+                              document.querySelector('button[type="submit"]')?.parentElement ||
+                              document.getElementById('studentForm');
+        
+        if (actionButtons) {
+            actionButtons.parentNode.insertBefore(contentDiv, actionButtons);
+        } else {
+            formContainer.appendChild(contentDiv);
+        }
+    }
+}
+
+function renderTeachersTab() {
+    const container = document.getElementById('teachers-list-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const currentSubjects = new Set();
+    document.querySelectorAll('.subject-entry').forEach(entry => {
+        const subj = entry.querySelector('.subject-name')?.value;
+        const status = entry.querySelector('.status')?.value;
+        if (subj && status !== 'drop') currentSubjects.add(subj);
+    });
+
+    if (currentSubjects.size === 0) {
+        container.innerHTML = '<p class="hint">Add subjects in the "Subjects" tab to assign teachers.</p>';
+        return;
+    }
+
+    const assignedTeachers = currentStudentData?.assignedTeachers || {};
+
+    currentSubjects.forEach(subj => {
+        const reqPosition = SUBJECT_TO_POSITION[subj];
+        if (!reqPosition) return;
+
+        const teachersForSubj = allTeachersCache.filter(t => t.positions.includes(reqPosition));
+
+        const section = document.createElement('div');
+        section.innerHTML = `<h4>${subj}</h4>`;
+
+        if (teachersForSubj.length === 0) {
+            section.innerHTML += '<p class="hint" style="margin:0;">No active teachers found for this subject.</p>';
+        } else {
+            const grid = document.createElement('div');
+            grid.className = 'teacher-grid';
+
+            teachersForSubj.forEach(t => {
+                const isChecked = assignedTeachers[subj]?.includes(t.uid);
+                const label = document.createElement('label');
+                label.className = `teacher-checkbox-label ${isChecked ? 'checked' : ''}`;
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = isChecked;
+                checkbox.dataset.subject = subj;
+                checkbox.dataset.uid = t.uid;
+                checkbox.className = 'teacher-checkbox';
+                
+                checkbox.addEventListener('change', () => {
+                    label.classList.toggle('checked', checkbox.checked);
+                });
+
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'teacher-name';
+                nameSpan.textContent = t.name;
+
+                label.appendChild(checkbox);
+                label.appendChild(nameSpan);
+                grid.appendChild(label);
+            });
+            section.appendChild(grid);
+        }
+        container.appendChild(section);
+    });
+}   
+
+setupTeachersTab();
+fetchTeachers().then(() => {
+    if (isEdit) loadStudentData(); 
+    else { 
+        addSubjectField(); 
+        renderTeachersTab(); // Render for new students
+        hideLoader(); 
+    }
+});
      
     document.getElementById('logoutBtn')?.addEventListener('click', logout);
 }   

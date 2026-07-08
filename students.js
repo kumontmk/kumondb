@@ -646,6 +646,19 @@ function initializePage(isAdmin = false) {
     );
   }
 
+  async function exportByTeacher(teacherUid) {
+  await exportFilteredStudents(
+    s => {
+      if (!s.assignedTeachers) return false;
+      // Check if the teacher's UID exists in any of the subject arrays
+      return Object.values(s.assignedTeachers).some(teachers => 
+        Array.isArray(teachers) && teachers.includes(teacherUid)
+      );
+    },
+    `Teacher_${teacherUid}`
+  );
+}
+
   async function exportNamesOnlyGrid() {
     const loader = document.getElementById('page-loader');
     loader?.classList.remove('hidden');
@@ -721,27 +734,53 @@ function initializePage(isAdmin = false) {
   // ==========================================
   // 🔌 EXPORT MODAL EVENT LISTENERS
   // ==========================================
-  async function openExportModal() {
-    const modal = document.getElementById('exportModal');
-    modal?.classList.remove('hidden');
-    
-    const students = await fetchAllStudents();
-    
-    const schools = [...new Set(students.map(s => s.school).filter(Boolean))].sort();
-    const grades = [...new Set(students.map(s => s.grade).filter(Boolean))].sort();
-    
-    const schoolSelect = document.getElementById('exportSchoolSelect');
-    if (schoolSelect) {
-      schoolSelect.innerHTML = '<option value="">Select School...</option>' + 
-        schools.map(s => `<option value="${s}">${s}</option>`).join('');
-    }
-    
-    const gradeSelect = document.getElementById('exportGradeSelect');
-    if (gradeSelect) {
-      gradeSelect.innerHTML = '<option value="">Select Grade...</option>' + 
-        grades.map(g => `<option value="${g}">${g}</option>`).join('');
+async function openExportModal() {
+  const modal = document.getElementById('exportModal');
+  modal?.classList.remove('hidden');
+  const students = await fetchAllStudents();
+  const schools = [...new Set(students.map(s => s.school).filter(Boolean))].sort();
+  const grades = [...new Set(students.map(s => s.grade).filter(Boolean))].sort();
+  
+  const schoolSelect = document.getElementById('exportSchoolSelect');
+  if (schoolSelect) {
+    schoolSelect.innerHTML = '<option value="">Select School...</option>' + 
+      schools.map(s => `<option value="${s}">${s}</option>`).join('');
+  }
+  
+  const gradeSelect = document.getElementById('exportGradeSelect');
+  if (gradeSelect) {
+    gradeSelect.innerHTML = '<option value="">Select Grade...</option>' + 
+      grades.map(g => `<option value="${g}">${g}</option>`).join('');
+  }
+
+  // 🆕 Fetch and populate teachers
+  const teacherSelect = document.getElementById('exportTeacherSelect');
+  if (teacherSelect) {
+    teacherSelect.innerHTML = '<option value="">Loading teachers...</option>';
+    try {
+      const empSnap = await get(ref(db, 'employees'));
+      if (empSnap.exists()) {
+        const emps = empSnap.val();
+        const teachingPositions = ['Math Teacher', 'English Teacher', 'Chinese Teacher', 'Tutorial Teacher'];
+        const teachers = Object.entries(emps)
+          .filter(([_, emp]) => {
+            const positions = Array.isArray(emp.positions) ? emp.positions : (emp.position ? [emp.position] : []);
+            return positions.some(p => teachingPositions.includes(p)) && !emp.isDisabled;
+          })
+          .map(([uid, emp]) => ({ uid, name: emp.englishName || emp.chineseName || 'Unknown' }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        
+        teacherSelect.innerHTML = '<option value="">Select Teacher...</option>' + 
+          teachers.map(t => `<option value="${t.uid}">${t.name}</option>`).join('');
+      } else {
+        teacherSelect.innerHTML = '<option value="">No teachers found</option>';
+      }
+    } catch (err) {
+      console.error("Error loading teachers for export:", err);
+      teacherSelect.innerHTML = '<option value="">Error loading teachers</option>';
     }
   }
+}
 
   document.getElementById('exportBtn')?.addEventListener('click', openExportModal);
 
@@ -778,6 +817,13 @@ function initializePage(isAdmin = false) {
     if (!grade) return alert('Please select a grade.');
     document.getElementById('exportModal')?.classList.add('hidden');
     await exportByFilter('grade', grade);
+  });
+
+  document.getElementById('exportTeacherBtn')?.addEventListener('click', async () => {
+  const teacherUid = document.getElementById('exportTeacherSelect').value;
+  if (!teacherUid) return alert('Please select a teacher.');
+  document.getElementById('exportModal')?.classList.add('hidden');
+  await exportByTeacher(teacherUid);
   });
 
   // ==========================================
