@@ -59,6 +59,8 @@ let selectedCenterForView = '';
 
 let subjectViewDate = getMonday(new Date());
 let selectedSubjectFilter = 'all';
+let centerGroupBySubject = false; 
+let isSaving = false; // ✅ Added to prevent double-clicks
 
 // ============================================
 // INITIALIZATION
@@ -462,6 +464,12 @@ function renderAdminBody(dates) {
     });
 }
 
+// ✅ Added helper to check if shifts have valid times
+function hasValidShifts(shifts) {
+    if (!shifts || shifts.length === 0) return false;
+    return shifts.some(s => s.start && s.end && s.start !== '--:--' && s.end !== '--:--');
+}
+
 function renderMergedScheduleCell(td, sched, empId, dateStr) {
     const status = sched.status || 'scheduled';
     if (status !== 'scheduled') {
@@ -479,8 +487,17 @@ function renderMergedScheduleCell(td, sched, empId, dateStr) {
         td.innerHTML = html;
         return;
     }
-    td.classList.add('has-schedule');
+    
     const shifts = sched._shifts || extractShifts(sched);
+    
+    // ✅ FIX: Check if shifts are valid before marking as has-schedule (prevents empty green cells)
+    if (!hasValidShifts(shifts)) {
+        td.classList.add('empty-cell');
+        td.innerHTML = '<div class="cell-content">—</div>';
+        return;
+    }
+    
+    td.classList.add('has-schedule');
     const centersUsed = [...new Set(shifts.filter(s => s.center).map(s => s.center))];
     const isMultiCenter = centersUsed.length > 1;
     if (isMultiCenter) {
@@ -798,7 +815,7 @@ function renderSubjectBody(dates) {
                 if (sched) {
                     renderMergedScheduleCell(td, sched, emp.uid, dateStr);
                     const shifts = sched._shifts || extractShifts(sched);
-                    if (shifts.length > 0 && (sched.status || 'scheduled') === 'scheduled') {
+                    if (hasValidShifts(shifts) && (sched.status || 'scheduled') === 'scheduled') {
                         dailyCounts[dateStr]++;
                     }
                 } else if (tmpl) {
@@ -807,7 +824,7 @@ function renderSubjectBody(dates) {
                     renderMergedScheduleCell(td, tmpl, emp.uid, dateStr);
                     td.title = 'Recurring pattern (click to override)';
                     const tmplShifts = tmpl._shifts || extractShifts(tmpl);
-                    if (tmplShifts.length > 0 && (tmpl.status || 'scheduled') === 'scheduled') {
+                    if (hasValidShifts(tmplShifts) && (tmpl.status || 'scheduled') === 'scheduled') {
                         dailyCounts[dateStr]++;
                     }
                 } else {
@@ -955,7 +972,7 @@ function printSubjectSchedule() {
                 }
 
                 let cellContent = '';
-                if (shifts.length > 0 || status !== 'scheduled') {
+                if (hasValidShifts(shifts) || status !== 'scheduled') {
                     if (status !== 'scheduled') {
                         const statusLabels = { 'other-center': '📍 Other', 'leave': '🏖 Leave', 'sick': '🤒 Sick', 'off': '😴 Off' };
                         const statusCls = status === 'leave' ? 'leave' : status === 'sick' ? 'sick' : status === 'off' ? 'off' : 'other';
@@ -1184,90 +1201,174 @@ document.addEventListener('change', (e) => {
     }
 });
 
-async function saveSchedule() {
-    if (!editingEmpId || !editingDate) return;
-    const status = document.getElementById('scheduleStatus').value;
-    const notes = document.getElementById('scheduleNotes').value.trim();
-    const shiftItems = document.querySelectorAll('#shiftsContainer .shift-item');
-    const shifts = [];
-    shiftItems.forEach(item => {
-        const type = item.querySelector('.shift-type').value;
-        const start = item.querySelector('.shift-start').value;
-        const end = item.querySelector('.shift-end').value;
-        const center = type === 'work' ? item.querySelector('.shift-center').value : null;
-        if (start && end) {
-            shifts.push({ type, start, end, center });
+// ✅ Added helper to update modal loading state
+function updateModalLoadingState(loading) {
+    const saveBtn = document.getElementById('saveScheduleBtn');
+    const clearBtn = document.getElementById('clearDayBtn');
+    const cancelBtn = document.getElementById('cancelModalBtn');
+    const modalFooter = document.querySelector('.modal-footer-right');
+    
+    if (loading) {
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<span class="spinner-small"></span> Saving...';
         }
-    });
-    const data = {
-        status,
-        shifts,
-        notes,
-        updatedAt: new Date().toISOString(),
-        updatedBy: currentUser.uid
-    };
-    const errors = validateSchedule(data, editingDate);
-    if (errors.length > 0) {
-        document.getElementById('modalWarnings').innerHTML =
-            errors.map(e => `<div class="error-box">❌ ${e}</div>`).join('');
-        return;
+        if (clearBtn) clearBtn.disabled = true;
+        if (cancelBtn) cancelBtn.disabled = true;
+        if (modalFooter) modalFooter.style.opacity = '0.7';
+    } else {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = 'Save';
+        }
+        if (clearBtn) clearBtn.disabled = false;
+        if (cancelBtn) cancelBtn.disabled = false;
+        if (modalFooter) modalFooter.style.opacity = '1';
     }
-    let targetCenter = null;
-    const workShifts = shifts.filter(s => s.type === 'work' && s.center);
-    if (workShifts.length > 0) {
-        targetCenter = workShifts[0].center;
-    }
-    if (!targetCenter) {
-        targetCenter = editingSourceCenter;
-    }
-    if (!targetCenter) {
-        if (allCenters.length > 0) {
-            targetCenter = allCenters[0].id;
-        } else {
-            alert('❌ No centers available to save schedule.');
+}
+
+async function saveSchedule() {
+    if (isSaving || !editingEmpId || !editingDate) return;
+    
+    isSaving = true;
+    updateModalLoadingState(true);
+    
+    try {
+        const status = document.getElementById('scheduleStatus').value;
+        const notes = document.getElementById('scheduleNotes').value.trim();
+        const shiftItems = document.querySelectorAll('#shiftsContainer .shift-item');
+        const shifts = [];
+        
+        // ✅ Only collect shifts that have valid start and end times
+        shiftItems.forEach(item => {
+            const type = item.querySelector('.shift-type').value;
+            const start = item.querySelector('.shift-start').value;
+            const end = item.querySelector('.shift-end').value;
+            const center = type === 'work' ? item.querySelector('.shift-center').value : null;
+            
+            // ✅ FIX: Only add shifts with valid times (not empty)
+            if (start && end && start !== '' && end !== '') {
+                shifts.push({ type, start, end, center });
+            }
+        });
+        
+        const data = {
+            status,
+            shifts,
+            notes,
+            updatedAt: new Date().toISOString(),
+            updatedBy: currentUser.uid
+        };
+        
+        const errors = validateSchedule(data, editingDate);
+        if (errors.length > 0) {
+            document.getElementById('modalWarnings').innerHTML =
+                errors.map(e => `<div class="error-box">❌ ${e}</div>`).join('');
+            isSaving = false;
+            updateModalLoadingState(false);
             return;
         }
-    }
-    const overlapError = await checkOverlaps(editingEmpId, editingDate, data, targetCenter);
-    if (overlapError) {
-        document.getElementById('modalWarnings').innerHTML =
-            `<div class="error-box">❌ ${overlapError}</div>`;
-        return;
-    }
-    try {
+        
+        let targetCenter = null;
+        const workShifts = shifts.filter(s => s.type === 'work' && s.center);
+        if (workShifts.length > 0) {
+            targetCenter = workShifts[0].center;
+        }
+        if (!targetCenter) {
+            targetCenter = editingSourceCenter;
+        }
+        if (!targetCenter) {
+            if (allCenters.length > 0) {
+                targetCenter = allCenters[0].id;
+            } else {
+                alert('❌ No centers available to save schedule.');
+                isSaving = false;
+                updateModalLoadingState(false);
+                return;
+            }
+        }
+        
+        const overlapError = await checkOverlaps(editingEmpId, editingDate, data, targetCenter);
+        if (overlapError) {
+            document.getElementById('modalWarnings').innerHTML =
+                `<div class="error-box">❌ ${overlapError}</div>`;
+            isSaving = false;
+            updateModalLoadingState(false);
+            return;
+        }
+        
+        // ✅ Remove old schedule first if source center is different
         if (editingSourceCenter && editingSourceCenter !== targetCenter) {
             await remove(ref(db, `schedules/${editingSourceCenter}/${editingEmpId}/${editingDate}`));
         }
+        
+        // ✅ FIX: Always save the schedule data, even if shifts is empty.
+        // This ensures it overrides any existing template and renders as an empty cell.
         await set(ref(db, `schedules/${targetCenter}/${editingEmpId}/${editingDate}`), data);
+        
+        // ✅ FIX: Handle recurring pattern - update OR clear template
         if (document.getElementById('saveAsPattern').checked) {
             const dateObj = parseDate(editingDate);
             const dow = dateObj.getDay();
             const templateData = { status, shifts, notes };
-            await set(ref(db, `scheduleTemplates/${editingEmpId}/${dow}`), templateData);
+            
+            // If there are valid shifts or status is not 'scheduled', save the template
+            // Otherwise, remove the template to clear the recurring pattern
+            if (shifts.length > 0 || status !== 'scheduled') {
+                await set(ref(db, `scheduleTemplates/${editingEmpId}/${dow}`), templateData);
+            } else {
+                await remove(ref(db, `scheduleTemplates/${editingEmpId}/${dow}`));
+            }
         }
+        
         await loadAllSchedules();
-        if (document.getElementById('saveAsPattern').checked) {
-            await loadAllTemplates();
-        }
+        await loadAllTemplates();
+        
         closeModal();
         renderAdminView();
         renderEmployeeView();
         renderCenterView();
         renderSubjectView();
+        
     } catch (err) {
         console.error('Save error:', err);
         alert('Failed to save schedule. Check console.');
+    } finally {
+        isSaving = false;
+        updateModalLoadingState(false);
     }
 }
 
 async function clearDay() {
-    if (!editingEmpId || !editingDate) return;
+    if (isSaving || !editingEmpId || !editingDate) return;
     if (!confirm('Clear the schedule for this day across ALL centers?')) return;
+    
+    isSaving = true;
+    updateModalLoadingState(true);
+    
     try {
+        const emptyData = {
+            status: 'scheduled',
+            shifts: [],
+            notes: '',
+            updatedAt: new Date().toISOString(),
+            updatedBy: currentUser.uid
+        };
+        
+        // ✅ FIX: Save an empty schedule to all centers to override any templates
         for (const center of allCenters) {
-            await remove(ref(db, `schedules/${center.id}/${editingEmpId}/${editingDate}`));
+            await set(ref(db, `schedules/${center.id}/${editingEmpId}/${editingDate}`), emptyData);
         }
+        
+        // ✅ FIX: Also clear the template for this day of week if "Save as Pattern" is checked
+        if (document.getElementById('saveAsPattern').checked) {
+            const dateObj = parseDate(editingDate);
+            const dow = dateObj.getDay();
+            await remove(ref(db, `scheduleTemplates/${editingEmpId}/${dow}`));
+        }
+        
         await loadAllSchedules();
+        await loadAllTemplates();
         closeModal();
         renderAdminView();
         renderEmployeeView();
@@ -1276,6 +1377,9 @@ async function clearDay() {
     } catch (err) {
         console.error('Clear error:', err);
         alert('Failed to clear.');
+    } finally {
+        isSaving = false;
+        updateModalLoadingState(false);
     }
 }
 
@@ -1439,6 +1543,11 @@ function setupCenterNav() {
         renderCenterView();
     });
     document.getElementById('printCenterBtn')?.addEventListener('click', printCenterSchedule);
+
+    document.getElementById('centerGroupBySubject')?.addEventListener('change', (e) => {
+        centerGroupBySubject = e.target.checked;
+        renderCenterView();
+    });
 }
 
 function get14Days(start) {
@@ -1497,6 +1606,212 @@ function renderCenterHeader(dates) {
     });
 }
 
+// ✅ ADD THESE HELPER FUNCTIONS
+function groupEmployeesBySubject(empList) {
+    const subjectGroups = {};
+    const subjectOrder = ['English Teacher', 'Math Teacher', 'Chinese Teacher', 'Tutorial Teacher'];
+    const adminRoles = ['Admin', 'Manager', 'Master Admin', 'Custodian'];
+    const otherTeachers = [];
+    const addedEmpIds = new Set();
+
+    empList.forEach(emp => {
+        const positions = getEmpPositions(emp);
+        let matchedSubject = false;
+        for (const subj of subjectOrder) {
+            if (positions.includes(subj)) {
+                if (!subjectGroups[subj]) subjectGroups[subj] = [];
+                subjectGroups[subj].push(emp);
+                matchedSubject = true;
+                addedEmpIds.add(emp.uid);
+            }
+        }
+        if (!matchedSubject && !addedEmpIds.has(emp.uid)) {
+            const hasAdminRole = positions.some(p => adminRoles.includes(p));
+            if (!hasAdminRole) {
+                otherTeachers.push(emp);
+                addedEmpIds.add(emp.uid);
+            }
+        }
+    });
+
+    const groupsToShow = [];
+    subjectOrder.forEach(subj => {
+        if (subjectGroups[subj] && subjectGroups[subj].length > 0) {
+            groupsToShow.push({ subject: subj, teachers: subjectGroups[subj] });
+        }
+    });
+    if (otherTeachers.length > 0) {
+        groupsToShow.push({ subject: 'Other', teachers: otherTeachers });
+    }
+    return groupsToShow;
+}
+
+function renderCenterEmployeeRow(emp, dates, tbody, dailyCounts, centerCalEvents, closedDays, today) {
+    const tr = document.createElement('tr');
+    const termsClass = emp.terms === 'Full-time' ? 'terms-full' : 'terms-part';
+    const termsLabel = emp.terms === 'Full-time' ? 'FT' : 'PT';
+    tr.innerHTML = `<td class="employee-name-cell">
+        ${emp.englishName || 'Unknown'}
+        <span class="emp-terms ${termsClass}">${termsLabel}</span>
+        <span class="emp-role">${getEmpPositions(emp).join(', ') || ''}</span>
+    </td>`;
+
+    dates.forEach((dateStr, idx) => {
+        const td = document.createElement('td');
+        td.className = 'schedule-cell';
+        if (idx === 7) td.classList.add('week-separator');
+        
+        const dateObj = parseDate(dateStr);
+        const dow = dateObj.getDay();
+        const event = centerCalEvents[dateStr];
+        const isHoliday = event && !event.muc;
+        const isClosed = closedDays.includes(dow) && !event;
+        const isToday = dateObj.getTime() === today.getTime();
+        
+        if (isToday) td.style.outline = '2px solid #27ae60';
+        
+        const sched = mergedSchedules[emp.uid]?.[dateStr];
+        const tmpl = templates[emp.uid]?.[dow];
+        
+        let shifts = [];
+        let status = 'scheduled';
+        let notes = '';
+        let isTemplate = false;
+        
+        if (sched) {
+            shifts = sched._shifts || extractShifts(sched);
+            status = sched.status || 'scheduled';
+            notes = sched.notes || '';
+        } else if (tmpl) {
+            shifts = tmpl._shifts || extractShifts(tmpl);
+            status = tmpl.status || 'scheduled';
+            notes = tmpl.notes || '';
+            isTemplate = true;
+        }
+        
+        let hasShiftToday = false;
+        if (hasValidShifts(shifts) || status !== 'scheduled') {
+            const centerShifts = shifts.filter(s => s.center === selectedCenterForView);
+            if (status !== 'scheduled') {
+                renderStatusCell(td, status, notes);
+                if (isTemplate) td.style.opacity = '0.5';
+            } else if (centerShifts.length > 0 && hasValidShifts(centerShifts)) {
+                hasShiftToday = true;
+                renderCenterShiftCell(td, centerShifts, isHoliday, event);
+                if (isTemplate) td.style.opacity = '0.5';
+            } else if (isClosed) {
+                td.classList.add('is-closed');
+                td.innerHTML = `<div class="cell-content"><span class="status-label">Closed</span></div>`;
+            } else if (isHoliday) {
+                td.classList.add('is-holiday');
+                td.innerHTML = `<div class="cell-content"><span class="status-label">${event.name || 'Holiday'}</span></div>`;
+            } else {
+                td.classList.add('empty-cell');
+                td.innerHTML = `<div class="cell-content">—</div>`;
+            }
+        } else {
+            if (isClosed) {
+                td.classList.add('is-closed');
+                td.innerHTML = `<div class="cell-content"><span class="status-label">Closed</span></div>`;
+            } else if (isHoliday) {
+                td.classList.add('is-holiday');
+                td.innerHTML = `<div class="cell-content"><span class="status-label">🎌 ${event.name || 'Holiday'}</span></div>`;
+            } else {
+                td.classList.add('empty-cell');
+                td.innerHTML = `<div class="cell-content">—</div>`;
+            }
+        }
+        
+        if (hasShiftToday) dailyCounts[dateStr]++;
+        td.addEventListener('click', () => openEditModal(emp.uid, dateStr));
+        tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+}
+
+function getCenterPrintRowHtml(emp, dates, selectedCenterForView, centerCalEvents, closedDays, today, dailyCounts) {
+    let html = '';
+    const termsCls = emp.terms === 'Full-time' ? 'ft' : 'pt';
+    const termsLbl = emp.terms === 'Full-time' ? 'FT' : 'PT';
+    html += `<tr>
+        <td class="employee-col">
+            ${emp.englishName || 'Unknown'}
+            <span class="terms-tag ${termsCls}">${termsLbl}</span>
+            <span class="role-tag">${getEmpPositions(emp).join(', ') || ''}</span>
+        </td>`;
+    
+    dates.forEach((dateStr, idx) => {
+        const dateObj = parseDate(dateStr);
+        const dow = dateObj.getDay();
+        const isWeekend = dow === 0 || dow === 6;
+        const isToday = dateObj.getTime() === today.getTime();
+        const event = centerCalEvents[dateStr];
+        const isHoliday = event && !event.muc;
+        const isClosed = closedDays.includes(dow) && !event;
+        const isWeek2 = idx === 7;
+        
+        let cellCls = '';
+        if (isWeek2) cellCls += ' week-sep';
+        if (isToday) cellCls += ' today-cell';
+        else if (isWeekend) cellCls += ' weekend-cell';
+        
+        const sched = mergedSchedules[emp.uid]?.[dateStr];
+        const tmpl = templates[emp.uid]?.[dow];
+        let shifts = [];
+        let status = 'scheduled';
+        let notes = '';
+        let isTemplate = false;
+        
+        if (sched) {
+            shifts = sched._shifts || extractShifts(sched);
+            status = sched.status || 'scheduled';
+            notes = sched.notes || '';
+        } else if (tmpl) {
+            shifts = tmpl._shifts || extractShifts(tmpl);
+            status = tmpl.status || 'scheduled';
+            notes = tmpl.notes || '';
+            isTemplate = true;
+        }
+        
+        let cellContent = '';
+        if (hasValidShifts(shifts) || status !== 'scheduled') {
+            const centerShifts = shifts.filter(s => s.center === selectedCenterForView);
+            if (status !== 'scheduled') {
+                const statusLabels = { 'other-center': '📍 Other', 'leave': '🏖 Leave', 'sick': '🤒 Sick', 'off': '😴 Off' };
+                const statusCls = status === 'leave' ? 'leave' : status === 'sick' ? 'sick' : status === 'off' ? 'off' : 'other';
+                cellContent = `<span class="print-status ${statusCls}">${statusLabels[status] || status}</span>`;
+            } else if (centerShifts.length > 0 && hasValidShifts(centerShifts)) {
+                dailyCounts[dateStr]++;
+                const sortedShifts = [...centerShifts].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+                sortedShifts.forEach(s => {
+                    if (s.type === 'break') {
+                        cellContent += `<div class="print-shift break-shift">☕ ${s.start}-${s.end}</div>`;
+                    } else {
+                        cellContent += `<div class="print-shift"><span class="time">${s.start}-${s.end}</span></div>`;
+                    }
+                });
+                if (isTemplate) {
+                    cellContent += `<div style="font-size:5pt;color:#888;font-style:italic;">(Pattern)</div>`;
+                }
+            } else if (isClosed) {
+                cellContent = `<span style="color:#999;font-size:6pt;">Closed</span>`;
+            } else if (isHoliday) {
+                cellContent = `<span style="color:#e74c3c;font-size:6pt;">🎌 ${event.name || ''}</span>`;
+            } else {
+                cellCls += ' empty-cell';
+                cellContent = '—';
+            }
+        } else {
+            if (isClosed) cellContent = `<span style="color:#999;font-size:6pt;">Closed</span>`;
+            else if (isHoliday) cellContent = `<span style="color:#e74c3c;font-size:6pt;">🎌 ${event.name || ''}</span>`;
+            else { cellCls += ' empty-cell'; cellContent = '—'; }
+        }
+        html += `<td class="${cellCls}">${cellContent}</td>`;
+    });
+    html += '</tr>';
+    return html;
+}
+
 function renderCenterBody(dates) {
     const tbody = document.getElementById('centerBody');
     const emptyState = document.getElementById('centerEmptyState');
@@ -1522,7 +1837,7 @@ function renderCenterBody(dates) {
                 currentShifts = tmpl._shifts || extractShifts(tmpl);
                 currentStatus = tmpl.status || 'scheduled';
             }
-            const hasCenterShift = currentShifts.some(s => s.center === selectedCenterForView);
+            const hasCenterShift = currentShifts.some(s => s.center === selectedCenterForView && hasValidShifts([s]));
             const isStatusHere = currentStatus !== 'scheduled' && sourceCenter === selectedCenterForView;
             if (hasCenterShift || isStatusHere) {
                 hasShiftHere = true;
@@ -1547,90 +1862,40 @@ function renderCenterBody(dates) {
     const closedDays = getClosedDaysForCenter(centerObj?.name || '');
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    let lastTerms = null;
+    
     const dailyCounts = {};
     dates.forEach(d => dailyCounts[d] = 0);
-    employeesWithShifts.forEach(emp => {
-        if (lastTerms !== null && emp.terms !== lastTerms) {
+
+    if (centerGroupBySubject) {
+        const groups = groupEmployeesBySubject(employeesWithShifts);
+        groups.forEach(group => {
+            const config = SUBJECT_CONFIG[group.subject] || { label: group.subject, icon: '👤', cls: 'other-divider', color: '#8e44ad' };
             const divRow = document.createElement('tr');
-            divRow.className = 'section-divider';
-            divRow.innerHTML = `<td colspan="${dates.length + 1}">— Part-Time Employees —</td>`;
+            divRow.className = `subject-divider ${config.cls}`;
+            divRow.innerHTML = `<td colspan="${dates.length + 1}">
+                <span class="subject-icon">${config.icon}</span> ${config.label}
+                <span class="subject-count">${group.teachers.length} teacher${group.teachers.length !== 1 ? 's' : ''}</span>
+            </td>`;
             tbody.appendChild(divRow);
-        }
-        lastTerms = emp.terms;
-        const tr = document.createElement('tr');
-        const termsClass = emp.terms === 'Full-time' ? 'terms-full' : 'terms-part';
-        const termsLabel = emp.terms === 'Full-time' ? 'FT' : 'PT';
-        tr.innerHTML = `<td class="employee-name-cell">
-            ${emp.englishName || 'Unknown'}
-            <span class="emp-terms ${termsClass}">${termsLabel}</span>
-            <span class="emp-role">${getEmpPositions(emp).join(', ') || ''}</span>
-        </td>`;
-        dates.forEach((dateStr, idx) => {
-            const td = document.createElement('td');
-            td.className = 'schedule-cell';
-            if (idx === 7) td.classList.add('week-separator');
-            const dateObj = parseDate(dateStr);
-            const dow = dateObj.getDay();
-            const event = centerCalEvents[dateStr];
-            const isHoliday = event && !event.muc;
-            const isClosed = closedDays.includes(dow) && !event;
-            const isToday = dateObj.getTime() === today.getTime();
-            if (isToday) td.style.outline = '2px solid #27ae60';
-            const sched = mergedSchedules[emp.uid]?.[dateStr];
-            const tmpl = templates[emp.uid]?.[dow];
-            let shifts = [];
-            let status = 'scheduled';
-            let notes = '';
-            let isTemplate = false;
-            if (sched) {
-                shifts = sched._shifts || extractShifts(sched);
-                status = sched.status || 'scheduled';
-                notes = sched.notes || '';
-            } else if (tmpl) {
-                shifts = tmpl._shifts || extractShifts(tmpl);
-                status = tmpl.status || 'scheduled';
-                notes = tmpl.notes || '';
-                isTemplate = true;
-            }
-            let hasShiftToday = false;
-            if (shifts.length > 0 || status !== 'scheduled') {
-                const centerShifts = shifts.filter(s => s.center === selectedCenterForView);
-                if (status !== 'scheduled') {
-                    renderStatusCell(td, status, notes);
-                    if (isTemplate) td.style.opacity = '0.5';
-                } else if (centerShifts.length > 0) {
-                    hasShiftToday = true;
-                    renderCenterShiftCell(td, centerShifts, isHoliday, event);
-                    if (isTemplate) td.style.opacity = '0.5';
-                } else if (isClosed) {
-                    td.classList.add('is-closed');
-                    td.innerHTML = `<div class="cell-content"><span class="status-label">Closed</span></div>`;
-                } else if (isHoliday) {
-                    td.classList.add('is-holiday');
-                    td.innerHTML = `<div class="cell-content"><span class="status-label"> ${event.name || 'Holiday'}</span></div>`;
-                } else {
-                    td.classList.add('empty-cell');
-                    td.innerHTML = `<div class="cell-content">—</div>`;
-                }
-            } else {
-                if (isClosed) {
-                    td.classList.add('is-closed');
-                    td.innerHTML = `<div class="cell-content"><span class="status-label">Closed</span></div>`;
-                } else if (isHoliday) {
-                    td.classList.add('is-holiday');
-                    td.innerHTML = `<div class="cell-content"><span class="status-label">🎌 ${event.name || 'Holiday'}</span></div>`;
-                } else {
-                    td.classList.add('empty-cell');
-                    td.innerHTML = `<div class="cell-content">—</div>`;
-                }
-            }
-            if (hasShiftToday) dailyCounts[dateStr]++;
-            td.addEventListener('click', () => openEditModal(emp.uid, dateStr));
-            tr.appendChild(td);
+
+            group.teachers.forEach(emp => {
+                renderCenterEmployeeRow(emp, dates, tbody, dailyCounts, centerCalEvents, closedDays, today);
+            });
         });
-        tbody.appendChild(tr);
-    });
+    } else {
+        let lastTerms = null;
+        employeesWithShifts.forEach(emp => {
+            if (lastTerms !== null && emp.terms !== lastTerms) {
+                const divRow = document.createElement('tr');
+                divRow.className = 'section-divider';
+                divRow.innerHTML = `<td colspan="${dates.length + 1}">— Part-Time Employees —</td>`;
+                tbody.appendChild(divRow);
+            }
+            lastTerms = emp.terms;
+            renderCenterEmployeeRow(emp, dates, tbody, dailyCounts, centerCalEvents, closedDays, today);
+        });
+    }
+
     const summaryRow = document.createElement('tr');
     summaryRow.className = 'section-divider summary-row';
     summaryRow.innerHTML = `<td style="font-weight:700;">Staff Count</td>`;
@@ -1657,6 +1922,13 @@ function renderStatusCell(td, status, notes) {
 }
 
 function renderCenterShiftCell(td, shifts, isHoliday, event) {
+    // ✅ FIX: Check if shifts are valid
+    if (!hasValidShifts(shifts)) {
+        td.classList.add('empty-cell');
+        td.innerHTML = '<div class="cell-content">—</div>';
+        return;
+    }
+
     td.classList.add('has-schedule');
     if (isHoliday) td.classList.add('has-warning');
     let html = '<div class="cell-content">';
@@ -1712,7 +1984,7 @@ function printCenterSchedule() {
                 currentShifts = tmpl._shifts || extractShifts(tmpl);
                 currentStatus = tmpl.status || 'scheduled';
             }
-            const hasCenterShift = currentShifts.some(s => s.center === selectedCenterForView);
+            const hasCenterShift = currentShifts.some(s => s.center === selectedCenterForView && hasValidShifts([s]));
             const isStatusHere = currentStatus !== 'scheduled' && sourceCenter === selectedCenterForView;
             if (hasCenterShift || isStatusHere) {
                 hasShift = true;
@@ -1748,88 +2020,33 @@ function printCenterSchedule() {
         html += `<th class="${sep}" ${cls}>${DAY_SHORT[dow]}<br>${dateObj.getDate()}</th>`;
     });
     html += `</tr></thead><tbody>`;
-    let lastTerms = null;
+    
     const dailyCounts = {};
     dates.forEach(d => dailyCounts[d] = 0);
-    employeesWithShifts.forEach(emp => {
-        if (lastTerms !== null && emp.terms !== lastTerms) {
-            html += `<tr class="section-row"><td colspan="${dates.length + 1}">— Part-Time Employees —</td></tr>`;
-        }
-        lastTerms = emp.terms;
-        const termsCls = emp.terms === 'Full-time' ? 'ft' : 'pt';
-        const termsLbl = emp.terms === 'Full-time' ? 'FT' : 'PT';
-        html += `<tr>
-            <td class="employee-col">
-                ${emp.englishName || 'Unknown'}
-                <span class="terms-tag ${termsCls}">${termsLbl}</span>
-                <span class="role-tag">${getEmpPositions(emp).join(', ') || ''}</span>
-            </td>`;
-        dates.forEach((dateStr, idx) => {
-            const dateObj = parseDate(dateStr);
-            const dow = dateObj.getDay();
-            const isWeekend = dow === 0 || dow === 6;
-            const isToday = dateObj.getTime() === today.getTime();
-            const event = centerCalEvents[dateStr];
-            const isHoliday = event && !event.muc;
-            const isClosed = closedDays.includes(dow) && !event;
-            const isWeek2 = idx === 7;
-            let cellCls = '';
-            if (isWeek2) cellCls += ' week-sep';
-            if (isToday) cellCls += ' today-cell';
-            else if (isWeekend) cellCls += ' weekend-cell';
-            const sched = mergedSchedules[emp.uid]?.[dateStr];
-            const tmpl = templates[emp.uid]?.[dow];
-            let shifts = [];
-            let status = 'scheduled';
-            let notes = '';
-            let isTemplate = false;
-            if (sched) {
-                shifts = sched._shifts || extractShifts(sched);
-                status = sched.status || 'scheduled';
-                notes = sched.notes || '';
-            } else if (tmpl) {
-                shifts = tmpl._shifts || extractShifts(tmpl);
-                status = tmpl.status || 'scheduled';
-                notes = tmpl.notes || '';
-                isTemplate = true;
-            }
-            let cellContent = '';
-            if (shifts.length > 0 || status !== 'scheduled') {
-                const centerShifts = shifts.filter(s => s.center === selectedCenterForView);
-                if (status !== 'scheduled') {
-                    const statusLabels = { 'other-center': '📍 Other', 'leave': '🏖 Leave', 'sick': '🤒 Sick', 'off': '😴 Off' };
-                    const statusCls = status === 'leave' ? 'leave' : status === 'sick' ? 'sick' : status === 'off' ? 'off' : 'other';
-                    cellContent = `<span class="print-status ${statusCls}">${statusLabels[status] || status}</span>`;
-                } else if (centerShifts.length > 0) {
-                    dailyCounts[dateStr]++;
-                    const sortedShifts = [...centerShifts].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
-                    sortedShifts.forEach(s => {
-                        if (s.type === 'break') {
-                            cellContent += `<div class="print-shift break-shift">☕ ${s.start}-${s.end}</div>`;
-                        } else {
-                            cellContent += `<div class="print-shift"><span class="time">${s.start}-${s.end}</span></div>`;
-                        }
-                    });
-                    if (isTemplate) {
-                        cellContent += `<div style="font-size:5pt;color:#888;font-style:italic;">(Pattern)</div>`;
-                    }
-                } else if (isClosed) {
-                    cellContent = '<span style="color:#999;font-size:6pt;">Closed</span>';
-                } else if (isHoliday) {
-                    cellContent = `<span style="color:#e74c3c;font-size:6pt;">🎌 ${event.name || ''}</span>`;
-                } else {
-                    cellCls += ' empty-cell';
-                    cellContent = '—';
-                }
-            } else {
-                if (isClosed) cellContent = '<span style="color:#999;font-size:6pt;">Closed</span>';
-                else if (isHoliday) cellContent = `<span style="color:#e74c3c;font-size:6pt;">🎌 ${event.name || ''}</span>`;
-                else { cellCls += ' empty-cell'; cellContent = '—'; }
-            }
-            html += `<td class="${cellCls}">${cellContent}</td>`;
+
+    if (centerGroupBySubject) {
+        const groups = groupEmployeesBySubject(employeesWithShifts);
+        groups.forEach(group => {
+            const config = SUBJECT_CONFIG[group.subject] || { label: group.subject, cls: 'other', icon: '' };
+            const dividerCls = SUBJECT_CONFIG[group.subject]?.cls || 'other';
+            html += `<tr class="print-subject-divider ${dividerCls}">
+                <td colspan="${dates.length + 1}">${config.icon} ${config.label} (${group.teachers.length})</td>
+            </tr>`;
+            group.teachers.forEach(emp => {
+                html += getCenterPrintRowHtml(emp, dates, selectedCenterForView, centerCalEvents, closedDays, today, dailyCounts);
+            });
         });
-        html += '</tr>';
-    });
+    } else {
+        let lastTerms = null;
+        employeesWithShifts.forEach(emp => {
+            if (lastTerms !== null && emp.terms !== lastTerms) {
+                html += `<tr class="section-row"><td colspan="${dates.length + 1}">— Part-Time Employees —</td></tr>`;
+            }
+            lastTerms = emp.terms;
+            html += getCenterPrintRowHtml(emp, dates, selectedCenterForView, centerCalEvents, closedDays, today, dailyCounts);
+        });
+    }
+
     html += `<tr class="summary-row"><td>Staff Count</td>`;
     dates.forEach((d, idx) => {
         const sep = idx === 7 ? ' week-sep' : '';

@@ -466,3 +466,48 @@ textarea { width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1; border-radiu
 /* 🆕 Tutorial Teacher Divider Colors */
 .subject-view-table tr.subject-divider.tutorial-divider td { background: linear-gradient(135deg, #8e44ad, #9b59b6); }
 .print-subject-table tr.print-subject-divider.tutorial td { background: #8e44ad !important; }
+
+/* =========================================
+PER CENTER VIEW - SUBJECT GROUPING STYLES
+========================================= */
+.center-view-table tr.subject-divider td {
+    background: #f0f4f8; font-weight: 700; font-size: 0.8rem;
+    color: var(--white); text-align: left; padding: 0.5rem 0.75rem;
+    border-top: 3px solid var(--primary); letter-spacing: 0.5px;
+}
+.center-view-table tr.subject-divider.english-divider td { background: linear-gradient(135deg, #2980b9, #3498db); }
+.center-view-table tr.subject-divider.math-divider td { background: linear-gradient(135deg, #27ae60, #2ecc71); }
+.center-view-table tr.subject-divider.chinese-divider td { background: linear-gradient(135deg, #e67e22, #f39c12); }
+.center-view-table tr.subject-divider.tutorial-divider td { background: linear-gradient(135deg, #8e44ad, #9b59b6); }
+.center-view-table tr.subject-divider.other-divider td { background: linear-gradient(135deg, #8e44ad, #9b59b6); }
+.center-view-table tr.subject-divider td .subject-icon { margin-right: 0.5rem; font-size: 0.9rem; }
+.center-view-table tr.subject-divider td .subject-count {
+    float: right; background: rgba(255,255,255,0.25);
+    padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: 600;
+}
+
+/* Loading spinner for buttons */
+.spinner-small {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    margin-right: 5px;
+    vertical-align: middle;
+}
+
+.btn-primary:disabled, .btn-secondary:disabled, .btn-danger:disabled,
+.nav-btn:disabled, .action-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* Disabled state for modal buttons */
+.modal-footer button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
