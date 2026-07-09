@@ -229,7 +229,20 @@ WEEK VIEW TABLE
 
 .week-empty-msg { text-align: center; padding: 2rem; color: var(--text-light); font-style: italic; }
 
+/* timetable.css */
+
 .hidden { display: none !important; }
+
+/* ============================================
+✅ KUMON CONNECT (KC) HIGHLIGHT
+============================================ */
+td.kc-cell {
+    background-color: #fff9c4 !important; /* Light Yellow */
+}
+.week-student.kc-student {
+    background-color: #fff9c4;
+    border-radius: 3px;
+}
 
 /* === RESPONSIVE === */
 @media (max-width: 768px) {
@@ -272,10 +285,19 @@ WEEK VIEW TABLE
     #timetableTable th { background: #eee !important; font-weight: 700 !important; }
     .time-cell { background: #eee !important; }
     .empty-cell { background: transparent !important; }
+    td.kc-cell { 
+     background-color: #fff9c4 !important; 
+     -webkit-print-color-adjust: exact; 
+     print-color-adjust: exact; }
 
     /* Week view print */
     #weekTimetableTable { width: 100% !important; border: 2px solid #333; font-size: 8pt; table-layout: fixed; }
     #weekTimetableTable th, #weekTimetableTable td { border: 1px solid #333 !important; padding: 2px 2px !important; line-height: 1.1 !important; color: #000 !important; }
     #weekTimetableTable th { font-weight: 700 !important; }
     .week-student { font-size: 7.5pt; padding: 1px 2px; }
+    .week-student.kc-student { 
+     background-color: #fff9c4 !important; 
+     -webkit-print-color-adjust: exact; 
+     print-color-adjust: exact; }
+
 }

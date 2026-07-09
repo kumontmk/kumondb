@@ -245,7 +245,8 @@ function initializeTimetable() {
         return {
             grade: s.grade || '-',
             name: displayName,
-            level: levelWS
+            level: levelWS,
+            worksheetType: s.worksheetType || 'Paper' // ✅ Added to track KC vs Paper
         };
     }
 
@@ -325,7 +326,8 @@ function initializeTimetable() {
                     const addSubjectCells = (arr) => {
                         if (arr[i]) {
                             row.appendChild(createCell(arr[i].grade));
-                            row.appendChild(createCell(arr[i].name));
+                            // ✅ Pass true if worksheetType is Kumon Connect to highlight the name cell
+                            row.appendChild(createCell(arr[i].name, false, arr[i].worksheetType === 'Kumon Connect'));
                             row.appendChild(createCell(arr[i].level));
                         } else {
                             row.appendChild(createCell('', true));
@@ -345,10 +347,12 @@ function initializeTimetable() {
             hideLoader();
         };
 
-        function createCell(content, isEmpty = false) {
+        // ✅ Updated createCell to accept isKC flag
+        function createCell(content, isEmpty = false, isKC = false) {
             const td = document.createElement('td');
             td.textContent = content;
             if (isEmpty) td.className = 'empty-cell';
+            if (isKC) td.classList.add('kc-cell'); // ✅ Add class for KC highlight
             return td;
         }
 
@@ -493,6 +497,11 @@ function initializeTimetable() {
                     students.forEach(st => {
                         const div = document.createElement('div');
                         div.className = 'week-student';
+
+                        // ✅ Added highlight class for KC students
+                        if (st.worksheetType === 'Kumon Connect') {
+                            div.classList.add('kc-student');
+                        }
 
                         const gradeSpan = document.createElement('span');
                         gradeSpan.className = 'ws-grade';
