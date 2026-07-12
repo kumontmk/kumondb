@@ -249,42 +249,47 @@ function initApp() {
     }, { onlyOnce: false });
   }
 
-  function loadVerifications() {
-    onValue(ref(db, 'users'), (snapshot) => {
-      const users = snapshot.val() || {};
-      const tbody = document.getElementById('verificationsTableBody');
-      if (!tbody) return;
-      tbody.innerHTML = '';
-      const pending = Object.entries(users).filter(([uid, u]) => !u.isVerified);
-      const vBadge = document.getElementById('verificationsBadge');
-      if (vBadge) {
-        if (pending.length > 0) {
-          vBadge.textContent = pending.length > 99 ? '99+' : pending.length;
-          vBadge.style.display = 'inline-block';
-        } else {
-          vBadge.style.display = 'none';
-        }
+function loadVerifications() {
+  onValue(ref(db, 'users'), (snapshot) => {
+    const users = snapshot.val() || {};
+    const tbody = document.getElementById('verificationsTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    
+    const pending = Object.entries(users).filter(([uid, u]) => !u.isVerified);
+    
+    const vBadge = document.getElementById('verificationsBadge');
+    if (vBadge) {
+      if (pending.length > 0) {
+        vBadge.textContent = pending.length > 99 ? '99+' : pending.length;
+        vBadge.classList.remove('hidden'); // ✅ FIX: Toggle class instead of style.display
+      } else {
+        vBadge.classList.add('hidden');
       }
-      if (pending.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No pending verifications.</td></tr>';
-        return;
-      }
-      pending.forEach(([uid, u]) => {
-        const row = document.createElement('tr');
-        const userPositions = getEmpPositions(u).join(', ') || '-';
-        row.innerHTML = `
-          <td>${u.email || '-'}</td>
-          <td>${u.englishName || '-'}</td>
-          <td>${userPositions}</td>
-          <td>${u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '-'}</td>
-          <td class="student-actions">
-            <button class="primary" onclick="window.verifyUser('${uid}', true)">✅ Verify</button>
-            <button class="danger" onclick="window.verifyUser('${uid}', false)">❌ Reject</button>
-          </td>`;
-        tbody.appendChild(row);
-      });
+    }
+    
+    if (pending.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No pending verifications.</td></tr>';
+      return;
+    }
+    
+    pending.forEach(([uid, u]) => {
+      const row = document.createElement('tr');
+      const userPositions = getEmpPositions(u).join(', ') || '-';
+      row.innerHTML = `
+        <td>${u.email || '-'}</td>
+        <td>${u.englishName || '-'}</td>
+        <td>${userPositions}</td>
+        <td>${u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '-'}</td>
+        <td class="student-actions">
+          <button class="primary" onclick="window.verifyUser('${uid}', true)">✅ Verify</button>
+          <button class="danger" onclick="window.verifyUser('${uid}', false)">❌ Reject</button>
+        </td>
+      `;
+      tbody.appendChild(row);
     });
-  }
+  });
+}
 
   async function loadCentersForPermissions() {
     const centerPermsContainer = document.getElementById('centerPermissions');
@@ -1120,187 +1125,306 @@ function initApp() {
     });
   }
 
-  async function updateIncompleteBadge() {
-    if (Object.keys(employees).length === 0) return;
-    try {
-      const timecardsSnap = await get(ref(db, 'timecards'));
-      const timecards = timecardsSnap.val() || {};
-      let count = 0;
-      Object.entries(timecards).forEach(([date, dayData]) => {
-        Object.entries(dayData).forEach(([empId, empData]) => {
-          const emp = employees[empId];
-          if (!emp) return;
-          const rawLogs = empData.logs || [];
-          const { logs: fixedLogs } = autoFixLogs(rawLogs, emp.terms || 'Full-time');
-          const sortedLogs = [...fixedLogs].sort((a, b) => a.time.localeCompare(b.time));
-          let currentIn = null;
-          for (const log of sortedLogs) {
-            if (log.type === 'in') {
+async function updateIncompleteBadge() {
+  if (Object.keys(employees).length === 0) return;
+  try {
+    const [timecardsSnap, verificationsSnap] = await Promise.all([
+      get(ref(db, 'timecards')),
+      get(ref(db, 'timecardVerifications'))
+    ]);
+    
+    const timecards = timecardsSnap.val() || {};
+    const verifications = verificationsSnap.val() || {};
+    
+    let count = 0;
+    
+    // 1. Count real-time incomplete records
+    Object.entries(timecards).forEach(([date, dayData]) => {
+      Object.entries(dayData).forEach(([empId, empData]) => {
+        const emp = employees[empId];
+        if (!emp) return;
+        const rawLogs = empData.logs || [];
+        const { logs: fixedLogs } = autoFixLogs(rawLogs, emp.terms || 'Full-time');
+        const sortedLogs = [...fixedLogs].sort((a, b) => a.time.localeCompare(b.time));
+        let currentIn = null;
+        for (const log of sortedLogs) {
+          if (log.type === 'in') {
+            if (currentIn !== null) count++;
+            currentIn = log;
+          } else if (log.type === 'out') {
+            if (currentIn !== null && currentIn.location === log.location) {
+              currentIn = null;
+            } else {
               if (currentIn !== null) count++;
-              currentIn = log;
-            } else if (log.type === 'out') {
-              if (currentIn !== null && currentIn.location === log.location) {
-                currentIn = null;
-              } else {
-                if (currentIn !== null) count++;
-                count++;
-                currentIn = null;
-              }
+              count++;
+              currentIn = null;
             }
           }
-          if (currentIn !== null) count++;
-        });
-      });
-      const badge = document.getElementById('incompleteBadge');
-      if (badge) {
-        if (count > 0) {
-          badge.textContent = count > 99 ? '99+' : count;
-          badge.style.display = 'inline-block';
-        } else {
-          badge.style.display = 'none';
         }
+        if (currentIn !== null) count++;
+      });
+    });
+    
+    // 2. Add pending verifications to the count
+    const pendingCount = Object.values(verifications).filter(v => v.status === 'pending').length;
+    count += pendingCount;
+    
+    // 3. Update the badge UI
+    const badge = document.getElementById('incompleteBadge');
+    if (badge) {
+      if (count > 0) {
+        badge.textContent = count > 99 ? '99+' : count;
+        badge.classList.remove('hidden'); // ✅ FIX: Toggle class instead of style.display
+      } else {
+        badge.classList.add('hidden');
       }
-    } catch (err) {
-      console.error('Error updating incomplete badge:', err);
     }
+  } catch (err) {
+    console.error('Error updating incomplete badge:', err);
   }
+}
 
-  async function loadIncompleteTimecards() {
-    const tbody = document.getElementById('incompleteTableBody');
-    if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">⏳ Loading...</td></tr>';
-    try {
-      const timecardsSnap = await get(ref(db, 'timecards'));
-      const timecards = timecardsSnap.val() || {};
-      const incompleteRecords = [];
-      Object.entries(timecards).forEach(([date, dayData]) => {
-        Object.entries(dayData).forEach(([empId, empData]) => {
-          const emp = employees[empId];
-          if (!emp) return;
-          const rawLogs = empData.logs || [];
-          const { logs: fixedLogs } = autoFixLogs(rawLogs, emp.terms || 'Full-time');
-          const sortedLogs = [...fixedLogs].sort((a, b) => a.time.localeCompare(b.time));
-          let currentIn = null;
-          for (let i = 0; i < sortedLogs.length; i++) {
-            const log = sortedLogs[i];
-            if (log.type === 'in') {
+
+// ✅ UPDATED: Integrates real-time incomplete records with verification requests
+async function loadIncompleteTimecards() {
+  const tbody = document.getElementById('incompleteTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8" class="empty-state">⏳ Loading...</td></tr>';
+  
+  try {
+    const [timecardsSnap, verificationsSnap] = await Promise.all([
+      get(ref(db, 'timecards')),
+      get(ref(db, 'timecardVerifications'))
+    ]);
+    
+    const timecards = timecardsSnap.val() || {};
+    const verifications = verificationsSnap.val() || {};
+    
+    const incompleteRecords = [];
+    Object.entries(timecards).forEach(([date, dayData]) => {
+      Object.entries(dayData).forEach(([empId, empData]) => {
+        const emp = employees[empId];
+        if (!emp) return;
+        const rawLogs = empData.logs || [];
+        const { logs: fixedLogs } = autoFixLogs(rawLogs, emp.terms || 'Full-time');
+        const sortedLogs = [...fixedLogs].sort((a, b) => a.time.localeCompare(b.time));
+        let currentIn = null;
+        for (let i = 0; i < sortedLogs.length; i++) {
+          const log = sortedLogs[i];
+          if (log.type === 'in') {
+            if (currentIn !== null) {
+              incompleteRecords.push({ empId, date, name: emp.englishName || '', chineseName: emp.chineseName || '', position: getEmpPositions(emp).join(', ') || '', terms: emp.terms || 'Full-time', center: currentIn.location || '', type: 'IN', time: currentIn.time, missingType: 'out' });
+            }
+            currentIn = log;
+          } else if (log.type === 'out') {
+            if (currentIn !== null && currentIn.location === log.location) {
+              currentIn = null;
+            } else {
               if (currentIn !== null) {
-                incompleteRecords.push({
-                  empId, date,
-                  name: emp.englishName || '', chineseName: emp.chineseName || '',
-                  position: getEmpPositions(emp).join(', ') || '', terms: emp.terms || 'Full-time',
-                  center: currentIn.location || '', type: 'IN', time: currentIn.time, missingType: 'out'
-                });
+                incompleteRecords.push({ empId, date, name: emp.englishName || '', chineseName: emp.chineseName || '', position: getEmpPositions(emp).join(', ') || '', terms: emp.terms || 'Full-time', center: currentIn.location || '', type: 'IN', time: currentIn.time, missingType: 'out' });
               }
-              currentIn = log;
-            } else if (log.type === 'out') {
-              if (currentIn !== null && currentIn.location === log.location) {
-                currentIn = null;
-              } else {
-                if (currentIn !== null) {
-                  incompleteRecords.push({
-                    empId, date,
-                    name: emp.englishName || '', chineseName: emp.chineseName || '',
-                    position: getEmpPositions(emp).join(', ') || '', terms: emp.terms || 'Full-time',
-                    center: currentIn.location || '', type: 'IN', time: currentIn.time, missingType: 'out'
-                  });
-                }
-                incompleteRecords.push({
-                  empId, date,
-                  name: emp.englishName || '', chineseName: emp.chineseName || '',
-                  position: getEmpPositions(emp).join(', ') || '', terms: emp.terms || 'Full-time',
-                  center: log.location || '', type: 'OUT', time: log.time, missingType: 'in'
-                });
-                currentIn = null;
-              }
+              incompleteRecords.push({ empId, date, name: emp.englishName || '', chineseName: emp.chineseName || '', position: getEmpPositions(emp).join(', ') || '', terms: emp.terms || 'Full-time', center: log.location || '', type: 'OUT', time: log.time, missingType: 'in' });
+              currentIn = null;
             }
           }
-          if (currentIn !== null) {
-            incompleteRecords.push({
-              empId, date,
-              name: emp.englishName || '', chineseName: emp.chineseName || '',
-              position: getEmpPositions(emp).join(', ') || '', terms: emp.terms || 'Full-time',
-              center: currentIn.location || '', type: 'IN', time: currentIn.time, missingType: 'out'
-            });
-          }
-        });
+        }
+        if (currentIn !== null) {
+          incompleteRecords.push({ empId, date, name: emp.englishName || '', chineseName: emp.chineseName || '', position: getEmpPositions(emp).join(', ') || '', terms: emp.terms || 'Full-time', center: currentIn.location || '', type: 'IN', time: currentIn.time, missingType: 'out' });
+        }
       });
-      incompleteRecords.sort((a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name));
-      tbody.innerHTML = '';
-      if (incompleteRecords.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="empty-state">🎉 No incomplete timecards found!</td></tr>';
-        return;
-      }
-      incompleteRecords.forEach((rec, idx) => {
-        const tr = document.createElement('tr');
-        tr.dataset.empId = rec.empId;
-        tr.dataset.date = rec.date;
-        tr.dataset.missingType = rec.missingType;
-        tr.dataset.center = rec.center;
-        const typeLabel = rec.type === 'IN'
-          ? `<span class="status-badge" style="background:#dbeafe;color:#1e40af;">IN only</span>`
-          : `<span class="status-badge" style="background:#fef3c7;color:#92400e;">OUT only</span>`;
-        tr.innerHTML = `
-          <td>${rec.name} ${rec.chineseName ? '(' + rec.chineseName + ')' : ''}</td>
-          <td>${rec.position}</td>
-          <td>${rec.terms}</td>
-          <td>${rec.date}</td>
-          <td>${rec.center || '-'}</td>
-          <td>${typeLabel} <small style="color:#666;">missing ${rec.missingType.toUpperCase()}</small><br><strong>${rec.time}</strong></td>
-          <td><input type="time" class="incomplete-time-input" style="width:110px;padding:0.4rem;border:1px solid #cbd5e1;border-radius:4px;"></td>
-          <td><button class="save-incomplete-btn primary" style="padding:0.4rem 0.8rem;font-size:0.85rem;">Save</button></td>
+    });
+    
+    const verificationList = Object.entries(verifications).map(([id, v]) => ({ id, ...v }));
+    const verificationKeys = new Set(verificationList.filter(v => v.status !== 'confirmed').map(v => `${v.empId}_${v.date}_${v.inTime}`));
+    
+    const filteredIncomplete = incompleteRecords.filter(rec => 
+      !verificationKeys.has(`${rec.empId}_${rec.date}_${rec.time}`)
+    );
+    
+    const allRecords = [
+      ...filteredIncomplete.map(r => ({ ...r, isVerification: false, status: 'Incomplete' })),
+      ...verificationList.map(v => ({ ...v, isVerification: true, status: v.status }))
+    ];
+    
+    allRecords.sort((a, b) => {
+      const statusOrder = { 'Pending': 0, 'Denied': 1, 'Incomplete': 2, 'Confirmed': 3 };
+      const orderDiff = (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99);
+      if (orderDiff !== 0) return orderDiff;
+      return b.date.localeCompare(a.date) || (a.name || a.empName || '').localeCompare(b.name || b.empName || '');
+    });
+    
+    tbody.innerHTML = '';
+    if (allRecords.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">🎉 No incomplete timecards or pending verifications!</td></tr>';
+      return;
+    }
+    
+    allRecords.forEach(rec => {
+      const tr = document.createElement('tr');
+      tr.dataset.empId = rec.empId;
+      tr.dataset.date = rec.date;
+      tr.dataset.missingType = rec.missingType;
+      tr.dataset.center = rec.center;
+      tr.dataset.time = rec.time || rec.inTime;
+      
+      const name = rec.name || rec.empName || 'Unknown';
+      const chineseName = rec.chineseName || '';
+      const position = rec.position || '-';
+      const terms = rec.terms || '-';
+      const date = rec.date;
+      const center = rec.center || '-';
+      
+      let statusBadge = '';
+      let timeCell = '';
+      let actionCell = '';
+      
+      if (rec.isVerification) {
+        const inTime = rec.inTime || rec.proposedInTime || '-';
+        const outTime = rec.outTime || rec.proposedOutTime || rec.actualOutTime || '-';
+        const isMissingOut = rec.missingType === 'out';
+        
+        if (rec.status === 'pending') {
+          statusBadge = '<span class="status-badge" style="background:#fef3c7;color:#92400e;">Pending</span>';
+          timeCell = isMissingOut ? `IN: <strong>${inTime}</strong><br>Proposed OUT: <strong>${outTime}</strong>` : `Proposed IN: <strong>${inTime}</strong><br>OUT: <strong>${outTime}</strong>`;
+          actionCell = `
+            <button class="primary verify-btn" data-id="${rec.id}" data-action="confirm" style="padding:0.4rem 0.8rem;font-size:0.85rem;margin-right:0.25rem;">✅ Confirm</button>
+            <button class="danger verify-btn" data-id="${rec.id}" data-action="deny" style="padding:0.4rem 0.8rem;font-size:0.85rem;">❌ Deny</button>
+          `;
+        } else if (rec.status === 'denied') {
+          statusBadge = '<span class="status-badge" style="background:#fee2e2;color:#991b1b;">Denied</span>';
+          const inputVal = isMissingOut ? (rec.actualOutTime || '') : (rec.actualInTime || '');
+          timeCell = isMissingOut
+            ? `IN: <strong>${inTime}</strong><br>Manual OUT: <input type="time" class="manual-time-input" value="${inputVal}" style="width:110px;padding:0.4rem;border:1px solid #cbd5e1;border-radius:4px;">`
+            : `Manual IN: <input type="time" class="manual-time-input" value="${inputVal}" style="width:110px;padding:0.4rem;border:1px solid #cbd5e1;border-radius:4px;"><br>OUT: <strong>${outTime}</strong>`;
+          actionCell = `<button class="primary save-manual-btn" data-id="${rec.id}" style="padding:0.4rem 0.8rem;font-size:0.85rem;">Save</button>`;
+        } else if (rec.status === 'confirmed') {
+          statusBadge = '<span class="status-badge" style="background:#d1fae5;color:#065f46;">Confirmed</span>';
+          timeCell = `IN: <strong>${inTime}</strong><br>OUT: <strong>${outTime}</strong>`;
+          actionCell = '<span style="color:#059669;font-weight:600;">Resolved</span>';
+          tr.style.opacity = '0.6';
+        }
+      } else {
+        const typeLabel = rec.type === 'IN' ? '<span class="status-badge" style="background:#dbeafe;color:#1e40af;">IN only</span>' : '<span class="status-badge" style="background:#fef3c7;color:#92400e;">OUT only</span>';
+        statusBadge = '<span class="status-badge" style="background:#e2e8f0;color:#475569;">Incomplete</span>';
+        timeCell = `${typeLabel} <small style="color:#666;">missing ${rec.missingType.toUpperCase()}</small><br><strong>${rec.time}</strong>`;
+        actionCell = `
+          <input type="time" class="incomplete-time-input" style="width:110px;padding:0.4rem;border:1px solid #cbd5e1;border-radius:4px;">
+          <button class="primary save-incomplete-btn" style="padding:0.4rem 0.8rem;font-size:0.85rem;margin-left:0.25rem;">Save</button>
         `;
-        tbody.appendChild(tr);
+      }
+      
+      tr.innerHTML = `
+        <td>${name} ${chineseName ? '(' + chineseName + ')' : ''}</td>
+        <td>${position}</td>
+        <td>${terms}</td>
+        <td>${date}</td>
+        <td>${center}</td>
+        <td>${timeCell}</td>
+        <td>${statusBadge}</td>
+        <td>${actionCell}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    
+    // Attach listeners for regular incomplete saves
+    tbody.querySelectorAll('.save-incomplete-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const tr = btn.closest('tr');
+        const input = tr.querySelector('.incomplete-time-input');
+        const newTime = input.value.trim();
+        if (!newTime) { alert('⚠️ Please enter the missing time.'); input.focus(); return; }
+        
+        const empId = tr.dataset.empId;
+        const date = tr.dataset.date;
+        const missingType = tr.dataset.missingType;
+        const center = tr.dataset.center;
+        
+        btn.disabled = true; btn.textContent = 'Saving...';
+        try {
+          const daySnap = await get(ref(db, `timecards/${date}/${empId}`));
+          let currentLogs = daySnap.val()?.logs || [];
+          if (!Array.isArray(currentLogs)) currentLogs = Object.values(currentLogs);
+          currentLogs.push({ type: missingType, time: newTime, location: center || 'Manual Fix' });
+          currentLogs.sort((a, b) => a.time.localeCompare(b.time));
+          await update(ref(db, `timecards/${date}/${empId}`), { logs: currentLogs });
+          btn.textContent = '✅ Saved'; btn.classList.remove('primary'); btn.style.background = '#059669';
+          input.disabled = true;
+          setTimeout(() => { tr.style.opacity = '0.4'; tr.style.textDecoration = 'line-through'; }, 500);
+          updateIncompleteBadge();
+        } catch (err) {
+          console.error(err); alert('❌ Failed to save.'); btn.disabled = false; btn.textContent = 'Save';
+        }
       });
-      document.querySelectorAll('.save-incomplete-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          const tr = btn.closest('tr');
-          const input = tr.querySelector('.incomplete-time-input');
-          const newTime = input.value.trim();
-          if (!newTime) {
-            alert('⚠️ Please enter the missing time.');
-            input.focus();
-            return;
-          }
-          const empId = tr.dataset.empId;
-          const date = tr.dataset.date;
-          const missingType = tr.dataset.missingType;
-          const center = tr.dataset.center;
-          btn.disabled = true;
-          btn.textContent = 'Saving...';
-          try {
-            const daySnap = await get(ref(db, `timecards/${date}/${empId}`));
-            let currentLogs = daySnap.val()?.logs || [];
-            if (!Array.isArray(currentLogs)) currentLogs = Object.values(currentLogs);
-            currentLogs.push({
-              type: missingType,
-              time: newTime,
-              location: center || 'Manual Fix'
-            });
-            currentLogs.sort((a, b) => a.time.localeCompare(b.time));
-            await update(ref(db, `timecards/${date}/${empId}`), { logs: currentLogs });
-            btn.textContent = '✅ Saved';
-            btn.classList.remove('primary');
-            btn.style.background = '#059669';
-            input.disabled = true;
-            setTimeout(() => {
-              tr.style.opacity = '0.4';
-              tr.style.textDecoration = 'line-through';
-            }, 500);
-            updateIncompleteBadge();
-          } catch (err) {
-            console.error('Save incomplete error:', err);
-            alert('❌ Failed to save. Check console.');
-            btn.disabled = false;
-            btn.textContent = 'Save';
-          }
+    });
+    
+  } catch (err) {
+    console.error('Error loading incomplete timecards:', err);
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">❌ Error loading records</td></tr>';
+  }
+}
+
+// ✅ NEW: Event delegation for verification buttons (Add this inside initApp() after loadIncompleteTimecards is defined)
+document.getElementById('incompleteTableBody').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  
+  if (btn.classList.contains('verify-btn')) {
+    const id = btn.dataset.id;
+    const action = btn.dataset.action;
+    
+    if (action === 'confirm') {
+      if (!confirm('Confirm this proposed time?')) return;
+      try {
+        await update(ref(db, `timecardVerifications/${id}`), {
+          status: 'confirmed', resolvedBy: auth.currentUser.uid, resolvedAt: new Date().toISOString()
         });
-      });
-    } catch (err) {
-      console.error('Error loading incomplete timecards:', err);
-      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">❌ Error loading records</td></tr>';
+        const vSnap = await get(ref(db, `timecardVerifications/${id}`));
+        const v = vSnap.val();
+        const daySnap = await get(ref(db, `timecards/${v.date}/${v.empId}`));
+        let logs = daySnap.val()?.logs || [];
+        if (!Array.isArray(logs)) logs = Object.values(logs);
+        logs.push({ type: 'out', time: v.proposedOutTime, location: v.center || 'Manual Fix' });
+        logs.sort((a, b) => a.time.localeCompare(b.time));
+        await update(ref(db, `timecards/${v.date}/${v.empId}`), { logs });
+        loadIncompleteTimecards();
+      } catch (err) { console.error(err); alert('Failed to confirm.'); }
+    } else if (action === 'deny') {
+      if (!confirm('Deny this proposed time? You will be able to enter the correct time manually.')) return;
+      try {
+        await update(ref(db, `timecardVerifications/${id}`), {
+          status: 'denied', resolvedBy: auth.currentUser.uid, resolvedAt: new Date().toISOString()
+        });
+        loadIncompleteTimecards();
+      } catch (err) { console.error(err); alert('Failed to deny.'); }
     }
   }
+  
+  if (btn.classList.contains('save-manual-btn')) {
+    const id = btn.dataset.id;
+    const tr = btn.closest('tr');
+    const input = tr.querySelector('.manual-time-input');
+    const newTime = input.value.trim();
+    if (!newTime) { alert('Please enter the correct time.'); return; }
+    
+    btn.disabled = true; btn.textContent = 'Saving...';
+    try {
+      const vSnap = await get(ref(db, `timecardVerifications/${id}`));
+      const v = vSnap.val();
+      const daySnap = await get(ref(db, `timecards/${v.date}/${v.empId}`));
+      let logs = daySnap.val()?.logs || [];
+      if (!Array.isArray(logs)) logs = Object.values(logs);
+      logs.push({ type: 'out', time: newTime, location: v.center || 'Manual Fix' });
+      logs.sort((a, b) => a.time.localeCompare(b.time));
+      await update(ref(db, `timecards/${v.date}/${v.empId}`), { logs });
+      await update(ref(db, `timecardVerifications/${id}`), {
+        status: 'confirmed', actualOutTime: newTime, resolvedBy: auth.currentUser.uid, resolvedAt: new Date().toISOString()
+      });
+      loadIncompleteTimecards();
+    } catch (err) {
+      console.error(err); alert('Failed to save.'); btn.disabled = false; btn.textContent = 'Save';
+    }
+  }
+});
 
   window.editEmp = (id) => openEmployeeModal(id);
 }

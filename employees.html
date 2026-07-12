@@ -4,45 +4,40 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Employees - Kumon DB</title>
-  <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="employees.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
-  <div id="page-loader"><div class="spinner"></div></div>
-
   <header>
+    <h1>👥 Employee Management</h1>
     <nav>
       <a href="centers.html">← Centers</a>
+      <button id="logoutBtn">Logout</button>
     </nav>
-    <h2>👥 Employee Management</h2>
   </header>
 
   <div id="accessDenied" class="access-denied hidden">
-      <div class="access-denied-content">
-          <h2>🔐 Access Restricted</h2>
-          <p>This page is only accessible to <strong>Administrators</strong> and <strong>Managers</strong>.</p>
-          <p>Please log in with an authorized account or contact your administrator.</p>
-      </div>
-  </div> 
+    <div class="access-denied-content">
+      <h2>🔐 Access Restricted</h2>
+      <p>This page is only accessible to Administrators and Managers.</p>
+      <p>Please log in with an authorized account or contact your administrator.</p>
+    </div>
+  </div>
 
-  <div id="mainContent" class="students-page hidden">
-    <div class="tabs" style="margin-bottom: 1.5rem;">
-      <button class="tab-btn active" data-main-tab="employees"><i class="fas fa-people-group"></i> Employees</button>
-      <button class="tab-btn" data-main-tab="verifications"><i class="fas fa-clock"></i> Pending Verifications <span class="tab-badge" id="verificationsBadge" style="display:none;">0</span></button>
-      <button class="tab-btn" data-main-tab="incomplete"><i class="fas fa-exclamation-triangle"></i> Incomplete Timecards <span class="tab-badge" id="incompleteBadge" style="display:none;">0</span></button>
+  <main id="mainContent" class="students-page hidden" style="opacity:0; pointer-events:none; transition: opacity 0.3s;">
+    <div class="controls">
+      <input type="text" id="searchEmployee" placeholder="🔍 Search employees...">
+      <button id="addEmployeeBtn" class="primary">+ Add Employee</button>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-main-tab="employees">Employees <span id="employeesBadge" class="tab-badge hidden">0</span></button>
+      <button class="tab-btn" data-main-tab="verifications">Pending Verifications <span id="verificationsBadge" class="tab-badge hidden">0</span></button>
+      <button class="tab-btn" data-main-tab="incomplete">Incomplete Timecards <span id="incompleteBadge" class="tab-badge hidden">0</span></button>
     </div>
 
     <div id="main-tab-employees" class="tab-content active">
-      <div class="controls">
-          <input type="text" id="searchEmployee" placeholder="Search employees...">
-          
-          <!-- NEW: Export Controls -->
-          <input type="month" id="exportMonthPicker" style="max-width: 200px;">
-          <button id="exportExcelBtn" class="primary">📊 Export Timecards to Excel</button>
-          
-          <button id="addEmployeeBtn" class="primary">+ Add Employee</button>
-      </div>
       <div class="table-wrapper">
         <table>
           <thead>
@@ -63,7 +58,7 @@
     </div>
 
     <div id="main-tab-verifications" class="tab-content">
-      <h3 style="margin-bottom: 1rem;">Pending Account Verifications</h3>
+      <h3 style="margin-bottom:1rem; color:#4682B4;">Pending Account Verifications</h3>
       <div class="table-wrapper">
         <table>
           <thead>
@@ -83,12 +78,10 @@
     </div>
 
     <div id="main-tab-incomplete" class="tab-content">
-      <h3 style="margin-bottom: 1rem;">⚠️ Incomplete Timecards</h3>
-      <p style="color: #666; font-size: 0.9rem; margin-bottom: 1rem;">
-        Shows all unpaired clock-in/out records across all dates. Enter the missing time and click Save to fix.
-      </p>
+      <h3 style="margin-bottom:0.5rem; color:#4682B4;">⚠️ Incomplete Timecards & Verifications</h3>
+      <p style="color:#666; margin-bottom:1rem; font-size:0.9rem;">Shows all unpaired clock-in/out records and employee-submitted verification requests.</p>
       <div class="table-wrapper">
-        <table id="incompleteTable">
+        <table>
           <thead>
             <tr>
               <th>Employee Name</th>
@@ -96,43 +89,47 @@
               <th>Terms</th>
               <th>Date</th>
               <th>Center</th>
-              <th>Incomplete Time</th>
-              <th>Add Missing Time</th>
+              <th>Time Details</th>
+              <th>Status</th>
               <th>Action</th>
             </tr>
           </thead>
           <tbody id="incompleteTableBody">
-            <tr>
-              <td colspan="8" class="empty-state">Loading incomplete records...</td>
-            </tr>
+            <tr><td colspan="8" class="empty-state">Loading incomplete records...</td></tr>
           </tbody>
         </table>
       </div>
     </div>
-
-  </div>
+  </main>
 
   <!-- Employee Modal -->
   <div id="employeeModal" class="modal hidden">
     <div class="modal-content wide">
-      <span class="close-btn" id="closeModal">&times;</span>
-      <h3 id="modalTitle">Add Employee</h3>
+      <button class="close-btn" id="closeModal">&times;</button>
+      <h2 id="modalTitle" style="text-align:center; margin-bottom:1.5rem; color:#4682B4;">Add Employee</h2>
       
-      <div class="tabs" style="margin: 1rem 0;">
+      <div class="tabs" style="margin-bottom:1.5rem;">
         <button class="tab-btn active" data-tab="details">Details & QR</button>
         <button class="tab-btn" data-tab="timeclock">Timeclock Records</button>
-        <button class="tab-btn" data-tab="permissions" id="permissionsTabBtn">Permissions</button>
+        <button class="tab-btn" data-tab="permissions">Permissions</button>
       </div>
 
-      <form id="employeeForm">
-        <input type="hidden" id="empId">
-        
-        <!-- Details Tab -->
-        <div id="tab-details" class="tab-content active">
+      <div id="tab-details" class="tab-content active">
+        <form id="employeeForm">
+          <input type="hidden" id="empId">
           <div class="form-grid">
-            <div><label>English Name *</label><input type="text" id="empEnglish" required></div>
-            <div><label>Chinese Name</label><input type="text" id="empChinese"></div>
-            <div><label>Email Address *</label><input type="email" id="empEmail" required></div>
+            <div>
+              <label>English Name *</label>
+              <input type="text" id="empEnglish" required>
+            </div>
+            <div>
+              <label>Chinese Name</label>
+              <input type="text" id="empChinese">
+            </div>
+            <div>
+              <label>Email Address *</label>
+              <input type="email" id="empEmail" required>
+            </div>
             <div>
               <label>Nationality *</label>
               <select id="empNationality" required>
@@ -142,22 +139,25 @@
                 <option value="Portuguese">Portuguese</option>
                 <option value="Others">Others</option>
               </select>
-              <input type="text" id="empNationalityOther" class="other-input" placeholder="Specify Nationality">
+              <input type="text" id="empNationalityOther" class="other-input" placeholder="Specify nationality">
             </div>
-              <div>
-                <label>Positions *</label>
-                <div class="checkbox-group" id="empPositionsGroup">
-                  <label><input type="checkbox" value="English Teacher"> English Teacher</label>
-                  <label><input type="checkbox" value="Math Teacher"> Math Teacher</label>
-                  <label><input type="checkbox" value="Chinese Teacher"> Chinese Teacher</label>
-                  <label><input type="checkbox" value="Tutorial Teacher"> Tutorial Teacher</label>
-                  <label><input type="checkbox" value="Admin"> Admin</label>
-                  <label><input type="checkbox" value="Manager"> Manager</label>
-                  <label><input type="checkbox" value="Master Admin"> Master Admin</label>
-                  <label><input type="checkbox" value="Custodian"> Custodian</label>
-                </div>
+            <div style="grid-column: 1 / -1;">
+              <label>Positions *</label>
+              <div id="empPositionsGroup" class="checkbox-group">
+                <label><input type="checkbox" value="English Teacher"> English Teacher</label>
+                <label><input type="checkbox" value="Math Teacher"> Math Teacher</label>
+                <label><input type="checkbox" value="Chinese Teacher"> Chinese Teacher</label>
+                <label><input type="checkbox" value="Tutorial Teacher"> Tutorial Teacher</label>
+                <label><input type="checkbox" value="Admin"> Admin</label>
+                <label><input type="checkbox" value="Manager"> Manager</label>
+                <label><input type="checkbox" value="Master Admin"> Master Admin</label>
+                <label><input type="checkbox" value="Custodian"> Custodian</label>
               </div>
-            <div><label>Employment Date *</label><input type="date" id="empDate" required></div>
+            </div>
+            <div>
+              <label>Employment Date *</label>
+              <input type="date" id="empDate" required>
+            </div>
             <div>
               <label>Employment Terms *</label>
               <select id="empTerms" required>
@@ -165,78 +165,77 @@
                 <option value="Part-time">Part-time</option>
               </select>
             </div>
-              <!-- 🆕 INITIAL PASSWORD FIELD -->
             <div id="passwordFieldContainer">
-              <label>Initial Password <span></span></label>
-              <input type="text" id="empPassword" value="Kumon123">
+              <label>Initial Password</label>
+              <input type="text" id="empPassword" value="Kumon123" readonly style="background:#f8f9fa;">
             </div>
           </div>
+          
           <div id="qrContainer">
-            <p>QR Code</p>
-            <img id="empQrImg" alt="QR Code" style="max-width: 200px; margin: 0 auto; display: block;">
-            <button type="button" id="downloadQrBtn" class="secondary" style="margin-top: 1rem;">⬇ Download QR Code</button>
+            <h4 style="margin-bottom:1rem; color:#4682B4;">QR Code</h4>
+            <img id="empQrImg" alt="QR Code" style="max-width:200px; margin-bottom:0.5rem;">
+            <br>
+            <button type="button" id="downloadQrBtn" class="secondary" style="margin-top:0.5rem;">⬇ Download QR Code</button>
           </div>
-        </div>
+        </form>
+      </div>
 
-        <!-- Timeclock Tab -->
-        <div id="tab-timeclock" class="tab-content">
-          <p class="hint">Edit time in/out records manually. Changes apply immediately.</p>
-          <div style="display: flex; gap: 1rem; margin-bottom: 1rem; align-items: center; flex-wrap: wrap;">
-            <label for="timeclockDateFilter" style="font-weight: 600; color: #4682B4; margin: 0;">Filter by Date:</label>
-            <input type="date" id="timeclockDateFilter" style="max-width: 200px; padding: 0.5rem;">
-            <button id="clearTimeclockFilter" type="button" class="secondary" style="padding: 0.5rem 1rem; font-size: 0.85rem; margin: 0;">Show All</button>
-          </div>
-          <div class="table-wrapper" style="max-height: 400px;">
-            <table class="timeclock-edit-table">
-              <thead id="timeclockThead">
-                <!-- JavaScript will dynamically populate this based on max cycles -->
-              </thead>
-              <tbody id="timeclockHistoryBody">
-                <tr><td colspan="9" class="empty-state">No records found</td></tr>
-              </tbody>
-            </table>
-          </div>
+      <div id="tab-timeclock" class="tab-content">
+        <p style="color:#666; margin-bottom:1rem; font-size:0.9rem;">Edit time in/out records manually. Changes apply immediately.</p>
+        <div style="margin-bottom:1rem; display:flex; gap:1rem; align-items:center;">
+          <label style="font-weight:600; color:#4682B4;">Filter by Date:</label>
+          <input type="month" id="timeclockDateFilter" style="max-width:200px;">
+          <button id="clearTimeclockFilter" class="secondary" style="padding:0.5rem 1rem;">Show All</button>
         </div>
-
-        <!-- ✅ PERMISSIONS TAB -->
-        <div id="tab-permissions" class="tab-content">
-          <p class="hint">Configure access rights for this employee.</p>
-          
-          <h4 style="margin: 1rem 0 0.5rem;">Center Access</h4>
-          <div class="form-grid" id="centerPermissions">
-            <label><input type="checkbox" value="kumon-taipa-mei-keng"> Kumon Taipa Mei Keng</label>
-            <label><input type="checkbox" value="kumon-taipa-pac-tat"> Kumon Taipa Pac Tat</label>
-          </div>
-
-          <h4 style="margin: 1rem 0 0.5rem;">Dashboard Cards Access</h4>
-            <div id="dashboardPermissions" class="form-grid">
-                <label><input type="checkbox" value="studentManagement"> Student Management</label>
-                <label><input type="checkbox" value="newStudentList"> New Student List</label>
-                <label><input type="checkbox" value="editStudent"> Edit Student Details</label>
-                <label><input type="checkbox" value="timetable"> Timetable</label>
-                <label><input type="checkbox" value="monthlyReports"> Monthly Reports</label>
-                <label><input type="checkbox" value="progressCharts"> Progress Charts</label>
-                <label><input type="checkbox" value="attendance"> Attendance</label>
-                <label><input type="checkbox" value="parentOrientation"> Follow Ups</label>
-                <label><input type="checkbox" value="dropBook"> Drop Book</label>
-                <label><input type="checkbox" value="bulletin">Centre Bulletin</label>
-            </div>
-          
-          <div class="hint" style="margin-top: 1rem; color: #dc3545; display: none;" id="permissionsLockedMsg">
-            🔒 Only kumonchamps@gmail.com can edit permissions.
-          </div>
+        <div class="table-wrapper" style="max-height: 400px;">
+          <table class="timeclock-edit-table">
+            <thead id="timeclockThead">
+              <tr><th colspan="9" class="empty-state">No records found</th></tr>
+            </thead>
+            <tbody id="timeclockHistoryBody">
+              <tr><td colspan="9" class="empty-state">No records found</td></tr>
+            </tbody>
+          </table>
         </div>
-
-        <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
-          <button type="button" id="cancelModal" class="secondary">Cancel</button>
-          <button type="button" id="saveEmployee" class="primary">Save Employee</button>
+        <div style="margin-top:1.5rem; padding-top:1rem; border-top:1px solid #e2e8f0; display:flex; gap:1rem; align-items:center;">
+          <label style="font-weight:600; color:#4682B4;">📊 Export Timecards to Excel:</label>
+          <input type="month" id="exportMonthPicker" style="max-width:200px;">
+          <button id="exportExcelBtn" class="primary">Export</button>
         </div>
-      </form>
+      </div>
+
+      <div id="tab-permissions" class="tab-content">
+        <p style="color:#666; margin-bottom:1rem; font-size:0.9rem;">Configure access rights for this employee.</p>
+        <h4>Center Access</h4>
+        <div id="centerPermissions" class="form-grid"></div>
+        
+        <h4>Dashboard Cards Access</h4>
+        <div id="dashboardPermissions" class="form-grid">
+          <label><input type="checkbox" value="studentManagement"> Student Management</label>
+          <label><input type="checkbox" value="newStudentList"> New Student List</label>
+          <label><input type="checkbox" value="editStudentDetails"> Edit Student Details</label>
+          <label><input type="checkbox" value="timetable"> Timetable</label>
+          <label><input type="checkbox" value="monthlyReports"> Monthly Reports</label>
+          <label><input type="checkbox" value="progressCharts"> Progress Charts</label>
+          <label><input type="checkbox" value="attendance"> Attendance</label>
+          <label><input type="checkbox" value="followUps"> Attendance Follow Ups</label>
+          <label><input type="checkbox" value="dropBook"> Drop Book</label>
+          <label><input type="checkbox" value="centreBulletin"> Centre Bulletin</label>
+        </div>
+        <div id="permissionsLockedMsg" class="hidden">🔒 Only kumonchamps@gmail.com can edit permissions.</div>
+      </div>
+
+      <div style="display:flex; gap:1rem; justify-content:flex-end; margin-top:2rem; padding-top:1rem; border-top:1px solid #e2e8f0;">
+        <button id="cancelModal" class="secondary">Cancel</button>
+        <button id="saveEmployee" class="primary">Save Employee</button>
+      </div>
     </div>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  <div id="page-loader" class="hidden">
+    <div class="spinner"></div>
+  </div>
+
   <script type="module" src="employees.js"></script>
 </body>
 </html>
