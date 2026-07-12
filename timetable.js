@@ -17,10 +17,11 @@ onAuthStateChanged(auth, async (user) => {
             window.location.href = 'index.html';
             return;
         }
-
+        
         const userData = userSnap.val();
         const isAdmin = user.email?.toLowerCase() === 'kumonchamps@gmail.com';
         const dashPerms = userData.permissions?.dashboardCards || {};
+
         const hasAccess = isAdmin || dashPerms[REQUIRED_PERMISSION] === true;
 
         if (hasAccess) {
@@ -31,6 +32,7 @@ onAuthStateChanged(auth, async (user) => {
             document.getElementById('accessDenied')?.classList.remove('hidden');
             document.getElementById('mainContent')?.classList.add('hidden');
             document.getElementById('page-loader')?.classList.add('hidden');
+
             document.getElementById('backToDashboardBtn')?.addEventListener('click', () => {
                 window.location.href = 'dashboard.html';
             });
@@ -52,10 +54,8 @@ function initializeTimetable() {
     }
 
     const studentsRef = ref(db, `centers/${centerId}/students`);
-
     const daySelect = document.getElementById('timetableDay');
     const timetableBody = document.getElementById('timetableBody');
-
     let timetableUnsub = null;
     let weekTimetableUnsub = null;
     let cachedStudentsSnap = null; // Cache for week view reuse
@@ -70,14 +70,14 @@ function initializeTimetable() {
     tabBtns.forEach(btn => {
         btn.addEventListener('click', () => {
             const targetTab = btn.dataset.tab;
-
+            
             // Update active tab button
             tabBtns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-
+            
             // Update active tab content
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-
+            
             if (targetTab === 'dayView') {
                 dayViewContainer.classList.add('active');
                 dayViewContainer.classList.add('print-active');
@@ -120,6 +120,7 @@ function initializeTimetable() {
         const slots = [];
         const startH = isWeekend ? 10 : 14;
         const endH = isWeekend ? 16 : 19;
+        
         for (let h = startH; h <= endH; h++) {
             const minutes = (h === endH) ? ['00', '15'] : ['00', '15', '30', '45'];
             minutes.forEach(m => {
@@ -181,36 +182,45 @@ function initializeTimetable() {
     function getNextDayNum(tsList, currentDay) {
         const days = [...new Set(tsList.map(ts => DAY_MAP[ts.day] || ts.day))];
         if (days.length <= 1) return '';
+        
         const currentIdx = DAY_ORDER.indexOf(currentDay);
         const dayNums = days.map(d => DAY_TO_NUM[d] || 0).filter(n => n > 0);
+        
         let next = dayNums.find(n => n > currentIdx + 1);
         if (next === undefined) next = Math.min(...dayNums);
+        
         return String(next);
     }
 
     function getDaySubjectOrder(subjects, currentDay) {
         const daySubjects = [];
         const seen = new Set();
+        
         subjects.forEach(sub => {
             if (sub.status !== 'current' || !sub.timeslots) return;
+            
             const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
             const dayTs = tsList.filter(ts => (DAY_MAP[ts.day] || ts.day) === currentDay);
+            
             if (dayTs.length > 0) {
                 const earliestTime = dayTs.reduce((min, ts) => ts.time < min ? ts.time : min, '23:59');
                 const group = getSubjectGroup(sub.name);
                 let letter = '';
+                
                 const lowerName = sub.name.toLowerCase().trim();
                 if (group === 'Math') letter = 'M';
                 else if (group === 'Chinese') letter = 'C';
                 else if (lowerName.includes('erp')) letter = 'R';
                 else if (lowerName.includes('efl')) letter = 'L';
                 else if (group === 'English') letter = 'E';
+                
                 if (letter && !seen.has(letter)) {
                     seen.add(letter);
                     daySubjects.push({ letter, time: earliestTime });
                 }
             }
         });
+        
         daySubjects.sort((a, b) => a.time.localeCompare(b.time));
         return daySubjects.map(s => s.letter).join('');
     }
@@ -234,6 +244,7 @@ function initializeTimetable() {
         const nextDayNum = getNextDayNum(tsList, tsDay);
         const baseName = s.nameCn || '-';
         const nick = s.nickname ? ` (${s.nickname})` : '';
+        
         const dayOrderStr = getDaySubjectOrder(
             Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {}),
             tsDay
@@ -246,7 +257,8 @@ function initializeTimetable() {
             grade: s.grade || '-',
             name: displayName,
             level: levelWS,
-            worksheetType: s.worksheetType || 'Paper' // ✅ Added to track KC vs Paper
+            // ✅ CRITICAL FIX: Pull worksheetType from the SUBJECT, not the student root
+            worksheetType: sub.worksheetType || s.worksheetType || 'Paper' 
         };
     }
 
@@ -264,7 +276,7 @@ function initializeTimetable() {
             timetableBody.innerHTML = '';
             const day = daySelect.value;
             const timeSlots = getTimeSlots(day);
-
+            
             const schedule = {};
             timeSlots.forEach(t => schedule[t] = {
                 mathLow: [], mathHigh: [], english: [], chinese: []
@@ -273,14 +285,17 @@ function initializeTimetable() {
             snap.forEach(ch => {
                 const s = ch.val();
                 if (!s?.subjects) return;
-                const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
 
+                const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
+                
                 subjects.forEach(sub => {
                     if (sub.status !== 'current' || !sub.timeslots) return;
+                    
                     const group = getSubjectGroup(sub.name);
                     if (!group) return;
 
                     const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
+                    
                     tsList.forEach(ts => {
                         const tsDay = DAY_MAP[ts.day] || ts.day;
                         if (tsDay === day && schedule[ts.time]) {
@@ -312,9 +327,10 @@ function initializeTimetable() {
                 const s = schedule[time];
                 const maxRows = Math.max(s.mathLow.length, s.mathHigh.length, s.english.length, s.chinese.length);
                 const rowCount = maxRows === 0 ? 2 : maxRows;
-
+                
                 for (let i = 0; i < rowCount; i++) {
                     const row = document.createElement('tr');
+                    
                     if (i === 0) {
                         const timeCell = document.createElement('td');
                         timeCell.textContent = time;
@@ -340,10 +356,10 @@ function initializeTimetable() {
                     addSubjectCells(s.mathHigh);
                     addSubjectCells(s.english);
                     addSubjectCells(s.chinese);
+                    
                     timetableBody.appendChild(row);
                 }
             });
-
             hideLoader();
         };
 
@@ -368,9 +384,8 @@ function initializeTimetable() {
         const weekDateRow = document.getElementById('weekDateRow');
         const weekDayRow = document.getElementById('weekDayRow');
         const weekRangeLabel = document.getElementById('weekRangeLabel');
-
+        
         if (!weekBody || !weekDateRow || !weekDayRow) return;
-
         showLoader();
 
         // If we already have cached data, use it; otherwise subscribe
@@ -379,13 +394,13 @@ function initializeTimetable() {
             hideLoader();
         } else {
             if (weekTimetableUnsub) { weekTimetableUnsub(); weekTimetableUnsub = null; }
-
+            
             const cb = (snap) => {
                 cachedStudentsSnap = snap;
                 renderWeekView(snap);
                 hideLoader();
             };
-
+            
             onValue(studentsRef, cb);
             weekTimetableUnsub = () => off(studentsRef, 'value', cb);
         }
@@ -432,16 +447,18 @@ function initializeTimetable() {
             snap.forEach(ch => {
                 const s = ch.val();
                 if (!s?.subjects) return;
-                const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
 
+                const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
+                
                 subjects.forEach(sub => {
                     if (sub.status !== 'current' || !sub.timeslots) return;
+                    
                     const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
-
+                    
                     tsList.forEach(ts => {
                         const tsDay = DAY_MAP[ts.day] || ts.day;
                         const time = ts.time;
-
+                        
                         if (schedule[time] && schedule[time][tsDay]) {
                             const studentObj = buildStudentObj(s, sub, tsDay, tsList);
                             if (studentObj) {
@@ -466,7 +483,7 @@ function initializeTimetable() {
 
             // --- Render table body ---
             weekBody.innerHTML = '';
-
+            
             if (activeTimeSlots.length === 0) {
                 const row = document.createElement('tr');
                 const td = document.createElement('td');
@@ -480,7 +497,7 @@ function initializeTimetable() {
 
             activeTimeSlots.forEach(time => {
                 const row = document.createElement('tr');
-
+                
                 // Time cell
                 const timeTd = document.createElement('td');
                 timeTd.textContent = time;
@@ -497,7 +514,7 @@ function initializeTimetable() {
                     students.forEach(st => {
                         const div = document.createElement('div');
                         div.className = 'week-student';
-
+                        
                         // ✅ Added highlight class for KC students
                         if (st.worksheetType === 'Kumon Connect') {
                             div.classList.add('kc-student');
@@ -518,12 +535,13 @@ function initializeTimetable() {
                         div.appendChild(gradeSpan);
                         div.appendChild(nameSpan);
                         div.appendChild(levelSpan);
+                        
                         td.appendChild(div);
                     });
-
+                    
                     row.appendChild(td);
                 });
-
+                
                 weekBody.appendChild(row);
             });
         }

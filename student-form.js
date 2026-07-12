@@ -109,7 +109,6 @@ function initApp() {
         return changed;
     }
 
-
     let subjectCount = 0;
     let html5QrCode = null;
     let scannerActive = false;
@@ -207,7 +206,6 @@ function initApp() {
         if (id === studentId) return;
         const url = new URL(window.location);
         url.searchParams.set('id', id);
-        // Keep the search term in the URL so the list remains filtered on the new page
         window.location.href = url.toString(); 
     }
 
@@ -229,7 +227,6 @@ function initApp() {
             (s.studentNumber || '').toLowerCase().includes(lowerTerm)
         );
 
-        // Update the filtered list for Prev/Next navigation
         filteredStudentsList = matches;
         currentListIndex = filteredStudentsList.findIndex(s => s.id === studentId);
         updateNavUI();
@@ -240,7 +237,7 @@ function initApp() {
         if (matches.length === 0) {
             searchDropdown.innerHTML = '<li class="no-results">No students found</li>';
         } else {
-            matches.slice(0, 50).forEach(s => { // Limit to 50 for performance
+            matches.slice(0, 50).forEach(s => { 
                 const li = document.createElement('li');
                 li.setAttribute('data-id', s.id);
                 
@@ -265,7 +262,6 @@ function initApp() {
                 li.appendChild(nameContainer);
                 li.appendChild(gradeSpan);
                 
-                // Use mousedown to prevent input blur before click registers
                 li.addEventListener('mousedown', (e) => {
                     e.preventDefault(); 
                     navigateToStudentById(s.id);
@@ -321,17 +317,14 @@ function initApp() {
                 updateSearchDropdown(term);
             });
 
-            // Show dropdown when focusing if there's already text
             searchInput.addEventListener('focus', () => {
                 if (searchInput.value) {
                     updateSearchDropdown(searchInput.value);
                 }
             });
 
-            // Handle keyboard navigation inside the search input
             searchInput.addEventListener('keydown', (e) => {
                 if (!searchDropdown || searchDropdown.classList.contains('hidden')) {
-                    // If dropdown is hidden, let ArrowLeft/Right navigate students
                     if (e.key === 'ArrowLeft') navigateToStudent(-1);
                     if (e.key === 'ArrowRight') navigateToStudent(1);
                     return;
@@ -361,7 +354,6 @@ function initApp() {
             });
         }
 
-        // Close dropdown when clicking outside
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.search-input-wrapper')) {
                 hideSearchDropdown();
@@ -371,14 +363,12 @@ function initApp() {
         document.getElementById('prevStudentBtn')?.addEventListener('click', () => navigateToStudent(-1));
         document.getElementById('nextStudentBtn')?.addEventListener('click', () => navigateToStudent(1));
         
-        // Global keyboard shortcuts (only when not typing in inputs)
         document.addEventListener('keydown', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
             if (e.key === 'ArrowLeft') navigateToStudent(-1);
             if (e.key === 'ArrowRight') navigateToStudent(1);
         });
 
-        // Initialize filter based on URL param (but don't show dropdown automatically on page load)
         if (searchParam) {
             const lowerTerm = searchParam.toLowerCase();
             filteredStudentsList = allStudentsList.filter(s => 
@@ -395,7 +385,6 @@ function initApp() {
         }
     }
 
-    // Initialize the navigation system
     initNavigation();
     // ==========================================
     // END NAVIGATION & SEARCH LOGIC
@@ -444,9 +433,6 @@ function initApp() {
         return opts;
     }
 
-    /* ============================================
-       🆕 MONTH / YEAR DROPDOWN HELPERS
-       ============================================ */
     function getMonthOptions(selectedMonth = '') {
         const months = [
             'January', 'February', 'March', 'April', 'May', 'June',
@@ -469,38 +455,6 @@ function initApp() {
         }
         return opts;
     }
-
-    // 🆕 Worksheet Type & KC No Logic
-    function updateWorksheetUI() {
-        const typeSelect = document.getElementById('worksheetType');
-        const kcWrapper = document.getElementById('kcNoWrapper');
-        const kcInput = document.getElementById('kcNo');
-        const kcHint = document.getElementById('kcNoHint');
-        
-        if (!typeSelect || !kcWrapper || !kcInput) return;
-        
-        const type = typeSelect.value;
-        const hasKcNo = kcInput.value.trim() !== '';
-        
-        if (type === 'Kumon Connect') {
-            kcWrapper.style.display = 'block';
-            kcInput.required = true;
-            if (kcHint) kcHint.style.display = 'none';
-        } else {
-            // Paper
-            if (hasKcNo) {
-                kcWrapper.style.display = 'block'; // Keep visible if previously entered
-                if (kcHint) kcHint.style.display = 'inline';
-                kcInput.required = false;
-            } else {
-                kcWrapper.style.display = 'none'; // Hide if empty
-                kcInput.required = false;
-            }
-        }
-    }
-
-    document.getElementById('worksheetType')?.addEventListener('change', updateWorksheetUI);
-    document.getElementById('kcNo')?.addEventListener('input', updateWorksheetUI);
 
     function initOtherInputs() {
         const fields = ['grade', 'school', 'nationality'];
@@ -700,17 +654,14 @@ function initApp() {
         let levels = [];
         
         if (subject === 'Math') {
-            // Math starts at 6A
             for (let i = 6; i >= 2; i--) levels.push(`${i}A`);
             levels = levels.concat(['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O']);
         } 
         else if (subject === 'English EFL') {
-            // English EFL starts at 7A
             for (let i = 7; i >= 2; i--) levels.push(`${i}A`);
             levels = levels.concat(['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O']);
         } 
         else if (subject.includes('Chinese') || subject === 'English ERP') {
-            // Chinese and English ERP start at 7A (unchanged)
             for (let i = 7; i >= 2; i--) levels.push(`${i}A`);
             ['A','B','C','D','E','F','G','H'].forEach(l => { levels.push(`${l}I`); levels.push(`${l}II`); });
             levels.push('II', 'III', 'J', 'K', 'L');
@@ -724,7 +675,6 @@ function initApp() {
         return optionsHTML;
     }
 
-    // 🆕 Pending Request Helpers
     let activePREntry = null;
 
     function updatePRBanner(entry) {
@@ -764,7 +714,6 @@ function initApp() {
         document.getElementById('prType').dispatchEvent(new Event('change'));
         document.getElementById('prReason').value = entry.querySelector('.pr-reason')?.value || '';
         
-        // Default to next month if empty
         const now = new Date();
         let nextM = String(now.getMonth() + 2).padStart(2, '0');
         let nextY = String(now.getFullYear());
@@ -782,9 +731,6 @@ function initApp() {
         document.getElementById('dropPauseRequestModal').classList.remove('hidden');
     }
 
-    /* ============================================
-       🆕 UPDATED: applySubjectUI — handles pause/drop fields
-       ============================================ */
     function applySubjectUI(entry) {
         const statusEl = entry.querySelector('.status');
         if (!statusEl) return;
@@ -795,23 +741,19 @@ function initApp() {
         const enrolDate = entry.querySelector('.fld-enrol-date');
         const timeslots = entry.querySelector('.timeslots-container');
 
-        // 🆕 Pause fields
         const pauseFrom = entry.querySelector('.fld-pause-from');
         const pauseTo = entry.querySelector('.fld-pause-to');
         const pauseReason = entry.querySelector('.fld-pause-reason');
 
-        // 🆕 Drop fields
         const dropDate = entry.querySelector('.fld-drop-date');
         const dropReason = entry.querySelector('.fld-drop-reason');
 
         [inquiryDate, enrolDate].forEach(el => { if(el) el.style.display = 'none'; });
         [startLevel, startWS].forEach(el => { if(el) el.style.display = 'none'; });
 
-        // 🆕 Hide all pause/drop fields first
         [pauseFrom, pauseTo, pauseReason, dropDate, dropReason].forEach(el => {
             if (el) el.style.display = 'none';
         });
-        // 🆕 Reset required on pause/drop inputs
         entry.querySelectorAll('.pause-from-month, .pause-from-year, .pause-to-month, .pause-to-year, .pause-reason').forEach(el => { if(el) el.required = false; });
         entry.querySelectorAll('.drop-month, .drop-year, .drop-reason').forEach(el => { if(el) el.required = false; });
 
@@ -837,7 +779,6 @@ function initApp() {
             if (startWS) { startWS.style.display = 'block'; const sel = startWS.querySelector('select'); if (sel) sel.required = true; }
         }
 
-        // 🆕 Show pause fields when status is 'pause'
         if (status === 'pause') {
             if (pauseFrom) {
                 pauseFrom.style.display = 'block';
@@ -852,14 +793,12 @@ function initApp() {
                 const input = pauseReason.querySelector('input');
                 if (input) input.required = true;
             }
-            // Hide timeslots for paused subjects
             if (timeslots) timeslots.style.display = 'none';
             if (enrolDate) { enrolDate.style.display = 'none'; const input = enrolDate.querySelector('input'); if (input) input.required = false; }
             if (startLevel) { startLevel.style.display = 'none'; const sel = startLevel.querySelector('select'); if (sel) sel.required = false; }
             if (startWS) { startWS.style.display = 'none'; const sel = startWS.querySelector('select'); if (sel) sel.required = false; }
         }
 
-        // 🆕 Show drop fields when status is 'drop'
         if (status === 'drop') {
             if (dropDate) {
                 dropDate.style.display = 'block';
@@ -870,7 +809,6 @@ function initApp() {
                 const input = dropReason.querySelector('input');
                 if (input) input.required = true;
             }
-            // Hide timeslots for dropped subjects
             if (timeslots) timeslots.style.display = 'none';
             if (enrolDate) { enrolDate.style.display = 'none'; const input = enrolDate.querySelector('input'); if (input) input.required = false; }
             if (startLevel) { startLevel.style.display = 'none'; const sel = startLevel.querySelector('select'); if (sel) sel.required = false; }
@@ -891,19 +829,17 @@ function initApp() {
         const statusSelect = entry.querySelector('.status');
         if (statusSelect) statusSelect.disabled = false;
 
-        // 🆕 Handle Drop/Pause Request Button Visibility & Overrides
         const addPrBtn = entry.querySelector('.add-pr-btn');
         if (addPrBtn) {
             if (status === 'drop' || status === 'pause') {
                 addPrBtn.style.display = 'none';
-                // Clear pending request if manually overridden
                 if (entry.querySelector('.pr-type')?.value || entry.querySelector('.pr-cancelled')?.value === 'true') {
                     entry.querySelector('.pr-cancelled').value = 'true';
                     entry.querySelectorAll('.pr-type, .pr-reason, .pr-pause-from-month, .pr-pause-from-year, .pr-pause-to-month, .pr-pause-to-year, .pr-drop-month, .pr-drop-year').forEach(el => el.value = '');
                     updatePRBanner(entry);
                 }
             } else {
-                updatePRBanner(entry); // Re-evaluates visibility based on pending request
+                updatePRBanner(entry);
             }
         }
 
@@ -914,9 +850,6 @@ function initApp() {
         renderTeachersTab();
     }
 
-    /* ============================================
-       🆕 UPDATED: collectFormData — includes pause/drop data
-       ============================================ */
     function collectFormData() {
         const subjects = [];
         for (const entry of document.querySelectorAll('.subject-entry')) {
@@ -950,17 +883,14 @@ function initApp() {
                 timeslots,
                 progress: [],
                 pencilSkill: pencilData,
-                // 🆕 Pause data
                 pauseFromMonth: entry.querySelector('.pause-from-month')?.value || '',
                 pauseFromYear: entry.querySelector('.pause-from-year')?.value || '',
                 pauseToMonth: entry.querySelector('.pause-to-month')?.value || '',
                 pauseToYear: entry.querySelector('.pause-to-year')?.value || '', 
                 pauseReason: entry.querySelector('.pause-reason')?.value?.trim() || '',
-                // 🆕 Drop data
                 dropMonth: entry.querySelector('.drop-month')?.value || '',
                 dropYear: entry.querySelector('.drop-year')?.value || '',
                 dropReason: entry.querySelector('.drop-reason')?.value?.trim() || '',
-                // 🆕 Pending Request Data
                 pendingRequest: (() => {
                     const isCancelled = entry.querySelector('.pr-cancelled')?.value === 'true';
                     if (isCancelled) return { cancelled: true, cancelledAt: new Date().toISOString() };
@@ -978,7 +908,9 @@ function initApp() {
                         dropYear: entry.querySelector('.pr-drop-year')?.value || '',
                         reason: entry.querySelector('.pr-reason')?.value || ''
                     };
-                })()
+                })(),
+                // 🆕 Worksheet Type per subject
+                worksheetType: entry.querySelector('.worksheet-type')?.value || 'Paper'
             });
         }
         const diagnosticTests = [];
@@ -1028,7 +960,7 @@ function initApp() {
                 own: document.getElementById('phoneOwn')?.value?.trim() || ''
             },
             qrCode: document.getElementById('qrCodeInput')?.value?.trim() || '',
-            worksheetType: document.getElementById('worksheetType')?.value || 'Paper',
+            // 🆕 Global KC No at root level
             kcNo: document.getElementById('kcNo')?.value?.trim() || '',
             subjects,
             diagnosticTests,
@@ -1072,9 +1004,6 @@ function initApp() {
         if (subject && SUBJECT_COLORS[subject]) entry.classList.add(SUBJECT_COLORS[subject]);
     }
 
-    /* ============================================
-       🆕 UPDATED: addSubjectField — includes pause/drop fields
-       ============================================ */
     function addSubjectField(data = {}) {
         if (subjectCount >= 3) return showError('Maximum 3 subjects allowed');
         const container = document.getElementById('subjectsContainer');
@@ -1106,7 +1035,6 @@ function initApp() {
                  </select>
              </div>
 
-             <!-- 🆕 Pause From -->
              <div class="fld-pause-from" style="display:${data.status === 'pause' ? 'block' : 'none'};">
                  <label>Pause From *</label>
                  <div class="month-year-group">
@@ -1115,7 +1043,6 @@ function initApp() {
                  </div>
              </div>
 
-             <!-- 🆕 Pause To -->
              <div class="fld-pause-to" style="display:${data.status === 'pause' ? 'block' : 'none'};">
                  <label>Pause To *</label>
                  <div class="month-year-group">
@@ -1124,7 +1051,6 @@ function initApp() {
                  </div>
              </div>
 
-             <!-- 🆕 Drop Month/Year -->
              <div class="fld-drop-date" style="display:${data.status === 'drop' ? 'block' : 'none'};">
                  <label>Drop Month *</label>
                  <div class="month-year-group">
@@ -1165,9 +1091,17 @@ function initApp() {
                  <label>Enrol Date *</label>
                  <input type="date" class="enrol-date" value="${data.enrolDate || ''}">
              </div>
+
+             <!-- 🆕 Worksheet Type per subject -->
+             <div class="fld-worksheet-type">
+                 <label>Worksheet Type</label>
+                 <select class="worksheet-type">
+                     <option value="Paper" ${data.worksheetType === 'Paper' || !data.worksheetType ? 'selected' : ''}>Paper</option>
+                     <option value="Kumon Connect" ${data.worksheetType === 'Kumon Connect' ? 'selected' : ''}>Kumon Connect</option>
+                 </select>
+             </div>
          </div>
 
-         <!-- 🆕 Pending Request Banner -->
          <div class="pending-request-banner hidden">
              <div class="banner-content">
                  <span class="banner-icon">⏳</span>
@@ -1176,7 +1110,6 @@ function initApp() {
              <button type="button" class="cancel-pr-btn danger">Cancel Request</button>
          </div>
 
-         <!-- 🆕 Hidden Inputs for Pending Request (synced with Drop Book) -->
          <input type="hidden" class="pr-cancelled" value="${data.pendingRequest?.cancelled ? 'true' : 'false'}">
          <input type="hidden" class="pr-type" value="${data.pendingRequest?.cancelled ? '' : (data.pendingRequest?.type || '')}">
          <input type="hidden" class="pr-pause-from-month" value="${data.pendingRequest?.cancelled ? '' : (data.pendingRequest?.pauseFromMonth || '')}">
@@ -1201,13 +1134,11 @@ function initApp() {
              </div>
          </div>
 
-         <!-- 🆕 Pause Reason -->
          <div class="fld-pause-reason pause-drop-reason-field" style="display:${data.status === 'pause' ? 'block' : 'none'};">
              <label>Reason for Pause *</label>
              <input type="text" class="pause-reason" placeholder="Enter reason for pause..." value="${data.pauseReason || ''}">
          </div>
 
-         <!-- 🆕 Drop Reason -->
          <div class="fld-drop-reason pause-drop-reason-field" style="display:${data.status === 'drop' ? 'block' : 'none'};">
              <label>Reason for Drop *</label>
              <input type="text" class="drop-reason" placeholder="Enter reason for drop..." value="${data.dropReason || ''}">
@@ -1260,7 +1191,6 @@ function initApp() {
             };
         }
 
-        // 🆕 Bind Drop/Pause Request Buttons
         const addPrBtn = div.querySelector('.add-pr-btn');
         if (addPrBtn) addPrBtn.onclick = () => openPRModal(div);
 
@@ -1272,7 +1202,7 @@ function initApp() {
                 updatePRBanner(div);
             };
         }
-        updatePRBanner(div); // Initialize banner state
+        updatePRBanner(div); 
         
         const addTimeslotBtn = div.querySelector('.add-timeslot-btn');
         if (addTimeslotBtn) addTimeslotBtn.onclick = () => addTimeslotField(timeslotsList);
@@ -1472,7 +1402,6 @@ function initApp() {
             if (snap.exists()) {
                 let s = snap.val();
                 
-                // 🆕 Auto-execute pending drop/pause requests
                 if (processPendingRequests(s)) {
                     s.updatedAt = new Date().toISOString();
                     await update(ref(db, `centers/${centerId}/students/${studentId}`), s);
@@ -1508,10 +1437,8 @@ function initApp() {
                 };
                 ['studentNumber','nickname','namePinyin','nameCn','email','address','gender'].forEach(id => setVal(id, s[id]));
                 
-                // 🆕 Load Worksheet & KC No
-                setVal('worksheetType', s.worksheetType || 'Paper');
+                // 🆕 Load Global KC No
                 setVal('kcNo', s.kcNo || '');
-                updateWorksheetUI(); // Initialize visibility based on loaded data
                 
                 if (s.grade) setFieldWithOther('grade', s.grade);
                 if (s.school) setFieldWithOther('school', s.school);
@@ -1528,8 +1455,19 @@ function initApp() {
                 if (s.diagnosticTests && Array.isArray(s.diagnosticTests)) {
                     s.diagnosticTests.forEach(dt => addDTRow(dt));
                 }
+                
                 if (s.subjects?.length) {
                     s.subjects.forEach(sub => {
+                        // 🆕 Migration: If subject has kcNo but root doesn't, move it to root
+                        if (sub.kcNo && !s.kcNo) {
+                            s.kcNo = sub.kcNo;
+                            setVal('kcNo', s.kcNo);
+                        }
+                        // 🆕 Migration: If root has worksheetType but subject doesn't, apply to subject
+                        if (!sub.worksheetType && s.worksheetType) {
+                            sub.worksheetType = s.worksheetType;
+                        }
+
                         addSubjectField(sub);
                         const entries = document.querySelectorAll('.subject-entry');
                         if (entries.length) applySubjectUI(entries[entries.length - 1]);
@@ -1543,7 +1481,7 @@ function initApp() {
                 if (typeof togglePO === 'function') togglePO();
                 updateOverallStatus();
                 updateCurrentLevelsSummary();
-                renderTeachersTab(); // Populate checkboxes with saved data
+                renderTeachersTab(); 
                 originalFormData = collectFormData();
             } else {
                 showError('Student not found in database.');
@@ -1624,9 +1562,6 @@ function initApp() {
         }
     });
 
-    /* ============================================
-       🆕 UPDATED: Form submit validation — includes pause/drop validation 
-       ============================================ */
     document.getElementById('studentForm')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         if (!centerId) return showError('Error: No center selected.');
@@ -1660,20 +1595,25 @@ function initApp() {
             if (poReasonEl && !poReasonEl.value?.trim()) return showError('⚠️ Please provide a reason for no Parent Orientation.');
         }
 
-        // 🆕 Validate Worksheet Type
-        const wsType = document.getElementById('worksheetType')?.value;
-        const kcNoVal = document.getElementById('kcNo')?.value?.trim();
-        if (wsType === 'Kumon Connect' && !kcNoVal) {
-            return showError('⚠️ KC No. is required for Kumon Connect students.');
+        // 🆕 Validate Global KC No if any subject uses Kumon Connect
+        let hasKCSubject = false;
+        for (const entry of document.querySelectorAll('.subject-entry')) {
+            if (entry.querySelector('.worksheet-type')?.value === 'Kumon Connect') {
+                hasKCSubject = true;
+                break;
+            }
         }
-        
+        const globalKcNo = document.getElementById('kcNo')?.value?.trim();
+        if (hasKCSubject && !globalKcNo) {
+            return showError('⚠️ KC No. is required at the top level when a subject uses Kumon Connect.');
+        }
+
         const pencilCount = Array.from(document.querySelectorAll('.pencil-skill-entry')).filter(el => el.style.display !== 'none').length;
         if (pencilCount > 1) return showError('⚠️ Only one Pencil Skill can be added per student.');
         
         let subIdx = 1;
         for (const entry of document.querySelectorAll('.subject-entry')) {
             if (entry.style.display === 'none' || entry.querySelector('.status')?.value === 'drop') {
-                // 🆕 Still validate drop fields even though status is 'drop'
                 const status = entry.querySelector('.status')?.value;
                 if (status === 'drop') {
                     const dropMonth = entry.querySelector('.drop-month');
@@ -1695,7 +1635,6 @@ function initApp() {
             
             if (!subject?.value) return showError(`⚠️ Subject #${subIdx}: Please select a Subject.`);
 
-            // 🆕 Validate Pause fields
             if (status === 'pause') {
                 const pauseFromMonth = entry.querySelector('.pause-from-month');
                 const pauseFromYear = entry.querySelector('.pause-from-year');
@@ -1709,7 +1648,6 @@ function initApp() {
                 if (!pauseReason?.value?.trim()) return showError(`⚠️ Subject #${subIdx}: Reason for Pause is required.`);
             }
 
-            // 🆕 Validate Drop fields
             if (status === 'drop') {
                 const dropMonth = entry.querySelector('.drop-month');
                 const dropYear = entry.querySelector('.drop-year');
@@ -1784,10 +1722,7 @@ function initApp() {
                 studentData.subjects = studentData.subjects.map(newSub => {
                     const oldSub = oldSubjects.find(s => s.name === newSub.name);
                     if (oldSub) {
-                        // Preserve progress data
                         if (Array.isArray(oldSub.progress)) newSub.progress = oldSub.progress;
-                        
-                        // 🆕 Preserve pendingRequest if form didn't explicitly change/cancel it
                         if (!newSub.pendingRequest && oldSub.pendingRequest) {
                             newSub.pendingRequest = oldSub.pendingRequest;
                         }
@@ -1855,7 +1790,6 @@ function initApp() {
     const togglePO = initParentOrientation();
     initOtherInputs();
 
-    // 🆕 Init Drop/Pause Request Modal
     const prModal = document.getElementById('dropPauseRequestModal');
     const prTypeSelect = document.getElementById('prType');
     
@@ -1881,7 +1815,7 @@ function initApp() {
         const reason = document.getElementById('prReason').value.trim();
         if (!reason) return showError('⚠️ Reason is required.');
         
-        activePREntry.querySelector('.pr-cancelled').value = 'false'; // Reset cancelled flag when creating new request
+        activePREntry.querySelector('.pr-cancelled').value = 'false'; 
         activePREntry.querySelector('.pr-type').value = type;
         activePREntry.querySelector('.pr-reason').value = reason;
         
@@ -1925,7 +1859,7 @@ async function fetchTeachers() {
                 name: data.englishName || data.chineseName || 'Unknown',
                 positions: data.positions || (data.position ? [data.position] : []),
                 isDisabled: data.isDisabled
-            })).filter(t => !t.isDisabled); // Only show active teachers
+            })).filter(t => !t.isDisabled); 
         }
     } catch (err) {
         console.error("Error fetching teachers:", err);
@@ -1933,7 +1867,6 @@ async function fetchTeachers() {
 }
 
 function setupTeachersTab() {
-    // 1. Inject Tab Button
     const tabsContainer = document.querySelector('.tabs');
     if (tabsContainer && !document.getElementById('tab-teachers-btn')) {
         const btn = document.createElement('button');
@@ -1953,7 +1886,6 @@ function setupTeachersTab() {
         });
     }
 
-    // 2. Inject Tab Content - Insert BEFORE the form action buttons
     const formContainer = document.querySelector('.form-container');
     if (formContainer && !document.getElementById('tab-teachers')) {
         const contentDiv = document.createElement('div');
@@ -1965,7 +1897,6 @@ function setupTeachersTab() {
             <div id="teachers-list-container" style="display: flex; flex-direction: column; gap: 1.5rem;"></div>
         `;
         
-        // Find the action buttons container and insert before it
         const actionButtons = document.querySelector('.form-actions') || 
                               document.querySelector('button[type="submit"]')?.parentElement ||
                               document.getElementById('studentForm');
@@ -2047,10 +1978,10 @@ fetchTeachers().then(() => {
     if (isEdit) loadStudentData(); 
     else { 
         addSubjectField(); 
-        renderTeachersTab(); // Render for new students
+        renderTeachersTab(); 
         hideLoader(); 
     }
 });
      
     document.getElementById('logoutBtn')?.addEventListener('click', logout);
-}   
+}
