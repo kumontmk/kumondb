@@ -1184,7 +1184,6 @@ async function updateIncompleteBadge() {
   }
 }
 
-
 // ✅ UPDATED: Integrates real-time incomplete records with verification requests
 async function loadIncompleteTimecards() {
   const tbody = document.getElementById('incompleteTableBody');
@@ -1213,7 +1212,17 @@ async function loadIncompleteTimecards() {
           const log = sortedLogs[i];
           if (log.type === 'in') {
             if (currentIn !== null) {
-              incompleteRecords.push({ empId, date, name: emp.englishName || '', chineseName: emp.chineseName || '', position: getEmpPositions(emp).join(', ') || '', terms: emp.terms || 'Full-time', center: currentIn.location || '', type: 'IN', time: currentIn.time, missingType: 'out' });
+              incompleteRecords.push({ 
+                empId, date, 
+                name: emp.englishName || '', 
+                chineseName: emp.chineseName || '', 
+                position: getEmpPositions(emp).join(', ') || '', 
+                terms: emp.terms || 'Full-time', 
+                center: currentIn.location || '', 
+                type: 'IN', 
+                time: currentIn.time, 
+                missingType: 'out' 
+              });
             }
             currentIn = log;
           } else if (log.type === 'out') {
@@ -1221,21 +1230,44 @@ async function loadIncompleteTimecards() {
               currentIn = null;
             } else {
               if (currentIn !== null) {
-                incompleteRecords.push({ empId, date, name: emp.englishName || '', chineseName: emp.chineseName || '', position: getEmpPositions(emp).join(', ') || '', terms: emp.terms || 'Full-time', center: currentIn.location || '', type: 'IN', time: currentIn.time, missingType: 'out' });
+                incompleteRecords.push({ 
+                  empId, date, 
+                  name: emp.englishName || '', 
+                  chineseName: emp.chineseName || '', 
+                  position: getEmpPositions(emp).join(', ') || '', 
+                  terms: emp.terms || 'Full-time', 
+                  center: currentIn.location || '', 
+                  type: 'IN', 
+                  time: currentIn.time, 
+                  missingType: 'out' 
+                });
               }
-              incompleteRecords.push({ empId, date, name: emp.englishName || '', chineseName: emp.chineseName || '', position: getEmpPositions(emp).join(', ') || '', terms: emp.terms || 'Full-time', center: log.location || '', type: 'OUT', time: log.time, missingType: 'in' });
               currentIn = null;
             }
           }
         }
         if (currentIn !== null) {
-          incompleteRecords.push({ empId, date, name: emp.englishName || '', chineseName: emp.chineseName || '', position: getEmpPositions(emp).join(', ') || '', terms: emp.terms || 'Full-time', center: currentIn.location || '', type: 'IN', time: currentIn.time, missingType: 'out' });
+          incompleteRecords.push({ 
+            empId, date, 
+            name: emp.englishName || '', 
+            chineseName: emp.chineseName || '', 
+            position: getEmpPositions(emp).join(', ') || '', 
+            terms: emp.terms || 'Full-time', 
+            center: currentIn.location || '', 
+            type: 'IN', 
+            time: currentIn.time, 
+            missingType: 'out' 
+          });
         }
       });
     });
     
-    const verificationList = Object.entries(verifications).map(([id, v]) => ({ id, ...v }));
-    const verificationKeys = new Set(verificationList.filter(v => v.status !== 'confirmed').map(v => `${v.empId}_${v.date}_${v.inTime}`));
+    // ✅ Filter out confirmed verifications from display
+    const verificationList = Object.entries(verifications)
+      .map(([id, v]) => ({ id, ...v }))
+      .filter(v => v.status !== 'confirmed'); // ✅ Hide confirmed from table
+    
+    const verificationKeys = new Set(verificationList.map(v => `${v.empId}_${v.date}_${v.inTime}`));
     
     const filteredIncomplete = incompleteRecords.filter(rec => 
       !verificationKeys.has(`${rec.empId}_${rec.date}_${rec.time}`)
@@ -1247,7 +1279,7 @@ async function loadIncompleteTimecards() {
     ];
     
     allRecords.sort((a, b) => {
-      const statusOrder = { 'Pending': 0, 'Denied': 1, 'Incomplete': 2, 'Confirmed': 3 };
+      const statusOrder = { 'Pending': 0, 'Denied': 1, 'Incomplete': 2 };
       const orderDiff = (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99);
       if (orderDiff !== 0) return orderDiff;
       return b.date.localeCompare(a.date) || (a.name || a.empName || '').localeCompare(b.name || b.empName || '');
@@ -1285,10 +1317,12 @@ async function loadIncompleteTimecards() {
         
         if (rec.status === 'pending') {
           statusBadge = '<span class="status-badge" style="background:#fef3c7;color:#92400e;">Pending</span>';
-          timeCell = isMissingOut ? `IN: <strong>${inTime}</strong><br>Proposed OUT: <strong>${outTime}</strong>` : `Proposed IN: <strong>${inTime}</strong><br>OUT: <strong>${outTime}</strong>`;
+          timeCell = isMissingOut 
+            ? `IN: <strong>${inTime}</strong><br>Proposed OUT: <strong>${outTime}</strong>` 
+            : `Proposed IN: <strong>${inTime}</strong><br>OUT: <strong>${outTime}</strong>`;
           actionCell = `
             <button class="primary verify-btn" data-id="${rec.id}" data-action="confirm" style="padding:0.4rem 0.8rem;font-size:0.85rem;margin-right:0.25rem;">✅ Confirm</button>
-            <button class="danger verify-btn" data-id="${rec.id}" data-action="deny" style="padding:0.4rem 0.8rem;font-size:0.85rem;">❌ Deny</button>
+            <button class="danger verify-btn" data-id="${rec.id}" data-action="deny" style="padding:0.4rem 0.8rem;font-size:0.85rem;"> Deny</button>
           `;
         } else if (rec.status === 'denied') {
           statusBadge = '<span class="status-badge" style="background:#fee2e2;color:#991b1b;">Denied</span>';
@@ -1297,14 +1331,9 @@ async function loadIncompleteTimecards() {
             ? `IN: <strong>${inTime}</strong><br>Manual OUT: <input type="time" class="manual-time-input" value="${inputVal}" style="width:110px;padding:0.4rem;border:1px solid #cbd5e1;border-radius:4px;">`
             : `Manual IN: <input type="time" class="manual-time-input" value="${inputVal}" style="width:110px;padding:0.4rem;border:1px solid #cbd5e1;border-radius:4px;"><br>OUT: <strong>${outTime}</strong>`;
           actionCell = `<button class="primary save-manual-btn" data-id="${rec.id}" style="padding:0.4rem 0.8rem;font-size:0.85rem;">Save</button>`;
-        } else if (rec.status === 'confirmed') {
-          statusBadge = '<span class="status-badge" style="background:#d1fae5;color:#065f46;">Confirmed</span>';
-          timeCell = `IN: <strong>${inTime}</strong><br>OUT: <strong>${outTime}</strong>`;
-          actionCell = '<span style="color:#059669;font-weight:600;">Resolved</span>';
-          tr.style.opacity = '0.6';
         }
       } else {
-        const typeLabel = rec.type === 'IN' ? '<span class="status-badge" style="background:#dbeafe;color:#1e40af;">IN only</span>' : '<span class="status-badge" style="background:#fef3c7;color:#92400e;">OUT only</span>';
+        const typeLabel = '<span class="status-badge" style="background:#dbeafe;color:#1e40af;">IN only</span>';
         statusBadge = '<span class="status-badge" style="background:#e2e8f0;color:#475569;">Incomplete</span>';
         timeCell = `${typeLabel} <small style="color:#666;">missing ${rec.missingType.toUpperCase()}</small><br><strong>${rec.time}</strong>`;
         actionCell = `
@@ -1352,7 +1381,7 @@ async function loadIncompleteTimecards() {
           setTimeout(() => { tr.style.opacity = '0.4'; tr.style.textDecoration = 'line-through'; }, 500);
           updateIncompleteBadge();
         } catch (err) {
-          console.error(err); alert('❌ Failed to save.'); btn.disabled = false; btn.textContent = 'Save';
+          console.error(err); alert(' Failed to save.'); btn.disabled = false; btn.textContent = 'Save';
         }
       });
     });

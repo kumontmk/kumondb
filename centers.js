@@ -47,7 +47,7 @@ onAuthStateChanged(auth, async (user) => {
         card.className = 'center-card';
         card.style.cursor = 'pointer';
         card.innerHTML = `
-          <div class="card-icon">🏢</div>
+          <div class="card-icon"></div>
           <h3>${centerData.name || centerId}</h3>
           <p>Manage students, reports, and daily operations</p>
         `;
@@ -62,7 +62,7 @@ onAuthStateChanged(auth, async (user) => {
     if (!hasVisibleCenters) {
       centerGrid.innerHTML = `
         <div class="center-card" style="cursor: default; border-left: 4px solid #dc3545; grid-column: 1 / -1;">
-          <div class="card-icon">🚫</div>
+          <div class="card-icon"></div>
           <h3>No Centers Assigned</h3>
           <p>You do not have permission to access any centers. Please contact the administrator to update your permissions.</p>
         </div>
@@ -108,23 +108,32 @@ async function checkMissingClockOuts() {
       for (const log of sortedLogs) {
         if (log.type === 'in') {
           if (currentIn) {
-            missingRecords.push({ date, center: currentIn.location, inTime: currentIn.time, missingType: 'out' });
+            // Found another IN without OUT - this is a missing OUT
+            missingRecords.push({ 
+              date, 
+              center: currentIn.location, 
+              inTime: currentIn.time, 
+              missingType: 'out' 
+            });
           }
           currentIn = log;
         } else if (log.type === 'out') {
           if (currentIn && currentIn.location === log.location) {
-            currentIn = null;
-          } else {
-            if (currentIn) {
-              missingRecords.push({ date, center: currentIn.location, inTime: currentIn.time, missingType: 'out' });
-            }
-            missingRecords.push({ date, center: log.location, outTime: log.time, missingType: 'in' });
+            // Valid pair found
             currentIn = null;
           }
+          // If OUT without matching IN, we ignore it (not showing missing IN)
         }
       }
+      
+      // If we end with an IN, it's missing an OUT
       if (currentIn) {
-        missingRecords.push({ date, center: currentIn.location, inTime: currentIn.time, missingType: 'out' });
+        missingRecords.push({ 
+          date, 
+          center: currentIn.location, 
+          inTime: currentIn.time, 
+          missingType: 'out' 
+        });
       }
     });
     
@@ -137,17 +146,19 @@ async function checkMissingClockOuts() {
 }
 
 function showMissingClockOutModal(records) {
+  // Check if modal already exists
   let modal = document.getElementById('missingClockOutModal');
+  
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'missingClockOutModal';
     modal.className = 'modal';
     modal.style.zIndex = '10000';
     modal.innerHTML = `
-      <div class="modal-content">
+      <div class="modal-content" style="max-width: 600px; text-align: left;">
         <button class="close-btn" id="closeMissingModalBtn">&times;</button>
-        <h3>⚠️ Missing Clock-Out Records</h3>
-        <p>You have incomplete timecard records from previous days. Please provide the missing times for manager approval.</p>
+        <h3 style="text-align: center; color: #dc3545; margin-bottom: 1rem;">️ Missing Clock-Out Records</h3>
+        <p style="color: #666; margin-bottom: 1.5rem; text-align: center;">You have incomplete timecard records from previous days. Please provide the missing times for manager approval.</p>
         <div id="missingRecordsList" style="max-height: 400px; overflow-y: auto; margin-bottom: 1rem;"></div>
         <div style="display:flex; gap:1rem; justify-content:flex-end;">
           <button class="secondary" id="remindLaterBtn">Remind Me Later</button>
@@ -157,9 +168,17 @@ function showMissingClockOutModal(records) {
     `;
     document.body.appendChild(modal);
     
-    document.getElementById('closeMissingModalBtn').onclick = () => modal.style.display = 'none';
-    document.getElementById('remindLaterBtn').onclick = () => modal.style.display = 'none';
+    // Close button
+    document.getElementById('closeMissingModalBtn').onclick = () => {
+      modal.style.display = 'none';
+    };
     
+    // Remind later button
+    document.getElementById('remindLaterBtn').onclick = () => {
+      modal.style.display = 'none';
+    };
+    
+    // Submit button
     document.getElementById('submitMissingClockOutsBtn').addEventListener('click', async () => {
       const inputs = document.querySelectorAll('.missing-time-input');
       const recordsToSubmit = [];
@@ -177,7 +196,6 @@ function showMissingClockOutModal(records) {
             date: input.dataset.date,
             center: input.dataset.center,
             inTime: input.dataset.inTime,
-            outTime: input.dataset.outTime,
             missingType: input.dataset.missingType,
             proposedTime: time
           });
@@ -202,17 +220,15 @@ function showMissingClockOutModal(records) {
             empName: userName,
             date: rec.date,
             center: rec.center,
-            inTime: rec.inTime || '',
-            outTime: rec.outTime || '',
+            inTime: rec.inTime,
             missingType: rec.missingType,
             proposedOutTime: rec.missingType === 'out' ? rec.proposedTime : '',
-            proposedInTime: rec.missingType === 'in' ? rec.proposedTime : '',
             status: 'pending',
             requestedAt: new Date().toISOString()
           });
         }
         alert('✅ Submitted successfully! Your manager will review the records.');
-        modal.style.display = 'none';
+        modal.style.display = 'none'; // ✅ Close modal after submission
       } catch (err) {
         console.error(err);
         alert('Failed to submit. Please try again.');
@@ -223,6 +239,7 @@ function showMissingClockOutModal(records) {
     });
   }
   
+  // Populate the list
   const list = document.getElementById('missingRecordsList');
   list.innerHTML = '';
   
@@ -230,22 +247,21 @@ function showMissingClockOutModal(records) {
     const item = document.createElement('div');
     item.style.cssText = 'padding: 0.75rem; background: #f8f9fa; border-radius: 6px; margin-bottom: 0.5rem; border: 1px solid #e2e8f0;';
     
-    const missingLabel = rec.missingType === 'out' ? 'Clock-Out' : 'Clock-In';
-    const existingTime = rec.missingType === 'out' ? `Clock-In: <strong>${rec.inTime}</strong>` : `Clock-Out: <strong>${rec.outTime}</strong>`;
-    
     item.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-        <span style="font-weight:600; color:#4682B4;">📅 ${rec.date}</span>
+        <span style="font-weight:600; color:#4682B4;"> ${rec.date}</span>
         <span style="font-size:0.85rem; color:#666;">📍 ${rec.center || 'Unknown'}</span>
       </div>
-      <div style="font-size:0.9rem; margin-bottom:0.5rem;">${existingTime} | Missing: <strong style="color:#dc3545;">${missingLabel}</strong></div>
-      <label style="font-size:0.85rem; font-weight:500; display:block; margin-bottom:0.25rem;">Proposed ${missingLabel} Time:</label>
+      <div style="font-size:0.9rem; margin-bottom:0.5rem;">
+        Clock-In: <strong>${rec.inTime}</strong> | 
+        Missing: <strong style="color:#dc3545;">Clock-Out</strong>
+      </div>
+      <label style="font-size:0.85rem; font-weight:500; display:block; margin-bottom:0.25rem;">Proposed Clock-Out Time:</label>
       <input type="time" class="missing-time-input" 
              data-emp-id="${auth.currentUser.uid}" 
              data-date="${rec.date}" 
              data-center="${rec.center || ''}" 
-             data-in-time="${rec.inTime || ''}" 
-             data-out-time="${rec.outTime || ''}" 
+             data-in-time="${rec.inTime}" 
              data-missing-type="${rec.missingType}" 
              style="width:100%; padding:0.5rem; border:1px solid #cbd5e1; border-radius:4px;">
     `;
