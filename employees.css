@@ -41,7 +41,7 @@ header a:hover, header button:hover { background: rgba(255,255,255,0.3); }
 .access-denied .primary { margin-top: 1.5rem; }
 
 /* 📄 MAIN LAYOUT */
-.students-page { padding: 1.5rem 2rem; max-width: 1400px; width: 99%; margin: 0 auto; }
+.students-page { padding: 1.5rem 2rem; max-width: 95%; width: 99%; margin: 0 auto; }
 .controls { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
 .controls input { flex: 1; min-width: 200px; }
 
@@ -505,4 +505,48 @@ tr.disabled-row td:first-child {
   .checkbox-group {
     grid-template-columns: 1fr; /* 1 column on mobile */
   }
+}
+
+/* ============================================
+✅ EXPORT BUTTON CONTAINER STYLING
+============================================ */
+.export-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: white;
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  border: 1px solid #e2e8f0;
+}
+
+.export-container label {
+  font-weight: 600;
+  color: #4682B4;
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.export-container input[type="month"] {
+  width: auto;
+  min-width: 150px;
+  padding: 0.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.export-container button {
+  padding: 0.5rem 1.2rem;
+  font-size: 0.9rem;
+}
+
+/* If you placed it inside .controls, ensure it doesn't stretch */
+.controls .export-container {
+  margin-bottom: 0;
+  flex: 0 0 auto;
+  margin-left: auto; /* Pushes it to the right if inside controls */
 }

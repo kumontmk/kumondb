@@ -1,5 +1,5 @@
 import { db, logout } from './auth.js';
-import { ref, get, push, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { ref, get, push, set, update } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const auth = getAuth();
@@ -62,14 +62,14 @@ onAuthStateChanged(auth, async (user) => {
     if (!hasVisibleCenters) {
       centerGrid.innerHTML = `
         <div class="center-card" style="cursor: default; border-left: 4px solid #dc3545; grid-column: 1 / -1;">
-          <div class="card-icon"></div>
+          <div class="card-icon">🚫</div>
           <h3>No Centers Assigned</h3>
           <p>You do not have permission to access any centers. Please contact the administrator to update your permissions.</p>
         </div>
       `;
     }
     
-    checkMissingClockOuts();
+    await checkMissingClockOuts();
     pageLoader.classList.add('hidden');
   } catch (error) {
     console.error("Error loading centers:", error);
@@ -78,7 +78,6 @@ onAuthStateChanged(auth, async (user) => {
   }
 });
 
-// ✅ NEW: Check for missing clock-outs and show notification modal
 async function checkMissingClockOuts() {
   const user = auth.currentUser;
   if (!user) return;
@@ -91,24 +90,26 @@ async function checkMissingClockOuts() {
       get(ref(db, 'timecardVerifications'))
     ]);
     
-    if (!timecardsSnap.exists()) return;
+    if (!timecardsSnap.exists()) {
+      console.log("No timecards found in database.");
+      return;
+    }
     
     const timecards = timecardsSnap.val();
     const verifications = verificationsSnap.exists() ? verificationsSnap.val() : {};
     
-    // Get pending verification keys to exclude
-    const pendingVerificationKeys = new Set();
+    // ✅ Only exclude CONFIRMED and PENDING (allow DENIED to show up again for resubmission)
+    const excludedVerificationKeys = new Set();
     Object.entries(verifications).forEach(([id, v]) => {
-      if (v.status === 'pending' && v.empId === user.uid) {
-        pendingVerificationKeys.add(`${v.date}_${v.inTime}`);
+      if (v.empId === user.uid && (v.status === 'confirmed' || v.status === 'pending')) {
+        excludedVerificationKeys.add(`${v.date}_${v.inTime}`);
       }
     });
     
     const missingRecords = [];
     
     Object.entries(timecards).forEach(([date, dayData]) => {
-      // ONLY check dates before today (ignores real-time same-day records)
-      if (date >= today) return; 
+      if (date >= today) return; // Ignore today's records
       
       const empData = dayData[user.uid];
       if (!empData || !empData.logs) return;
@@ -120,40 +121,28 @@ async function checkMissingClockOuts() {
       for (const log of sortedLogs) {
         if (log.type === 'in') {
           if (currentIn) {
-            // Found another IN without OUT - this is a missing OUT
             const recordKey = `${date}_${currentIn.time}`;
-            if (!pendingVerificationKeys.has(recordKey)) {
-              missingRecords.push({ 
-                date, 
-                center: currentIn.location, 
-                inTime: currentIn.time, 
-                missingType: 'out' 
-              });
+            if (!excludedVerificationKeys.has(recordKey)) {
+              missingRecords.push({ date, center: currentIn.location, inTime: currentIn.time, missingType: 'out' });
             }
           }
           currentIn = log;
         } else if (log.type === 'out') {
           if (currentIn && currentIn.location === log.location) {
-            // Valid pair found
-            currentIn = null;
+            currentIn = null; // Valid pair found
           }
-          // If OUT without matching IN, we ignore it (not showing missing IN)
         }
       }
       
-      // If we end with an IN, it's missing an OUT
       if (currentIn) {
         const recordKey = `${date}_${currentIn.time}`;
-        if (!pendingVerificationKeys.has(recordKey)) {
-          missingRecords.push({ 
-            date, 
-            center: currentIn.location, 
-            inTime: currentIn.time, 
-            missingType: 'out' 
-          });
+        if (!excludedVerificationKeys.has(recordKey)) {
+          missingRecords.push({ date, center: currentIn.location, inTime: currentIn.time, missingType: 'out' });
         }
       }
     });
+    
+    console.log("Missing records detected for modal:", missingRecords);
     
     if (missingRecords.length > 0) {
       showMissingClockOutModal(missingRecords);
@@ -165,6 +154,7 @@ async function checkMissingClockOuts() {
 
 function showMissingClockOutModal(records) {
   let modal = document.getElementById('missingClockOutModal');
+  
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'missingClockOutModal';
@@ -186,67 +176,9 @@ function showMissingClockOutModal(records) {
     
     document.getElementById('closeMissingModalBtn').onclick = () => modal.style.display = 'none';
     document.getElementById('remindLaterBtn').onclick = () => modal.style.display = 'none';
-    
-    document.getElementById('submitMissingClockOutsBtn').addEventListener('click', async () => {
-      const inputs = document.querySelectorAll('.missing-time-input');
-      const recordsToSubmit = [];
-      let hasError = false;
-      
-      inputs.forEach(input => {
-        const time = input.value;
-        if (!time) {
-          hasError = true;
-          input.style.borderColor = '#dc3545';
-        } else {
-          input.style.borderColor = '#cbd5e1';
-          recordsToSubmit.push({
-            empId: input.dataset.empId,
-            date: input.dataset.date,
-            center: input.dataset.center,
-            inTime: input.dataset.inTime,
-            missingType: input.dataset.missingType,
-            proposedTime: time
-          });
-        }
-      });
-      
-      if (hasError) {
-        alert('Please fill in all missing times.');
-        return;
-      }
-      
-      const btn = document.getElementById('submitMissingClockOutsBtn');
-      btn.disabled = true;
-      btn.textContent = 'Submitting...';
-      
-      try {
-        const userName = sessionStorage.getItem('kumonUser') ? JSON.parse(sessionStorage.getItem('kumonUser')).name : '';
-        for (const rec of recordsToSubmit) {
-          const newRef = push(ref(db, 'timecardVerifications'));
-          await set(newRef, {
-            empId: rec.empId,
-            empName: userName,
-            date: rec.date,
-            center: rec.center,
-            inTime: rec.inTime,
-            missingType: rec.missingType,
-            proposedOutTime: rec.missingType === 'out' ? rec.proposedTime : '',
-            status: 'pending',
-            requestedAt: new Date().toISOString()
-          });
-        }
-        alert('✅ Submitted successfully! Your manager will review the records.');
-        modal.style.display = 'none';
-      } catch (err) {
-        console.error(err);
-        alert('Failed to submit. Please try again.');
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Submit for Review';
-      }
-    });
   }
   
+  // ✅ Populate the list every time the modal is shown
   const list = document.getElementById('missingRecordsList');
   list.innerHTML = '';
   
@@ -257,7 +189,7 @@ function showMissingClockOutModal(records) {
     item.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
         <span style="font-weight:600; color:#4682B4;">📅 ${rec.date}</span>
-        <span style="font-size:0.85rem; color:#666;"> ${rec.center || 'Unknown'}</span>
+        <span style="font-size:0.85rem; color:#666;">📍 ${rec.center || 'Unknown'}</span>
       </div>
       <div style="font-size:0.9rem; margin-bottom:0.5rem;">
         Clock-In: <strong>${rec.inTime}</strong> | 
@@ -276,4 +208,100 @@ function showMissingClockOutModal(records) {
   });
   
   modal.style.display = 'flex';
+
+  // ✅ Attach submit listener INSIDE the function so the button definitely exists
+  const submitBtn = document.getElementById('submitMissingClockOutsBtn');
+  const newSubmitBtn = submitBtn.cloneNode(true);
+  submitBtn.parentNode.replaceChild(newSubmitBtn, submitBtn);
+  
+  newSubmitBtn.addEventListener('click', async () => {
+    const inputs = document.querySelectorAll('.missing-time-input');
+    const recordsToSubmit = [];
+    let hasError = false;
+    let timeError = false; // ✅ NEW: Track if proposed time is before clock-in
+    
+    inputs.forEach(input => {
+      const time = input.value;
+      const inTime = input.dataset.inTime;
+      
+      if (!time) {
+        hasError = true;
+        input.style.borderColor = '#dc3545';
+      } else if (time <= inTime) {
+        // ✅ NEW: Validate that proposed time is strictly after clock-in time
+        timeError = true;
+        input.style.borderColor = '#dc3545';
+      } else {
+        input.style.borderColor = '#cbd5e1';
+        recordsToSubmit.push({
+          empId: input.dataset.empId,
+          date: input.dataset.date,
+          center: input.dataset.center,
+          inTime: inTime,
+          missingType: input.dataset.missingType,
+          proposedTime: time
+        });
+      }
+    });
+    
+    if (hasError) {
+      alert('Please fill in all missing times.');
+      return;
+    }
+    
+    if (timeError) {
+      alert('⚠️ Proposed clock-out time must be AFTER the clock-in time.');
+      return;
+    }
+    
+    newSubmitBtn.disabled = true;
+    newSubmitBtn.textContent = 'Submitting...';
+    
+    try {
+      const userName = sessionStorage.getItem('kumonUser') ? JSON.parse(sessionStorage.getItem('kumonUser')).name : '';
+      
+      for (const rec of recordsToSubmit) {
+        const verificationsSnap = await get(ref(db, 'timecardVerifications'));
+        let existingId = null;
+        
+        if (verificationsSnap.exists()) {
+          const verifications = verificationsSnap.val();
+          Object.entries(verifications).forEach(([id, v]) => {
+            if (v.empId === rec.empId && v.date === rec.date && v.inTime === rec.inTime) {
+              existingId = id;
+            }
+          });
+        }
+        
+        const verificationData = {
+          empId: rec.empId,
+          empName: userName,
+          date: rec.date,
+          center: rec.center,
+          inTime: rec.inTime,
+          missingType: rec.missingType,
+          proposedOutTime: rec.missingType === 'out' ? rec.proposedTime : '',
+          status: 'pending',
+          requestedAt: new Date().toISOString(),
+          resubmittedAt: existingId ? new Date().toISOString() : null
+        };
+        
+        if (existingId) {
+          await update(ref(db, `timecardVerifications/${existingId}`), verificationData);
+        } else {
+          const newRef = push(ref(db, 'timecardVerifications'));
+          await set(newRef, verificationData);
+        }
+      }
+      
+      alert('✅ Submitted successfully! Your manager will review the records.');
+      modal.style.display = 'none';
+    } catch (err) {
+      console.error(err);
+      alert('Failed to submit. Please try again.');
+    } finally {
+      newSubmitBtn.disabled = false;
+      newSubmitBtn.textContent = 'Submit for Review';
+    }
+  });
 }

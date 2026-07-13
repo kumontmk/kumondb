@@ -29,6 +29,11 @@
       <input type="text" id="searchEmployee" placeholder="🔍 Search employees...">
       <button id="addEmployeeBtn" class="primary">+ Add Employee</button>
     </div>
+    <div class="export-container">
+      <label>📊 Export Timecards to Excel:</label>
+      <input type="month" id="exportMonthPicker">
+      <button id="exportExcelBtn" class="primary">Export</button>
+    </div>
 
     <div class="tabs">
       <button class="tab-btn active" data-main-tab="employees">Employees <span id="employeesBadge" class="tab-badge hidden">0</span></button>
@@ -195,11 +200,6 @@
               <tr><td colspan="9" class="empty-state">No records found</td></tr>
             </tbody>
           </table>
-        </div>
-        <div style="margin-top:1.5rem; padding-top:1rem; border-top:1px solid #e2e8f0; display:flex; gap:1rem; align-items:center;">
-          <label style="font-weight:600; color:#4682B4;">📊 Export Timecards to Excel:</label>
-          <input type="month" id="exportMonthPicker" style="max-width:200px;">
-          <button id="exportExcelBtn" class="primary">Export</button>
         </div>
       </div>
 
