@@ -330,34 +330,20 @@
                   </select>
               </div>
 
-              <!-- Pause Fields -->
               <div id="prPauseFields">
-                  <div class="form-grid" style="grid-template-columns: 1fr 1fr;">
-                      <div>
-                          <label>Pause From *</label>
-                          <div class="month-year-group">
-                              <select id="prPauseFromMonth" class="pr-month-select"></select>
-                              <select id="prPauseFromYear" class="pr-year-select"></select>
-                          </div>
-                      </div>
-                      <div>
-                          <label>Pause To *</label>
-                          <div class="month-year-group">
-                              <select id="prPauseToMonth" class="pr-month-select"></select>
-                              <select id="prPauseToYear" class="pr-year-select"></select>
-                          </div>
-                      </div>
+                  <div style="margin-bottom: 1rem;">
+                      <label>Pause From *</label>
+                      <input type="month" id="prPauseFromMonthYear" class="pr-month-year-input">
+                  </div>
+                  <div>
+                      <label>Pause To *</label>
+                      <input type="month" id="prPauseToMonthYear" class="pr-month-year-input">
                   </div>
               </div>
-
-              <!-- Drop Fields -->
-              <div id="prDropFields" style="display:none;">
+              <div id="prDropFields">
                   <div>
                       <label>Drop Month *</label>
-                      <div class="month-year-group">
-                          <select id="prDropMonth" class="pr-month-select"></select>
-                          <select id="prDropYear" class="pr-year-select"></select>
-                      </div>
+                      <input type="month" id="prDropMonthYear" class="pr-month-year-input">
                   </div>
               </div>
 
