@@ -134,35 +134,7 @@ LOADING SPINNER
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* =========================================
-MISSING CLOCK-OUT MODAL
-========================================= */
-#missingClockOutModal .modal-content {
-  max-width: 600px;
-  text-align: left;
-}
-#missingClockOutModal h3 {
-  text-align: center;
-  color: #dc3545;
-  margin-bottom: 1rem;
-}
-#missingClockOutModal p {
-  color: #666;
-  margin-bottom: 1rem;
-  text-align: center;
-}
-
-/* =========================================
-RESPONSIVE
-========================================= */
-@media (max-width: 768px) {
-  header { padding: 1rem; flex-direction: column; align-items: flex-start; }
-  header nav { width: 100%; justify-content: space-between; margin-top: 0.5rem; }
-  .dashboard { padding: 1rem; }
-  .center-grid { grid-template-columns: 1fr; }
-}
-
-/* =========================================
-MISSING CLOCK-OUT MODAL
+MISSING CLOCK-OUT MODAL STYLES
 ========================================= */
 .modal {
   position: fixed;
@@ -170,88 +142,97 @@ MISSING CLOCK-OUT MODAL
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10000;
-  backdrop-filter: blur(3px);
+  backdrop-filter: blur(2px);
   padding: 1rem;
 }
 
 .modal-content {
-  background: var(--white);
+  background: white;
   padding: 2rem;
-  border-radius: var(--radius);
+  border-radius: 12px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
   max-width: 600px;
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
   position: relative;
-  animation: modalSlideIn 0.3s ease;
+  animation: modalFadeIn 0.2s ease;
 }
 
-@keyframes modalSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+@keyframes modalFadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.close-btn {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  font-size: 1.5rem;
+  cursor: pointer;
+  background: none;
+  border: none;
+  color: #666;
+  transition: color 0.2s;
+}
+
+.close-btn:hover {
+  color: #dc3545;
 }
 
 .modal-content h3 {
+  text-align: center;
   color: #dc3545;
   margin-bottom: 1rem;
-  text-align: center;
-  font-size: 1.5rem;
+  font-size: 1.4rem;
 }
 
 .modal-content > p {
-  color: var(--text-light);
+  color: #666;
   margin-bottom: 1.5rem;
   text-align: center;
-  line-height: 1.6;
+  line-height: 1.5;
+}
+
+#missingRecordsList {
+  max-height: 400px;
+  overflow-y: auto;
+  margin-bottom: 1rem;
 }
 
 .missing-record-item {
-  background: #f8f9fa;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
   padding: 1rem;
-  margin-bottom: 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
+  border: 1px solid #e2e8f0;
 }
 
 .missing-record-item .record-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.75rem;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+  margin-bottom: 0.5rem;
 }
 
 .missing-record-item .record-date {
-  font-size: 1.1rem;
   font-weight: 600;
-  color: var(--primary-dark);
+  color: #4682B4;
 }
 
 .missing-record-item .record-center {
-  font-size: 0.9rem;
-  color: var(--text-light);
+  font-size: 0.85rem;
+  color: #666;
 }
 
 .missing-record-item .record-details {
-  margin-bottom: 0.75rem;
   font-size: 0.95rem;
-}
-
-.missing-record-item .record-details strong {
-  color: var(--text);
+  margin-bottom: 0.75rem;
 }
 
 .missing-record-item .missing-label {
@@ -261,25 +242,17 @@ MISSING CLOCK-OUT MODAL
 
 .missing-record-item label {
   display: block;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 0.4rem;
 }
 
 .missing-record-item input[type="time"] {
   width: 100%;
-  padding: 0.75rem;
+  padding: 0.6rem;
   border: 1px solid #cbd5e1;
   border-radius: 6px;
   font-size: 1rem;
-  background: white;
-}
-
-.missing-record-item input[type="time"]:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.25);
 }
 
 .modal-actions {
@@ -296,14 +269,14 @@ MISSING CLOCK-OUT MODAL
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
-  border-radius: var(--radius);
+  border-radius: 8px;
   border: none;
   transition: all 0.2s;
 }
 
 .modal-actions button.secondary {
   background: #6c757d;
-  color: var(--white);
+  color: white;
 }
 
 .modal-actions button.secondary:hover {
@@ -311,56 +284,23 @@ MISSING CLOCK-OUT MODAL
 }
 
 .modal-actions button.primary {
-  background: var(--primary-dark);
-  color: var(--white);
+  background: #4682B4;
+  color: white;
 }
 
 .modal-actions button.primary:hover {
   background: #3a6f94;
 }
 
-.close-modal-btn {
-  position: absolute;
-  top: 15px;
-  right: 15px;
-  font-size: 1.8rem;
-  cursor: pointer;
-  color: var(--text-light);
-  background: none;
-  border: none;
-  padding: 0;
-  line-height: 1;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  transition: all 0.2s;
-}
-
-.close-modal-btn:hover {
-  color: var(--text);
-  background: #f1f5f9;
-}
-
-/* Mobile responsiveness */
 @media (max-width: 600px) {
   .modal-content {
     padding: 1.5rem;
     max-width: 95%;
   }
-  
   .modal-actions {
     flex-direction: column;
   }
-  
   .modal-actions button {
     width: 100%;
-  }
-  
-  .missing-record-item .record-header {
-    flex-direction: column;
-    align-items: flex-start;
   }
 }

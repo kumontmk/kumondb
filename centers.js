@@ -47,7 +47,7 @@ onAuthStateChanged(auth, async (user) => {
         card.className = 'center-card';
         card.style.cursor = 'pointer';
         card.innerHTML = `
-          <div class="card-icon"></div>
+          <div class="card-icon">🏢</div>
           <h3>${centerData.name || centerId}</h3>
           <p>Manage students, reports, and daily operations</p>
         `;
@@ -69,9 +69,7 @@ onAuthStateChanged(auth, async (user) => {
       `;
     }
     
-    // ✅ Check for missing clock-outs from previous days
     checkMissingClockOuts();
-    
     pageLoader.classList.add('hidden');
   } catch (error) {
     console.error("Error loading centers:", error);
@@ -88,10 +86,24 @@ async function checkMissingClockOuts() {
   const today = new Date().toISOString().split('T')[0];
   
   try {
-    const timecardsSnap = await get(ref(db, 'timecards'));
+    const [timecardsSnap, verificationsSnap] = await Promise.all([
+      get(ref(db, 'timecards')),
+      get(ref(db, 'timecardVerifications'))
+    ]);
+    
     if (!timecardsSnap.exists()) return;
     
     const timecards = timecardsSnap.val();
+    const verifications = verificationsSnap.exists() ? verificationsSnap.val() : {};
+    
+    // Get pending verification keys to exclude
+    const pendingVerificationKeys = new Set();
+    Object.entries(verifications).forEach(([id, v]) => {
+      if (v.status === 'pending' && v.empId === user.uid) {
+        pendingVerificationKeys.add(`${v.date}_${v.inTime}`);
+      }
+    });
+    
     const missingRecords = [];
     
     Object.entries(timecards).forEach(([date, dayData]) => {
@@ -109,12 +121,15 @@ async function checkMissingClockOuts() {
         if (log.type === 'in') {
           if (currentIn) {
             // Found another IN without OUT - this is a missing OUT
-            missingRecords.push({ 
-              date, 
-              center: currentIn.location, 
-              inTime: currentIn.time, 
-              missingType: 'out' 
-            });
+            const recordKey = `${date}_${currentIn.time}`;
+            if (!pendingVerificationKeys.has(recordKey)) {
+              missingRecords.push({ 
+                date, 
+                center: currentIn.location, 
+                inTime: currentIn.time, 
+                missingType: 'out' 
+              });
+            }
           }
           currentIn = log;
         } else if (log.type === 'out') {
@@ -128,12 +143,15 @@ async function checkMissingClockOuts() {
       
       // If we end with an IN, it's missing an OUT
       if (currentIn) {
-        missingRecords.push({ 
-          date, 
-          center: currentIn.location, 
-          inTime: currentIn.time, 
-          missingType: 'out' 
-        });
+        const recordKey = `${date}_${currentIn.time}`;
+        if (!pendingVerificationKeys.has(recordKey)) {
+          missingRecords.push({ 
+            date, 
+            center: currentIn.location, 
+            inTime: currentIn.time, 
+            missingType: 'out' 
+          });
+        }
       }
     });
     
@@ -146,9 +164,7 @@ async function checkMissingClockOuts() {
 }
 
 function showMissingClockOutModal(records) {
-  // Check if modal already exists
   let modal = document.getElementById('missingClockOutModal');
-  
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'missingClockOutModal';
@@ -157,7 +173,7 @@ function showMissingClockOutModal(records) {
     modal.innerHTML = `
       <div class="modal-content" style="max-width: 600px; text-align: left;">
         <button class="close-btn" id="closeMissingModalBtn">&times;</button>
-        <h3 style="text-align: center; color: #dc3545; margin-bottom: 1rem;">️ Missing Clock-Out Records</h3>
+        <h3 style="text-align: center; color: #dc3545; margin-bottom: 1rem;">⚠️ Missing Clock-Out Records</h3>
         <p style="color: #666; margin-bottom: 1.5rem; text-align: center;">You have incomplete timecard records from previous days. Please provide the missing times for manager approval.</p>
         <div id="missingRecordsList" style="max-height: 400px; overflow-y: auto; margin-bottom: 1rem;"></div>
         <div style="display:flex; gap:1rem; justify-content:flex-end;">
@@ -168,17 +184,9 @@ function showMissingClockOutModal(records) {
     `;
     document.body.appendChild(modal);
     
-    // Close button
-    document.getElementById('closeMissingModalBtn').onclick = () => {
-      modal.style.display = 'none';
-    };
+    document.getElementById('closeMissingModalBtn').onclick = () => modal.style.display = 'none';
+    document.getElementById('remindLaterBtn').onclick = () => modal.style.display = 'none';
     
-    // Remind later button
-    document.getElementById('remindLaterBtn').onclick = () => {
-      modal.style.display = 'none';
-    };
-    
-    // Submit button
     document.getElementById('submitMissingClockOutsBtn').addEventListener('click', async () => {
       const inputs = document.querySelectorAll('.missing-time-input');
       const recordsToSubmit = [];
@@ -228,7 +236,7 @@ function showMissingClockOutModal(records) {
           });
         }
         alert('✅ Submitted successfully! Your manager will review the records.');
-        modal.style.display = 'none'; // ✅ Close modal after submission
+        modal.style.display = 'none';
       } catch (err) {
         console.error(err);
         alert('Failed to submit. Please try again.');
@@ -239,7 +247,6 @@ function showMissingClockOutModal(records) {
     });
   }
   
-  // Populate the list
   const list = document.getElementById('missingRecordsList');
   list.innerHTML = '';
   
@@ -249,8 +256,8 @@ function showMissingClockOutModal(records) {
     
     item.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-        <span style="font-weight:600; color:#4682B4;"> ${rec.date}</span>
-        <span style="font-size:0.85rem; color:#666;">📍 ${rec.center || 'Unknown'}</span>
+        <span style="font-weight:600; color:#4682B4;">📅 ${rec.date}</span>
+        <span style="font-size:0.85rem; color:#666;"> ${rec.center || 'Unknown'}</span>
       </div>
       <div style="font-size:0.9rem; margin-bottom:0.5rem;">
         Clock-In: <strong>${rec.inTime}</strong> | 
