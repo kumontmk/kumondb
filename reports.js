@@ -231,13 +231,23 @@ function initializeReports() {
             return;
         }
 
+
         const sortedStudents = [...cachedStudents].sort((a, b) => {
             const orderA = getGradeOrder(a.data.grade);
             const orderB = getGradeOrder(b.data.grade);
+            
+            // 1️⃣ Primary Sort: By Grade
             if (orderA !== orderB) return orderA - orderB;
-            return (a.data.nameCn || '').localeCompare(b.data.nameCn || '', 'zh-Hans-CN', { sensitivity: 'base' });
+            
+            // 2️⃣ Secondary Sort: By Pinyin Name (Fallback: Nickname -> Chinese Name)
+            // We use .toUpperCase() to ensure strict A-Z sorting regardless of how it's capitalized in the DB
+            const nameA = (a.data.namePinyin || a.data.nickname || a.data.nameCn || '').trim().toUpperCase();
+            const nameB = (b.data.namePinyin || b.data.nickname || b.data.nameCn || '').trim().toUpperCase();
+            
+            // Use English locale for standard A-Z alphabetical sorting
+            return nameA.localeCompare(nameB, 'en', { sensitivity: 'base' });
         });
-
+        
         let totalRows = 0;
         const subjectsToRender = activeSubject === 'all'
             ? ['Math', 'Chinese', 'English ERP', 'English EFL']

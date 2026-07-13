@@ -96,7 +96,6 @@ function loadEmployees() {
 function identifyCurrentUser() {
     const user = auth.currentUser;
     if (!user) return;
-    
     currentEmployeeId = null;
     currentEmployeeData = null;
     hasFullAccess = false;
@@ -115,14 +114,29 @@ function identifyCurrentUser() {
     }
 
     if (currentEmployeeData) {
+        // ✅ FIX: Helper to get all positions (matches employees.js logic)
+        const getPositions = (emp) => {
+            if (Array.isArray(emp.positions)) return emp.positions;
+            if (emp.position) return [emp.position];
+            return [];
+        };
+        
+        const userPositions = getPositions(currentEmployeeData).map(p => p.trim().toLowerCase());
+        const isManagerOrAdmin = userPositions.includes('manager') || userPositions.includes('master admin');
+        
         const centerStr = (currentEmployeeData.center || currentEmployeeData.branch || currentEmployeeData.location || currentEmployeeData.centerName || '').toLowerCase();
         const isChamps = centerStr.includes('champs');
-        const isManager = (currentEmployeeData.position || '').toLowerCase() === 'manager';
-        hasFullAccess = isChamps || isManager;
+        
+        // ✅ Grant full access if they are Champs staff, Manager, or Master Admin
+        hasFullAccess = isChamps || isManagerOrAdmin;
     }
 
-    if (!hasFullAccess && user.email && user.email.toLowerCase().includes('champs')) {
-        hasFullAccess = true;
+    // ✅ Fallback: Force full access for Master Admin email just in case
+    if (!hasFullAccess && user.email) {
+        const emailLower = user.email.toLowerCase();
+        if (emailLower.includes('champs') || emailLower === 'kumonchamps@gmail.com') {
+            hasFullAccess = true;
+        }
     }
 
     console.log("🔒 [Auth Debug] User:", user.email, "| Found in DB:", !!currentEmployeeData, "| Full Access:", hasFullAccess);
@@ -152,7 +166,10 @@ function renderTimecardTable() {
     Object.entries(employees).forEach(([id, e]) => {
         if (!hasFullAccess && id !== currentEmployeeId) return; 
         if (filterTxt && !e.englishName.toLowerCase().includes(filterTxt) && !(e.chineseName || '').toLowerCase().includes(filterTxt)) return;
-        if (filterPos && e.position !== filterPos) return;
+        if (filterPos) {
+            const empPositions = (Array.isArray(e.positions) ? e.positions : (e.position ? [e.position] : [])).map(p => p.toLowerCase());
+            if (!empPositions.includes(filterPos.toLowerCase())) return;
+        }
         
         const logs = currentDayLogs[id]?.logs || [];
         if (logs.length === 0) return;
