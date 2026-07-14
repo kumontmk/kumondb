@@ -19,7 +19,8 @@ const CENTER_CLOSED_DAYS = {
     'champs': [0],
     'tap siac': [2],
     't11': [],
-    'ao': []
+    'ao': [],
+    'am': [] 
 };
 
 const SUBJECT_CONFIG = {
@@ -156,10 +157,13 @@ async function loadAllCenters() {
     
     const existingIds = allCenters.map(c => c.id.toLowerCase());
     if (!existingIds.includes('t11')) {
-        allCenters.push({ id: 't11', name: 'Kumon T11' });
+        allCenters.push({ id: 't11', name: 'T11' }); 
     }
     if (!existingIds.includes('ao')) {
-        allCenters.push({ id: 'ao', name: 'Kumon AO' });
+        allCenters.push({ id: 'ao', name: 'AO' }); 
+    }
+    if (!existingIds.includes('am')) {
+        allCenters.push({ id: 'am', name: 'AM' }); 
     }
 }
 
@@ -302,6 +306,11 @@ function setupAdminNav() {
         renderAdminView();
     });
     document.getElementById('applyPatternBtn')?.addEventListener('click', applyPatternsToMonth);
+    
+    // 🆕 Search input event listener for real-time filtering
+    document.getElementById('adminSearchInput')?.addEventListener('input', () => {
+        renderAdminView();
+    });
 }
 
 function setupEmployeeNav() {
@@ -414,18 +423,33 @@ function renderAdminBody(dates) {
     const emptyState = document.getElementById('adminEmptyState');
     const tableWrapper = document.querySelector('#tab-admin .table-wrapper');
     if (!tbody) return;
+    
     const sorted = getSortedEmployees();
-    if (sorted.length === 0) {
+    
+    // 🆕 Filter employees based on search input
+    const searchInput = document.getElementById('adminSearchInput');
+    const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+    const filtered = sorted.filter(emp => {
+        if (!searchTerm) return true;
+        const name = (emp.englishName || '').toLowerCase();
+        const roles = getEmpPositions(emp).join(' ').toLowerCase();
+        return name.includes(searchTerm) || roles.includes(searchTerm);
+    });
+
+    if (filtered.length === 0) {
         tbody.innerHTML = '';
         emptyState.classList.remove('hidden');
         if (tableWrapper) tableWrapper.style.display = 'none';
         return;
     }
+    
     emptyState.classList.add('hidden');
     if (tableWrapper) tableWrapper.style.display = '';
     tbody.innerHTML = '';
+    
     let lastTerms = null;
-    sorted.forEach(emp => {
+    // 🔄 Changed from sorted.forEach to filtered.forEach
+    filtered.forEach(emp => {
         if (lastTerms !== null && emp.terms !== lastTerms) {
             const divRow = document.createElement('tr');
             divRow.className = 'section-divider';
@@ -543,6 +567,7 @@ function getCenterAbbr(centerId) {
     if (n.includes('champs')) return 'C';
     if (n.includes('t11')) return 'T11';
     if (n.includes('ao')) return 'AO';
+    if (n.includes('am')) return 'AM';
     
     return c.name.substring(0, 4).toUpperCase();
 }
@@ -574,6 +599,7 @@ function isCenterClosedOnDay(centerId, dayOfWeek) {
     else if (name.includes('tap siac')) closedDays = CENTER_CLOSED_DAYS['tap siac'];
     else if (name.includes('t11')) closedDays = CENTER_CLOSED_DAYS['t11'];
     else if (name.includes('ao')) closedDays = CENTER_CLOSED_DAYS['ao'];
+    else if (name.includes('am')) closedDays = CENTER_CLOSED_DAYS['am']; 
     return closedDays.includes(dayOfWeek);
 }
 
@@ -585,6 +611,7 @@ function getClosedDaysForCenter(name) {
     if (lowerName.includes('tap siac')) return CENTER_CLOSED_DAYS['tap siac'];
     if (lowerName.includes('t11')) return CENTER_CLOSED_DAYS['t11'];
     if (lowerName.includes('ao')) return CENTER_CLOSED_DAYS['ao'];
+    if (lowerName.includes('am')) return CENTER_CLOSED_DAYS['am']; 
     return [0];
 }
 
@@ -1016,6 +1043,7 @@ function printSubjectSchedule() {
         <div class="print-legend-item"><span class="print-legend-color" style="background:#27ae60;"></span> C</div>
         <div class="print-legend-item"><span class="print-legend-color" style="background:#16a085;"></span> T11</div>
         <div class="print-legend-item"><span class="print-legend-color" style="background:#d35400;"></span> AO</div>
+        <div class="print-legend-item"><span class="print-legend-color" style="background:#34495e;"></span> AM</div> 
         <div class="print-legend-item"><span class="print-legend-color" style="background:#e74c3c;"></span> Holiday</div>
     </div>
     <div class="print-footer">
@@ -1454,14 +1482,30 @@ async function checkOverlaps(empId, dateStr, newData, currentCenter) {
 // ============================================
 async function applyPatternsToMonth() {
     if (!isAdminOrManager) return;
+    
+    // 🆕 Show loading spinner on button
+    const btn = document.getElementById('applyPatternBtn');
+    const originalText = 'Apply Patterns to Month';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-small"></span> Applying...';
+    }
+
     const midDate = addDays(viewStartDate, 10);
     const year = midDate.getFullYear();
     const month = midDate.getMonth();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const monthName = `${MONTH_NAMES[month]} ${year}`;
+    
     if (!confirm(`Apply recurring patterns to all of ${monthName}?\n\nThis will fill in schedules for days that don't have overrides.`)) {
+        // 🆕 Restore button if user cancels
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
         return;
     }
+
     let count = 0;
     let skipped = 0;
     try {
@@ -1507,6 +1551,12 @@ async function applyPatternsToMonth() {
     } catch (err) {
         console.error('Apply pattern error:', err);
         alert('❌ Error applying patterns.');
+    } finally {
+        // 🆕 Always restore button state when done or if an error occurs
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
     }
 }
 
@@ -2063,6 +2113,7 @@ function printCenterSchedule() {
         <div class="print-legend-item"><span class="print-legend-color" style="background:#16a085;"></span> T11</div>
         <div class="print-legend-item"><span class="print-legend-color" style="background:#d35400;"></span> AO</div>
         <div class="print-legend-item"><span class="print-legend-color" style="background:#e74c3c;"></span> Holiday</div>
+        <div class="print-legend-item"><span class="print-legend-color" style="background:#34495e;"></span> AM</div> 
         <div class="print-legend-item"><span class="print-legend-color" style="background:#f3f4f6;"></span> Closed</div>
     </div>
     <div class="print-footer">

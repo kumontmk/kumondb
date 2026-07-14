@@ -206,9 +206,6 @@ header nav a:hover, header nav button:hover { background: rgba(255,255,255,0.35)
 .cell-content .shift-center.c-PT { background: #9b59b6; }
 .cell-content .shift-center.c-TS { background: #e67e22; }
 .cell-content .shift-center.c-C  { background: #27ae60; }
-/* ✅ NEW: T11 and AO Colors */
-.cell-content .shift-center.c-T11 { background: #16a085; }
-.cell-content .shift-center.c-AO  { background: #d35400; }
 
 .cell-content .lunch-line { color: #999; font-style: italic; }
 .cell-content .status-label { font-weight: 600; font-size: 0.7rem; }
@@ -413,7 +410,9 @@ textarea { width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1; border-radiu
         width: 15%; text-align: left; padding-left: 5px; background: #154360 !important;
     }
     .print-schedule-table th.weekend-col { background: #5dade2 !important; }
-    .print-schedule-table th.today-col { background: #27ae60 !important; }
+    .print-schedule-table th.today-col { 
+        background: #1a5276 !important; 
+    }
     .print-schedule-table th.week-sep { border-left: 3px solid #fff; }
     .print-schedule-table td, .print-subject-table td {
         padding: 2px; border: 1px solid #ccc; vertical-align: top;
@@ -429,10 +428,23 @@ textarea { width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1; border-radiu
     .print-schedule-table td .terms-tag.pt, .print-subject-table td .terms-tag.pt { background: #fff3cd !important; color: #856404 !important; -webkit-print-color-adjust: exact !important; }
     .print-schedule-table td.week-sep { border-left: 3px solid #aaa; }
     .print-schedule-table td.weekend-cell { background: #eaf2f8 !important; -webkit-print-color-adjust: exact !important; }
-    .print-schedule-table td.today-cell { background: #e8f8e8 !important; -webkit-print-color-adjust: exact !important; }
+    .print-schedule-table td.today-cell { 
+        background: transparent !important; 
+        -webkit-print-color-adjust: exact !important; 
+    }   
     .print-schedule-table td.empty-cell { background: #fafafa !important; color: #ccc; text-align: center; }
-    .print-shift { font-size: 6.5pt; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .print-shift .time { font-weight: 700; color: #1a1a1a; }
+    .print-shift { 
+        font-size: 8pt; /* Increased from 6.5pt */
+        line-height: 1.4; 
+        white-space: nowrap; 
+        overflow: hidden; 
+        text-overflow: ellipsis; 
+    }
+    .print-shift .time { 
+        font-size: 8.5pt; /* Increased from 6.5pt */
+        font-weight: 700; 
+        color: #1a1a1a; 
+    }
     .print-shift.break-shift { color: #888; font-style: italic; }
     .print-status { font-weight: 700; font-size: 6.5pt; }
     .print-status.leave { color: #2980b9; }
@@ -510,4 +522,36 @@ PER CENTER VIEW - SUBJECT GROUPING STYLES
 .modal-footer button:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+}
+
+/* 🆕 Search Input Styles */
+.search-input {
+    padding: 0.5rem 0.9rem;
+    background: var(--white);
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text);
+    transition: all 0.15s;
+    width: 220px;
+}
+.search-input:focus {
+    outline: none;
+    border-color: var(--primary-dark);
+    box-shadow: 0 0 0 2px rgba(70,130,180,0.2);
+}
+
+/* ✅ NEW: T11, AO, and AM Colors */
+.cell-content .shift-center.c-T11 { background: #16a085; }
+.cell-content .shift-center.c-AO { background: #d35400; }
+.cell-content .shift-center.c-AM { background: #34495e; } /* 🆕 Added AM */
+
+/* 🆕 Bigger fonts for timeslots in Per Center View (Screen) */
+.center-view-table .cell-content {
+    font-size: 0.75rem; /* Increased from 0.65rem */
+}
+.center-view-table .shift-time {
+    font-size: 0.8rem; /* Increased for better readability */
+    font-weight: 700;
 }
