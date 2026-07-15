@@ -1,5 +1,5 @@
 // timetable.js
-import { auth, db, logout } from './auth.js';
+import { auth, db, logout, syncPendingRequests } from './auth.js';
 import { ref, get, onValue, off } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
@@ -50,6 +50,8 @@ function initializeTimetable() {
         return;
     }
 
+    syncPendingRequests(centerId);
+
     const studentsRef = ref(db, `centers/${centerId}/students`);
     const daySelect = document.getElementById('timetableDay');
     const timetableBody = document.getElementById('timetableBody');
@@ -85,6 +87,20 @@ function initializeTimetable() {
                 dayViewContainer.classList.remove('print-active');
                 // Load week view
                 loadWeekTimetable();
+            } else if (targetTab === 'weekView') {
+                weekViewContainer.classList.add('active');
+                weekViewContainer.classList.add('print-active');
+                dayViewContainer.classList.remove('print-active');
+                document.getElementById('champViewContainer')?.classList.remove('print-active');
+                loadWeekTimetable();
+            } else if (targetTab === 'champView') {
+                // ✅ NEW: Champ Format tab
+                const champContainer = document.getElementById('champViewContainer');
+                champContainer?.classList.add('active');
+                champContainer?.classList.add('print-active');
+                dayViewContainer.classList.remove('print-active');
+                weekViewContainer.classList.remove('print-active');
+                loadChampTimetable();
             }
         });
     });
@@ -167,6 +183,32 @@ function initializeTimetable() {
         if (lowerName.includes('english') || lowerName.includes('erp') || lowerName.includes('efl')) return 'English';
         if (lowerName.includes('chinese') || lowerName.includes('mandarin')) return 'Chinese';
         return null;
+    }
+
+    // ============================================
+    // ✅ CHAMP FORMAT HELPERS
+    // ============================================
+    function getMathChampGroup(level) {
+        if (!level) return null;
+        const first = level.charAt(0).toUpperCase();
+        const second = level.charAt(1)?.toUpperCase();
+
+        // 6A, 5A, 4A, 3A, 2A  → digit followed by 'A'
+        if (/\d/.test(first) && second === 'A') return 'math6A2A';
+
+        if (['A', 'B', 'C', 'D', 'E', 'F'].includes(first)) return 'mathAF';
+        if (['G', 'H', 'I'].includes(first))                  return 'mathGI';
+        if (['J', 'K', 'L', 'M', 'N', 'O'].includes(first))   return 'mathJO';
+        return null; // P+ levels don't fall into any champ math bucket
+    }
+
+    function getEnglishChampGroup(grade) {
+        if (!grade) return null;
+        const g = grade.toString().toUpperCase().trim();
+        // Only K0, K1, K2, K3 go to the K column
+        if (['K0', 'K1', 'K2', 'K3'].includes(g)) return 'engK';
+        // Everything else (K4+, P1+, preschool, etc.) goes to P1+
+        return 'engP1';
     }
 
     function isMathHighLevel(level) {
@@ -542,6 +584,124 @@ function initializeTimetable() {
     }
 
     // ============================================
+    // ✅ CHAMP FORMAT VIEW
+    // ============================================
+    function loadChampTimetable() {
+        const champDaySelect = document.getElementById('champDay');
+        const champBody = document.getElementById('champTimetableBody');
+        if (!champDaySelect || !champBody) return;
+
+        showLoader();
+
+        // Reuse cached snap if available, otherwise subscribe
+        const render = (snap) => {
+            champBody.innerHTML = '';
+            const day = champDaySelect.value;
+            const timeSlots = getTimeSlots(day);
+
+            // 7 subject buckets per time slot
+            const schedule = {};
+            timeSlots.forEach(t => {
+                schedule[t] = {
+                    math6A2A: [], mathAF: [], mathGI: [], mathJO: [],
+                    engK: [], engP1: [],
+                    chinese: []
+                };
+            });
+
+            snap.forEach(ch => {
+                const s = ch.val();
+                if (!s?.subjects) return;
+                const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
+
+                subjects.forEach(sub => {
+                    if (sub.status !== 'current' || !sub.timeslots) return;
+                    const group = getSubjectGroup(sub.name);
+                    if (!group) return;
+
+                    const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
+                    tsList.forEach(ts => {
+                        const tsDay = DAY_MAP[ts.day] || ts.day;
+                        if (tsDay !== day || !schedule[ts.time]) return;
+
+                        const studentObj = buildStudentObj(s, sub, tsDay, tsList);
+                        if (!studentObj) return;
+
+                        if (group === 'Math') {
+                            const bucket = getMathChampGroup(studentObj.level);
+                            if (bucket) schedule[ts.time][bucket].push(studentObj);
+                        } else if (group === 'English') {
+                            const bucket = getEnglishChampGroup(s.grade);
+                            if (bucket) schedule[ts.time][bucket].push(studentObj);
+                        } else if (group === 'Chinese') {
+                            schedule[ts.time].chinese.push(studentObj);
+                        }
+                    });
+                });
+            });
+
+            // Sort each bucket by grade
+            const BUCKETS = ['math6A2A', 'mathAF', 'mathGI', 'mathJO', 'engK', 'engP1', 'chinese'];
+            Object.values(schedule).forEach(slot => {
+                BUCKETS.forEach(b => slot[b].sort((a, b) => a.grade.localeCompare(b.grade)));
+            });
+
+            // Render rows
+            timeSlots.forEach(time => {
+                const s = schedule[time];
+                const maxRows = Math.max(...BUCKETS.map(b => s[b].length));
+                const rowCount = maxRows === 0 ? 2 : maxRows;
+
+                for (let i = 0; i < rowCount; i++) {
+                    const row = document.createElement('tr');
+                    if (i === 0) {
+                        const timeCell = document.createElement('td');
+                        timeCell.textContent = time;
+                        timeCell.className = 'time-cell';
+                        timeCell.rowSpan = rowCount;
+                        row.appendChild(timeCell);
+                    }
+
+                    const addSubjectCells = (arr) => {
+                        if (arr[i]) {
+                            row.appendChild(createChampCell(arr[i].grade));
+                            row.appendChild(createChampCell(arr[i].name, false, arr[i].worksheetType === 'Kumon Connect'));
+                            row.appendChild(createChampCell(arr[i].level));
+                        } else {
+                            row.appendChild(createChampCell('', true));
+                            row.appendChild(createChampCell('', true));
+                            row.appendChild(createChampCell('', true));
+                        }
+                    };
+
+                    BUCKETS.forEach(b => addSubjectCells(s[b]));
+                    champBody.appendChild(row);
+                }
+            });
+
+            hideLoader();
+        };
+
+        function createChampCell(content, isEmpty = false, isKC = false) {
+            const td = document.createElement('td');
+            td.textContent = content;
+            if (isEmpty) td.className = 'empty-cell';
+            if (isKC) td.classList.add('kc-cell');
+            return td;
+        }
+
+        if (cachedStudentsSnap) {
+            render(cachedStudentsSnap);
+        } else {
+            const cb = (snap) => {
+                cachedStudentsSnap = snap;
+                render(snap);
+            };
+            onValue(studentsRef, cb);
+        }
+    }
+
+    // ============================================
     // INITIAL LOAD
     // ============================================
     if (daySelect) {
@@ -554,7 +714,21 @@ function initializeTimetable() {
     }
 
     document.getElementById('printTimetable')?.addEventListener('click', () => window.print());
-
+    // ============================================
+    // ✅ CHAMP FORMAT INITIAL LOAD
+    // ============================================
+    const champDaySelect = document.getElementById('champDay');
+        if (champDaySelect) {
+            const today = new Date();
+            const currentDayName = today.toLocaleDateString('en-US', { weekday: 'long' });
+            const hasOption = Array.from(champDaySelect.options).some(opt => opt.value === currentDayName);
+            champDaySelect.value = hasOption ? currentDayName : 'Monday';
+            champDaySelect.addEventListener('change', loadChampTimetable);
+            // Auto-load if champ tab is active on page load (unlikely, but safe)
+            if (document.getElementById('champViewContainer')?.classList.contains('active')) {
+                loadChampTimetable();
+            }
+        }
     window.addEventListener('beforeunload', () => {
         if (timetableUnsub) timetableUnsub();
         if (weekTimetableUnsub) weekTimetableUnsub();

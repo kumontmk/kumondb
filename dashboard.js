@@ -1,4 +1,4 @@
-import { auth, requireAuth, logout, db } from './auth.js';
+import { auth, requireAuth, logout, db, syncPendingRequests  } from './auth.js';
 import { ref, get, update, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 // ============================================
@@ -62,6 +62,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 5. ✅ NEW: Load and display Center Name in Calendar
   await loadCenterName();
+
+  await syncPendingRequests(centerId);
 
   // 6. Initialize PO Calendar and Hide Loader
   try {

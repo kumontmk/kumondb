@@ -1,4 +1,4 @@
-import { auth, db, logout } from './auth.js';
+import { auth, db, logout, syncPendingRequests } from './auth.js';
 import { ref, get, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
@@ -206,6 +206,9 @@ function initApp() {
 
     async function loadData() {
         if (!centerId) return;
+        
+        await syncPendingRequests(centerId);
+
         try {
             const snap = await get(ref(db, `centers/${centerId}/students`));
             if (snap.exists()) {

@@ -300,4 +300,142 @@ td.kc-cell {
      -webkit-print-color-adjust: exact; 
      print-color-adjust: exact; }
 
+
+}
+
+/* ============================================
+✅ CHAMP FORMAT VIEW
+============================================ */
+.champ-view-controls {
+    display: flex;
+    align-items: flex-end;
+    gap: 1rem;
+    background: var(--white);
+    padding: 1rem 1.5rem;
+    border-radius: var(--radius) var(--radius) 0 0;
+    border-bottom: 1px solid #e2e8f0;
+}
+.champ-view-controls .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-width: 200px;
+    max-width: 280px;
+}
+.champ-view-controls .control-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-light);
+}
+.champ-view-controls .day-select {
+    padding: 0.7rem 0.9rem;
+    font-size: 1rem;
+    font-weight: 500;
+    border: 1px solid #cbd5e1;
+    border-radius: var(--radius);
+    background: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: var(--text);
+}
+.champ-view-controls .day-select:hover { border-color: var(--primary-dark); }
+.champ-view-controls .day-select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.25);
+}
+
+#champTimetableTable {
+    width: 100%;
+    border: 2px solid #333;
+    font-size: 11pt;
+    table-layout: auto;
+    border-collapse: collapse;
+}
+#champTimetableTable th,
+#champTimetableTable td {
+    border: 1px solid #333 !important;
+    padding: 3px 5px !important;
+    line-height: 1.2 !important;
+    color: #000 !important;
+    text-align: center;
+    vertical-align: middle;
+}
+#champTimetableTable th {
+    background: #eee !important;
+    font-weight: 700 !important;
+    padding: 5px 5px !important;
+    font-size: 11pt;
+}
+#champTimetableTable .col-time,
+#champTimetableTable .col-grade,
+#champTimetableTable .col-level {
+    width: 1% !important;
+    white-space: nowrap !important;
+}
+#champTimetableTable .col-name {
+    width: auto !important;
+    min-width: 90px;
+}
+#champTimetableTable .time-cell {
+    font-weight: 600;
+    background: #f8f9fa !important;
+    border-right: 2px solid #cbd5e1 !important;
+}
+#champTimetableTable .empty-cell { background: transparent !important; }
+#champTimetableTable tbody tr:hover { background-color: #f1f5f9; }
+#champTimetableTable td.kc-cell {
+    background-color: #fff9c4 !important;
+}
+#champTimetableTable .loading-msg {
+    padding: 2rem;
+    color: var(--text-light);
+    font-style: italic;
+    text-align: center;
+}
+
+/* Champ Format responsive */
+@media (max-width: 768px) {
+    .champ-view-controls {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 1rem;
+    }
+    .champ-view-controls .control-group { max-width: 100%; }
+}
+@media (max-width: 480px) {
+    .champ-view-controls { padding: 0.75rem; }
+    #champTimetableTable { font-size: 9pt; }
+    #champTimetableTable th,
+    #champTimetableTable td { padding: 2px 3px !important; }
+}
+
+/* Champ Format print */
+@media print {
+    #champTimetableTable {
+        width: 100% !important;
+        border: 2px solid #333;
+        font-size: 8pt;
+        table-layout: auto;
+    }
+    #champTimetableTable th,
+    #champTimetableTable td {
+        border: 1px solid #333 !important;
+        padding: 2px 2px !important;
+        line-height: 1.1 !important;
+        color: #000 !important;
+        font-size: 8pt;
+    }
+    #champTimetableTable th {
+        background: #eee !important;
+        font-weight: 700 !important;
+    }
+    #champTimetableTable .time-cell { background: #eee !important; }
+    #champTimetableTable td.kc-cell {
+        background-color: #fff9c4 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    .champ-view-controls { display: none !important; }
+    header, #page-loader, .timetable-controls, .access-denied, .tab-navigation, .week-view-info, .day-view-controls, .champ-view-controls { display: none !important; }
 }

@@ -109,15 +109,21 @@ function initApp() {
                 if (pr.type === 'drop') { triggerMonth = pr.dropMonth; triggerYear = pr.dropYear; } 
                 else if (pr.type === 'pause') { triggerMonth = pr.pauseFromMonth; triggerYear = pr.pauseFromYear; }
                 
-                if (triggerYear && triggerMonth) {
-                    if (triggerYear < currentYear || (triggerYear === currentYear && triggerMonth <= currentMonth)) {
-                        sub.status = pr.type;
-                        if (pr.type === 'drop') { sub.dropMonth = pr.dropMonth; sub.dropYear = pr.dropYear; sub.dropReason = pr.reason; } 
-                        else { sub.pauseFromMonth = pr.pauseFromMonth; sub.pauseFromYear = pr.pauseFromYear; sub.pauseToMonth = pr.pauseToMonth; sub.pauseToYear = pr.pauseToYear; sub.pauseReason = pr.reason; }
-                        delete sub.pendingRequest;
-                        changed = true;
-                    }
-                }
+             if (triggerYear && triggerMonth) {
+                 if (triggerYear < currentYear || (triggerYear === currentYear && triggerMonth <= currentMonth)) {
+                     sub.status = pr.type;
+                     if (pr.type === 'drop') { sub.dropMonth = pr.dropMonth; sub.dropYear = pr.dropYear; sub.dropReason = pr.reason; } 
+                     else { sub.pauseFromMonth = pr.pauseFromMonth; sub.pauseFromYear = pr.pauseFromYear; sub.pauseToMonth = pr.pauseToMonth; sub.pauseToYear = pr.pauseToYear; sub.pauseReason = pr.reason; }
+                     
+                     // 🆕 AUTO-CONFIRM: Mark as confirmed since the target month has arrived
+                     if (!sub.dropBook) sub.dropBook = {};
+                     sub.dropBook.confirmed = true;
+                     sub.dropBook.confirmedAt = new Date().toISOString();
+
+                     delete sub.pendingRequest;
+                     changed = true;
+                 }
+             }
             }
         });
         return changed;

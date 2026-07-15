@@ -429,3 +429,103 @@ function showError(msg) {
   const el = document.getElementById('errorMsg');
   if (el) el.textContent = msg;
 }
+
+// ==========================================
+// 🔄 BACKGROUND MULTI-PATH SYNC FOR PENDING REQUESTS
+// ==========================================
+export async function syncPendingRequests(centerId) {
+  if (!centerId) return;
+  try {
+    const snap = await get(ref(db, `centers/${centerId}/students`));
+    if (!snap.exists()) return;
+
+    const multiPathUpdates = {};
+    const now = new Date();
+    const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+    const currentYear = String(now.getFullYear());
+
+    snap.forEach(child => {
+      const student = child.val();
+      const id = child.key;
+      let studentChanged = false;
+
+      if (student.subjects) {
+        const subjects = Array.isArray(student.subjects) ? student.subjects : Object.values(student.subjects || {});
+        subjects.forEach(sub => {
+          let shouldConfirm = false;
+          let targetMonth = '';
+          let targetYear = '';
+          
+          // Check pending requests
+          if (sub.pendingRequest && !sub.pendingRequest.cancelled && (sub.status === 'current' || sub.status === 'inquiry')) {
+            const pr = sub.pendingRequest;
+            if (pr.type === 'drop') { 
+              targetMonth = pr.dropMonth; 
+              targetYear = pr.dropYear; 
+              shouldConfirm = true;
+            } else if (pr.type === 'pause') { 
+              targetMonth = pr.pauseFromMonth; 
+              targetYear = pr.pauseFromYear; 
+              shouldConfirm = true;
+            }
+          }
+          // 🆕 Also check direct drop/pause entries that haven't been confirmed yet
+          else if ((sub.status === 'drop' || sub.status === 'pause') && !sub.dropBook?.confirmed) {
+            if (sub.status === 'drop') {
+              targetMonth = sub.dropMonth;
+              targetYear = sub.dropYear;
+            } else {
+              targetMonth = sub.pauseFromMonth;
+              targetYear = sub.pauseFromYear;
+            }
+            shouldConfirm = true;
+          }
+          
+          // If we have a target date and it's arrived, confirm it
+          if (shouldConfirm && targetMonth && targetYear) {
+            if (targetYear < currentYear || (targetYear === currentYear && targetMonth <= currentMonth)) {
+              // Initialize dropBook if it doesn't exist
+              if (!sub.dropBook) sub.dropBook = {};
+              
+              // Mark as confirmed
+              sub.dropBook.confirmed = true;
+              sub.dropBook.confirmedAt = new Date().toISOString();
+              
+              // If it was a pending request, process it
+              if (sub.pendingRequest && !sub.pendingRequest.cancelled) {
+                const pr = sub.pendingRequest;
+                sub.status = pr.type;
+                if (pr.type === 'drop') {
+                  sub.dropMonth = pr.dropMonth;
+                  sub.dropYear = pr.dropYear;
+                  sub.dropReason = pr.reason;
+                } else {
+                  sub.pauseFromMonth = pr.pauseFromMonth;
+                  sub.pauseFromYear = pr.pauseFromYear;
+                  sub.pauseToMonth = pr.pauseToMonth;
+                  sub.pauseToYear = pr.pauseToYear;
+                  sub.pauseReason = pr.reason;
+                }
+                delete sub.pendingRequest;
+              }
+              
+              studentChanged = true;
+            }
+          }
+        });
+      }
+
+      if (studentChanged) {
+        student.updatedAt = new Date().toISOString();
+        multiPathUpdates[`centers/${centerId}/students/${id}`] = student;
+      }
+    });
+
+    if (Object.keys(multiPathUpdates).length > 0) {
+      await update(ref(db), multiPathUpdates);
+      console.log(`✅ Synced & auto-confirmed ${Object.keys(multiPathUpdates).length} students.`);
+    }
+  } catch (err) {
+    console.error("Error syncing pending requests:", err);
+  }
+}

@@ -1,4 +1,4 @@
-import { auth, db, logout } from './auth.js';
+import { auth, db, logout, syncPendingRequests } from './auth.js';
 import { ref, get, push, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
@@ -48,6 +48,7 @@ onAuthStateChanged(auth, async (user) => {
 // ==========================================
 function initializePage(isAdmin = false) {
     const centerId = sessionStorage.getItem('selectedCenter');
+    await syncPendingRequests(centerId);
     const studentsRef = ref(db, `centers/${centerId}/students`);
 
     if (isAdmin) {
