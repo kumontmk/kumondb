@@ -46,7 +46,7 @@ onAuthStateChanged(auth, async (user) => {
 // ==========================================
 // 📄 MAIN APP LOGIC (Only runs if authorized)
 // ==========================================
-function initializePage(isAdmin = false) {
+async function initializePage(isAdmin = false) {
     const centerId = sessionStorage.getItem('selectedCenter');
     await syncPendingRequests(centerId);
     const studentsRef = ref(db, `centers/${centerId}/students`);
