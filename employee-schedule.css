@@ -555,3 +555,11 @@ PER CENTER VIEW - SUBJECT GROUPING STYLES
     font-size: 0.8rem; /* Increased for better readability */
     font-weight: 700;
 }
+
+/* 🆕 Admin Divider Colors for Per Center View */
+.center-view-table tr.subject-divider.admin-divider td { 
+    background: linear-gradient(135deg, #2c3e50, #34495e); 
+}
+.print-subject-table tr.print-subject-divider.admin td { 
+    background: #2c3e50 !important; 
+}

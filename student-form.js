@@ -11,21 +11,36 @@ onAuthStateChanged(auth, async (user) => {
         return;
     }
     try {
-        const userSnap = await get(ref(db, `users/${user.uid}`));
-        if (!userSnap.exists()) {
-            window.location.href = 'index.html';
-            return;
-        }
-        
-        const userData = userSnap.val();
+        let userData = null;
         const isAdmin = user.email?.toLowerCase() === 'kumonchamps@gmail.com';
-        const dashPerms = userData.permissions?.dashboardCards || {};
 
-        const hasAccess = isAdmin || dashPerms[REQUIRED_PERMISSION] === true;
+        // 1. Try to get data from the users node first
+        const userSnap = await get(ref(db, `users/${user.uid}`));
+        if (userSnap.exists()) {
+            userData = userSnap.val();
+        }
+
+        // 2. Fallback: If not found or missing permissions, check the employees node by email
+        if (!userData || !userData.permissions) {
+            const empSnap = await get(ref(db, 'employees'));
+            const empData = empSnap.val();
+            if (empData) {
+                const matchingEmp = Object.values(empData).find(e => e.email?.toLowerCase() === user.email?.toLowerCase());
+                if (matchingEmp) {
+                    userData = matchingEmp;
+                }
+            }
+        }
+
+        // 3. Evaluate Permissions
+        // ⚠️ CRITICAL: 'editStudentDetails' is the specific permission for this form
+        const dashPerms = userData?.permissions?.dashboardCards || {};
+        const hasAccess = isAdmin || dashPerms['editStudentDetails'] === true;
 
         if (hasAccess) {
             document.getElementById('accessDenied')?.classList.add('hidden');
             document.getElementById('mainContent')?.classList.remove('hidden');
+            document.getElementById('page-loader')?.classList.add('hidden');
             initApp();
         } else {
             document.getElementById('accessDenied')?.classList.remove('hidden');

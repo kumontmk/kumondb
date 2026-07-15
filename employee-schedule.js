@@ -28,6 +28,7 @@ const SUBJECT_CONFIG = {
     'Math Teacher':    { label: 'Math Teachers',    icon: '🔢', cls: 'math-divider',    color: '#27ae60' },
     'Chinese Teacher': { label: 'Chinese Teachers',  icon: '🀄', cls: 'chinese-divider', color: '#e67e22' },
     'Tutorial Teacher': { label: 'Tutorial Teachers', icon: '📚', cls: 'tutorial-divider', color: '#8e44ad' },
+    'Admins': { label: 'Admins', icon: '👑', cls: 'admin-divider', color: '#2c3e50' },
 };
 
 // 🆕 Helper to handle both new (array) and old (string) position data
@@ -754,7 +755,7 @@ function renderSubjectBody(dates) {
     const sorted = getSortedEmployees();
     const subjectGroups = {};
     const subjectOrder = ['English Teacher', 'Math Teacher', 'Chinese Teacher', 'Tutorial Teacher'];
-    const adminRoles = ['Admin', 'Manager', 'Master Admin', 'Custodian'];
+    const adminRoles = ['Admin'];
     const otherTeachers = [];
     const addedEmpIds = new Set();
 
@@ -887,7 +888,7 @@ function printSubjectSchedule() {
     const sorted = getSortedEmployees();
     const subjectGroups = {};
     const subjectOrder = ['English Teacher', 'Math Teacher', 'Chinese Teacher', 'Tutorial Teacher'];
-    const adminRoles = ['Admin', 'Manager', 'Master Admin', 'Custodian'];
+    const adminRoles = ['Admin'];
     const otherTeachers = [];
     const addedEmpIds = new Set();
 
@@ -1257,29 +1258,25 @@ function updateModalLoadingState(loading) {
 
 async function saveSchedule() {
     if (isSaving || !editingEmpId || !editingDate) return;
-    
     isSaving = true;
     updateModalLoadingState(true);
-    
     try {
         const status = document.getElementById('scheduleStatus').value;
         const notes = document.getElementById('scheduleNotes').value.trim();
         const shiftItems = document.querySelectorAll('#shiftsContainer .shift-item');
         const shifts = [];
-        
+
         // ✅ Only collect shifts that have valid start and end times
         shiftItems.forEach(item => {
             const type = item.querySelector('.shift-type').value;
             const start = item.querySelector('.shift-start').value;
             const end = item.querySelector('.shift-end').value;
             const center = type === 'work' ? item.querySelector('.shift-center').value : null;
-            
-            // ✅ FIX: Only add shifts with valid times (not empty)
             if (start && end && start !== '' && end !== '') {
                 shifts.push({ type, start, end, center });
             }
         });
-        
+
         const data = {
             status,
             shifts,
@@ -1287,7 +1284,7 @@ async function saveSchedule() {
             updatedAt: new Date().toISOString(),
             updatedBy: currentUser.uid
         };
-        
+
         const errors = validateSchedule(data, editingDate);
         if (errors.length > 0) {
             document.getElementById('modalWarnings').innerHTML =
@@ -1296,68 +1293,68 @@ async function saveSchedule() {
             updateModalLoadingState(false);
             return;
         }
-        
-        let targetCenter = null;
-        const workShifts = shifts.filter(s => s.type === 'work' && s.center);
-        if (workShifts.length > 0) {
-            targetCenter = workShifts[0].center;
-        }
-        if (!targetCenter) {
-            targetCenter = editingSourceCenter;
-        }
-        if (!targetCenter) {
-            if (allCenters.length > 0) {
-                targetCenter = allCenters[0].id;
-            } else {
-                alert('❌ No centers available to save schedule.');
+
+        // ✅ FIX 1: If saving an empty schedule (no valid shifts), clear it from ALL centers 
+        // to prevent the merge bug where old shifts from other centers persist.
+        if (shifts.length === 0 && status === 'scheduled') {
+            for (const center of allCenters) {
+                await set(ref(db, `schedules/${center.id}/${editingEmpId}/${editingDate}`), data);
+            }
+        } else {
+            let targetCenter = null;
+            const workShifts = shifts.filter(s => s.type === 'work' && s.center);
+            if (workShifts.length > 0) {
+                targetCenter = workShifts[0].center;
+            }
+            if (!targetCenter) {
+                targetCenter = editingSourceCenter;
+            }
+            if (!targetCenter) {
+                if (allCenters.length > 0) {
+                    targetCenter = allCenters[0].id;
+                } else {
+                    alert('❌ No centers available to save schedule.');
+                    isSaving = false;
+                    updateModalLoadingState(false);
+                    return;
+                }
+            }
+
+            const overlapError = await checkOverlaps(editingEmpId, editingDate, data, targetCenter);
+            if (overlapError) {
+                document.getElementById('modalWarnings').innerHTML =
+                    `<div class="error-box">❌ ${overlapError}</div>`;
                 isSaving = false;
                 updateModalLoadingState(false);
                 return;
             }
+
+            // Remove old schedule first if source center is different
+            if (editingSourceCenter && editingSourceCenter !== targetCenter) {
+                await remove(ref(db, `schedules/${editingSourceCenter}/${editingEmpId}/${editingDate}`));
+            }
+            await set(ref(db, `schedules/${targetCenter}/${editingEmpId}/${editingDate}`), data);
         }
-        
-        const overlapError = await checkOverlaps(editingEmpId, editingDate, data, targetCenter);
-        if (overlapError) {
-            document.getElementById('modalWarnings').innerHTML =
-                `<div class="error-box">❌ ${overlapError}</div>`;
-            isSaving = false;
-            updateModalLoadingState(false);
-            return;
-        }
-        
-        // ✅ Remove old schedule first if source center is different
-        if (editingSourceCenter && editingSourceCenter !== targetCenter) {
-            await remove(ref(db, `schedules/${editingSourceCenter}/${editingEmpId}/${editingDate}`));
-        }
-        
-        // ✅ FIX: Always save the schedule data, even if shifts is empty.
-        // This ensures it overrides any existing template and renders as an empty cell.
-        await set(ref(db, `schedules/${targetCenter}/${editingEmpId}/${editingDate}`), data);
-        
-        // ✅ FIX: Handle recurring pattern - update OR clear template
+
+        // Handle recurring pattern
         if (document.getElementById('saveAsPattern').checked) {
             const dateObj = parseDate(editingDate);
             const dow = dateObj.getDay();
             const templateData = { status, shifts, notes };
-            
-            // If there are valid shifts or status is not 'scheduled', save the template
-            // Otherwise, remove the template to clear the recurring pattern
             if (shifts.length > 0 || status !== 'scheduled') {
                 await set(ref(db, `scheduleTemplates/${editingEmpId}/${dow}`), templateData);
             } else {
                 await remove(ref(db, `scheduleTemplates/${editingEmpId}/${dow}`));
             }
         }
-        
+
         await loadAllSchedules();
         await loadAllTemplates();
-        
         closeModal();
         renderAdminView();
         renderEmployeeView();
         renderCenterView();
         renderSubjectView();
-        
     } catch (err) {
         console.error('Save error:', err);
         alert('Failed to save schedule. Check console.');
@@ -1366,6 +1363,7 @@ async function saveSchedule() {
         updateModalLoadingState(false);
     }
 }
+
 
 async function clearDay() {
     if (isSaving || !editingEmpId || !editingDate) return;
@@ -1483,7 +1481,6 @@ async function checkOverlaps(empId, dateStr, newData, currentCenter) {
 async function applyPatternsToMonth() {
     if (!isAdminOrManager) return;
     
-    // 🆕 Show loading spinner on button
     const btn = document.getElementById('applyPatternBtn');
     const originalText = 'Apply Patterns to Month';
     if (btn) {
@@ -1496,9 +1493,8 @@ async function applyPatternsToMonth() {
     const month = midDate.getMonth();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const monthName = `${MONTH_NAMES[month]} ${year}`;
-    
-    if (!confirm(`Apply recurring patterns to all of ${monthName}?\n\nThis will fill in schedules for days that don't have overrides.`)) {
-        // 🆕 Restore button if user cancels
+
+    if (!confirm(`Apply recurring patterns to all of ${monthName}?\n\nThis will fill in schedules for days that don't have overrides or are currently empty.`)) {
         if (btn) {
             btn.disabled = false;
             btn.innerHTML = originalText;
@@ -1514,11 +1510,24 @@ async function applyPatternsToMonth() {
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const dateObj = new Date(year, month, day);
                 const dow = dateObj.getDay();
-                if (mergedSchedules[empId]?.[dateStr]) {
-                    skipped++;
-                    continue;
+
+                const existingSched = mergedSchedules[empId]?.[dateStr];
+                
+                // ✅ FIX 2: Check if the existing schedule is ACTUALLY empty before skipping it.
+                // This allows the pattern to overwrite days that were previously cleared.
+                if (existingSched) {
+                    const existingShifts = existingSched._shifts || extractShifts(existingSched);
+                    const hasValidExistingShifts = hasValidShifts(existingShifts);
+                    const hasSpecialStatus = existingSched.status && existingSched.status !== 'scheduled';
+                    
+                    if (hasValidExistingShifts || hasSpecialStatus) {
+                        skipped++;
+                        continue; // Skip days that have real shifts or special statuses (Leave, Sick, etc.)
+                    }
                 }
+
                 if (!empTemplates[dow]) continue;
+
                 const tmpl = empTemplates[dow];
                 const schedData = {
                     status: tmpl.status || 'scheduled',
@@ -1528,6 +1537,7 @@ async function applyPatternsToMonth() {
                     updatedAt: new Date().toISOString(),
                     updatedBy: currentUser.uid
                 };
+
                 let targetCenter = null;
                 const workShifts = schedData.shifts.filter(s => s.type === 'work' && s.center);
                 if (workShifts.length > 0) {
@@ -1536,14 +1546,16 @@ async function applyPatternsToMonth() {
                 if (!targetCenter) {
                     if (allCenters.length > 0) targetCenter = allCenters[0].id;
                 }
+
                 if (targetCenter) {
                     await set(ref(db, `schedules/${targetCenter}/${empId}/${dateStr}`), schedData);
                     count++;
                 }
             }
         }
+
         await loadAllSchedules();
-        alert(`✅ Applied patterns: ${count} entries created, ${skipped} skipped.`);
+        alert(`✅ Applied patterns: ${count} entries created/updated, ${skipped} skipped.`);
         renderAdminView();
         renderEmployeeView();
         renderCenterView();
@@ -1552,7 +1564,6 @@ async function applyPatternsToMonth() {
         console.error('Apply pattern error:', err);
         alert('❌ Error applying patterns.');
     } finally {
-        // 🆕 Always restore button state when done or if an error occurs
         if (btn) {
             btn.disabled = false;
             btn.innerHTML = originalText;
@@ -1593,6 +1604,8 @@ function setupCenterNav() {
         renderCenterView();
     });
     document.getElementById('printCenterBtn')?.addEventListener('click', printCenterSchedule);
+
+    document.getElementById('exportJpegBtn')?.addEventListener('click', exportCenterAsJpeg);
 
     document.getElementById('centerGroupBySubject')?.addEventListener('change', (e) => {
         centerGroupBySubject = e.target.checked;
@@ -1656,43 +1669,67 @@ function renderCenterHeader(dates) {
     });
 }
 
-// ✅ ADD THESE HELPER FUNCTIONS
+// ✅ REPLACE YOUR EXISTING groupEmployeesBySubject FUNCTION WITH THIS:
 function groupEmployeesBySubject(empList) {
     const subjectGroups = {};
-    const subjectOrder = ['English Teacher', 'Math Teacher', 'Chinese Teacher', 'Tutorial Teacher'];
-    const adminRoles = ['Admin', 'Manager', 'Master Admin', 'Custodian'];
+    // 🆕 Removed 'Tutorial Teacher' from the main subject order for Center View
+    const subjectOrder = ['English Teacher', 'Math Teacher', 'Chinese Teacher'];
+    const adminRoles = ['Admin'];
     const otherTeachers = [];
     const addedEmpIds = new Set();
 
     empList.forEach(emp => {
         const positions = getEmpPositions(emp);
         let matchedSubject = false;
-        for (const subj of subjectOrder) {
-            if (positions.includes(subj)) {
-                if (!subjectGroups[subj]) subjectGroups[subj] = [];
-                subjectGroups[subj].push(emp);
-                matchedSubject = true;
-                addedEmpIds.add(emp.uid);
+
+        // 🆕 1. Check for Admin roles FIRST
+        const hasAdminRole = positions.some(p => adminRoles.includes(p));
+        if (hasAdminRole) {
+            if (!subjectGroups['Admins']) subjectGroups['Admins'] = [];
+            subjectGroups['Admins'].push(emp);
+            addedEmpIds.add(emp.uid);
+            matchedSubject = true;
+        }
+
+        // 2. Check for teaching subjects
+        if (!matchedSubject) {
+            for (const subj of subjectOrder) {
+                if (positions.includes(subj)) {
+                    if (!subjectGroups[subj]) subjectGroups[subj] = [];
+                    subjectGroups[subj].push(emp);
+                    matchedSubject = true;
+                    addedEmpIds.add(emp.uid);
+                    break;
+                }
             }
         }
+
+        // 3. If not admin and not a main subject, put in 'Other' (This catches Tutorial Teachers now)
         if (!matchedSubject && !addedEmpIds.has(emp.uid)) {
-            const hasAdminRole = positions.some(p => adminRoles.includes(p));
-            if (!hasAdminRole) {
-                otherTeachers.push(emp);
-                addedEmpIds.add(emp.uid);
-            }
+            otherTeachers.push(emp);
+            addedEmpIds.add(emp.uid);
         }
     });
 
     const groupsToShow = [];
+    
+    // Add standard subjects
     subjectOrder.forEach(subj => {
         if (subjectGroups[subj] && subjectGroups[subj].length > 0) {
             groupsToShow.push({ subject: subj, teachers: subjectGroups[subj] });
         }
     });
+
+    // 🆕 Add Admins group
+    if (subjectGroups['Admins'] && subjectGroups['Admins'].length > 0) {
+        groupsToShow.push({ subject: 'Admins', teachers: subjectGroups['Admins'] });
+    }
+
+    // Add Other group
     if (otherTeachers.length > 0) {
         groupsToShow.push({ subject: 'Other', teachers: otherTeachers });
     }
+
     return groupsToShow;
 }
 
@@ -1999,11 +2036,9 @@ function renderCenterShiftCell(td, shifts, isHoliday, event) {
     td.innerHTML = html;
 }
 
-function printCenterSchedule() {
-    if (!selectedCenterForView) {
-        alert('Please select a center first.');
-        return;
-    }
+// ✅ NEW: Generates the HTML string for the Center Printout (Legends Removed)
+function generateCenterPrintHTML() {
+    if (!selectedCenterForView) return '';
     const centerObj = allCenters.find(c => c.id === selectedCenterForView);
     const centerNamePrint = centerObj ? centerObj.name : 'Center';
     const dates = get14Days(centerViewDate);
@@ -2015,6 +2050,7 @@ function printCenterSchedule() {
     const centerCalEvents = calendarEvents[selectedCenterForView] || {};
     const closedDays = getClosedDaysForCenter(centerNamePrint);
     const sorted = getSortedEmployees();
+    
     const employeesWithShifts = [];
     sorted.forEach(emp => {
         let hasShift = false;
@@ -2043,17 +2079,9 @@ function printCenterSchedule() {
         }
         if (hasShift) employeesWithShifts.push(emp);
     });
-    let html = `
-    <div class="print-header">
-        <h1>${centerNamePrint} — Employee Schedule</h1>
-        <p class="print-subtitle">Kumon Learning Center</p>
-        <p class="print-date-range">${dateRangeStr}</p>
-    </div>
-    <div class="print-table-wrapper">
-        <table class="print-schedule-table">
-            <thead>
-                <tr>
-                    <th class="employee-col">Employee</th>`;
+
+    let html = `<div class="print-header"> <h1>${centerNamePrint} — Employee Schedule</h1> <p class="print-subtitle">Kumon Learning Center</p> <p class="print-date-range">${dateRangeStr}</p> </div> <div class="print-table-wrapper"> <table class="print-schedule-table"> <thead> <tr> <th class="employee-col">Employee</th>`;
+    
     dates.forEach((d, idx) => {
         const dateObj = parseDate(d);
         const dow = dateObj.getDay();
@@ -2070,7 +2098,7 @@ function printCenterSchedule() {
         html += `<th class="${sep}" ${cls}>${DAY_SHORT[dow]}<br>${dateObj.getDate()}</th>`;
     });
     html += `</tr></thead><tbody>`;
-    
+
     const dailyCounts = {};
     dates.forEach(d => dailyCounts[d] = 0);
 
@@ -2103,22 +2131,175 @@ function printCenterSchedule() {
         html += `<td class="${sep}">${dailyCounts[d]}</td>`;
     });
     html += '</tr></tbody></table></div>';
-    
+
+    // ✅ LEGENDS REMOVED AS REQUESTED
     html += `
-    <div class="print-legend">
-        <div class="print-legend-item"><span class="print-legend-color" style="background:#3498db;"></span> MK</div>
-        <div class="print-legend-item"><span class="print-legend-color" style="background:#9b59b6;"></span> PT</div>
-        <div class="print-legend-item"><span class="print-legend-color" style="background:#e67e22;"></span> TS</div>
-        <div class="print-legend-item"><span class="print-legend-color" style="background:#27ae60;"></span> C</div>
-        <div class="print-legend-item"><span class="print-legend-color" style="background:#16a085;"></span> T11</div>
-        <div class="print-legend-item"><span class="print-legend-color" style="background:#d35400;"></span> AO</div>
-        <div class="print-legend-item"><span class="print-legend-color" style="background:#e74c3c;"></span> Holiday</div>
-        <div class="print-legend-item"><span class="print-legend-color" style="background:#34495e;"></span> AM</div> 
-        <div class="print-legend-item"><span class="print-legend-color" style="background:#f3f4f6;"></span> Closed</div>
-    </div>
     <div class="print-footer">
         Printed: ${new Date().toLocaleString()} | Kumon DB Employee Schedule System
     </div>`;
+    
+    return html;
+}
+
+// ✅ IMPROVED: High-Quality JPEG Export with !important override
+async function exportCenterAsJpeg() {
+    if (!selectedCenterForView) {
+        alert('Please select a center first.');
+        return;
+    }
+    
+    if (typeof html2canvas === 'undefined') {
+        alert('❌ Export library not loaded. Please refresh the page and try again.');
+        return;
+    }
+    
+    const btn = document.getElementById('exportJpegBtn');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-small"></span> Generating...';
+
+    try {
+        const html = generateCenterPrintHTML();
+        const printArea = document.getElementById('printArea');
+        
+        if (!printArea) {
+            throw new Error('Print area element not found');
+        }
+        
+        // 1. Inject HTML
+        printArea.innerHTML = html;
+        
+        // 2. Force visibility using setProperty with 'important' to override CSS !important
+        printArea.style.setProperty('display', 'block', 'important');
+        printArea.style.setProperty('position', 'absolute', 'important');
+        printArea.style.setProperty('left', '0', 'important');
+        printArea.style.setProperty('top', '0', 'important');
+        printArea.style.setProperty('width', '1400px', 'important');
+        printArea.style.setProperty('background', '#ffffff', 'important');
+        printArea.style.setProperty('z-index', '99999', 'important');
+        printArea.style.setProperty('padding', '20px', 'important');
+        printArea.style.setProperty('visibility', 'visible', 'important');
+        printArea.style.setProperty('opacity', '1', 'important');
+
+        // 3. Inject temporary CSS to force print styles on screen
+        const tempStyle = document.createElement('style');
+        tempStyle.id = 'temp-export-styles';
+        tempStyle.innerHTML = `
+            #printArea * { 
+                visibility: visible !important; 
+                opacity: 1 !important;
+            }
+            #printArea .print-schedule-table, #printArea .print-subject-table {
+                width: 100%; border-collapse: collapse; font-size: 10pt; font-family: Arial, sans-serif;
+            }
+            #printArea .print-schedule-table th, #printArea .print-subject-table th {
+                background: #1a5276 !important; color: white !important; padding: 4px; text-align: center; font-size: 9pt; font-weight: 700; border: 1px solid #ccc;
+            }
+            #printArea .print-schedule-table th.employee-col { width: 15%; text-align: left; padding-left: 8px; background: #154360 !important; }
+            #printArea .print-schedule-table td, #printArea .print-subject-table td {
+                padding: 4px; border: 1px solid #ccc; vertical-align: top; text-align: left; height: 45px; font-size: 9pt;
+            }
+            #printArea .print-schedule-table td.employee-col { background: #f8f9fa !important; font-weight: 700; border-right: 2px solid #1a5276; }
+            #printArea .print-shift { font-size: 10pt; line-height: 1.4; }
+            #printArea .print-shift .time { font-size: 11pt; font-weight: 700; }
+            #printArea .print-status { font-weight: 700; font-size: 9pt; }
+            #printArea tr.print-subject-divider td { font-weight: 700; font-size: 10pt; color: white; padding: 6px; }
+            #printArea tr.print-subject-divider.english td { background: #2980b9 !important; }
+            #printArea tr.print-subject-divider.math td { background: #27ae60 !important; }
+            #printArea tr.print-subject-divider.chinese td { background: #e67e22 !important; }
+            #printArea tr.print-subject-divider.other td { background: #8e44ad !important; }
+            #printArea tr.summary-row td { background: #eaf2f8 !important; font-weight: 700; text-align: center; }
+            #printArea .print-header h1 { font-size: 18pt; color: #1a5276; margin: 0 0 5px 0; font-family: Arial, sans-serif; }
+            #printArea .print-header .print-subtitle { font-size: 11pt; color: #555; margin: 0; }
+            #printArea .print-header .print-date-range { font-size: 12pt; color: #333; font-weight: 700; margin: 5px 0 0 0; }
+            #printArea .terms-tag.ft { background: #d4edda !important; color: #155724 !important; padding: 0 3px; border-radius: 2px; font-size: 7pt; }
+            #printArea .terms-tag.pt { background: #fff3cd !important; color: #856404 !important; padding: 0 3px; border-radius: 2px; font-size: 7pt; }
+            #printArea .role-tag { font-size: 8pt; color: #777; display: block; }
+        `;
+        document.head.appendChild(tempStyle);
+
+        // Wait for DOM to update and render
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        console.log('Starting html2canvas capture...');
+        const canvas = await html2canvas(printArea, {
+            scale: 3,
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: '#ffffff',
+            logging: true,
+            width: 1400,
+            windowWidth: 1400,
+            windowHeight: printArea.scrollHeight,
+            onclone: (clonedDoc) => {
+                console.log('Clone completed');
+            }
+        });
+
+        console.log('Canvas created:', canvas.width, 'x', canvas.height);
+
+        // 4. Cleanup DOM and Styles (removeProperty reverts to the original CSS !important rule)
+        document.head.removeChild(tempStyle);
+        printArea.innerHTML = '';
+        printArea.style.removeProperty('display');
+        printArea.style.removeProperty('position');
+        printArea.style.removeProperty('left');
+        printArea.style.removeProperty('top');
+        printArea.style.removeProperty('width');
+        printArea.style.removeProperty('background');
+        printArea.style.removeProperty('z-index');
+        printArea.style.removeProperty('padding');
+        printArea.style.removeProperty('visibility');
+        printArea.style.removeProperty('opacity');
+
+        if (canvas.width === 0 || canvas.height === 0) {
+            throw new Error('Canvas is empty - capture failed');
+        }
+
+        // 5. Convert to blob and download
+        canvas.toBlob((blob) => {
+            if (!blob) {
+                alert('❌ Failed to generate image. Please try again.');
+                return;
+            }
+            
+            console.log('Blob created:', blob.size, 'bytes');
+            
+            if (blob.size === 0) {
+                alert('❌ Generated image is empty. Please check console for errors.');
+                return;
+            }
+            
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const centerName = allCenters.find(c => c.id === selectedCenterForView)?.name || 'Center';
+            const timestamp = new Date().toISOString().slice(0,10);
+            link.download = `${centerName.replace(/\s+/g, '_')}_Schedule_${timestamp}.jpeg`;
+            link.href = url;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            console.log('Download initiated');
+        }, 'image/jpeg', 0.95);
+
+    } catch (err) {
+        console.error('Export error:', err);
+        alert(`❌ Failed to export JPEG: ${err.message}\n\nCheck console for details.`);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+}
+
+// ✅ UPDATED: Now uses the extracted HTML generator
+function printCenterSchedule() {
+    if (!selectedCenterForView) {
+        alert('Please select a center first.');
+        return;
+    }
+    const html = generateCenterPrintHTML();
     const printArea = document.getElementById('printArea');
     if (printArea) {
         printArea.innerHTML = html;
