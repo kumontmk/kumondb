@@ -1831,6 +1831,147 @@ function initApp() {
 
     let allTeachersCache = [];
 
+        // ==========================================
+    // 🔍 DUPLICATE STUDENT CHECK (Debounced)
+    // ==========================================
+    let duplicateCheckTimeout = null;
+
+    function getSubjectColorClass(subjectName) {
+        if (!subjectName) return '';
+        if (subjectName === 'Math') return 'subj-Math';
+        if (subjectName.includes('Chinese')) return 'subj-Chinese';
+        if (subjectName.includes('ERP')) return 'subj-ERP';
+        if (subjectName.includes('EFL')) return 'subj-EFL';
+        return '';
+    }
+
+    function setupDuplicateCheck() {
+        const nameCnInput = document.getElementById('nameCn');
+        const namePinyinInput = document.getElementById('namePinyin');
+
+        const handleInput = (e) => {
+            const value = e.target.value.trim();
+            const field = e.target.id; // 'nameCn' or 'namePinyin'
+
+            if (duplicateCheckTimeout) clearTimeout(duplicateCheckTimeout);
+
+            if (value.length < 2) return; // Need at least 2 chars
+
+            duplicateCheckTimeout = setTimeout(() => {
+                checkForDuplicateStudent(field, value);
+            }, 1000);
+        };
+
+        if (nameCnInput) nameCnInput.addEventListener('input', handleInput);
+        if (namePinyinInput) namePinyinInput.addEventListener('input', handleInput);
+    }
+
+    async function checkForDuplicateStudent(field, value) {
+        try {
+            const snap = await get(ref(db, `centers/${centerId}/students`));
+            if (!snap.exists()) return;
+
+            const matches = [];
+            snap.forEach(child => {
+                const data = child.val();
+                const id = child.key;
+
+                // Skip the student currently being edited
+                if (isEdit && id === studentId) return;
+
+                let isMatch = false;
+                if (field === 'nameCn') {
+                    isMatch = data.nameCn && data.nameCn.trim() === value;
+                } else if (field === 'namePinyin') {
+                    isMatch = data.namePinyin &&
+                            data.namePinyin.trim().toLowerCase() === value.toLowerCase();
+                }
+
+                if (isMatch) {
+                    matches.push({
+                        id,
+                        nameCn: data.nameCn || '',
+                        namePinyin: data.namePinyin || '',
+                        grade: data.grade || '',
+                        subjects: data.subjects || []
+                    });
+                }
+            });
+
+            if (matches.length > 0) {
+                showDuplicateModal(matches);
+            }
+        } catch (err) {
+            console.error('Duplicate check error:', err);
+        }
+    }
+
+    function showDuplicateModal(matches) {
+        const modal = document.getElementById('duplicateStudentModal');
+        const listContainer = document.getElementById('duplicateStudentList');
+        if (!modal || !listContainer) return;
+
+        listContainer.innerHTML = '';
+
+        matches.forEach(student => {
+            const card = document.createElement('div');
+            card.className = 'duplicate-student-card';
+
+            const subjects = Array.isArray(student.subjects)
+                ? student.subjects
+                : Object.values(student.subjects || {});
+
+            const activeSubjects = subjects.filter(s => s.status && s.status !== 'drop');
+            const subjectsHtml = activeSubjects.length > 0
+                ? activeSubjects.map(s =>
+                    `<span class="subj-pill ${getSubjectColorClass(s.name)}">${s.name} <small>(${s.status})</small></span>`
+                ).join('')
+                : '<span style="color:#999; font-size:0.8rem;">No active subjects</span>';
+
+            card.innerHTML = `
+                <div class="duplicate-student-info">
+                    <div class="duplicate-name-cn">${student.nameCn || 'N/A'}</div>
+                    <div class="duplicate-name-pinyin">${student.namePinyin || ''}</div>
+                    <div class="duplicate-grade"><strong>Grade:</strong> ${student.grade || 'N/A'}</div>
+                    <div class="duplicate-subjects">${subjectsHtml}</div>
+                </div>
+                <button type="button" class="edit-existing-btn primary" data-id="${student.id}">✏️ Edit Existing</button>
+            `;
+
+            listContainer.appendChild(card);
+        });
+
+        // Wire up "Edit Existing" buttons
+        listContainer.querySelectorAll('.edit-existing-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.dataset.id;
+                hideDuplicateModal();
+                navigateToStudentById(id);
+            });
+        });
+
+        modal.classList.remove('hidden');
+        modal.style.display = 'flex';
+    }
+
+    function hideDuplicateModal() {
+        const modal = document.getElementById('duplicateStudentModal');
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.style.display = 'none';
+        }
+    }
+
+    // Modal close handlers
+    document.getElementById('closeDuplicateModal')?.addEventListener('click', hideDuplicateModal);
+    document.getElementById('addAnywayBtn')?.addEventListener('click', hideDuplicateModal);
+    document.getElementById('duplicateStudentModal')?.addEventListener('click', (e) => {
+        if (e.target.id === 'duplicateStudentModal') hideDuplicateModal();
+    });
+
+    // Kick it off
+    setupDuplicateCheck();
+
     async function fetchTeachers() {
         try {
             const snap = await get(ref(db, 'employees'));

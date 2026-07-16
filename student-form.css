@@ -845,3 +845,106 @@ input[type="month"]::-webkit-calendar-picker-indicator:hover {
     opacity: 1;
     background: #f0f8ff;
 }
+
+/* ============================================
+🆕 DUPLICATE STUDENT MODAL
+============================================ */
+.duplicate-modal-content {
+    max-width: 560px;
+    width: 92%;
+    text-align: center;
+    max-height: 85vh;
+    overflow-y: auto;
+    border-top: 4px solid #d97706;
+}
+
+.duplicate-student-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.duplicate-student-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-left: 4px solid #d97706;
+    border-radius: var(--radius);
+    flex-wrap: wrap;
+    text-align: left;
+}
+
+.duplicate-student-info {
+    flex: 1;
+    min-width: 200px;
+}
+
+.duplicate-name-cn {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.3;
+}
+
+.duplicate-name-pinyin {
+    font-size: 0.85rem;
+    color: var(--text-light);
+    margin-top: 0.15rem;
+}
+
+.duplicate-grade {
+    font-size: 0.85rem;
+    color: var(--text-light);
+    margin-top: 0.35rem;
+}
+
+.duplicate-grade strong {
+    color: var(--text);
+}
+
+.duplicate-subjects {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.5rem;
+}
+
+.subj-pill {
+    display: inline-block;
+    padding: 0.2rem 0.55rem;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: white;
+    background: #9ca3af;
+}
+
+.subj-pill.subj-Math { background: #008B8B; }
+.subj-pill.subj-Chinese { background: #9ACD32; color: #333; }
+.subj-pill.subj-ERP { background: #DC143C; }
+.subj-pill.subj-EFL { background: #FF8C00; }
+
+.subj-pill small {
+    font-weight: 400;
+    opacity: 0.85;
+    text-transform: capitalize;
+}
+
+.edit-existing-btn {
+    padding: 0.55rem 1rem !important;
+    font-size: 0.85rem !important;
+    width: auto !important;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+#addAnywayBtn {
+    background: #6b7280;
+}
+#addAnywayBtn:hover {
+    background: #4b5563;
+}

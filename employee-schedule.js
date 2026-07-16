@@ -759,11 +759,9 @@ function renderSubjectBody(dates) {
     const otherTeachers = [];
     const addedEmpIds = new Set();
 
-    // 🆕 Group employees by their teaching subjects
     sorted.forEach(emp => {
         const positions = getEmpPositions(emp);
         let matchedSubject = false;
-        
         for (const subj of subjectOrder) {
             if (positions.includes(subj)) {
                 if (!subjectGroups[subj]) subjectGroups[subj] = [];
@@ -772,7 +770,6 @@ function renderSubjectBody(dates) {
                 addedEmpIds.add(emp.uid);
             }
         }
-        
         if (!matchedSubject && !addedEmpIds.has(emp.uid)) {
             const hasAdminRole = positions.some(p => adminRoles.includes(p));
             if (!hasAdminRole) {
@@ -799,7 +796,6 @@ function renderSubjectBody(dates) {
     }
 
     const totalTeachers = groupsToShow.reduce((sum, g) => sum + g.teachers.length, 0);
-
     if (totalTeachers === 0) {
         tbody.innerHTML = '';
         emptyState.classList.remove('hidden');
@@ -813,6 +809,10 @@ function renderSubjectBody(dates) {
 
     const dailyCounts = {};
     dates.forEach(d => dailyCounts[d] = 0);
+    
+    // ✅ FIX: Initialize tracker to prevent double-counting
+    const countedEmpIdsByDate = {};
+    dates.forEach(d => countedEmpIdsByDate[d] = new Set());
 
     groupsToShow.forEach(group => {
         const config = SUBJECT_CONFIG[group.subject] || { label: group.subject, icon: '👤', cls: 'other-divider', color: '#8e44ad' };
@@ -839,12 +839,16 @@ function renderSubjectBody(dates) {
                 td.className = 'schedule-cell';
                 const sched = mergedSchedules[emp.uid]?.[dateStr];
                 const tmpl = templates[emp.uid]?.[parseDate(dateStr).getDay()];
-
+                
                 if (sched) {
                     renderMergedScheduleCell(td, sched, emp.uid, dateStr);
                     const shifts = sched._shifts || extractShifts(sched);
                     if (hasValidShifts(shifts) && (sched.status || 'scheduled') === 'scheduled') {
-                        dailyCounts[dateStr]++;
+                        // ✅ FIX: Check Set before counting
+                        if (!countedEmpIdsByDate[dateStr].has(emp.uid)) {
+                            countedEmpIdsByDate[dateStr].add(emp.uid);
+                            dailyCounts[dateStr]++;
+                        }
                     }
                 } else if (tmpl) {
                     td.classList.add('has-schedule');
@@ -853,13 +857,16 @@ function renderSubjectBody(dates) {
                     td.title = 'Recurring pattern (click to override)';
                     const tmplShifts = tmpl._shifts || extractShifts(tmpl);
                     if (hasValidShifts(tmplShifts) && (tmpl.status || 'scheduled') === 'scheduled') {
-                        dailyCounts[dateStr]++;
+                        // ✅ FIX: Check Set before counting
+                        if (!countedEmpIdsByDate[dateStr].has(emp.uid)) {
+                            countedEmpIdsByDate[dateStr].add(emp.uid);
+                            dailyCounts[dateStr]++;
+                        }
                     }
                 } else {
                     td.classList.add('empty-cell');
                     td.innerHTML = '<div class="cell-content">—</div>';
                 }
-
                 td.addEventListener('click', () => openEditModal(emp.uid, dateStr));
                 tr.appendChild(td);
             });
@@ -963,6 +970,10 @@ function printSubjectSchedule() {
     const dailyCounts = {};
     dates.forEach(d => dailyCounts[d] = 0);
 
+    // ✅ FIX: Initialize tracker to prevent double-counting in print view
+    const countedEmpIdsByDate = {};
+    dates.forEach(d => countedEmpIdsByDate[d] = new Set());
+
     groupsToShow.forEach(group => {
         const config = SUBJECT_CONFIG[group.subject] || { label: group.subject, cls: 'other', icon: '' };
         const dividerCls = SUBJECT_CONFIG[group.subject]?.cls || 'other';
@@ -1006,7 +1017,11 @@ function printSubjectSchedule() {
                         const statusCls = status === 'leave' ? 'leave' : status === 'sick' ? 'sick' : status === 'off' ? 'off' : 'other';
                         cellContent = `<span class="print-status ${statusCls}">${statusLabels[status] || status}</span>`;
                     } else {
-                        dailyCounts[dateStr]++;
+                        // ✅ FIX: Check Set before counting
+                        if (!countedEmpIdsByDate[dateStr].has(emp.uid)) {
+                            countedEmpIdsByDate[dateStr].add(emp.uid);
+                            dailyCounts[dateStr]++;
+                        }
                         const sortedShifts = [...shifts].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
                         sortedShifts.forEach(s => {
                             if (s.type === 'break') {
@@ -1669,20 +1684,18 @@ function renderCenterHeader(dates) {
     });
 }
 
-// ✅ REPLACE YOUR EXISTING groupEmployeesBySubject FUNCTION WITH THIS:
 function groupEmployeesBySubject(empList) {
     const subjectGroups = {};
-    // 🆕 Removed 'Tutorial Teacher' from the main subject order for Center View
     const subjectOrder = ['English Teacher', 'Math Teacher', 'Chinese Teacher'];
     const adminRoles = ['Admin'];
     const otherTeachers = [];
     const addedEmpIds = new Set();
-
+    
     empList.forEach(emp => {
         const positions = getEmpPositions(emp);
         let matchedSubject = false;
-
-        // 🆕 1. Check for Admin roles FIRST
+        
+        // 1. Check for Admin roles FIRST
         const hasAdminRole = positions.some(p => adminRoles.includes(p));
         if (hasAdminRole) {
             if (!subjectGroups['Admins']) subjectGroups['Admins'] = [];
@@ -1690,7 +1703,7 @@ function groupEmployeesBySubject(empList) {
             addedEmpIds.add(emp.uid);
             matchedSubject = true;
         }
-
+        
         // 2. Check for teaching subjects
         if (!matchedSubject) {
             for (const subj of subjectOrder) {
@@ -1699,11 +1712,14 @@ function groupEmployeesBySubject(empList) {
                     subjectGroups[subj].push(emp);
                     matchedSubject = true;
                     addedEmpIds.add(emp.uid);
-                    break;
+                    
+                    // ✅ FIX: Removed the 'break;' statement here!
+                    // Now the loop will continue checking the rest of the subjects,
+                    // allowing an employee to be added to multiple subject groups.
                 }
             }
         }
-
+        
         // 3. If not admin and not a main subject, put in 'Other' (This catches Tutorial Teachers now)
         if (!matchedSubject && !addedEmpIds.has(emp.uid)) {
             otherTeachers.push(emp);
@@ -1719,30 +1735,27 @@ function groupEmployeesBySubject(empList) {
             groupsToShow.push({ subject: subj, teachers: subjectGroups[subj] });
         }
     });
-
-    // 🆕 Add Admins group
+    
+    // Add Admins group
     if (subjectGroups['Admins'] && subjectGroups['Admins'].length > 0) {
         groupsToShow.push({ subject: 'Admins', teachers: subjectGroups['Admins'] });
     }
-
+    
     // Add Other group
     if (otherTeachers.length > 0) {
         groupsToShow.push({ subject: 'Other', teachers: otherTeachers });
     }
-
+    
     return groupsToShow;
 }
 
-function renderCenterEmployeeRow(emp, dates, tbody, dailyCounts, centerCalEvents, closedDays, today) {
+// ✅ UPDATED: Added countedEmpIdsByDate to prevent double-counting
+function renderCenterEmployeeRow(emp, dates, tbody, dailyCounts, centerCalEvents, closedDays, today, countedEmpIdsByDate) {
     const tr = document.createElement('tr');
     const termsClass = emp.terms === 'Full-time' ? 'terms-full' : 'terms-part';
     const termsLabel = emp.terms === 'Full-time' ? 'FT' : 'PT';
-    tr.innerHTML = `<td class="employee-name-cell">
-        ${emp.englishName || 'Unknown'}
-        <span class="emp-terms ${termsClass}">${termsLabel}</span>
-        <span class="emp-role">${getEmpPositions(emp).join(', ') || ''}</span>
-    </td>`;
-
+    tr.innerHTML = `<td class="employee-name-cell"> ${emp.englishName || 'Unknown'} <span class="emp-terms ${termsClass}">${termsLabel}</span> <span class="emp-role">${getEmpPositions(emp).join(', ') || ''}</span> </td>`;
+    
     dates.forEach((dateStr, idx) => {
         const td = document.createElement('td');
         td.className = 'schedule-cell';
@@ -1759,7 +1772,6 @@ function renderCenterEmployeeRow(emp, dates, tbody, dailyCounts, centerCalEvents
         
         const sched = mergedSchedules[emp.uid]?.[dateStr];
         const tmpl = templates[emp.uid]?.[dow];
-        
         let shifts = [];
         let status = 'scheduled';
         let notes = '';
@@ -1809,23 +1821,27 @@ function renderCenterEmployeeRow(emp, dates, tbody, dailyCounts, centerCalEvents
             }
         }
         
-        if (hasShiftToday) dailyCounts[dateStr]++;
+        // ✅ FIX: Only count if we haven't already counted this emp for this date
+        if (hasShiftToday) {
+            if (!countedEmpIdsByDate[dateStr]) countedEmpIdsByDate[dateStr] = new Set();
+            if (!countedEmpIdsByDate[dateStr].has(emp.uid)) {
+                countedEmpIdsByDate[dateStr].add(emp.uid);
+                dailyCounts[dateStr]++;
+            }
+        }
+        
         td.addEventListener('click', () => openEditModal(emp.uid, dateStr));
         tr.appendChild(td);
     });
     tbody.appendChild(tr);
 }
 
-function getCenterPrintRowHtml(emp, dates, selectedCenterForView, centerCalEvents, closedDays, today, dailyCounts) {
+// ✅ UPDATED: Added countedEmpIdsByDate parameter
+function getCenterPrintRowHtml(emp, dates, selectedCenterForView, centerCalEvents, closedDays, today, dailyCounts, countedEmpIdsByDate) {
     let html = '';
     const termsCls = emp.terms === 'Full-time' ? 'ft' : 'pt';
     const termsLbl = emp.terms === 'Full-time' ? 'FT' : 'PT';
-    html += `<tr>
-        <td class="employee-col">
-            ${emp.englishName || 'Unknown'}
-            <span class="terms-tag ${termsCls}">${termsLbl}</span>
-            <span class="role-tag">${getEmpPositions(emp).join(', ') || ''}</span>
-        </td>`;
+    html += `<tr> <td class="employee-col"> ${emp.englishName || 'Unknown'} <span class="terms-tag ${termsCls}">${termsLbl}</span> <span class="role-tag">${getEmpPositions(emp).join(', ') || ''}</span> </td>`;
     
     dates.forEach((dateStr, idx) => {
         const dateObj = parseDate(dateStr);
@@ -1868,7 +1884,13 @@ function getCenterPrintRowHtml(emp, dates, selectedCenterForView, centerCalEvent
                 const statusCls = status === 'leave' ? 'leave' : status === 'sick' ? 'sick' : status === 'off' ? 'off' : 'other';
                 cellContent = `<span class="print-status ${statusCls}">${statusLabels[status] || status}</span>`;
             } else if (centerShifts.length > 0 && hasValidShifts(centerShifts)) {
-                dailyCounts[dateStr]++;
+                // ✅ FIX: Check Set before counting
+                if (!countedEmpIdsByDate[dateStr]) countedEmpIdsByDate[dateStr] = new Set();
+                if (!countedEmpIdsByDate[dateStr].has(emp.uid)) {
+                    countedEmpIdsByDate[dateStr].add(emp.uid);
+                    dailyCounts[dateStr]++;
+                }
+                
                 const sortedShifts = [...centerShifts].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
                 sortedShifts.forEach(s => {
                     if (s.type === 'break') {
@@ -1904,6 +1926,7 @@ function renderCenterBody(dates) {
     const emptyState = document.getElementById('centerEmptyState');
     const tableWrapper = document.getElementById('centerTableWrapper');
     if (!tbody) return;
+
     const sorted = getSortedEmployees();
     const employeesWithShifts = [];
     sorted.forEach(emp => {
@@ -1931,19 +1954,20 @@ function renderCenterBody(dates) {
                 break;
             }
         }
-        if (hasShiftHere) {
-            employeesWithShifts.push(emp);
-        }
+        if (hasShiftHere) employeesWithShifts.push(emp);
     });
+
     if (employeesWithShifts.length === 0) {
         tbody.innerHTML = '';
         emptyState.classList.remove('hidden');
         if (tableWrapper) tableWrapper.style.display = 'none';
         return;
     }
+
     emptyState.classList.add('hidden');
     if (tableWrapper) tableWrapper.style.display = '';
     tbody.innerHTML = '';
+
     const centerCalEvents = calendarEvents[selectedCenterForView] || {};
     const centerObj = allCenters.find(c => c.id === selectedCenterForView);
     const closedDays = getClosedDaysForCenter(centerObj?.name || '');
@@ -1952,6 +1976,10 @@ function renderCenterBody(dates) {
     
     const dailyCounts = {};
     dates.forEach(d => dailyCounts[d] = 0);
+    
+    // ✅ FIX: Initialize tracker to prevent double-counting
+    const countedEmpIdsByDate = {};
+    dates.forEach(d => countedEmpIdsByDate[d] = new Set());
 
     if (centerGroupBySubject) {
         const groups = groupEmployeesBySubject(employeesWithShifts);
@@ -1964,9 +1992,9 @@ function renderCenterBody(dates) {
                 <span class="subject-count">${group.teachers.length} teacher${group.teachers.length !== 1 ? 's' : ''}</span>
             </td>`;
             tbody.appendChild(divRow);
-
             group.teachers.forEach(emp => {
-                renderCenterEmployeeRow(emp, dates, tbody, dailyCounts, centerCalEvents, closedDays, today);
+                // ✅ UPDATED: Pass countedEmpIdsByDate
+                renderCenterEmployeeRow(emp, dates, tbody, dailyCounts, centerCalEvents, closedDays, today, countedEmpIdsByDate);
             });
         });
     } else {
@@ -1979,7 +2007,8 @@ function renderCenterBody(dates) {
                 tbody.appendChild(divRow);
             }
             lastTerms = emp.terms;
-            renderCenterEmployeeRow(emp, dates, tbody, dailyCounts, centerCalEvents, closedDays, today);
+            // ✅ UPDATED: Pass countedEmpIdsByDate
+            renderCenterEmployeeRow(emp, dates, tbody, dailyCounts, centerCalEvents, closedDays, today, countedEmpIdsByDate);
         });
     }
 
@@ -2102,6 +2131,10 @@ function generateCenterPrintHTML() {
     const dailyCounts = {};
     dates.forEach(d => dailyCounts[d] = 0);
 
+    // ✅ FIX: Initialize tracker to prevent double-counting in print view
+    const countedEmpIdsByDate = {};
+    dates.forEach(d => countedEmpIdsByDate[d] = new Set());
+
     if (centerGroupBySubject) {
         const groups = groupEmployeesBySubject(employeesWithShifts);
         groups.forEach(group => {
@@ -2111,7 +2144,7 @@ function generateCenterPrintHTML() {
                 <td colspan="${dates.length + 1}">${config.icon} ${config.label} (${group.teachers.length})</td>
             </tr>`;
             group.teachers.forEach(emp => {
-                html += getCenterPrintRowHtml(emp, dates, selectedCenterForView, centerCalEvents, closedDays, today, dailyCounts);
+                html += getCenterPrintRowHtml(emp, dates, selectedCenterForView, centerCalEvents, closedDays, today, dailyCounts, countedEmpIdsByDate);
             });
         });
     } else {
@@ -2121,7 +2154,7 @@ function generateCenterPrintHTML() {
                 html += `<tr class="section-row"><td colspan="${dates.length + 1}">— Part-Time Employees —</td></tr>`;
             }
             lastTerms = emp.terms;
-            html += getCenterPrintRowHtml(emp, dates, selectedCenterForView, centerCalEvents, closedDays, today, dailyCounts);
+            html += getCenterPrintRowHtml(emp, dates, selectedCenterForView, centerCalEvents, closedDays, today, dailyCounts, countedEmpIdsByDate);
         });
     }
 
