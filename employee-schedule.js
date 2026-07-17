@@ -682,19 +682,28 @@ function renderEmployeeHeader(dates) {
 
 function renderEmployeeBody(dates, empId) {
     const tbody = document.getElementById('empBody');
+    const mobileList = document.getElementById('employeeMobileList');
     const emptyState = document.getElementById('empEmptyState');
+    
     if (!tbody) return;
+    
     tbody.innerHTML = '';
+    mobileList.innerHTML = '';
+    
     let hasAnySchedule = false;
+    
+    // Desktop table view
     const tr = document.createElement('tr');
     const emp = employees[empId];
     const empLabel = emp ? `${emp.englishName} — ${getEmpPositions(emp).join(', ')}` : 'Schedule';
     tr.innerHTML = `<td class="employee-name-cell">${empLabel}</td>`;
+    
     dates.forEach(dateStr => {
         const td = document.createElement('td');
         td.className = 'schedule-cell';
         const sched = mergedSchedules[empId]?.[dateStr];
         const tmpl = templates[empId]?.[parseDate(dateStr).getDay()];
+        
         if (sched) {
             hasAnySchedule = true;
             renderMergedScheduleCell(td, sched, empId, dateStr);
@@ -708,9 +717,104 @@ function renderEmployeeBody(dates, empId) {
         }
         tr.appendChild(td);
     });
+    
     tbody.appendChild(tr);
-    if (!hasAnySchedule) emptyState.classList.remove('hidden');
-    else emptyState.classList.add('hidden');
+    
+    // Mobile list view
+    if (emp) {
+        const mobileCard = document.createElement('div');
+        mobileCard.className = 'employee-mobile-card';
+        
+        mobileCard.innerHTML = `
+            <div class="employee-mobile-header">
+                ${emp.englishName || 'Unknown'}
+                <span class="emp-role">${getEmpPositions(emp).join(', ')}</span>
+            </div>
+            <div class="employee-mobile-schedule" id="mobile-sched-${empId}"></div>
+        `;
+        
+        const scheduleContainer = mobileCard.querySelector(`#mobile-sched-${empId}`);
+        
+        dates.forEach(dateStr => {
+            const dateObj = parseDate(dateStr);
+            const dow = dateObj.getDay();
+            const sched = mergedSchedules[empId]?.[dateStr];
+            const tmpl = templates[empId]?.[dow];
+            
+            const item = document.createElement('div');
+            item.className = 'mobile-schedule-item';
+            
+            let detailsHTML = '';
+            
+            if (sched || tmpl) {
+                hasAnySchedule = true;
+                const data = sched || tmpl;
+                const status = data.status || 'scheduled';
+                
+                if (status !== 'scheduled') {
+                    const statusLabels = {
+                        'other-center': '📍 Other Center',
+                        'leave': '🏖 On Leave',
+                        'sick': '🤒 Sick',
+                        'off': '😴 Off'
+                    };
+                    const statusClass = status === 'leave' ? 'leave' : 
+                                       status === 'sick' ? 'sick' : 
+                                       status === 'off' ? 'off' : 'other';
+                    detailsHTML = `<span class="mobile-status ${statusClass}">${statusLabels[status] || status}</span>`;
+                } else {
+                    const shifts = data._shifts || extractShifts(data);
+                    if (hasValidShifts(shifts)) {
+                        const sortedShifts = [...shifts].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+                        sortedShifts.forEach(shift => {
+                            if (shift.type === 'break') {
+                                detailsHTML += `<div class="mobile-shift break">☕ ${shift.start} - ${shift.end}</div>`;
+                            } else {
+                                const centerAbbr = getCenterAbbr(shift.center);
+                                detailsHTML += `
+                                    <div class="mobile-shift">
+                                        ${shift.start} - ${shift.end}
+                                        <span class="mobile-center-badge">${centerAbbr}</span>
+                                    </div>
+                                `;
+                            }
+                        });
+                    }
+                }
+                
+                if (data.notes) {
+                    detailsHTML += `<div style="font-size: 0.75rem; color: #999; margin-top: 0.25rem;">📝 ${data.notes}</div>`;
+                }
+            }
+            
+            if (!detailsHTML) {
+                detailsHTML = '<span class="mobile-empty">No schedule</span>';
+            }
+            
+            const dayName = DAY_NAMES[dow];
+            const dateDisplay = `${dateObj.getDate()} ${MONTH_NAMES[dateObj.getMonth()].substring(0, 3)}`;
+            
+            item.innerHTML = `
+                <div class="mobile-date">
+                    ${dayName}
+                    <span class="day-name">${dateDisplay}</span>
+                </div>
+                <div class="mobile-schedule-details">
+                    ${detailsHTML}
+                </div>
+            `;
+            
+            scheduleContainer.appendChild(item);
+        });
+        
+        mobileList.appendChild(mobileCard);
+    }
+    
+    if (!hasAnySchedule) {
+        emptyState.classList.remove('hidden');
+    } else {
+        emptyState.classList.add('hidden');
+    }
 }
 
 // ============================================
