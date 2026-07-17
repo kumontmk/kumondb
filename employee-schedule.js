@@ -688,7 +688,7 @@ function renderEmployeeBody(dates, empId) {
     if (!tbody) return;
     
     tbody.innerHTML = '';
-    mobileList.innerHTML = '';
+    if (mobileList) mobileList.innerHTML = '';
     
     let hasAnySchedule = false;
     
@@ -721,7 +721,7 @@ function renderEmployeeBody(dates, empId) {
     tbody.appendChild(tr);
     
     // Mobile list view
-    if (emp) {
+    if (mobileList && emp) {
         const mobileCard = document.createElement('div');
         mobileCard.className = 'employee-mobile-card';
         
@@ -753,9 +753,9 @@ function renderEmployeeBody(dates, empId) {
                 
                 if (status !== 'scheduled') {
                     const statusLabels = {
-                        'other-center': '📍 Other Center',
-                        'leave': '🏖 On Leave',
-                        'sick': '🤒 Sick',
+                        'other-center': ' Other Center',
+                        'leave': ' On Leave',
+                        'sick': ' Sick',
                         'off': '😴 Off'
                     };
                     const statusClass = status === 'leave' ? 'leave' : 
@@ -770,11 +770,13 @@ function renderEmployeeBody(dates, empId) {
                             if (shift.type === 'break') {
                                 detailsHTML += `<div class="mobile-shift break">☕ ${shift.start} - ${shift.end}</div>`;
                             } else {
+                                // ✅ FIX: Properly define centerAbbr and centerClass
                                 const centerAbbr = getCenterAbbr(shift.center);
+                                const centerClass = getCenterClass(shift.center);
                                 detailsHTML += `
                                     <div class="mobile-shift">
                                         ${shift.start} - ${shift.end}
-                                        <span class="mobile-center-badge">${centerAbbr}</span>
+                                        <span class="mobile-center-badge ${centerClass}">${centerAbbr}</span>
                                     </div>
                                 `;
                             }

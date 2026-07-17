@@ -727,6 +727,14 @@ MOBILE EMPLOYEE VIEW - VERTICAL LIST
   margin-left: 0.5rem;
 }
 
+.mobile-center-badge.c-MK { background: #3498db; }
+.mobile-center-badge.c-PT { background: #9b59b6; }
+.mobile-center-badge.c-TS { background: #e67e22; }
+.mobile-center-badge.c-C { background: #27ae60; }
+.mobile-center-badge.c-T11 { background: #16a085; }
+.mobile-center-badge.c-AO { background: #d35400; }
+.mobile-center-badge.c-AM { background: #34495e; }
+
 .mobile-status { font-weight: 600; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem; }
 .mobile-status.leave { background: #e3f2fd; color: #2980b9; }
 .mobile-status.sick { background: #fce4ec; color: #e74c3c; }
