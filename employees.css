@@ -550,3 +550,84 @@ tr.disabled-row td:first-child {
   flex: 0 0 auto;
   margin-left: auto; /* Pushes it to the right if inside controls */
 }
+
+/* ============================================
+✅ LEAVE ENTITLEMENT STYLING
+============================================ */
+.leave-credit-card {
+    background: #f8f9fa;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 1.25rem;
+    margin-bottom: 1.25rem;
+}
+.leave-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid #e2e8f0;
+}
+.leave-type {
+    font-weight: 600;
+    color: #333;
+    font-size: 1rem;
+}
+.leave-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+.stat-item {
+    text-align: center;
+    padding: 0.75rem;
+    background: white;
+    border-radius: 6px;
+    border: 1px solid #cbd5e1;
+}
+.stat-item label {
+    display: block;
+    font-size: 0.8rem;
+    color: #666;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #4682B4;
+}
+.stat-value.editable {
+    cursor: pointer;
+    padding: 0.25rem;
+    border: 1px dashed #4682B4;
+    border-radius: 4px;
+    background: #f0f8ff;
+}
+.stat-value.editable:hover {
+    background: #e8f0fe;
+}
+.edit-entitled-modal .modal-content {
+    max-width: 400px;
+}
+.edit-entitled-form .form-group {
+    margin-bottom: 1.25rem;
+}
+.edit-entitled-form label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: #333;
+}
+.edit-entitled-form input[type="number"] {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 1rem;
+}
+@media (max-width: 600px) {
+    .leave-stats-grid { grid-template-columns: 1fr; }
+    .leave-header { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
+}

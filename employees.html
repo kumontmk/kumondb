@@ -25,10 +25,6 @@
   </div>
 
   <main id="mainContent" class="students-page hidden" style="opacity:0; pointer-events:none; transition: opacity 0.3s;">
-    <div class="controls">
-      <input type="text" id="searchEmployee" placeholder="🔍 Search employees...">
-      <button id="addEmployeeBtn" class="primary">+ Add Employee</button>
-    </div>
     <div class="export-container">
       <label>📊 Export Timecards to Excel:</label>
       <input type="month" id="exportMonthPicker">
@@ -42,6 +38,10 @@
     </div>
 
     <div id="main-tab-employees" class="tab-content active">
+    <div class="controls">
+      <input type="text" id="searchEmployee" placeholder="🔍 Search employees...">
+      <button id="addEmployeeBtn" class="primary">+ Add Employee</button>
+    </div>
       <div class="table-wrapper">
         <table>
           <thead>
@@ -116,6 +116,7 @@
         <button class="tab-btn active" data-tab="details">Details & QR</button>
         <button class="tab-btn" data-tab="timeclock">Timeclock Records</button>
         <button class="tab-btn" data-tab="permissions">Permissions</button>
+        <button class="tab-btn" data-tab="leave">Leave Entitlement</button>
       </div>
 
       <div id="tab-details" class="tab-content active">
@@ -222,6 +223,82 @@
           <label><input type="checkbox" value="centreBulletin"> Centre Bulletin</label>
         </div>
         <div id="permissionsLockedMsg" class="hidden">🔒 Only kumonchamps@gmail.com can edit permissions.</div>
+      </div>
+
+      <!--Leave -->
+      <div id="tab-leave" class="tab-content">
+                  <p style="font-size: 0.9rem; color: #666; margin-bottom: 1.5rem;">
+              Manage leave credits for this employee.
+          </p>          
+          <!-- Full-Time Employee Leave Section -->
+          <div id="fullTimeLeaveSection">
+              <!-- Annual Leave -->
+              <div class="leave-credit-card">
+                  <div class="leave-header">
+                      <span class="leave-type">📅 Annual Leave</span>
+                      <button class="secondary edit-entitled-btn" data-leave-type="annual" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">✏️ Edit</button>
+                  </div>
+                  <div class="leave-stats-grid">
+                      <div class="stat-item">
+                          <label>Balance</label>
+                          <div class="stat-value" id="annualBalance">0</div>
+                      </div>
+                      <div class="stat-item">
+                          <label>Entitled</label>
+                          <div class="stat-value editable" id="annualEntitled">0</div>
+                      </div>
+                      <div class="stat-item">
+                          <label>Used Credits</label>
+                          <div class="stat-value" id="annualUsed">0</div>
+                      </div>
+                  </div>
+              </div>
+
+              <!-- Sick Leave -->
+              <div class="leave-credit-card">
+                  <div class="leave-header">
+                      <span class="leave-type">🏥 Sick Leave</span>
+                      <button class="secondary edit-entitled-btn" data-leave-type="sick" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">✏️ Edit</button>
+                  </div>
+                  <div class="leave-stats-grid">
+                      <div class="stat-item">
+                          <label>Balance</label>
+                          <div class="stat-value" id="sickBalance">0</div>
+                      </div>
+                      <div class="stat-item">
+                          <label>Entitled</label>
+                          <div class="stat-value editable" id="sickEntitled">0</div>
+                      </div>
+                      <div class="stat-item">
+                          <label>Used Credits</label>
+                          <div class="stat-value" id="sickUsed">0</div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+
+          <!-- Part-Time Employee Leave Section -->
+          <div id="partTimeLeaveSection" style="display: none;">
+              <div class="leave-credit-card">
+                  <div class="leave-header">
+                      <span class="leave-type">⏱️ Time Off Credits</span>
+                  </div>
+                  <div class="leave-stats-grid" style="grid-template-columns: 1fr; max-width: 200px;">
+                      <div class="stat-item">
+                          <label>Used Credits</label>
+                          <div class="stat-value" id="partTimeUsed">0</div>
+                      </div>
+                  </div>
+                  <p style="font-size: 0.85rem; color: #666; margin-top: 1rem; font-style: italic;">
+                      Part-time employees do not have leave entitlement. Time off is tracked separately.
+                  </p>
+              </div>
+          </div>
+
+          <!-- Hidden inputs to hold values during form submission -->
+          <input type="number" id="empAnnualLeave" min="0" step="1" style="display:none;">
+          <input type="number" id="empSickLeave" min="0" step="1" style="display:none;">
+          <input type="number" id="empTimeOff" min="0" step="1" style="display:none;">
       </div>
 
       <div style="display:flex; gap:1rem; justify-content:flex-end; margin-top:2rem; padding-top:1rem; border-top:1px solid #e2e8f0;">
