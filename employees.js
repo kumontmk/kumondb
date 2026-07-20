@@ -98,6 +98,7 @@ function initApp() {
   let currentTimeclockEmpId = null;
   let initialLoadDone = false; 
   let currentEditingEmpId = null;
+  let yearlyResetChecked = false; // 🔽 NEW: Flag to ensure reset only runs once per session
 
   function openModal(id) {
     const el = document.getElementById(id);
@@ -241,8 +242,46 @@ function initApp() {
       if (!initialLoadDone) {
         initialLoadDone = true;
         updateIncompleteBadge();
+        
+        // 🔽 NEW: Trigger yearly leave reset check on first load
+        if (!yearlyResetChecked) {
+          yearlyResetChecked = true;
+          performYearlyLeaveReset();
+        }
       }
     }, { onlyOnce: false });
+  }
+
+  // 🔽 NEW: Automatic Yearly Leave Reset Function
+  async function performYearlyLeaveReset() {
+    const currentYear = new Date().getFullYear();
+    const updates = {};
+    
+    Object.entries(employees).forEach(([empId, emp]) => {
+      const leave = emp.leaveEntitlement || {};
+      
+      if (!leave.lastResetYear) {
+        // Safe Migration: If the field doesn't exist yet, just stamp the current year 
+        // so we don't accidentally wipe out their used credits for the current year.
+        updates[`employees/${empId}/leaveEntitlement/lastResetYear`] = currentYear;
+      } else if (currentYear > leave.lastResetYear) {
+        // 🎉 New year detected! Reset used credits to 0, but keep the "Entitled" limits intact.
+        updates[`employees/${empId}/leaveEntitlement/annualUsed`] = 0;
+        updates[`employees/${empId}/leaveEntitlement/sickUsed`] = 0;
+        updates[`employees/${empId}/leaveEntitlement/timeOffUsed`] = 0;
+        updates[`employees/${empId}/leaveEntitlement/lastResetYear`] = currentYear;
+      }
+    });
+    
+    // Apply all updates to Firebase in one batch
+    if (Object.keys(updates).length > 0) {
+      try {
+        await update(ref(db), updates);
+        console.log(`✅ Yearly leave reset completed. Used credits set to 0 for the new year.`);
+      } catch (err) {
+        console.error('❌ Error during yearly leave reset:', err);
+      }
+    }
   }
 
   function loadVerifications() {
@@ -566,7 +605,8 @@ function initApp() {
         sick: parseInt(document.getElementById('empSickLeave')?.value) || existingLeave.sick || 0,
         sickUsed: existingLeave.sickUsed || 0,
         timeOff: parseInt(document.getElementById('empTimeOff')?.value) || existingLeave.timeOff || 0,
-        timeOffUsed: existingLeave.timeOffUsed || 0
+        timeOffUsed: existingLeave.timeOffUsed || 0,
+        lastResetYear: existingLeave.lastResetYear || new Date().getFullYear() // 🔽 Auto-stamp current year for new employees
     };
 
     const employeeData = {
