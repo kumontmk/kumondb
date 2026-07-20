@@ -79,14 +79,7 @@ function initializeTimetable() {
                 dayViewContainer.classList.add('active');
                 dayViewContainer.classList.add('print-active');
                 weekViewContainer.classList.remove('print-active');
-                // Reload day view if needed
                 if (daySelect) loadTimetable();
-            } else if (targetTab === 'weekView') {
-                weekViewContainer.classList.add('active');
-                weekViewContainer.classList.add('print-active');
-                dayViewContainer.classList.remove('print-active');
-                // Load week view
-                loadWeekTimetable();
             } else if (targetTab === 'weekView') {
                 weekViewContainer.classList.add('active');
                 weekViewContainer.classList.add('print-active');
@@ -94,7 +87,6 @@ function initializeTimetable() {
                 document.getElementById('champViewContainer')?.classList.remove('print-active');
                 loadWeekTimetable();
             } else if (targetTab === 'champView') {
-                // ✅ NEW: Champ Format tab
                 const champContainer = document.getElementById('champViewContainer');
                 champContainer?.classList.add('active');
                 champContainer?.classList.add('print-active');
@@ -105,7 +97,6 @@ function initializeTimetable() {
         });
     });
 
-    // Set initial print-active
     dayViewContainer.classList.add('print-active');
 
     function showLoader() {
@@ -142,7 +133,6 @@ function initializeTimetable() {
         return slots;
     }
 
-    // ✅ NEW: Week time slots (10:00 to 19:15 covers all days)
     function getWeekTimeSlots() {
         const slots = [];
         for (let h = 10; h <= 19; h++) {
@@ -154,10 +144,9 @@ function initializeTimetable() {
         return slots;
     }
 
-    // ✅ NEW: Get current week dates (Mon–Sun)
     function getWeekDates() {
         const today = new Date();
-        const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon, ...
+        const dayOfWeek = today.getDay();
         const monday = new Date(today);
         monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
         monday.setHours(0, 0, 0, 0);
@@ -185,29 +174,21 @@ function initializeTimetable() {
         return null;
     }
 
-    // ============================================
-    // ✅ CHAMP FORMAT HELPERS
-    // ============================================
     function getMathChampGroup(level) {
         if (!level) return null;
         const first = level.charAt(0).toUpperCase();
         const second = level.charAt(1)?.toUpperCase();
-
-        // 6A, 5A, 4A, 3A, 2A  → digit followed by 'A'
         if (/\d/.test(first) && second === 'A') return 'math6A2A';
-
         if (['A', 'B', 'C', 'D', 'E', 'F'].includes(first)) return 'mathAF';
-        if (['G', 'H', 'I'].includes(first))                  return 'mathGI';
-        if (['J', 'K', 'L', 'M', 'N', 'O'].includes(first))   return 'mathJO';
-        return null; // P+ levels don't fall into any champ math bucket
+        if (['G', 'H', 'I'].includes(first)) return 'mathGI';
+        if (['J', 'K', 'L', 'M', 'N', 'O'].includes(first)) return 'mathJO';
+        return null;
     }
 
     function getEnglishChampGroup(grade) {
         if (!grade) return null;
         const g = grade.toString().toUpperCase().trim();
-        // Only K0, K1, K2, K3 go to the K column
         if (['K0', 'K1', 'K2', 'K3'].includes(g)) return 'engK';
-        // Everything else (K4+, P1+, preschool, etc.) goes to P1+
         return 'engP1';
     }
 
@@ -254,52 +235,37 @@ function initializeTimetable() {
         return daySubjects.map(s => s.letter).join('');
     }
 
-    // ============================================
-    // ✅ HELPER: Get effective level based on progress reports
-    // ============================================
     function getEffectiveLevelAndWS(sub) {
         const now = new Date();
         const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         
         let progress = sub.progress;
         if (progress) {
-            // Handle both Array and Object formats from Firebase
             if (!Array.isArray(progress)) {
                 progress = Object.values(progress);
             }
-            
-            // Filter valid entries up to current month and sort descending (newest first)
             const validProgress = progress
                 .filter(p => p && p.month && p.month <= currentMonth)
                 .sort((a, b) => b.month.localeCompare(a.month));
                 
             if (validProgress.length > 0) {
                 const latest = validProgress[0];
-                // Use currLevel from report if it exists, otherwise fallback to startLevel
                 const level = latest.currLevel || sub.startLevel || '-';
                 const ws = latest.currWS ?? sub.startWS ?? 0;
                 return { level, ws };
             }
         }
-        
-        // Fallback to start level if no valid progress found (e.g., brand new student)
         return {
             level: sub.startLevel || '-',
             ws: sub.startWS ?? 0
         };
     }
 
-    // ============================================
-    // ✅ HELPER: Build student display object (shared by both views)
-    // ============================================
     function buildStudentObj(s, sub, tsDay, tsList) {
         const group = getSubjectGroup(sub.name);
         if (!group) return null;
         
-        // ✅ FIX: Calculate effective level from progress reports
         const { level } = getEffectiveLevelAndWS(sub);
-        
-        // ✅ FIX: Only show the Level (e.g., B50), do not append the WS number
         const levelWS = level;
 
         let enType = '';
@@ -320,13 +286,12 @@ function initializeTimetable() {
             grade: s.grade || '-',
             name: displayName,
             level: levelWS,
-            // ✅ CRITICAL FIX: Pull worksheetType from the SUBJECT, fallback to root for older records
             worksheetType: sub.worksheetType || s.worksheetType || 'Paper' 
         };
     }
 
     // ============================================
-    // DAY VIEW (existing — unchanged logic, refactored to use helper)
+    // DAY VIEW
     // ============================================
     function loadTimetable() {
         if (!daySelect || !timetableBody) return;
@@ -334,7 +299,7 @@ function initializeTimetable() {
         if (timetableUnsub) { timetableUnsub(); timetableUnsub = null; }
 
         const cb = (snap) => {
-            cachedStudentsSnap = snap; // Cache for week view
+            cachedStudentsSnap = snap;
             timetableBody.innerHTML = '';
             const day = daySelect.value;
             const timeSlots = getTimeSlots(day);
@@ -358,7 +323,6 @@ function initializeTimetable() {
                             const studentObj = buildStudentObj(s, sub, tsDay, tsList);
                             if (!studentObj) return;
                             if (group === 'Math') {
-                                // ✅ FIX: studentObj.level is now just the level (e.g. "B50"), no need to substring
                                 if (isMathHighLevel(studentObj.level)) {
                                     schedule[ts.time].mathHigh.push(studentObj);
                                 } else {
@@ -394,7 +358,6 @@ function initializeTimetable() {
                     const addSubjectCells = (arr) => {
                         if (arr[i]) {
                             row.appendChild(createCell(arr[i].grade));
-                            // ✅ Pass true if worksheetType is Kumon Connect to highlight the name cell
                             row.appendChild(createCell(arr[i].name, false, arr[i].worksheetType === 'Kumon Connect'));
                             row.appendChild(createCell(arr[i].level));
                         } else {
@@ -413,12 +376,11 @@ function initializeTimetable() {
             hideLoader();
         };
 
-        // ✅ Updated createCell to accept isKC flag
         function createCell(content, isEmpty = false, isKC = false) {
             const td = document.createElement('td');
             td.textContent = content;
             if (isEmpty) td.className = 'empty-cell';
-            if (isKC) td.classList.add('kc-cell'); // ✅ Add class for KC highlight
+            if (isKC) td.classList.add('kc-cell');
             return td;
         }
 
@@ -427,7 +389,7 @@ function initializeTimetable() {
     }
 
     // ============================================
-    // ✅ NEW: WEEK VIEW
+    // WEEK VIEW
     // ============================================
     function loadWeekTimetable() {
         const weekBody = document.getElementById('weekTimetableBody');
@@ -437,7 +399,6 @@ function initializeTimetable() {
         if (!weekBody || !weekDateRow || !weekDayRow) return;
 
         showLoader();
-        // If we already have cached data, use it; otherwise subscribe
         if (cachedStudentsSnap) {
             renderWeekView(cachedStudentsSnap);
             hideLoader();
@@ -454,10 +415,8 @@ function initializeTimetable() {
 
         function renderWeekView(snap) {
             const weekDates = getWeekDates();
-            const days = DAY_ORDER; // ['Monday', ... 'Sunday']
+            const days = DAY_ORDER;
 
-            // --- Build header ---
-            // Date row
             weekDateRow.innerHTML = '<th rowspan="2" class="th-time">Time</th>';
             weekDates.forEach((wd, i) => {
                 const th = document.createElement('th');
@@ -467,7 +426,6 @@ function initializeTimetable() {
                 weekDateRow.appendChild(th);
             });
 
-            // Day name row
             weekDayRow.innerHTML = '';
             days.forEach((day, i) => {
                 const th = document.createElement('th');
@@ -476,15 +434,11 @@ function initializeTimetable() {
                 weekDayRow.appendChild(th);
             });
 
-            // Week range label
             const first = weekDates[0];
             const last = weekDates[6];
             weekRangeLabel.textContent = `Week of ${first.month} ${first.date} – ${last.month} ${last.date}, ${last.fullDate.getFullYear()}`;
 
-            // --- Generate all time slots ---
             const allTimeSlots = getWeekTimeSlots();
-
-            // --- Build schedule: time -> day -> [students] ---
             const schedule = {};
             allTimeSlots.forEach(time => {
                 schedule[time] = {};
@@ -511,19 +465,16 @@ function initializeTimetable() {
                 });
             });
 
-            // Sort students in each cell by grade
             Object.values(schedule).forEach(daySchedule => {
                 Object.values(daySchedule).forEach(arr => {
                     arr.sort((a, b) => a.grade.localeCompare(b.grade));
                 });
             });
 
-            // Filter to only time slots that have at least one student
             const activeTimeSlots = allTimeSlots.filter(time =>
                 days.some(day => schedule[time][day].length > 0)
             );
 
-            // --- Render table body ---
             weekBody.innerHTML = '';
             if (activeTimeSlots.length === 0) {
                 const row = document.createElement('tr');
@@ -538,13 +489,11 @@ function initializeTimetable() {
 
             activeTimeSlots.forEach(time => {
                 const row = document.createElement('tr');
-                // Time cell
                 const timeTd = document.createElement('td');
                 timeTd.textContent = time;
                 timeTd.className = 'week-time-cell';
                 row.appendChild(timeTd);
 
-                // Day cells
                 days.forEach((day, dayIdx) => {
                     const td = document.createElement('td');
                     td.className = 'week-cell';
@@ -554,9 +503,11 @@ function initializeTimetable() {
                     students.forEach(st => {
                         const div = document.createElement('div');
                         div.className = 'week-student';
-                        // ✅ Added highlight class for KC students
+                        
+                        // ✅ CRITICAL: Add data attribute for bulletproof Excel export detection
                         if (st.worksheetType === 'Kumon Connect') {
                             div.classList.add('kc-student');
+                            div.setAttribute('data-kc', 'true');
                         }
 
                         const gradeSpan = document.createElement('span');
@@ -584,7 +535,7 @@ function initializeTimetable() {
     }
 
     // ============================================
-    // ✅ CHAMP FORMAT VIEW
+    // CHAMP FORMAT VIEW
     // ============================================
     function loadChampTimetable() {
         const champDaySelect = document.getElementById('champDay');
@@ -593,13 +544,11 @@ function initializeTimetable() {
 
         showLoader();
 
-        // Reuse cached snap if available, otherwise subscribe
         const render = (snap) => {
             champBody.innerHTML = '';
             const day = champDaySelect.value;
             const timeSlots = getTimeSlots(day);
 
-            // 7 subject buckets per time slot
             const schedule = {};
             timeSlots.forEach(t => {
                 schedule[t] = {
@@ -640,13 +589,11 @@ function initializeTimetable() {
                 });
             });
 
-            // Sort each bucket by grade
             const BUCKETS = ['math6A2A', 'mathAF', 'mathGI', 'mathJO', 'engK', 'engP1', 'chinese'];
             Object.values(schedule).forEach(slot => {
                 BUCKETS.forEach(b => slot[b].sort((a, b) => a.grade.localeCompare(b.grade)));
             });
 
-            // Render rows
             timeSlots.forEach(time => {
                 const s = schedule[time];
                 const maxRows = Math.max(...BUCKETS.map(b => s[b].length));
@@ -714,143 +661,140 @@ function initializeTimetable() {
     }
 
     document.getElementById('printTimetable')?.addEventListener('click', () => window.print());
-    // ============================================
-    // ✅ CHAMP FORMAT INITIAL LOAD
-    // ============================================
+    
     const champDaySelect = document.getElementById('champDay');
-        if (champDaySelect) {
-            const today = new Date();
-            const currentDayName = today.toLocaleDateString('en-US', { weekday: 'long' });
-            const hasOption = Array.from(champDaySelect.options).some(opt => opt.value === currentDayName);
-            champDaySelect.value = hasOption ? currentDayName : 'Monday';
-            champDaySelect.addEventListener('change', loadChampTimetable);
-            // Auto-load if champ tab is active on page load (unlikely, but safe)
-            if (document.getElementById('champViewContainer')?.classList.contains('active')) {
-                loadChampTimetable();
-            }
+    if (champDaySelect) {
+        const today = new Date();
+        const currentDayName = today.toLocaleDateString('en-US', { weekday: 'long' });
+        const hasOption = Array.from(champDaySelect.options).some(opt => opt.value === currentDayName);
+        champDaySelect.value = hasOption ? currentDayName : 'Monday';
+        champDaySelect.addEventListener('change', loadChampTimetable);
+        if (document.getElementById('champViewContainer')?.classList.contains('active')) {
+            loadChampTimetable();
+        }
+    }
+
+    // ============================================
+    // ✅ EXPORT TO EXCEL (Bulletproof Nested Table Approach)
+    // ============================================
+    function exportToExcel() {
+        let activeTable = null;
+        let viewName = 'Timetable';
+        
+        if (document.getElementById('dayViewContainer').classList.contains('active')) {
+            activeTable = document.getElementById('timetableTable');
+            viewName = 'Day_View';
+        } else if (document.getElementById('weekViewContainer').classList.contains('active')) {
+            activeTable = document.getElementById('weekTimetableTable');
+            viewName = 'Week_View';
+        } else if (document.getElementById('champViewContainer').classList.contains('active')) {
+            activeTable = document.getElementById('champTimetableTable');
+            viewName = 'Champ_Format';
         }
 
-    // ============================================
-// ✅ EXPORT TO EXCEL (Preserves Formatting)
-// ============================================
-function exportToExcel() {
-    let activeTable = null;
-    let viewName = 'Timetable';
-    
-    // 1. Identify which tab is currently active
-    if (document.getElementById('dayViewContainer').classList.contains('active')) {
-        activeTable = document.getElementById('timetableTable');
-        viewName = 'Day_View';
-    } else if (document.getElementById('weekViewContainer').classList.contains('active')) {
-        activeTable = document.getElementById('weekTimetableTable');
-        viewName = 'Week_View';
-    } else if (document.getElementById('champViewContainer').classList.contains('active')) {
-        activeTable = document.getElementById('champTimetableTable');
-        viewName = 'Champ_Format';
-    }
+        if (!activeTable) {
+            alert('Please select a view to export.');
+            return;
+        }
 
-    if (!activeTable) {
-        alert('Please select a view to export.');
-        return;
-    }
+        const tableClone = activeTable.cloneNode(true);
 
-    // 2. Clone the table to avoid modifying the live DOM
-    const tableClone = activeTable.cloneNode(true);
+        // ✅ CRITICAL FIX: Use nested tables for Week View. 
+        // Excel's HTML engine IGNORES background-color on <div> elements.
+        // It ONLY reliably renders background colors on <td> elements.
+        if (viewName === 'Week_View') {
+            const cells = tableClone.querySelectorAll('.week-cell');
+            cells.forEach(td => {
+                const students = td.querySelectorAll('.week-student');
+                if (students.length === 0) return;
 
-    // 3. Special handling for Week View (Convert Flexbox divs to Excel-friendly blocks)
-    if (viewName === 'Week_View') {
-        const cells = tableClone.querySelectorAll('.week-cell');
-        cells.forEach(td => {
-            let html = '';
-            td.querySelectorAll('.week-student').forEach(div => {
-                const grade = div.querySelector('.ws-grade')?.innerText || '';
-                const name = div.querySelector('.ws-name')?.innerText || '';
-                const level = div.querySelector('.ws-level')?.innerText || '';
-                const isKC = div.classList.contains('kc-student');
+                let innerHTML = '<table style="width:100%; border-collapse:collapse; border:none; margin:0;">';
                 
-                // Apply KC highlight background inline for Excel
-                const bgStyle = isKC ? 'background-color:#fff9c4;' : '';
+                students.forEach(div => {
+                    const grade = div.querySelector('.ws-grade')?.innerText || '';
+                    const name = div.querySelector('.ws-name')?.innerText || '';
+                    const level = div.querySelector('.ws-level')?.innerText || '';
+                    
+                    // Check both class and data attribute for maximum reliability
+                    const isKC = div.classList.contains('kc-student') || div.getAttribute('data-kc') === 'true';
+                    const bgColor = isKC ? '#fff9c4' : 'transparent';
+                    
+                    innerHTML += `<tr>
+                        <td style="background-color:${bgColor}; padding:2px 3px; border:none; text-align:left; vertical-align:middle; font-size:9.5pt;">
+                            <b style="color:#4682B4; font-size:9pt; font-weight:700;">${grade}</b> 
+                            <span style="font-size:9.5pt; font-weight:500; color:#000;">${name}</span> 
+                            <b style="color:#555; font-size:9pt; font-weight:600; white-space:nowrap;">${level}</b>
+                        </td>
+                    </tr>`;
+                });
                 
-                // Format as structured text with colors
-                html += `<div style="${bgStyle}padding:2px;white-space:nowrap;">
-                            <b style="color:#4682B4;font-size:9pt;">${grade}</b> 
-                            <span style="font-size:9.5pt;">${name}</span> 
-                            <b style="color:#555;font-size:9pt;">${level}</b>
-                         </div>`;
+                innerHTML += '</table>';
+                td.innerHTML = innerHTML;
             });
-            td.innerHTML = html || td.innerHTML;
-        });
+        }
+
+        const excelCSS = `
+            <style>
+                table { border-collapse: collapse; border: 2px solid #333; font-family: 'Microsoft YaHei', 'PingFang SC', 'Segoe UI', Arial, sans-serif; font-size: 11pt; }
+                th, td { border: 1px solid #333; padding: 4px 5px; text-align: center; vertical-align: middle; color: #000; }
+                th { font-weight: 700; font-size: 11pt; }
+                
+                .th-math { background: #008B8B !important; color: #fff !important; }
+                .th-english { background: #DC143C !important; color: #fff !important; }
+                .th-chinese { background: #9ACD32 !important; color: #333 !important; }
+                
+                .th-time { background: #555 !important; color: #fff !important; }
+                #weekDateRow th { background: #4682B4 !important; color: #fff !important; font-size: 13pt; }
+                #weekDayRow th { background: #d0e8f5 !important; color: #333 !important; font-size: 10pt; }
+                
+                .time-cell, .week-time-cell { font-weight: 600; background: #f8f9fa !important; border-right: 2px solid #cbd5e1 !important; }
+                .empty-cell { background: transparent !important; }
+                .kc-cell { background-color: #fff9c4 !important; }
+                
+                .week-today-col { background: rgba(135, 206, 235, 0.15) !important; }
+                .week-today-header { background: #2e6da4 !important; color: #fff !important; }
+            </style>
+        `;
+
+        const htmlTemplate = `
+            <html xmlns:o="urn:schemas-microsoft-com:office:office"
+                xmlns:x="urn:schemas-microsoft-com:office:excel"
+                xmlns="http://www.w3.org/TR/REC-html40">
+            <head>
+                <meta charset="UTF-8">
+                <!--[if gte mso 9]><xml>
+                <x:ExcelWorkbook>
+                <x:ExcelWorksheets>
+                <x:ExcelWorksheet>
+                    <x:Name>${viewName}</x:Name>
+                    <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+                </x:ExcelWorksheet>
+                </x:ExcelWorksheets>
+                </x:ExcelWorkbook>
+                </xml><![endif]-->
+                ${excelCSS}
+            </head>
+            <body>
+                ${tableClone.outerHTML}
+            </body>
+            </html>
+        `;
+
+        const blob = new Blob([htmlTemplate], { type: 'application/vnd.ms-excel' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const dateStr = new Date().toISOString().slice(0, 10);
+        
+        a.href = url;
+        a.download = `Kumon_Timetable_${viewName}_${dateStr}.xls`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     }
 
-    // 4. Define CSS that Excel will understand to replicate the web styles
-    const excelCSS = `
-        <style>
-            table { border-collapse: collapse; border: 2px solid #333; font-family: 'Microsoft YaHei', 'PingFang SC', 'Segoe UI', Arial, sans-serif; font-size: 11pt; }
-            th, td { border: 1px solid #333; padding: 4px 5px; text-align: center; vertical-align: middle; color: #000; }
-            th { font-weight: 700; font-size: 11pt; }
-            
-            /* Day & Champ View Headers */
-            .th-math { background: #008B8B; color: #fff; }
-            .th-english { background: #DC143C; color: #fff; }
-            .th-chinese { background: #9ACD32; color: #333; }
-            
-            /* Week View Headers */
-            .th-time { background: #555; color: #fff; }
-            #weekDateRow th { background: #4682B4; color: #fff; font-size: 13pt; }
-            #weekDayRow th { background: #d0e8f5; color: #333; font-size: 10pt; }
-            
-            /* Cells & Highlights */
-            .time-cell, .week-time-cell { font-weight: 600; background: #f8f9fa; border-right: 2px solid #cbd5e1; }
-            .empty-cell { background: transparent; }
-            .kc-cell { background-color: #fff9c4; }
-            
-            /* Week View Today Highlight */
-            .week-today-col { background: rgba(135, 206, 235, 0.15); }
-            .week-today-header { background: #2e6da4 !important; color: #fff !important; }
-        </style>
-    `;
+    document.getElementById('exportExcel')?.addEventListener('click', exportToExcel);
 
-    // 5. Build the Excel-compatible HTML template
-    const htmlTemplate = `
-        <html xmlns:o="urn:schemas-microsoft-com:office:office"
-              xmlns:x="urn:schemas-microsoft-com:office:excel"
-              xmlns="http://www.w3.org/TR/REC-html40">
-        <head>
-            <meta charset="UTF-8">
-            <!--[if gte mso 9]><xml>
-             <x:ExcelWorkbook>
-              <x:ExcelWorksheets>
-               <x:ExcelWorksheet>
-                <x:Name>${viewName}</x:Name>
-                <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
-               </x:ExcelWorksheet>
-              </x:ExcelWorksheets>
-             </x:ExcelWorkbook>
-            </xml><![endif]-->
-            ${excelCSS}
-        </head>
-        <body>
-            ${tableClone.outerHTML}
-        </body>
-        </html>
-    `;
-
-    // 6. Trigger Download
-    const blob = new Blob([htmlTemplate], { type: 'application/vnd.ms-excel' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const dateStr = new Date().toISOString().slice(0, 10);
-    
-    a.href = url;
-    a.download = `Kumon_Timetable_${viewName}_${dateStr}.xls`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-}
-
-// ✅ Bind the new button
-document.getElementById('exportExcel')?.addEventListener('click', exportToExcel);
     window.addEventListener('beforeunload', () => {
         if (timetableUnsub) timetableUnsub();
         if (weekTimetableUnsub) weekTimetableUnsub();
