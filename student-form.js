@@ -1015,232 +1015,234 @@ function initApp() {
         if (subject && SUBJECT_COLORS[subject]) entry.classList.add(SUBJECT_COLORS[subject]);
     }
 
-    function addSubjectField(data = {}) {
-        if (subjectCount >= 3) return showError('Maximum 3 subjects allowed');
-        const container = document.getElementById('subjectsContainer');
-        if (!container) return;
-        if (data.pencilSkill) {
-            let rawLevel = String(data.pencilSkill.level || '');
-            let rawWs = String(data.pencilSkill.ws || '');
-            const match = rawLevel.match(/^(ZI|ZII)(\d+)$/i);
-            if (match) {
-                data.pencilSkill.level = match[1].toUpperCase();
-                data.pencilSkill.ws = match[2];
-            }
+
+function addSubjectField(data = {}) {
+    if (subjectCount >= 3) return showError('Maximum 3 subjects allowed');
+    const container = document.getElementById('subjectsContainer');
+    if (!container) return;
+    
+    if (data.pencilSkill) {
+        let rawLevel = String(data.pencilSkill.level || '');
+        let rawWs = String(data.pencilSkill.ws || '');
+        const match = rawLevel.match(/^(ZI|ZII)(\d+)$/i);
+        if (match) {
+            data.pencilSkill.level = match[1].toUpperCase();
+            data.pencilSkill.ws = match[2];
         }
-        const div = document.createElement('div');  
-        div.className = 'subject-entry';
-        const usedSubjects = getUsedSubjects(div);
-        const initialSubject = data.name || 'Math';
-        const levelOptionsHTML = getLevelOptions(initialSubject, data.startLevel);
-
-        div.innerHTML = `
-         <div class="form-grid">
-             <div>
-                 <label>Status</label>
-                 <select class="status">
-                     <option value="inquiry" ${data.status === 'inquiry' ? 'selected' : ''}>Inquiry</option>
-                     <option value="current" ${data.status === 'current' ? 'selected' : ''} ${!data.status ? 'selected' : ''}>Current</option>
-                     <option value="pause" ${data.status === 'pause' ? 'selected' : ''}>Pause</option>
-                     <option value="drop" ${data.status === 'drop' ? 'selected' : ''}>Drop</option>
-                 </select>
-             </div>
-
-             <div class="fld-pause-from" style="display:${data.status === 'pause' ? 'block' : 'none'};">
-                 <label>Pause From *</label>
-                 <input type="month" class="pause-from-month-year" value="${(data.pauseFromYear && data.pauseFromMonth) ? `${data.pauseFromYear}-${String(data.pauseFromMonth).padStart(2, '0')}` : ''}">
-             </div>
-
-             <div class="fld-pause-to" style="display:${data.status === 'pause' ? 'block' : 'none'};">
-                 <label>Pause To *</label>
-                 <input type="month" class="pause-to-month-year" value="${(data.pauseToYear && data.pauseToMonth) ? `${data.pauseToYear}-${String(data.pauseToMonth).padStart(2, '0')}` : ''}">
-             </div>
-
-             <div class="fld-drop-date" style="display:${data.status === 'drop' ? 'block' : 'none'};">
-                 <label>Drop Month *</label>
-                 <input type="month" class="drop-month-year" value="${(data.dropYear && data.dropMonth) ? `${data.dropYear}-${String(data.dropMonth).padStart(2, '0')}` : ''}">
-             </div>
-
-             <div>
-                 <label>Select Subject *</label>
-                 <select class="subject-name" required>
-                     <option value="">Select Subject *</option>
-                    ${SUBJECTS.map(s => {
-                        const isSelected = data.name === s;
-                        const isUsed = usedSubjects.has(s) && !isSelected;
-                        return `<option value="${s}" ${isSelected ? 'selected' : ''} ${isUsed ? 'disabled' : ''}>${s}${isUsed ? ' (Added)' : ''}</option>`;
-                    }).join('')}
-                 </select>
-             </div>
-             <div class="fld-inquiry-date" style="display:${data.status === 'inquiry' ? 'block' : 'none'};">
-                 <label>Inquiry Date *</label>
-                 <input type="date" class="inquiry-date" value="${data.inquiryDate || ''}">
-             </div>
-             <div class="fld-start-level" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'};">
-                 <label>Start Level *</label>
-                 <select class="start-level subject-level-select">${levelOptionsHTML}</select>
-             </div>
-             <div class="fld-start-ws" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'};">
-                 <label>Start WS # *</label>
-                 <select class="start-ws">${getWSDropdownOptions(data.startWS)}</select>
-             </div>
-             <input type="hidden" class="current-level-db" value="${data.currentLevel || ''}">
-             <div class="fld-current-level-readonly" style="display:block;">
-                 <label>Current Level <span style="color:#999; font-weight:400;">(From Database)</span></label>
-                 <input type="text" class="current-level-display" readonly value="${data.currentLevel || 'Not Set'}" style="background:#f1f5f9; color:#64748b; cursor:not-allowed;">
-             </div>
-             <div class="fld-enrol-date" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'};">
-                 <label>Enrol Date *</label>
-                 <input type="date" class="enrol-date" value="${data.enrolDate || ''}">
-             </div>
-
-             <div class="fld-worksheet-type">
-                 <label>Worksheet Type</label>
-                 <select class="worksheet-type">
-                     <option value="Paper" ${data.worksheetType === 'Paper' || !data.worksheetType ? 'selected' : ''}>Paper</option>
-                     <option value="Kumon Connect" ${data.worksheetType === 'Kumon Connect' ? 'selected' : ''}>Kumon Connect</option>
-                 </select>
-             </div>
+    }
+    
+    const div = document.createElement('div');  
+    div.className = 'subject-entry';
+    const usedSubjects = getUsedSubjects(div);
+    const initialSubject = data.name || 'Math';
+    const levelOptionsHTML = getLevelOptions(initialSubject, data.startLevel);
+    
+    div.innerHTML = `
+     <div class="form-grid">
+         <div>
+             <label>Status</label>
+             <select class="status">
+                 <option value="inquiry" ${data.status === 'inquiry' ? 'selected' : ''}>Inquiry</option>
+                 <option value="current" ${data.status === 'current' ? 'selected' : ''} ${!data.status ? 'selected' : ''}>Current</option>
+                 <option value="pause" ${data.status === 'pause' ? 'selected' : ''}>Pause</option>
+                 <option value="drop" ${data.status === 'drop' ? 'selected' : ''}>Drop</option>
+             </select>
          </div>
-
-         <div class="pending-request-banner hidden">
-             <div class="banner-content">
-                 <span class="banner-icon">⏳</span>
-                 <span class="banner-text"></span>
-             </div>
-             <button type="button" class="cancel-pr-btn danger">Cancel Request</button>
+         <div class="fld-pause-from" style="display:${data.status === 'pause' ? 'block' : 'none'};">
+             <label>Pause From *</label>
+             <input type="month" class="pause-from-month-year" value="${(data.pauseFromYear && data.pauseFromMonth) ? `${data.pauseFromYear}-${String(data.pauseFromMonth).padStart(2, '0')}` : ''}">
          </div>
-
-         <input type="hidden" class="pr-cancelled" value="${data.pendingRequest?.cancelled ? 'true' : 'false'}">
-         <input type="hidden" class="pr-type" value="${data.pendingRequest?.cancelled ? '' : (data.pendingRequest?.type || '')}">
-         <input type="hidden" class="pr-pause-from-month-year" value="${data.pendingRequest?.cancelled ? '' : ((data.pendingRequest?.pauseFromYear && data.pendingRequest?.pauseFromMonth) ? `${data.pendingRequest.pauseFromYear}-${String(data.pendingRequest.pauseFromMonth).padStart(2, '0')}` : '')}">
-         <input type="hidden" class="pr-pause-to-month-year" value="${data.pendingRequest?.cancelled ? '' : ((data.pendingRequest?.pauseToYear && data.pendingRequest?.pauseToMonth) ? `${data.pendingRequest.pauseToYear}-${String(data.pendingRequest.pauseToMonth).padStart(2, '0')}` : '')}">
-         <input type="hidden" class="pr-drop-month-year" value="${data.pendingRequest?.cancelled ? '' : ((data.pendingRequest?.dropYear && data.pendingRequest?.dropMonth) ? `${data.pendingRequest.dropYear}-${String(data.pendingRequest.dropMonth).padStart(2, '0')}` : '')}">
-         <input type="hidden" class="pr-reason" value="${data.pendingRequest?.cancelled ? '' : (data.pendingRequest?.reason || '')}">
-
-         <button type="button" class="add-pr-btn secondary" style="position:absolute; bottom:1rem; right:1rem; background:#fff3cd; color:#856404; border:1px solid #ffeeba; width:auto; padding:0.4rem 0.8rem; font-size:0.85rem; z-index:10;">🗓️ Drop/Pause Request</button>
-         
-         <button type="button" class="add-pencil-btn secondary" style="margin:0.25rem 0 0.75rem; padding:0.3rem 0.7rem; font-size:0.85rem; width:auto; background:#e8f0fe; color:#667eea; border:1px solid #667eea;">➕ Add Pencil Skill</button>
-         <div class="pencil-skill-entry" style="display:none; margin-top:0.5rem; margin-bottom:1rem; padding:0.75rem; background:#e8f0fe; border-radius:8px; border-left:4px solid #667eea;">
-             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-                 <h4 style="font-size:0.9rem; margin:0; color:#333;">Pencil Skill</h4>
-                 <button type="button" class="remove-pencil-btn" style="background:none; border:none; cursor:pointer; color:#dc3545; font-size:1.2rem; padding:0; line-height:1;">×</button>
-             </div>
-             <div class="form-grid">
-                 <div> <label>Pencil Level</label> <select class="pencil-level"> <option value="">Select Level</option>${['ZI','ZII'].map(l => `<option value="${l}" ${data.pencilSkill?.level === l ? 'selected' : ''}>${l}</option>`).join('')}</select> </div>
-                 <div> <label>Pencil Start WS</label> <select class="pencil-ws">${getWSDropdownOptions(data.pencilSkill?.ws)}</select> </div>
-             </div>
+         <div class="fld-pause-to" style="display:${data.status === 'pause' ? 'block' : 'none'};">
+             <label>Pause To *</label>
+             <input type="month" class="pause-to-month-year" value="${(data.pauseToYear && data.pauseToMonth) ? `${data.pauseToYear}-${String(data.pauseToMonth).padStart(2, '0')}` : ''}">
          </div>
-
-         <div class="fld-pause-reason pause-drop-reason-field" style="display:${data.status === 'pause' ? 'block' : 'none'};">
-             <label>Reason for Pause *</label>
-             <input type="text" class="pause-reason" placeholder="Enter reason for pause..." value="${data.pauseReason || ''}">
+         <div class="fld-drop-date" style="display:${data.status === 'drop' ? 'block' : 'none'};">
+             <label>Drop Month *</label>
+             <input type="month" class="drop-month-year" value="${(data.dropYear && data.dropMonth) ? `${data.dropYear}-${String(data.dropMonth).padStart(2, '0')}` : ''}">
          </div>
-
-         <div class="fld-drop-reason pause-drop-reason-field" style="display:${data.status === 'drop' ? 'block' : 'none'};">
-             <label>Reason for Drop *</label>
-             <input type="text" class="drop-reason" placeholder="Enter reason for drop..." value="${data.dropReason || ''}">
+         <div>
+             <label>Select Subject *</label>
+             <select class="subject-name" required>
+                 <option value="">Select Subject *</option>
+                ${SUBJECTS.map(s => {
+                    const isSelected = data.name === s;
+                    const isUsed = usedSubjects.has(s) && !isSelected;
+                    return `<option value="${s}" ${isSelected ? 'selected' : ''} ${isUsed ? 'disabled' : ''}>${s}${isUsed ? ' (Added)' : ''}</option>`;
+                }).join('')}
+             </select>
          </div>
-
-      <div class="timeslots-container" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'}; margin-bottom:1rem;">
-         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-             <h4 style="font-size:0.9rem; margin:0;">Timeslots (Max 6)</h4>
-             <button type="button" class="add-timeslot-btn secondary" style="margin:0; padding:0.3rem 0.8rem; font-size:0.8rem; width:auto;">+ Add Timeslot</button>
+         <div class="fld-inquiry-date" style="display:${data.status === 'inquiry' ? 'block' : 'none'};">
+             <label>Inquiry Date *</label>
+             <input type="date" class="inquiry-date" value="${data.inquiryDate || ''}">
          </div>
-         <div class="timeslots-list"></div>
+         <div class="fld-start-level" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'};">
+             <label>Start Level *</label>
+             <select class="start-level subject-level-select">${levelOptionsHTML}</select>
+         </div>
+         <div class="fld-start-ws" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'};">
+             <label>Start WS # *</label>
+             <select class="start-ws">${getWSDropdownOptions(data.startWS)}</select>
+         </div>
+         <input type="hidden" class="current-level-db" value="${data.currentLevel || ''}">
+         <div class="fld-current-level-readonly" style="display:block;">
+             <label>Current Level <span style="color:#999; font-weight:400;">(From Database)</span></label>
+             <input type="text" class="current-level-display" readonly value="${data.currentLevel || 'Not Set'}" style="background:#f1f5f9; color:#64748b; cursor:not-allowed;">
+         </div>
+         <div class="fld-enrol-date" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'};">
+             <label>Enrol Date *</label>
+             <input type="date" class="enrol-date" value="${data.enrolDate || ''}">
+         </div>
+         <div class="fld-worksheet-type">
+             <label>Worksheet Type</label>
+             <select class="worksheet-type">
+                 <option value="Paper" ${data.worksheetType === 'Paper' || !data.worksheetType ? 'selected' : ''}>Paper</option>
+                 <option value="Kumon Connect" ${data.worksheetType === 'Kumon Connect' ? 'selected' : ''}>Kumon Connect</option>
+             </select>
+         </div>
      </div>
-     <button type="button" class="remove-subject" style="background:#dc3545; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; margin-top:1.5rem;">Remove Subject</button>`;  
+     <div class="pending-request-banner hidden">
+         <div class="banner-content">
+             <span class="banner-icon">⏳</span>
+             <span class="banner-text"></span>
+         </div>
+         <button type="button" class="cancel-pr-btn danger">Cancel Request</button>
+     </div>
+     <input type="hidden" class="pr-cancelled" value="${data.pendingRequest?.cancelled ? 'true' : 'false'}">
+     <input type="hidden" class="pr-type" value="${data.pendingRequest?.cancelled ? '' : (data.pendingRequest?.type || '')}">
+     <input type="hidden" class="pr-pause-from-month-year" value="${data.pendingRequest?.cancelled ? '' : ((data.pendingRequest?.pauseFromYear && data.pendingRequest?.pauseFromMonth) ? `${data.pendingRequest.pauseFromYear}-${String(data.pendingRequest.pauseFromMonth).padStart(2, '0')}` : '')}">
+     <input type="hidden" class="pr-pause-to-month-year" value="${data.pendingRequest?.cancelled ? '' : ((data.pendingRequest?.pauseToYear && data.pendingRequest?.pauseToMonth) ? `${data.pendingRequest.pauseToYear}-${String(data.pendingRequest.pauseToMonth).padStart(2, '0')}` : '')}">
+     <input type="hidden" class="pr-drop-month-year" value="${data.pendingRequest?.cancelled ? '' : ((data.pendingRequest?.dropYear && data.pendingRequest?.dropMonth) ? `${data.pendingRequest.dropYear}-${String(data.pendingRequest.dropMonth).padStart(2, '0')}` : '')}">
+     <input type="hidden" class="pr-reason" value="${data.pendingRequest?.cancelled ? '' : (data.pendingRequest?.reason || '')}">
+     <button type="button" class="add-pr-btn secondary" style="position:absolute; bottom:1rem; right:1rem; background:#fff3cd; color:#856404; border:1px solid #ffeeba; width:auto; padding:0.4rem 0.8rem; font-size:0.85rem; z-index:10;">🗓️ Drop/Pause Request</button>
+     <button type="button" class="add-pencil-btn secondary" style="margin:0.25rem 0 0.75rem; padding:0.3rem 0.7rem; font-size:0.85rem; width:auto; background:#e8f0fe; color:#667eea; border:1px solid #667eea;">➕ Add Pencil Skill</button>
+     <div class="pencil-skill-entry" style="display:none; margin-top:0.5rem; margin-bottom:1rem; padding:0.75rem; background:#e8f0fe; border-radius:8px; border-left:4px solid #667eea;">
+         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+             <h4 style="font-size:0.9rem; margin:0; color:#333;">Pencil Skill</h4>
+             <button type="button" class="remove-pencil-btn" style="background:none; border:none; cursor:pointer; color:#dc3545; font-size:1.2rem; padding:0; line-height:1;">×</button>
+         </div>
+         <div class="form-grid">
+             <div> <label>Pencil Level</label> <select class="pencil-level"> <option value="">Select Level</option>${['ZI','ZII'].map(l => `<option value="${l}" ${data.pencilSkill?.level === l ? 'selected' : ''}>${l}</option>`).join('')}</select> </div>
+             <div> <label>Pencil Start WS</label> <select class="pencil-ws">${getWSDropdownOptions(data.pencilSkill?.ws)}</select> </div>
+         </div>
+     </div>
+     <div class="fld-pause-reason pause-drop-reason-field" style="display:${data.status === 'pause' ? 'block' : 'none'};">
+         <label>Reason for Pause *</label>
+         <input type="text" class="pause-reason" placeholder="Enter reason for pause..." value="${data.pauseReason || ''}">
+     </div>
+     <div class="fld-drop-reason pause-drop-reason-field" style="display:${data.status === 'drop' ? 'block' : 'none'};">
+         <label>Reason for Drop *</label>
+         <input type="text" class="drop-reason" placeholder="Enter reason for drop..." value="${data.dropReason || ''}">
+     </div>
+  <div class="timeslots-container" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'}; margin-bottom:1rem;">
+     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+         <h4 style="font-size:0.9rem; margin:0;">Timeslots (Max 6)</h4>
+         <button type="button" class="add-timeslot-btn secondary" style="margin:0; padding:0.3rem 0.8rem; font-size:0.8rem; width:auto;">+ Add Timeslot</button>
+     </div>
+     <div class="timeslots-list"></div>
+ </div>
+ <button type="button" class="remove-subject" style="background:#dc3545; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; margin-top:1.5rem;">Remove Subject</button>`;  
+ 
+    const timeslotsList = div.querySelector('.timeslots-list');
+    
+    // ✅ MODIFIED: Only populate timeslots if they exist in the database (editing). 
+    // Removed the 'else' block that automatically added a default empty timeslot row.
+    if (data.timeslots?.length) {
+        data.timeslots.forEach(ts => addTimeslotField(timeslotsList, ts));
+    }
 
-        const timeslotsList = div.querySelector('.timeslots-list');
-        if (data.timeslots?.length) data.timeslots.forEach(ts => addTimeslotField(timeslotsList, ts));
-        else addTimeslotField(timeslotsList);
-        
-        const addPencilBtn = div.querySelector('.add-pencil-btn');
-        const pencilEntry = div.querySelector('.pencil-skill-entry');
-        if (data.pencilSkill && (data.pencilSkill.level || data.pencilSkill.ws)) {
-            pencilEntry.style.display = 'block';
-            addPencilBtn.style.display = 'none';
+    const addPencilBtn = div.querySelector('.add-pencil-btn');
+    const pencilEntry = div.querySelector('.pencil-skill-entry');
+    if (data.pencilSkill && (data.pencilSkill.level || data.pencilSkill.ws)) {
+        pencilEntry.style.display = 'block';
+        addPencilBtn.style.display = 'none';
+        const pencilLevel = pencilEntry.querySelector('.pencil-level');
+        const pencilWs = pencilEntry.querySelector('.pencil-ws');
+        if (pencilLevel) pencilLevel.required = true;
+        if (pencilWs) pencilWs.required = true;
+    }
+    
+    if (addPencilBtn) {
+        addPencilBtn.onclick = () => {
+            const anyVisible = Array.from(document.querySelectorAll('.pencil-skill-entry')).some(el => el.style.display !== 'none');
+            if (anyVisible) return showError('⚠️ Only one Pencil Skill can be added per student.');
+            pencilEntry.style.display = 'block';  
+            addPencilBtn.style.display = 'inline-block';
             const pencilLevel = pencilEntry.querySelector('.pencil-level');
             const pencilWs = pencilEntry.querySelector('.pencil-ws');
             if (pencilLevel) pencilLevel.required = true;
             if (pencilWs) pencilWs.required = true;
-        }
-        if (addPencilBtn) {
-            addPencilBtn.onclick = () => {
-                const anyVisible = Array.from(document.querySelectorAll('.pencil-skill-entry')).some(el => el.style.display !== 'none');
-                if (anyVisible) return showError('⚠️ Only one Pencil Skill can be added per student.');
-                pencilEntry.style.display = 'block';  
-                addPencilBtn.style.display = 'inline-block';
-                const pencilLevel = pencilEntry.querySelector('.pencil-level');
-                const pencilWs = pencilEntry.querySelector('.pencil-ws');
-                if (pencilLevel) pencilLevel.required = true;
-                if (pencilWs) pencilWs.required = true;
-            };
-        }
-        const removePencilBtn = div.querySelector('.remove-pencil-btn');
-        if (removePencilBtn) {
-            removePencilBtn.onclick = () => {
-                pencilEntry.style.display = 'none';
-                if (addPencilBtn) addPencilBtn.style.display = 'inline-block';
-                const pencilLevel = pencilEntry.querySelector('.pencil-level');
-                const pencilWs = pencilEntry.querySelector('.pencil-ws');
-                if (pencilLevel) { pencilLevel.value = ''; pencilLevel.required = false; }
-                if (pencilWs) { pencilWs.value = ''; pencilWs.required = false; }
-            };
-        }
-
-        const addPrBtn = div.querySelector('.add-pr-btn');
-        if (addPrBtn) addPrBtn.onclick = () => openPRModal(div);
-
-        const cancelPrBtn = div.querySelector('.cancel-pr-btn');
-        if (cancelPrBtn) {
-            cancelPrBtn.onclick = () => {
-                div.querySelector('.pr-cancelled').value = 'true';
-                div.querySelectorAll('.pr-type, .pr-reason, .pr-pause-from-month-year, .pr-pause-to-month-year, .pr-drop-month-year').forEach(el => el.value = '');
-                updatePRBanner(div);
-            };
-        }
-        updatePRBanner(div); 
-        
-        const addTimeslotBtn = div.querySelector('.add-timeslot-btn');
-        if (addTimeslotBtn) addTimeslotBtn.onclick = () => addTimeslotField(timeslotsList);
-        const removeSubjectBtn = div.querySelector('.remove-subject');
-        if (removeSubjectBtn) {
-            removeSubjectBtn.onclick = () => {
-                div.remove();
-                subjectCount--;
-                renderTeachersTab();
-                updateOverallStatus();
-                renderSchedule();
-                updateCurrentLevelsSummary();
-                document.querySelectorAll('.subject-entry').forEach(entry => {
-                    const select = entry.querySelector('.subject-name');
-                    if (select) refreshSubjectOptions(select);
-                });
-            };
-        }
-        const subjectNameSelect = div.querySelector('.subject-name');
-        if (subjectNameSelect) {
-            subjectNameSelect.addEventListener('change', (e) => {
-                const startLevelSelect = div.querySelector('.start-level');
-                if (startLevelSelect) startLevelSelect.innerHTML = getLevelOptions(e.target.value, '');
-                validateConflict(e.target);
-                renderSchedule();
-                updateSubjectEntry(div);
-                renderTeachersTab();
-                updateCurrentLevelsSummary();
-                document.querySelectorAll('.subject-entry').forEach(entry => {
-                    const select = entry.querySelector('.subject-name');
-                    if (select && select !== e.target) refreshSubjectOptions(select);
-                });
-            });
-        }
-        const statusSelect = div.querySelector('.status');
-        if (statusSelect) statusSelect.addEventListener('change', () => applySubjectUI(div));
-        container.appendChild(div);
-        subjectCount++;
-        applySubjectUI(div);
+        };
     }
+    
+    const removePencilBtn = div.querySelector('.remove-pencil-btn');
+    if (removePencilBtn) {
+        removePencilBtn.onclick = () => {
+            pencilEntry.style.display = 'none';
+            if (addPencilBtn) addPencilBtn.style.display = 'inline-block';
+            const pencilLevel = pencilEntry.querySelector('.pencil-level');
+            const pencilWs = pencilEntry.querySelector('.pencil-ws');
+            if (pencilLevel) { pencilLevel.value = ''; pencilLevel.required = false; }
+            if (pencilWs) { pencilWs.value = ''; pencilWs.required = false; }
+        };
+    }
+    
+    const addPrBtn = div.querySelector('.add-pr-btn');
+    if (addPrBtn) addPrBtn.onclick = () => openPRModal(div);
+    
+    const cancelPrBtn = div.querySelector('.cancel-pr-btn');
+    if (cancelPrBtn) {
+        cancelPrBtn.onclick = () => {
+            div.querySelector('.pr-cancelled').value = 'true';
+            div.querySelectorAll('.pr-type, .pr-reason, .pr-pause-from-month-year, .pr-pause-to-month-year, .pr-drop-month-year').forEach(el => el.value = '');
+            updatePRBanner(div);
+        };
+    }
+    
+    updatePRBanner(div); 
+    
+    const addTimeslotBtn = div.querySelector('.add-timeslot-btn');
+    if (addTimeslotBtn) addTimeslotBtn.onclick = () => addTimeslotField(timeslotsList);
+    
+    const removeSubjectBtn = div.querySelector('.remove-subject');
+    if (removeSubjectBtn) {
+        removeSubjectBtn.onclick = () => {
+            div.remove();
+            subjectCount--;
+            renderTeachersTab();
+            updateOverallStatus();
+            renderSchedule();
+            updateCurrentLevelsSummary();
+            document.querySelectorAll('.subject-entry').forEach(entry => {
+                const select = entry.querySelector('.subject-name');
+                if (select) refreshSubjectOptions(select);
+            });
+        };
+    }
+    
+    const subjectNameSelect = div.querySelector('.subject-name');
+    if (subjectNameSelect) {
+        subjectNameSelect.addEventListener('change', (e) => {
+            const startLevelSelect = div.querySelector('.start-level');
+            if (startLevelSelect) startLevelSelect.innerHTML = getLevelOptions(e.target.value, '');
+            validateConflict(e.target);
+            renderSchedule();
+            updateSubjectEntry(div);
+            renderTeachersTab();
+            updateCurrentLevelsSummary();
+            document.querySelectorAll('.subject-entry').forEach(entry => {
+                const select = entry.querySelector('.subject-name');
+                if (select && select !== e.target) refreshSubjectOptions(select);
+            });
+        });
+    }
+    
+    const statusSelect = div.querySelector('.status');
+    if (statusSelect) statusSelect.addEventListener('change', () => applySubjectUI(div));
+    
+    container.appendChild(div);
+    subjectCount++;
+    applySubjectUI(div);
+}
 
     function validateConflict(currentSelect) {
         if (!currentSelect) return;
