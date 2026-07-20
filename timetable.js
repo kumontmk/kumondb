@@ -729,6 +729,128 @@ function initializeTimetable() {
                 loadChampTimetable();
             }
         }
+
+    // ============================================
+// ✅ EXPORT TO EXCEL (Preserves Formatting)
+// ============================================
+function exportToExcel() {
+    let activeTable = null;
+    let viewName = 'Timetable';
+    
+    // 1. Identify which tab is currently active
+    if (document.getElementById('dayViewContainer').classList.contains('active')) {
+        activeTable = document.getElementById('timetableTable');
+        viewName = 'Day_View';
+    } else if (document.getElementById('weekViewContainer').classList.contains('active')) {
+        activeTable = document.getElementById('weekTimetableTable');
+        viewName = 'Week_View';
+    } else if (document.getElementById('champViewContainer').classList.contains('active')) {
+        activeTable = document.getElementById('champTimetableTable');
+        viewName = 'Champ_Format';
+    }
+
+    if (!activeTable) {
+        alert('Please select a view to export.');
+        return;
+    }
+
+    // 2. Clone the table to avoid modifying the live DOM
+    const tableClone = activeTable.cloneNode(true);
+
+    // 3. Special handling for Week View (Convert Flexbox divs to Excel-friendly blocks)
+    if (viewName === 'Week_View') {
+        const cells = tableClone.querySelectorAll('.week-cell');
+        cells.forEach(td => {
+            let html = '';
+            td.querySelectorAll('.week-student').forEach(div => {
+                const grade = div.querySelector('.ws-grade')?.innerText || '';
+                const name = div.querySelector('.ws-name')?.innerText || '';
+                const level = div.querySelector('.ws-level')?.innerText || '';
+                const isKC = div.classList.contains('kc-student');
+                
+                // Apply KC highlight background inline for Excel
+                const bgStyle = isKC ? 'background-color:#fff9c4;' : '';
+                
+                // Format as structured text with colors
+                html += `<div style="${bgStyle}padding:2px;white-space:nowrap;">
+                            <b style="color:#4682B4;font-size:9pt;">${grade}</b> 
+                            <span style="font-size:9.5pt;">${name}</span> 
+                            <b style="color:#555;font-size:9pt;">${level}</b>
+                         </div>`;
+            });
+            td.innerHTML = html || td.innerHTML;
+        });
+    }
+
+    // 4. Define CSS that Excel will understand to replicate the web styles
+    const excelCSS = `
+        <style>
+            table { border-collapse: collapse; border: 2px solid #333; font-family: 'Microsoft YaHei', 'PingFang SC', 'Segoe UI', Arial, sans-serif; font-size: 11pt; }
+            th, td { border: 1px solid #333; padding: 4px 5px; text-align: center; vertical-align: middle; color: #000; }
+            th { font-weight: 700; font-size: 11pt; }
+            
+            /* Day & Champ View Headers */
+            .th-math { background: #008B8B; color: #fff; }
+            .th-english { background: #DC143C; color: #fff; }
+            .th-chinese { background: #9ACD32; color: #333; }
+            
+            /* Week View Headers */
+            .th-time { background: #555; color: #fff; }
+            #weekDateRow th { background: #4682B4; color: #fff; font-size: 13pt; }
+            #weekDayRow th { background: #d0e8f5; color: #333; font-size: 10pt; }
+            
+            /* Cells & Highlights */
+            .time-cell, .week-time-cell { font-weight: 600; background: #f8f9fa; border-right: 2px solid #cbd5e1; }
+            .empty-cell { background: transparent; }
+            .kc-cell { background-color: #fff9c4; }
+            
+            /* Week View Today Highlight */
+            .week-today-col { background: rgba(135, 206, 235, 0.15); }
+            .week-today-header { background: #2e6da4 !important; color: #fff !important; }
+        </style>
+    `;
+
+    // 5. Build the Excel-compatible HTML template
+    const htmlTemplate = `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office"
+              xmlns:x="urn:schemas-microsoft-com:office:excel"
+              xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+            <meta charset="UTF-8">
+            <!--[if gte mso 9]><xml>
+             <x:ExcelWorkbook>
+              <x:ExcelWorksheets>
+               <x:ExcelWorksheet>
+                <x:Name>${viewName}</x:Name>
+                <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+               </x:ExcelWorksheet>
+              </x:ExcelWorksheets>
+             </x:ExcelWorkbook>
+            </xml><![endif]-->
+            ${excelCSS}
+        </head>
+        <body>
+            ${tableClone.outerHTML}
+        </body>
+        </html>
+    `;
+
+    // 6. Trigger Download
+    const blob = new Blob([htmlTemplate], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const dateStr = new Date().toISOString().slice(0, 10);
+    
+    a.href = url;
+    a.download = `Kumon_Timetable_${viewName}_${dateStr}.xls`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// ✅ Bind the new button
+document.getElementById('exportExcel')?.addEventListener('click', exportToExcel);
     window.addEventListener('beforeunload', () => {
         if (timetableUnsub) timetableUnsub();
         if (weekTimetableUnsub) weekTimetableUnsub();
