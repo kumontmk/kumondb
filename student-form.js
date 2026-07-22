@@ -979,6 +979,19 @@ function initApp() {
         };
     }
 
+    // ==========================================
+    // 🆕 HELPER: COUNT ACTIVE SUBJECTS
+    // ==========================================
+    function getActiveSubjectCount(excludeEntry = null) {
+        let count = 0;
+        document.querySelectorAll('.subject-entry').forEach(entry => {
+            if (entry === excludeEntry) return;
+            const status = entry.querySelector('.status')?.value;
+            if (status && status !== 'drop') count++;
+        });
+        return count;
+    }
+
     function getUsedSubjects(excludeEntry = null) {
         const used = new Set();
         document.querySelectorAll('.subject-entry').forEach(entry => {
@@ -1017,7 +1030,7 @@ function initApp() {
 
 
 function addSubjectField(data = {}) {
-    if (subjectCount >= 3) return showError('Maximum 3 subjects allowed');
+    if (subjectCount >= 4) return showError('Maximum 4 subjects allowed.');
     const container = document.getElementById('subjectsContainer');
     if (!container) return;
     
@@ -1237,7 +1250,16 @@ function addSubjectField(data = {}) {
     }
     
     const statusSelect = div.querySelector('.status');
-    if (statusSelect) statusSelect.addEventListener('change', () => applySubjectUI(div));
+    if (statusSelect) {
+        statusSelect.addEventListener('change', () => {
+            // Prevent activating a 4th subject
+            if (statusSelect.value !== 'drop' && getActiveSubjectCount(div) >= 3) {
+                showError('⚠️ Maximum 3 active subjects allowed. Please drop another subject first.');
+                statusSelect.value = 'drop'; // Revert selection to prevent invalid state
+            }
+            applySubjectUI(div);
+        });
+    }
     
     container.appendChild(div);
     subjectCount++;
@@ -1334,7 +1356,11 @@ function addSubjectField(data = {}) {
         timeslotsList.appendChild(row);
     }
 
-    document.getElementById('addSubjectBtn')?.addEventListener('click', () => addSubjectField());
+        document.getElementById('addSubjectBtn')?.addEventListener('click', () => {
+            if (subjectCount >= 4) return showError('Maximum 4 subjects allowed in the system.');
+            if (getActiveSubjectCount() >= 3) return showError('⚠️ Maximum 3 active subjects allowed. Please drop an existing subject before adding a new one.');
+            addSubjectField();
+        });
 
     function addDTRow(data = {}) {
         const tbody = document.getElementById('dtTableBody');
@@ -1605,8 +1631,17 @@ function addSubjectField(data = {}) {
         const pencilCount = Array.from(document.querySelectorAll('.pencil-skill-entry')).filter(el => el.style.display !== 'none').length;
         if (pencilCount > 1) return showError('⚠️ Only one Pencil Skill can be added per student.');
         
-        let subIdx = 1;
-        for (const entry of document.querySelectorAll('.subject-entry')) {
+            // 🆕 CHECK MAX ACTIVE SUBJECTS ON SUBMIT
+            let activeSubjectsCount = 0;
+            for (const entry of document.querySelectorAll('.subject-entry')) {
+                if (entry.querySelector('.status')?.value !== 'drop') activeSubjectsCount++;
+            }
+            if (activeSubjectsCount > 3) {
+                return showError('⚠️ You can only have a maximum of 3 active subjects. Please ensure at least one subject is dropped.');
+            }
+
+            let subIdx = 1;
+            for (const entry of document.querySelectorAll('.subject-entry')) {
             if (entry.style.display === 'none' || entry.querySelector('.status')?.value === 'drop') {
                 const status = entry.querySelector('.status')?.value;
                 if (status === 'drop') {
