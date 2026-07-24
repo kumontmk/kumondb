@@ -216,13 +216,13 @@ padding-bottom: 1rem;
 border-bottom: 1px dashed #e2e8f0;
 flex-wrap: wrap;
 }
-.timeslot-row > div { flex: 1 1 160px; min-width: 140px; }
+.timeslot-row > div { flex: 1 1 140px; min-width: 120px; } 
 .timeslot-row label {
-display: block;
-font-size: 0.85rem;
-font-weight: 600;
-color: var(--text-light);
-margin-bottom: 0.4rem;
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-light);
+    margin-bottom: 0.4rem;
 }
 .timeslot-row select {
 width: 100%;

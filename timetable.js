@@ -52,7 +52,8 @@ function initializeTimetable() {
 
     syncPendingRequests(centerId);
 
-    const studentsRef = ref(db, `centers/${centerId}/students`);
+    // ✅ UPDATED: Fetch all centers instead of just the current one
+    const centersRef = ref(db, 'centers');
     const daySelect = document.getElementById('timetableDay');
     const timetableBody = document.getElementById('timetableBody');
     let timetableUnsub = null;
@@ -308,32 +309,41 @@ function initializeTimetable() {
                 mathLow: [], mathHigh: [], english: [], chinese: []
             });
 
-            snap.forEach(ch => {
-                const s = ch.val();
-                if (!s?.subjects) return;
-                const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
-                subjects.forEach(sub => {
-                    if (sub.status !== 'current' || !sub.timeslots) return;
-                    const group = getSubjectGroup(sub.name);
-                    if (!group) return;
-                    const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
-                    tsList.forEach(ts => {
-                        const tsDay = DAY_MAP[ts.day] || ts.day;
-                        if (tsDay === day && schedule[ts.time]) {
-                            const studentObj = buildStudentObj(s, sub, tsDay, tsList);
-                            if (!studentObj) return;
-                            if (group === 'Math') {
-                                if (isMathHighLevel(studentObj.level)) {
-                                    schedule[ts.time].mathHigh.push(studentObj);
-                                } else {
-                                    schedule[ts.time].mathLow.push(studentObj);
+            // ✅ UPDATED: Loop through all centers
+            snap.forEach(centerSnap => {
+                const centerData = centerSnap.val();
+                if (!centerData?.students) return;
+
+                Object.values(centerData.students).forEach(s => {
+                    if (!s?.subjects) return;
+                    const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
+                    subjects.forEach(sub => {
+                        if (sub.status !== 'current' || !sub.timeslots) return;
+                        const group = getSubjectGroup(sub.name);
+                        if (!group) return;
+                        const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
+                        tsList.forEach(ts => {
+                            // ✅ CRITICAL FILTER: Only include if timeslot is for THIS center
+                            const tsCenter = ts.center || centerSnap.key; // Fallback for backward compatibility
+                            if (tsCenter !== centerId) return;
+
+                            const tsDay = DAY_MAP[ts.day] || ts.day;
+                            if (tsDay === day && schedule[ts.time]) {
+                                const studentObj = buildStudentObj(s, sub, tsDay, tsList);
+                                if (!studentObj) return;
+                                if (group === 'Math') {
+                                    if (isMathHighLevel(studentObj.level)) {
+                                        schedule[ts.time].mathHigh.push(studentObj);
+                                    } else {
+                                        schedule[ts.time].mathLow.push(studentObj);
+                                    }
+                                } else if (group === 'English') {
+                                    schedule[ts.time].english.push(studentObj);
+                                } else if (group === 'Chinese') {
+                                    schedule[ts.time].chinese.push(studentObj);
                                 }
-                            } else if (group === 'English') {
-                                schedule[ts.time].english.push(studentObj);
-                            } else if (group === 'Chinese') {
-                                schedule[ts.time].chinese.push(studentObj);
                             }
-                        }
+                        });
                     });
                 });
             });
@@ -384,8 +394,8 @@ function initializeTimetable() {
             return td;
         }
 
-        onValue(studentsRef, cb);
-        timetableUnsub = () => off(studentsRef, 'value', cb);
+        onValue(centersRef, cb);
+        timetableUnsub = () => off(centersRef, 'value', cb);
     }
 
     // ============================================
@@ -409,8 +419,8 @@ function initializeTimetable() {
                 renderWeekView(snap);
                 hideLoader();
             };
-            onValue(studentsRef, cb);
-            weekTimetableUnsub = () => off(studentsRef, 'value', cb);
+            onValue(centersRef, cb);
+            weekTimetableUnsub = () => off(centersRef, 'value', cb);
         }
 
         function renderWeekView(snap) {
@@ -445,22 +455,31 @@ function initializeTimetable() {
                 days.forEach(day => { schedule[time][day] = []; });
             });
 
-            snap.forEach(ch => {
-                const s = ch.val();
-                if (!s?.subjects) return;
-                const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
-                subjects.forEach(sub => {
-                    if (sub.status !== 'current' || !sub.timeslots) return;
-                    const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
-                    tsList.forEach(ts => {
-                        const tsDay = DAY_MAP[ts.day] || ts.day;
-                        const time = ts.time;
-                        if (schedule[time] && schedule[time][tsDay]) {
-                            const studentObj = buildStudentObj(s, sub, tsDay, tsList);
-                            if (studentObj) {
-                                schedule[time][tsDay].push(studentObj);
+            // ✅ UPDATED: Loop through all centers
+            snap.forEach(centerSnap => {
+                const centerData = centerSnap.val();
+                if (!centerData?.students) return;
+
+                Object.values(centerData.students).forEach(s => {
+                    if (!s?.subjects) return;
+                    const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
+                    subjects.forEach(sub => {
+                        if (sub.status !== 'current' || !sub.timeslots) return;
+                        const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
+                        tsList.forEach(ts => {
+                            // ✅ CRITICAL FILTER: Only include if timeslot is for THIS center
+                            const tsCenter = ts.center || centerSnap.key;
+                            if (tsCenter !== centerId) return;
+
+                            const tsDay = DAY_MAP[ts.day] || ts.day;
+                            const time = ts.time;
+                            if (schedule[time] && schedule[time][tsDay]) {
+                                const studentObj = buildStudentObj(s, sub, tsDay, tsList);
+                                if (studentObj) {
+                                    schedule[time][tsDay].push(studentObj);
+                                }
                             }
-                        }
+                        });
                     });
                 });
             });
@@ -558,33 +577,42 @@ function initializeTimetable() {
                 };
             });
 
-            snap.forEach(ch => {
-                const s = ch.val();
-                if (!s?.subjects) return;
-                const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
+            // ✅ UPDATED: Loop through all centers
+            snap.forEach(centerSnap => {
+                const centerData = centerSnap.val();
+                if (!centerData?.students) return;
 
-                subjects.forEach(sub => {
-                    if (sub.status !== 'current' || !sub.timeslots) return;
-                    const group = getSubjectGroup(sub.name);
-                    if (!group) return;
+                Object.values(centerData.students).forEach(s => {
+                    if (!s?.subjects) return;
+                    const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
 
-                    const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
-                    tsList.forEach(ts => {
-                        const tsDay = DAY_MAP[ts.day] || ts.day;
-                        if (tsDay !== day || !schedule[ts.time]) return;
+                    subjects.forEach(sub => {
+                        if (sub.status !== 'current' || !sub.timeslots) return;
+                        const group = getSubjectGroup(sub.name);
+                        if (!group) return;
 
-                        const studentObj = buildStudentObj(s, sub, tsDay, tsList);
-                        if (!studentObj) return;
+                        const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
+                        tsList.forEach(ts => {
+                            // ✅ CRITICAL FILTER: Only include if timeslot is for THIS center
+                            const tsCenter = ts.center || centerSnap.key;
+                            if (tsCenter !== centerId) return;
 
-                        if (group === 'Math') {
-                            const bucket = getMathChampGroup(studentObj.level);
-                            if (bucket) schedule[ts.time][bucket].push(studentObj);
-                        } else if (group === 'English') {
-                            const bucket = getEnglishChampGroup(s.grade);
-                            if (bucket) schedule[ts.time][bucket].push(studentObj);
-                        } else if (group === 'Chinese') {
-                            schedule[ts.time].chinese.push(studentObj);
-                        }
+                            const tsDay = DAY_MAP[ts.day] || ts.day;
+                            if (tsDay !== day || !schedule[ts.time]) return;
+
+                            const studentObj = buildStudentObj(s, sub, tsDay, tsList);
+                            if (!studentObj) return;
+
+                            if (group === 'Math') {
+                                const bucket = getMathChampGroup(studentObj.level);
+                                if (bucket) schedule[ts.time][bucket].push(studentObj);
+                            } else if (group === 'English') {
+                                const bucket = getEnglishChampGroup(s.grade);
+                                if (bucket) schedule[ts.time][bucket].push(studentObj);
+                            } else if (group === 'Chinese') {
+                                schedule[ts.time].chinese.push(studentObj);
+                            }
+                        });
                     });
                 });
             });
@@ -644,7 +672,7 @@ function initializeTimetable() {
                 cachedStudentsSnap = snap;
                 render(snap);
             };
-            onValue(studentsRef, cb);
+            onValue(centersRef, cb);
         }
     }
 

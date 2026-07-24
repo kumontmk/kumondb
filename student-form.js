@@ -33,7 +33,6 @@ onAuthStateChanged(auth, async (user) => {
         }
 
         // 3. Evaluate Permissions
-        // ⚠️ CRITICAL: 'editStudentDetails' is the specific permission for this form
         const dashPerms = userData?.permissions?.dashboardCards || {};
         const hasAccess = isAdmin || dashPerms['editStudentDetails'] === true;
 
@@ -91,7 +90,6 @@ function initApp() {
         return false;
     }
 
-    // 🆕 Auto-execute pending drop/pause requests
     function processPendingRequests(studentData) {
         if (!studentData.subjects) return false;
         const subjects = Array.isArray(studentData.subjects) ? studentData.subjects : Object.values(studentData.subjects);
@@ -109,21 +107,20 @@ function initApp() {
                 if (pr.type === 'drop') { triggerMonth = pr.dropMonth; triggerYear = pr.dropYear; } 
                 else if (pr.type === 'pause') { triggerMonth = pr.pauseFromMonth; triggerYear = pr.pauseFromYear; }
                 
-             if (triggerYear && triggerMonth) {
-                 if (triggerYear < currentYear || (triggerYear === currentYear && triggerMonth <= currentMonth)) {
-                     sub.status = pr.type;
-                     if (pr.type === 'drop') { sub.dropMonth = pr.dropMonth; sub.dropYear = pr.dropYear; sub.dropReason = pr.reason; } 
-                     else { sub.pauseFromMonth = pr.pauseFromMonth; sub.pauseFromYear = pr.pauseFromYear; sub.pauseToMonth = pr.pauseToMonth; sub.pauseToYear = pr.pauseToYear; sub.pauseReason = pr.reason; }
-                     
-                     // 🆕 AUTO-CONFIRM: Mark as confirmed since the target month has arrived
-                     if (!sub.dropBook) sub.dropBook = {};
-                     sub.dropBook.confirmed = true;
-                     sub.dropBook.confirmedAt = new Date().toISOString();
+                if (triggerYear && triggerMonth) {
+                    if (triggerYear < currentYear || (triggerYear === currentYear && triggerMonth <= currentMonth)) {
+                        sub.status = pr.type;
+                        if (pr.type === 'drop') { sub.dropMonth = pr.dropMonth; sub.dropYear = pr.dropYear; sub.dropReason = pr.reason; } 
+                        else { sub.pauseFromMonth = pr.pauseFromMonth; sub.pauseFromYear = pr.pauseFromYear; sub.pauseToMonth = pr.pauseToMonth; sub.pauseToYear = pr.pauseToYear; sub.pauseReason = pr.reason; }
+                        
+                        if (!sub.dropBook) sub.dropBook = {};
+                        sub.dropBook.confirmed = true;
+                        sub.dropBook.confirmedAt = new Date().toISOString();
 
-                     delete sub.pendingRequest;
-                     changed = true;
-                 }
-             }
+                        delete sub.pendingRequest;
+                        changed = true;
+                    }
+                }
             }
         });
         return changed;
@@ -216,7 +213,6 @@ function initApp() {
     function navigateToStudent(direction) {
         let newIndex = currentListIndex + direction;
         if (newIndex < 0 || newIndex >= filteredStudentsList.length) return;
-        
         const newStudentId = filteredStudentsList[newIndex].id;
         navigateToStudentById(newStudentId);
     }
@@ -231,7 +227,6 @@ function initApp() {
 
     function updateSearchDropdown(term) {
         if (!searchDropdown) return;
-        
         if (!term) {
             hideSearchDropdown();
             filteredStudentsList = [...allStudentsList];
@@ -290,7 +285,6 @@ function initApp() {
                 searchDropdown.appendChild(li);
             });
         }
-        
         searchDropdown.classList.remove('hidden');
     }
 
@@ -314,7 +308,6 @@ function initApp() {
 
     async function initNavigation() {
         const navBar = document.getElementById('student-nav-bar');
-        
         if (!isEdit) {
             if (navBar) navBar.style.display = 'none';
             return;
@@ -581,7 +574,8 @@ function initApp() {
                 const day = row.querySelector('.ts-day')?.value;
                 const h = row.querySelector('.ts-hour')?.value;
                 const m = row.querySelector('.ts-min')?.value;
-                if (day && h && m) schedule[day].push({ name, time: `${h}:${m}`, color: SUBJECT_COLORS[name] });
+                const center = row.querySelector('.ts-center')?.value; // ✅ NEW
+                if (day && h && m) schedule[day].push({ name, time: `${h}:${m}`, color: SUBJECT_COLORS[name], center });
             });
         });
         const tr = document.createElement('tr');
@@ -590,7 +584,10 @@ function initApp() {
             schedule[day].sort((a,b) => a.time.localeCompare(b.time)).forEach(slot => {
                 const pill = document.createElement('span');
                 pill.className = `slot-pill ${slot.color}`;
-                pill.textContent = `${slot.name.substring(0,3)} ${slot.time}`;
+                // ✅ NEW: Append center abbreviation to the pill
+                const centerName = allCenters.find(c => c.id === slot.center)?.name || '';
+                const centerAbbr = centerName ? ` (${centerName.substring(0, 2).toUpperCase()})` : '';
+                pill.textContent = `${slot.name.substring(0,3)} ${slot.time}${centerAbbr}`;
                 td.appendChild(pill);
             });
             if (schedule[day].length === 0) td.innerHTML = '<span style="color:#999;">-</span>';
@@ -742,7 +739,6 @@ function initApp() {
 
         [inquiryDate, enrolDate].forEach(el => { if(el) el.style.display = 'none'; });
         [startLevel, startWS].forEach(el => { if(el) el.style.display = 'none'; });
-
         [pauseFrom, pauseTo, pauseReason, dropDate, dropReason].forEach(el => {
             if (el) el.style.display = 'none';
         });
@@ -849,7 +845,6 @@ function initApp() {
     function collectFormData() {
         const subjects = [];
         
-        // Helper to parse YYYY-MM into separate month and year for DB compatibility
         const parseMonthYear = (val) => {
             if (!val) return { month: '', year: '' };
             const parts = val.split('-');
@@ -862,10 +857,16 @@ function initApp() {
             const timeslots = [];
             if (status !== 'inquiry' && status !== 'pause' && status !== 'drop') {
                 entry.querySelectorAll('.timeslots-list .timeslot-row').forEach(row => {
+                    // ✅ NEW: Include center in timeslot data
+                    const centerEl = row.querySelector('.ts-center');
                     const dayEl = row.querySelector('.ts-day');
                     const hourEl = row.querySelector('.ts-hour');
                     const minEl = row.querySelector('.ts-min');
-                    timeslots.push({ day: dayEl?.value || '', time: `${hourEl?.value || '00'}:${minEl?.value || '00'}` });
+                    timeslots.push({ 
+                        center: centerEl?.value || centerId, 
+                        day: dayEl?.value || '', 
+                        time: `${hourEl?.value || '00'}:${minEl?.value || '00'}` 
+                    });
                 });
             }
             const pencilEntry = entry.querySelector('.pencil-skill-entry');
@@ -979,9 +980,6 @@ function initApp() {
         };
     }
 
-    // ==========================================
-    // 🆕 HELPER: COUNT ACTIVE SUBJECTS
-    // ==========================================
     function getActiveSubjectCount(excludeEntry = null) {
         let count = 0;
         document.querySelectorAll('.subject-entry').forEach(entry => {
@@ -1028,243 +1026,239 @@ function initApp() {
         if (subject && SUBJECT_COLORS[subject]) entry.classList.add(SUBJECT_COLORS[subject]);
     }
 
-
-function addSubjectField(data = {}) {
-    if (subjectCount >= 4) return showError('Maximum 4 subjects allowed.');
-    const container = document.getElementById('subjectsContainer');
-    if (!container) return;
-    
-    if (data.pencilSkill) {
-        let rawLevel = String(data.pencilSkill.level || '');
-        let rawWs = String(data.pencilSkill.ws || '');
-        const match = rawLevel.match(/^(ZI|ZII)(\d+)$/i);
-        if (match) {
-            data.pencilSkill.level = match[1].toUpperCase();
-            data.pencilSkill.ws = match[2];
+    function addSubjectField(data = {}) {
+        if (subjectCount >= 4) return showError('Maximum 4 subjects allowed.');
+        const container = document.getElementById('subjectsContainer');
+        if (!container) return;
+        
+        if (data.pencilSkill) {
+            let rawLevel = String(data.pencilSkill.level || '');
+            let rawWs = String(data.pencilSkill.ws || '');
+            const match = rawLevel.match(/^(ZI|ZII)(\d+)$/i);
+            if (match) {
+                data.pencilSkill.level = match[1].toUpperCase();
+                data.pencilSkill.ws = match[2];
+            }
         }
-    }
-    
-    const div = document.createElement('div');  
-    div.className = 'subject-entry';
-    const usedSubjects = getUsedSubjects(div);
-    const initialSubject = data.name || 'Math';
-    const levelOptionsHTML = getLevelOptions(initialSubject, data.startLevel);
-    
-    div.innerHTML = `
-     <div class="form-grid">
-         <div>
-             <label>Status</label>
-             <select class="status">
-                 <option value="inquiry" ${data.status === 'inquiry' ? 'selected' : ''}>Inquiry</option>
-                 <option value="current" ${data.status === 'current' ? 'selected' : ''} ${!data.status ? 'selected' : ''}>Current</option>
-                 <option value="pause" ${data.status === 'pause' ? 'selected' : ''}>Pause</option>
-                 <option value="drop" ${data.status === 'drop' ? 'selected' : ''}>Drop</option>
-             </select>
-         </div>
-         <div class="fld-pause-from" style="display:${data.status === 'pause' ? 'block' : 'none'};">
-             <label>Pause From *</label>
-             <input type="month" class="pause-from-month-year" value="${(data.pauseFromYear && data.pauseFromMonth) ? `${data.pauseFromYear}-${String(data.pauseFromMonth).padStart(2, '0')}` : ''}">
-         </div>
-         <div class="fld-pause-to" style="display:${data.status === 'pause' ? 'block' : 'none'};">
-             <label>Pause To *</label>
-             <input type="month" class="pause-to-month-year" value="${(data.pauseToYear && data.pauseToMonth) ? `${data.pauseToYear}-${String(data.pauseToMonth).padStart(2, '0')}` : ''}">
-         </div>
-         <div class="fld-drop-date" style="display:${data.status === 'drop' ? 'block' : 'none'};">
-             <label>Drop Month *</label>
-             <input type="month" class="drop-month-year" value="${(data.dropYear && data.dropMonth) ? `${data.dropYear}-${String(data.dropMonth).padStart(2, '0')}` : ''}">
-         </div>
-         <div>
-             <label>Select Subject *</label>
-             <select class="subject-name" required>
-                 <option value="">Select Subject *</option>
-                ${SUBJECTS.map(s => {
-                    const isSelected = data.name === s;
-                    const isUsed = usedSubjects.has(s) && !isSelected;
-                    return `<option value="${s}" ${isSelected ? 'selected' : ''} ${isUsed ? 'disabled' : ''}>${s}${isUsed ? ' (Added)' : ''}</option>`;
-                }).join('')}
-             </select>
-         </div>
-         <div class="fld-inquiry-date" style="display:${data.status === 'inquiry' ? 'block' : 'none'};">
-             <label>Inquiry Date *</label>
-             <input type="date" class="inquiry-date" value="${data.inquiryDate || ''}">
-         </div>
-         <div class="fld-start-level" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'};">
-             <label>Start Level *</label>
-             <select class="start-level subject-level-select">${levelOptionsHTML}</select>
-         </div>
-         <div class="fld-start-ws" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'};">
-             <label>Start WS # *</label>
-             <select class="start-ws">${getWSDropdownOptions(data.startWS)}</select>
-         </div>
-         <input type="hidden" class="current-level-db" value="${data.currentLevel || ''}">
-         <div class="fld-current-level-readonly" style="display:block;">
-             <label>Current Level <span style="color:#999; font-weight:400;">(From Database)</span></label>
-             <input type="text" class="current-level-display" readonly value="${data.currentLevel || 'Not Set'}" style="background:#f1f5f9; color:#64748b; cursor:not-allowed;">
-         </div>
-         <div class="fld-enrol-date" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'};">
-             <label>Enrol Date *</label>
-             <input type="date" class="enrol-date" value="${data.enrolDate || ''}">
-         </div>
-         <div class="fld-worksheet-type">
-             <label>Worksheet Type</label>
-             <select class="worksheet-type">
-                 <option value="Paper" ${data.worksheetType === 'Paper' || !data.worksheetType ? 'selected' : ''}>Paper</option>
-                 <option value="Kumon Connect" ${data.worksheetType === 'Kumon Connect' ? 'selected' : ''}>Kumon Connect</option>
-             </select>
-         </div>
-     </div>
-     <div class="pending-request-banner hidden">
-         <div class="banner-content">
-             <span class="banner-icon">⏳</span>
-             <span class="banner-text"></span>
-         </div>
-         <button type="button" class="cancel-pr-btn danger">Cancel Request</button>
-     </div>
-     <input type="hidden" class="pr-cancelled" value="${data.pendingRequest?.cancelled ? 'true' : 'false'}">
-     <input type="hidden" class="pr-type" value="${data.pendingRequest?.cancelled ? '' : (data.pendingRequest?.type || '')}">
-     <input type="hidden" class="pr-pause-from-month-year" value="${data.pendingRequest?.cancelled ? '' : ((data.pendingRequest?.pauseFromYear && data.pendingRequest?.pauseFromMonth) ? `${data.pendingRequest.pauseFromYear}-${String(data.pendingRequest.pauseFromMonth).padStart(2, '0')}` : '')}">
-     <input type="hidden" class="pr-pause-to-month-year" value="${data.pendingRequest?.cancelled ? '' : ((data.pendingRequest?.pauseToYear && data.pendingRequest?.pauseToMonth) ? `${data.pendingRequest.pauseToYear}-${String(data.pendingRequest.pauseToMonth).padStart(2, '0')}` : '')}">
-     <input type="hidden" class="pr-drop-month-year" value="${data.pendingRequest?.cancelled ? '' : ((data.pendingRequest?.dropYear && data.pendingRequest?.dropMonth) ? `${data.pendingRequest.dropYear}-${String(data.pendingRequest.dropMonth).padStart(2, '0')}` : '')}">
-     <input type="hidden" class="pr-reason" value="${data.pendingRequest?.cancelled ? '' : (data.pendingRequest?.reason || '')}">
-     <button type="button" class="add-pr-btn secondary" style="position:absolute; bottom:1rem; right:1rem; background:#fff3cd; color:#856404; border:1px solid #ffeeba; width:auto; padding:0.4rem 0.8rem; font-size:0.85rem; z-index:10;">🗓️ Drop/Pause Request</button>
-     <button type="button" class="add-pencil-btn secondary" style="margin:0.25rem 0 0.75rem; padding:0.3rem 0.7rem; font-size:0.85rem; width:auto; background:#e8f0fe; color:#667eea; border:1px solid #667eea;">➕ Add Pencil Skill</button>
-     <div class="pencil-skill-entry" style="display:none; margin-top:0.5rem; margin-bottom:1rem; padding:0.75rem; background:#e8f0fe; border-radius:8px; border-left:4px solid #667eea;">
-         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-             <h4 style="font-size:0.9rem; margin:0; color:#333;">Pencil Skill</h4>
-             <button type="button" class="remove-pencil-btn" style="background:none; border:none; cursor:pointer; color:#dc3545; font-size:1.2rem; padding:0; line-height:1;">×</button>
-         </div>
+        
+        const div = document.createElement('div');  
+        div.className = 'subject-entry';
+        const usedSubjects = getUsedSubjects(div);
+        const initialSubject = data.name || 'Math';
+        const levelOptionsHTML = getLevelOptions(initialSubject, data.startLevel);
+        
+        div.innerHTML = `
          <div class="form-grid">
-             <div> <label>Pencil Level</label> <select class="pencil-level"> <option value="">Select Level</option>${['ZI','ZII'].map(l => `<option value="${l}" ${data.pencilSkill?.level === l ? 'selected' : ''}>${l}</option>`).join('')}</select> </div>
-             <div> <label>Pencil Start WS</label> <select class="pencil-ws">${getWSDropdownOptions(data.pencilSkill?.ws)}</select> </div>
+             <div>
+                 <label>Status</label>
+                 <select class="status">
+                     <option value="inquiry" ${data.status === 'inquiry' ? 'selected' : ''}>Inquiry</option>
+                     <option value="current" ${data.status === 'current' ? 'selected' : ''} ${!data.status ? 'selected' : ''}>Current</option>
+                     <option value="pause" ${data.status === 'pause' ? 'selected' : ''}>Pause</option>
+                     <option value="drop" ${data.status === 'drop' ? 'selected' : ''}>Drop</option>
+                 </select>
+             </div>
+             <div class="fld-pause-from" style="display:${data.status === 'pause' ? 'block' : 'none'};">
+                 <label>Pause From *</label>
+                 <input type="month" class="pause-from-month-year" value="${(data.pauseFromYear && data.pauseFromMonth) ? `${data.pauseFromYear}-${String(data.pauseFromMonth).padStart(2, '0')}` : ''}">
+             </div>
+             <div class="fld-pause-to" style="display:${data.status === 'pause' ? 'block' : 'none'};">
+                 <label>Pause To *</label>
+                 <input type="month" class="pause-to-month-year" value="${(data.pauseToYear && data.pauseToMonth) ? `${data.pauseToYear}-${String(data.pauseToMonth).padStart(2, '0')}` : ''}">
+             </div>
+             <div class="fld-drop-date" style="display:${data.status === 'drop' ? 'block' : 'none'};">
+                 <label>Drop Month *</label>
+                 <input type="month" class="drop-month-year" value="${(data.dropYear && data.dropMonth) ? `${data.dropYear}-${String(data.dropMonth).padStart(2, '0')}` : ''}">
+             </div>
+             <div>
+                 <label>Select Subject *</label>
+                 <select class="subject-name" required>
+                     <option value="">Select Subject *</option>
+                    ${SUBJECTS.map(s => {
+                        const isSelected = data.name === s;
+                        const isUsed = usedSubjects.has(s) && !isSelected;
+                        return `<option value="${s}" ${isSelected ? 'selected' : ''} ${isUsed ? 'disabled' : ''}>${s}${isUsed ? ' (Added)' : ''}</option>`;
+                    }).join('')}
+                 </select>
+             </div>
+             <div class="fld-inquiry-date" style="display:${data.status === 'inquiry' ? 'block' : 'none'};">
+                 <label>Inquiry Date *</label>
+                 <input type="date" class="inquiry-date" value="${data.inquiryDate || ''}">
+             </div>
+             <div class="fld-start-level" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'};">
+                 <label>Start Level *</label>
+                 <select class="start-level subject-level-select">${levelOptionsHTML}</select>
+             </div>
+             <div class="fld-start-ws" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'};">
+                 <label>Start WS # *</label>
+                 <select class="start-ws">${getWSDropdownOptions(data.startWS)}</select>
+             </div>
+             <input type="hidden" class="current-level-db" value="${data.currentLevel || ''}">
+             <div class="fld-current-level-readonly" style="display:block;">
+                 <label>Current Level <span style="color:#999; font-weight:400;">(From Database)</span></label>
+                 <input type="text" class="current-level-display" readonly value="${data.currentLevel || 'Not Set'}" style="background:#f1f5f9; color:#64748b; cursor:not-allowed;">
+             </div>
+             <div class="fld-enrol-date" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'};">
+                 <label>Enrol Date *</label>
+                 <input type="date" class="enrol-date" value="${data.enrolDate || ''}">
+             </div>
+             <div class="fld-worksheet-type">
+                 <label>Worksheet Type</label>
+                 <select class="worksheet-type">
+                     <option value="Paper" ${data.worksheetType === 'Paper' || !data.worksheetType ? 'selected' : ''}>Paper</option>
+                     <option value="Kumon Connect" ${data.worksheetType === 'Kumon Connect' ? 'selected' : ''}>Kumon Connect</option>
+                 </select>
+             </div>
          </div>
+         <div class="pending-request-banner hidden">
+             <div class="banner-content">
+                 <span class="banner-icon">⏳</span>
+                 <span class="banner-text"></span>
+             </div>
+             <button type="button" class="cancel-pr-btn danger">Cancel Request</button>
+         </div>
+         <input type="hidden" class="pr-cancelled" value="${data.pendingRequest?.cancelled ? 'true' : 'false'}">
+         <input type="hidden" class="pr-type" value="${data.pendingRequest?.cancelled ? '' : (data.pendingRequest?.type || '')}">
+         <input type="hidden" class="pr-pause-from-month-year" value="${data.pendingRequest?.cancelled ? '' : ((data.pendingRequest?.pauseFromYear && data.pendingRequest?.pauseFromMonth) ? `${data.pendingRequest.pauseFromYear}-${String(data.pendingRequest.pauseFromMonth).padStart(2, '0')}` : '')}">
+         <input type="hidden" class="pr-pause-to-month-year" value="${data.pendingRequest?.cancelled ? '' : ((data.pendingRequest?.pauseToYear && data.pendingRequest?.pauseToMonth) ? `${data.pendingRequest.pauseToYear}-${String(data.pendingRequest.pauseToMonth).padStart(2, '0')}` : '')}">
+         <input type="hidden" class="pr-drop-month-year" value="${data.pendingRequest?.cancelled ? '' : ((data.pendingRequest?.dropYear && data.pendingRequest?.dropMonth) ? `${data.pendingRequest.dropYear}-${String(data.pendingRequest.dropMonth).padStart(2, '0')}` : '')}">
+         <input type="hidden" class="pr-reason" value="${data.pendingRequest?.cancelled ? '' : (data.pendingRequest?.reason || '')}">
+         <button type="button" class="add-pr-btn secondary" style="position:absolute; bottom:1rem; right:1rem; background:#fff3cd; color:#856404; border:1px solid #ffeeba; width:auto; padding:0.4rem 0.8rem; font-size:0.85rem; z-index:10;">🗓️ Drop/Pause Request</button>
+         <button type="button" class="add-pencil-btn secondary" style="margin:0.25rem 0 0.75rem; padding:0.3rem 0.7rem; font-size:0.85rem; width:auto; background:#e8f0fe; color:#667eea; border:1px solid #667eea;">➕ Add Pencil Skill</button>
+         <div class="pencil-skill-entry" style="display:none; margin-top:0.5rem; margin-bottom:1rem; padding:0.75rem; background:#e8f0fe; border-radius:8px; border-left:4px solid #667eea;">
+             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                 <h4 style="font-size:0.9rem; margin:0; color:#333;">Pencil Skill</h4>
+                 <button type="button" class="remove-pencil-btn" style="background:none; border:none; cursor:pointer; color:#dc3545; font-size:1.2rem; padding:0; line-height:1;">×</button>
+             </div>
+             <div class="form-grid">
+                 <div> <label>Pencil Level</label> <select class="pencil-level"> <option value="">Select Level</option>${['ZI','ZII'].map(l => `<option value="${l}" ${data.pencilSkill?.level === l ? 'selected' : ''}>${l}</option>`).join('')}</select> </div>
+                 <div> <label>Pencil Start WS</label> <select class="pencil-ws">${getWSDropdownOptions(data.pencilSkill?.ws)}</select> </div>
+             </div>
+         </div>
+         <div class="fld-pause-reason pause-drop-reason-field" style="display:${data.status === 'pause' ? 'block' : 'none'};">
+             <label>Reason for Pause *</label>
+             <input type="text" class="pause-reason" placeholder="Enter reason for pause..." value="${data.pauseReason || ''}">
+         </div>
+         <div class="fld-drop-reason pause-drop-reason-field" style="display:${data.status === 'drop' ? 'block' : 'none'};">
+             <label>Reason for Drop *</label>
+             <input type="text" class="drop-reason" placeholder="Enter reason for drop..." value="${data.dropReason || ''}">
+         </div>
+      <div class="timeslots-container" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'}; margin-bottom:1rem;">
+         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+             <h4 style="font-size:0.9rem; margin:0;">Timeslots (Max 6)</h4>
+             <button type="button" class="add-timeslot-btn secondary" style="margin:0; padding:0.3rem 0.8rem; font-size:0.8rem; width:auto;">+ Add Timeslot</button>
+         </div>
+         <div class="timeslots-list"></div>
      </div>
-     <div class="fld-pause-reason pause-drop-reason-field" style="display:${data.status === 'pause' ? 'block' : 'none'};">
-         <label>Reason for Pause *</label>
-         <input type="text" class="pause-reason" placeholder="Enter reason for pause..." value="${data.pauseReason || ''}">
-     </div>
-     <div class="fld-drop-reason pause-drop-reason-field" style="display:${data.status === 'drop' ? 'block' : 'none'};">
-         <label>Reason for Drop *</label>
-         <input type="text" class="drop-reason" placeholder="Enter reason for drop..." value="${data.dropReason || ''}">
-     </div>
-  <div class="timeslots-container" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'}; margin-bottom:1rem;">
-     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-         <h4 style="font-size:0.9rem; margin:0;">Timeslots (Max 6)</h4>
-         <button type="button" class="add-timeslot-btn secondary" style="margin:0; padding:0.3rem 0.8rem; font-size:0.8rem; width:auto;">+ Add Timeslot</button>
-     </div>
-     <div class="timeslots-list"></div>
- </div>
- <button type="button" class="remove-subject" style="background:#dc3545; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; margin-top:1.5rem;">Remove Subject</button>`;  
- 
-    const timeslotsList = div.querySelector('.timeslots-list');
-    
-    // ✅ MODIFIED: Only populate timeslots if they exist in the database (editing). 
-    // Removed the 'else' block that automatically added a default empty timeslot row.
-    if (data.timeslots?.length) {
-        data.timeslots.forEach(ts => addTimeslotField(timeslotsList, ts));
-    }
+     <button type="button" class="remove-subject" style="background:#dc3545; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; margin-top:1.5rem;">Remove Subject</button>`;  
+     
+        const timeslotsList = div.querySelector('.timeslots-list');
+        
+        if (data.timeslots?.length) {
+            data.timeslots.forEach(ts => addTimeslotField(timeslotsList, ts));
+        }
 
-    const addPencilBtn = div.querySelector('.add-pencil-btn');
-    const pencilEntry = div.querySelector('.pencil-skill-entry');
-    if (data.pencilSkill && (data.pencilSkill.level || data.pencilSkill.ws)) {
-        pencilEntry.style.display = 'block';
-        addPencilBtn.style.display = 'none';
-        const pencilLevel = pencilEntry.querySelector('.pencil-level');
-        const pencilWs = pencilEntry.querySelector('.pencil-ws');
-        if (pencilLevel) pencilLevel.required = true;
-        if (pencilWs) pencilWs.required = true;
-    }
-    
-    if (addPencilBtn) {
-        addPencilBtn.onclick = () => {
-            const anyVisible = Array.from(document.querySelectorAll('.pencil-skill-entry')).some(el => el.style.display !== 'none');
-            if (anyVisible) return showError('⚠️ Only one Pencil Skill can be added per student.');
-            pencilEntry.style.display = 'block';  
-            addPencilBtn.style.display = 'inline-block';
+        const addPencilBtn = div.querySelector('.add-pencil-btn');
+        const pencilEntry = div.querySelector('.pencil-skill-entry');
+        if (data.pencilSkill && (data.pencilSkill.level || data.pencilSkill.ws)) {
+            pencilEntry.style.display = 'block';
+            addPencilBtn.style.display = 'none';
             const pencilLevel = pencilEntry.querySelector('.pencil-level');
             const pencilWs = pencilEntry.querySelector('.pencil-ws');
             if (pencilLevel) pencilLevel.required = true;
             if (pencilWs) pencilWs.required = true;
-        };
-    }
-    
-    const removePencilBtn = div.querySelector('.remove-pencil-btn');
-    if (removePencilBtn) {
-        removePencilBtn.onclick = () => {
-            pencilEntry.style.display = 'none';
-            if (addPencilBtn) addPencilBtn.style.display = 'inline-block';
-            const pencilLevel = pencilEntry.querySelector('.pencil-level');
-            const pencilWs = pencilEntry.querySelector('.pencil-ws');
-            if (pencilLevel) { pencilLevel.value = ''; pencilLevel.required = false; }
-            if (pencilWs) { pencilWs.value = ''; pencilWs.required = false; }
-        };
-    }
-    
-    const addPrBtn = div.querySelector('.add-pr-btn');
-    if (addPrBtn) addPrBtn.onclick = () => openPRModal(div);
-    
-    const cancelPrBtn = div.querySelector('.cancel-pr-btn');
-    if (cancelPrBtn) {
-        cancelPrBtn.onclick = () => {
-            div.querySelector('.pr-cancelled').value = 'true';
-            div.querySelectorAll('.pr-type, .pr-reason, .pr-pause-from-month-year, .pr-pause-to-month-year, .pr-drop-month-year').forEach(el => el.value = '');
-            updatePRBanner(div);
-        };
-    }
-    
-    updatePRBanner(div); 
-    
-    const addTimeslotBtn = div.querySelector('.add-timeslot-btn');
-    if (addTimeslotBtn) addTimeslotBtn.onclick = () => addTimeslotField(timeslotsList);
-    
-    const removeSubjectBtn = div.querySelector('.remove-subject');
-    if (removeSubjectBtn) {
-        removeSubjectBtn.onclick = () => {
-            div.remove();
-            subjectCount--;
-            renderTeachersTab();
-            updateOverallStatus();
-            renderSchedule();
-            updateCurrentLevelsSummary();
-            document.querySelectorAll('.subject-entry').forEach(entry => {
-                const select = entry.querySelector('.subject-name');
-                if (select) refreshSubjectOptions(select);
+        }
+        
+        if (addPencilBtn) {
+            addPencilBtn.onclick = () => {
+                const anyVisible = Array.from(document.querySelectorAll('.pencil-skill-entry')).some(el => el.style.display !== 'none');
+                if (anyVisible) return showError('⚠️ Only one Pencil Skill can be added per student.');
+                pencilEntry.style.display = 'block';  
+                addPencilBtn.style.display = 'inline-block';
+                const pencilLevel = pencilEntry.querySelector('.pencil-level');
+                const pencilWs = pencilEntry.querySelector('.pencil-ws');
+                if (pencilLevel) pencilLevel.required = true;
+                if (pencilWs) pencilWs.required = true;
+            };
+        }
+        
+        const removePencilBtn = div.querySelector('.remove-pencil-btn');
+        if (removePencilBtn) {
+            removePencilBtn.onclick = () => {
+                pencilEntry.style.display = 'none';
+                if (addPencilBtn) addPencilBtn.style.display = 'inline-block';
+                const pencilLevel = pencilEntry.querySelector('.pencil-level');
+                const pencilWs = pencilEntry.querySelector('.pencil-ws');
+                if (pencilLevel) { pencilLevel.value = ''; pencilLevel.required = false; }
+                if (pencilWs) { pencilWs.value = ''; pencilWs.required = false; }
+            };
+        }
+        
+        const addPrBtn = div.querySelector('.add-pr-btn');
+        if (addPrBtn) addPrBtn.onclick = () => openPRModal(div);
+        
+        const cancelPrBtn = div.querySelector('.cancel-pr-btn');
+        if (cancelPrBtn) {
+            cancelPrBtn.onclick = () => {
+                div.querySelector('.pr-cancelled').value = 'true';
+                div.querySelectorAll('.pr-type, .pr-reason, .pr-pause-from-month-year, .pr-pause-to-month-year, .pr-drop-month-year').forEach(el => el.value = '');
+                updatePRBanner(div);
+            };
+        }
+        
+        updatePRBanner(div); 
+        
+        const addTimeslotBtn = div.querySelector('.add-timeslot-btn');
+        if (addTimeslotBtn) addTimeslotBtn.onclick = () => addTimeslotField(timeslotsList);
+        
+        const removeSubjectBtn = div.querySelector('.remove-subject');
+        if (removeSubjectBtn) {
+            removeSubjectBtn.onclick = () => {
+                div.remove();
+                subjectCount--;
+                renderTeachersTab();
+                updateOverallStatus();
+                renderSchedule();
+                updateCurrentLevelsSummary();
+                document.querySelectorAll('.subject-entry').forEach(entry => {
+                    const select = entry.querySelector('.subject-name');
+                    if (select) refreshSubjectOptions(select);
+                });
+            };
+        }
+        
+        const subjectNameSelect = div.querySelector('.subject-name');
+        if (subjectNameSelect) {
+            subjectNameSelect.addEventListener('change', (e) => {
+                const startLevelSelect = div.querySelector('.start-level');
+                if (startLevelSelect) startLevelSelect.innerHTML = getLevelOptions(e.target.value, '');
+                validateConflict(e.target);
+                renderSchedule();
+                updateSubjectEntry(div);
+                renderTeachersTab();
+                updateCurrentLevelsSummary();
+                document.querySelectorAll('.subject-entry').forEach(entry => {
+                    const select = entry.querySelector('.subject-name');
+                    if (select && select !== e.target) refreshSubjectOptions(select);
+                });
             });
-        };
-    }
-    
-    const subjectNameSelect = div.querySelector('.subject-name');
-    if (subjectNameSelect) {
-        subjectNameSelect.addEventListener('change', (e) => {
-            const startLevelSelect = div.querySelector('.start-level');
-            if (startLevelSelect) startLevelSelect.innerHTML = getLevelOptions(e.target.value, '');
-            validateConflict(e.target);
-            renderSchedule();
-            updateSubjectEntry(div);
-            renderTeachersTab();
-            updateCurrentLevelsSummary();
-            document.querySelectorAll('.subject-entry').forEach(entry => {
-                const select = entry.querySelector('.subject-name');
-                if (select && select !== e.target) refreshSubjectOptions(select);
+        }
+        
+        const statusSelect = div.querySelector('.status');
+        if (statusSelect) {
+            statusSelect.addEventListener('change', () => {
+                if (statusSelect.value !== 'drop' && getActiveSubjectCount(div) >= 3) {
+                    showError('⚠️ Maximum 3 active subjects allowed. Please drop another subject first.');
+                    statusSelect.value = 'drop';
+                }
+                applySubjectUI(div);
             });
-        });
+        }
+        
+        container.appendChild(div);
+        subjectCount++;
+        applySubjectUI(div);
     }
-    
-    const statusSelect = div.querySelector('.status');
-    if (statusSelect) {
-        statusSelect.addEventListener('change', () => {
-            // Prevent activating a 4th subject
-            if (statusSelect.value !== 'drop' && getActiveSubjectCount(div) >= 3) {
-                showError('⚠️ Maximum 3 active subjects allowed. Please drop another subject first.');
-                statusSelect.value = 'drop'; // Revert selection to prevent invalid state
-            }
-            applySubjectUI(div);
-        });
-    }
-    
-    container.appendChild(div);
-    subjectCount++;
-    applySubjectUI(div);
-}
 
     function validateConflict(currentSelect) {
         if (!currentSelect) return;
@@ -1332,14 +1326,30 @@ function addSubjectField(data = {}) {
         if (!timeslotsList || timeslotsList.children.length >= 6) return showError('Maximum 6 timeslots per subject');
         let h = '01', m = '00', day = data.day || 'Monday';
         if (data.time) { const p = data.time.split(':'); if(p.length===2) { h = p[0]; m = p[1]; } }
+
+        // ✅ NEW: Generate center options, defaulting to the student's primary center
+        const centerOptions = allCenters.map(c => 
+            `<option value="${c.id}" ${(data.center || centerId) === c.id ? 'selected' : ''}>${c.name}</option>`
+        ).join('');
+
         const row = document.createElement('div');
         row.className = 'timeslot-row';
         row.innerHTML = `
-         <div> <label>Day</label> <select class="ts-day" required>${DAYS.map(d => `<option value="${d}" ${data.day === d ? 'selected' : ''}>${d}</option>`).join('')}</select> </div>
-         <div> <label>Time (24h)</label> <div class="time-input-group"> <select class="ts-hour" required>${getHourOptions(h, day)}</select> <span class="time-separator">:</span> <select class="ts-min" required>${getMinuteOptions(m)}</select> </div> </div>
-         <div class="remove-timeslot-wrapper"> <button type="button" class="remove-ts-btn" title="Remove">×</button> </div>`;
+            <div> 
+                <label>Center</label> 
+                <select class="ts-center" required>
+                    ${centerOptions}
+                </select> 
+            </div>
+            <div> <label>Day</label> <select class="ts-day" required>${DAYS.map(d => `<option value="${d}" ${data.day === d ? 'selected' : ''}>${d}</option>`).join('')}</select> </div>
+            <div> <label>Time (24h)</label> <div class="time-input-group"> <select class="ts-hour" required>${getHourOptions(h, day)}</select> <span class="time-separator">:</span> <select class="ts-min" required>${getMinuteOptions(m)}</select> </div> </div>
+            <div class="remove-timeslot-wrapper"> <button type="button" class="remove-ts-btn" title="Remove">×</button> </div>`;
         
-        const daySel = row.querySelector('.ts-day'), hourSel = row.querySelector('.ts-hour'), minSel = row.querySelector('.ts-min');
+        // ✅ FIXED: Syntax error resolved (properly declared minSel)
+        const daySel = row.querySelector('.ts-day');
+        const hourSel = row.querySelector('.ts-hour');
+        const minSel = row.querySelector('.ts-min');
+        
         const checkConflict = () => {
             if (!daySel?.value || !hourSel?.value || !minSel?.value) return;
             const conflict = isTimeslotGloballyUsed(daySel.value, hourSel.value, minSel.value, row);
@@ -1356,11 +1366,11 @@ function addSubjectField(data = {}) {
         timeslotsList.appendChild(row);
     }
 
-        document.getElementById('addSubjectBtn')?.addEventListener('click', () => {
-            if (subjectCount >= 4) return showError('Maximum 4 subjects allowed in the system.');
-            if (getActiveSubjectCount() >= 3) return showError('⚠️ Maximum 3 active subjects allowed. Please drop an existing subject before adding a new one.');
-            addSubjectField();
-        });
+    document.getElementById('addSubjectBtn')?.addEventListener('click', () => {
+        if (subjectCount >= 4) return showError('Maximum 4 subjects allowed in the system.');
+        if (getActiveSubjectCount() >= 3) return showError('⚠️ Maximum 3 active subjects allowed. Please drop an existing subject before adding a new one.');
+        addSubjectField();
+    });
 
     function addDTRow(data = {}) {
         const tbody = document.getElementById('dtTableBody');
@@ -1631,17 +1641,16 @@ function addSubjectField(data = {}) {
         const pencilCount = Array.from(document.querySelectorAll('.pencil-skill-entry')).filter(el => el.style.display !== 'none').length;
         if (pencilCount > 1) return showError('⚠️ Only one Pencil Skill can be added per student.');
         
-            // 🆕 CHECK MAX ACTIVE SUBJECTS ON SUBMIT
-            let activeSubjectsCount = 0;
-            for (const entry of document.querySelectorAll('.subject-entry')) {
-                if (entry.querySelector('.status')?.value !== 'drop') activeSubjectsCount++;
-            }
-            if (activeSubjectsCount > 3) {
-                return showError('⚠️ You can only have a maximum of 3 active subjects. Please ensure at least one subject is dropped.');
-            }
+        let activeSubjectsCount = 0;
+        for (const entry of document.querySelectorAll('.subject-entry')) {
+            if (entry.querySelector('.status')?.value !== 'drop') activeSubjectsCount++;
+        }
+        if (activeSubjectsCount > 3) {
+            return showError('⚠️ You can only have a maximum of 3 active subjects. Please ensure at least one subject is dropped.');
+        }
 
-            let subIdx = 1;
-            for (const entry of document.querySelectorAll('.subject-entry')) {
+        let subIdx = 1;
+        for (const entry of document.querySelectorAll('.subject-entry')) {
             if (entry.style.display === 'none' || entry.querySelector('.status')?.value === 'drop') {
                 const status = entry.querySelector('.status')?.value;
                 if (status === 'drop') {
@@ -1867,8 +1876,23 @@ function addSubjectField(data = {}) {
     };
 
     let allTeachersCache = [];
+    let allCenters = []; // ✅ NEW: Declare allCenters array
 
-        // ==========================================
+    async function fetchCenters() {
+        try {
+            const snap = await get(ref(db, 'centers'));
+            if (snap.exists()) {
+                allCenters = Object.entries(snap.val()).map(([id, data]) => ({
+                    id: id,
+                    name: data.name || id
+                }));
+            }
+        } catch (err) {
+            console.error("Error fetching centers:", err);
+        }
+    }
+
+    // ==========================================
     // 🔍 DUPLICATE STUDENT CHECK (Debounced)
     // ==========================================
     let duplicateCheckTimeout = null;
@@ -1888,11 +1912,10 @@ function addSubjectField(data = {}) {
 
         const handleInput = (e) => {
             const value = e.target.value.trim();
-            const field = e.target.id; // 'nameCn' or 'namePinyin'
+            const field = e.target.id;
 
             if (duplicateCheckTimeout) clearTimeout(duplicateCheckTimeout);
-
-            if (value.length < 2) return; // Need at least 2 chars
+            if (value.length < 2) return;
 
             duplicateCheckTimeout = setTimeout(() => {
                 checkForDuplicateStudent(field, value);
@@ -1913,15 +1936,13 @@ function addSubjectField(data = {}) {
                 const data = child.val();
                 const id = child.key;
 
-                // Skip the student currently being edited
                 if (isEdit && id === studentId) return;
 
                 let isMatch = false;
                 if (field === 'nameCn') {
                     isMatch = data.nameCn && data.nameCn.trim() === value;
                 } else if (field === 'namePinyin') {
-                    isMatch = data.namePinyin &&
-                            data.namePinyin.trim().toLowerCase() === value.toLowerCase();
+                    isMatch = data.namePinyin && data.namePinyin.trim().toLowerCase() === value.toLowerCase();
                 }
 
                 if (isMatch) {
@@ -1978,7 +1999,6 @@ function addSubjectField(data = {}) {
             listContainer.appendChild(card);
         });
 
-        // Wire up "Edit Existing" buttons
         listContainer.querySelectorAll('.edit-existing-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 const id = btn.dataset.id;
@@ -1999,14 +2019,12 @@ function addSubjectField(data = {}) {
         }
     }
 
-    // Modal close handlers
     document.getElementById('closeDuplicateModal')?.addEventListener('click', hideDuplicateModal);
     document.getElementById('addAnywayBtn')?.addEventListener('click', hideDuplicateModal);
     document.getElementById('duplicateStudentModal')?.addEventListener('click', (e) => {
         if (e.target.id === 'duplicateStudentModal') hideDuplicateModal();
     });
 
-    // Kick it off
     setupDuplicateCheck();
 
     async function fetchTeachers() {
@@ -2133,7 +2151,9 @@ function addSubjectField(data = {}) {
     }   
 
     setupTeachersTab();
-    fetchTeachers().then(() => {
+    
+    // ✅ FIXED: Cleaned up duplicate initialization blocks
+    Promise.all([fetchTeachers(), fetchCenters()]).then(() => {
         if (isEdit) loadStudentData(); 
         else { 
             addSubjectField(); 
@@ -2141,6 +2161,6 @@ function addSubjectField(data = {}) {
             hideLoader(); 
         }
     });
-         
+    
     document.getElementById('logoutBtn')?.addEventListener('click', logout);
 }
