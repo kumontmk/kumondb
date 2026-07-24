@@ -56,13 +56,14 @@
             <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
             <div class="sort-panel">
-                <!-- ✅ Status Filter (Defaults to Current) -->
+                <!-- ✅ Status Filter (Defaults to Current, added Pause) -->
                 <div class="sort-group">
                     <label>📋 Status:</label>
                         <select id="filter-status">
                             <option value="all">All Statuses</option>
                             <option value="current" selected>Current</option>
                             <option value="inquiry">Inquiry</option> 
+                            <option value="pause">Pause</option>
                             <option value="drop">Drop</option>
                         </select>   
                 </div>
@@ -70,10 +71,11 @@
                     <label>📚 Filter Subject:</label>
                     <select id="filter-subject">
                         <option value="">All Subjects</option>
-                        <option value="Chinese">Chinese</option>
+                        <option value="Math">Math</option>
                         <option value="English ERP">English ERP</option>
                         <option value="English EFL">English EFL</option>
-                        <option value="Math">Math</option>
+                        <option value="Chinese (Trad)">Chinese (Trad)</option>
+                        <option value="Chinese (Simp)">Chinese (Simp)</option>
                     </select>
                 </div>
                 <div class="sort-group">
@@ -111,7 +113,7 @@
                 <button id="clearSortBtn" class="secondary">Reset</button>
             </div>
 
-           <div class="table-wrapper">
+            <div class="table-wrapper">
                 <table>
                     <thead>
                     <tr>
@@ -146,8 +148,9 @@
         </main>
 
     </div> <!-- ✅ End of mainContent wrapper -->
-        <!-- Export Options Modal -->
-        <div id="exportModal" class="modal hidden">
+    
+    <!-- Export Options Modal -->
+    <div id="exportModal" class="modal hidden">
         <div class="modal-content" style="max-width: 500px; text-align: left;">
             <span id="closeExportModal" style="position: absolute; top: 10px; right: 15px; font-size: 1.5rem; cursor: pointer; color: var(--text-light);">&times;</span>
             <h2 style="margin-bottom: 1.5rem; text-align: center; color: var(--primary-dark);">Export Options</h2>
@@ -164,6 +167,7 @@
                 <option value="English EFL">English EFL</option>
                 <option value="English ERP">English ERP</option>
                 <option value="Chinese (Trad)">Chinese (Trad)</option>
+                <option value="Chinese (Simp)">Chinese (Simp)</option>
                 </select>
                 <button id="exportSubjectBtn" class="secondary" style="flex: 1;">Export by Subject</button>
             </div>
@@ -186,6 +190,7 @@
                 </select>
                 <button id="exportGradeBtn" class="secondary" style="flex: 1;">Export by Grade</button>
             </div>
+            
             <!-- 🆕 NEW: Export by Teacher Section -->
             <div style="margin:1rem 0; padding:1rem; background:#f8f9fa; border-radius:8px;">
             <label style="font-weight:600; display:block; margin-bottom:0.5rem;">👩‍🏫 Export by Teacher</label>
@@ -196,10 +201,10 @@
             </div>
             </div>
         </div>
-        </div>
+    </div>
 
-                <!-- Delete All Confirmation Modal -->
-        <div id="deleteAllModal" class="modal hidden">
+    <!-- Delete All Confirmation Modal -->
+    <div id="deleteAllModal" class="modal hidden">
         <div class="modal-content">
             <span id="closeDeleteAllModal" style="position:absolute; top:10px; right:15px; font-size:1.8rem; cursor:pointer; color:var(--text-light);">×</span>
             <h3 style="color:#dc3545; margin-bottom:1rem;">⚠️ Delete All Students</h3>
@@ -210,7 +215,8 @@
             <button id="cancelDeleteAllBtn" class="secondary">Cancel</button>
             </div>
         </div>
-        </div>
+    </div>
+    
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <script type="module" src="students.js"></script>
 </body>

@@ -81,7 +81,9 @@ async function initializePage(isAdmin = false) {
         'efl': 'eflBool', 'eflstarting': 'eflStartLevel', 'eflstartingno': 'eflStartWS',
         'eflenrollmentdate': 'eflEnrolDate', 'eflclassday': 'eflDay1', 'eflclasstime': 'eflTime1',
         'eflclassday2': 'eflDay2', 'eflclasstime2': 'eflTime2', 'currentefl': 'eflCurrentLevel', 'eflno': 'eflCurrentWS',
-        'chinese': 'chiBool', 'cstarting': 'chiStartLevel', 'cstartingno': 'chiStartWS',
+        'chinese': 'chiBool', 
+        'chinese_simp': 'chiSimpBool', 'chinese (simp)': 'chiSimpBool', 'chinese simp': 'chiSimpBool', // Enhanced mapping
+        'cstarting': 'chiStartLevel', 'cstartingno': 'chiStartWS',
         'cenrollmentdate': 'chiEnrolDate', 'cclassday': 'chiDay1', 'cclasstime': 'chiTime1',
         'cclassday2': 'chiDay2', 'cclasstime2': 'chiTime2', 'currentchinese': 'chiCurrentLevel', 'chino': 'chiCurrentWS'
     };
@@ -223,6 +225,9 @@ async function initializePage(isAdmin = false) {
 
                     const chiSubj = buildSubject(getVal, 'chi', 'Chinese (Trad)');
                     if (chiSubj) subjects.push(chiSubj);
+                    
+                    const chiSimpSubj = buildSubject(getVal, 'chiSimp', 'Chinese (Simp)');
+                    if (chiSimpSubj) subjects.push(chiSimpSubj);
 
                     const overallStatus = subjects.length === 0 ? 'Drop' : 'Current';
 
@@ -292,12 +297,13 @@ async function initializePage(isAdmin = false) {
                 if (student.subjects && Array.isArray(student.subjects) && student.subjects.length > 0) {
                     const hasCurrent = student.subjects.some(sub => sub.status === 'current');
                     const hasInquiry = student.subjects.some(sub => sub.status === 'inquiry');
+                    const hasPause = student.subjects.some(sub => sub.status === 'pause');  
+
                     if (hasCurrent) overallStatus = 'Current';
                     else if (hasInquiry) overallStatus = 'Inquiry';
+                    else if (hasPause) overallStatus = 'Pause';  
                     else overallStatus = 'Drop';
-                } else if (!overallStatus) {
-                    overallStatus = 'Drop';
-                }
+                } // ✅ FIXED: Added missing closing brace here
 
                 if (student.subjects && Array.isArray(student.subjects)) {
                     student.subjects.forEach(sub => {
@@ -310,7 +316,6 @@ async function initializePage(isAdmin = false) {
                             overallStatus, 
                             rawDob: student.birthday || '',
                             rawEnrolDate: sub.enrolDate || '',
-                            // 🆕 Pass per-subject worksheetType (fallback to global for legacy data)
                             worksheetType: sub.worksheetType || student.worksheetType || 'Paper'
                         });
                     });
@@ -390,7 +395,6 @@ async function initializePage(isAdmin = false) {
                 const dobDisplay = row.rawDob ? new Date(row.rawDob).toLocaleDateString('en-CA') : '-';
                 const enrolDisplay = row.rawEnrolDate ? new Date(row.rawEnrolDate).toLocaleDateString('en-CA') : '-';
                 
-                // 🆕 Check per-subject worksheetType
                 const isKC = row.worksheetType === 'Kumon Connect';
                 const kcBadge = isKC ? '<span class="kc-badge" title="Kumon Connect">KC</span>' : '';
 
@@ -577,6 +581,7 @@ async function initializePage(isAdmin = false) {
             const eng = getSubj('English ERP');
             const efl = getSubj('English EFL');
             const chi = getSubj('Chinese (Trad)');
+            const chiSimp = getSubj('Chinese (Simp)'); // ✅ Added Simplified Chinese
 
             return {
                 'StudentNo': s.studentNumber || '',
@@ -632,7 +637,18 @@ async function initializePage(isAdmin = false) {
                 'CClassDay2': chi.timeslots?.[1]?.day || '',
                 'CClassTime2': chi.timeslots?.[1]?.time || '',
                 'CurrentChinese': chi.currentLevel || '',
-                'ChiNo': chi.currentWS || ''
+                'ChiNo': chi.currentWS || '',
+                // ✅ Added Simplified Chinese Export Fields
+                'Chinese (Simp)': chiSimp.name ? '1' : '',
+                'CSStarting': chiSimp.startLevel || '',
+                'CSStartingNo': chiSimp.startWS || '',
+                'CSEnrollmentDate': chiSimp.enrolDate || '',
+                'CSClassDay': chiSimp.timeslots?.[0]?.day || '',
+                'CSClassTime': chiSimp.timeslots?.[0]?.time || '',
+                'CSClassDay2': chiSimp.timeslots?.[1]?.day || '',
+                'CSClassTime2': chiSimp.timeslots?.[1]?.time || '',
+                'CurrentChineseSimp': chiSimp.currentLevel || '',
+                'ChiSimpNo': chiSimp.currentWS || ''
             };
         });
 
@@ -686,17 +702,19 @@ async function initializePage(isAdmin = false) {
             snapshot.forEach(child => {
                 const s = child.val();
                 
-                // ✅ DYNAMICALLY CALCULATE overallStatus for accurate filtering
                 let overallStatus = s.overallStatus;
                 if (s.subjects && Array.isArray(s.subjects) && s.subjects.length > 0) {
+                    // ✅ FIXED: Changed 'student.subjects' to 's.subjects'
                     const hasCurrent = s.subjects.some(sub => sub.status === 'current');
                     const hasInquiry = s.subjects.some(sub => sub.status === 'inquiry');
+                    const hasPause = s.subjects.some(sub => sub.status === 'pause');
+
                     if (hasCurrent) overallStatus = 'Current';
                     else if (hasInquiry) overallStatus = 'Inquiry';
+                    else if (hasPause) overallStatus = 'Pause';
                     else overallStatus = 'Drop';
                 }
                 
-                // ✅ FILTER 1: ONLY export "Current" students
                 if (overallStatus === 'Current') {
                     const name = (s.nameCn || s.namePinyin || 'Unknown').trim();
                     if (name && name !== 'Unknown') {
@@ -762,7 +780,6 @@ async function initializePage(isAdmin = false) {
                 grades.map(g => `<option value="${g}">${g}</option>`).join('');
         }
 
-        // 🆕 Fetch and populate teachers
         const teacherSelect = document.getElementById('exportTeacherSelect');
         if (teacherSelect) {
             teacherSelect.innerHTML = '<option value="">Loading teachers...</option>';
@@ -854,7 +871,7 @@ async function initializePage(isAdmin = false) {
     });
 
     document.getElementById('clearSortBtn')?.addEventListener('click', () => {
-        document.getElementById('filter-subject').value = '';
+        document.getElementById('filter-subject').value = ''; // ✅ Defaults to All Subjects
         document.getElementById('filter-status').value = 'current';
         for (let i = 1; i <= 2; i++) {
             document.getElementById(`sort${i}-field`).value = '';
