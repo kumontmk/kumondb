@@ -59,11 +59,10 @@ function initApp() {
     const modal = document.getElementById('detailModal');
     const callStatusBtn = document.getElementById('mCallStatusBtn');
 
-    // ✅ NEW: Resume UI Elements
+    // ✅ UPDATED: Resume UI Elements (Single Month Picker)
     const resumeBtn = document.getElementById('resumeBtn');
     const resumeSection = document.getElementById('resumeSection');
-    const resumeMonthSel = document.getElementById('mResumeMonth');
-    const resumeYearSel = document.getElementById('mResumeYear');
+    const resumeMonthYearSel = document.getElementById('mResumeMonthYear');
     const cancelResumeBtn = document.getElementById('cancelResumeBtn');
     const cancelResumeRequestBtn = document.getElementById('cancelResumeRequestBtn');
 
@@ -80,19 +79,7 @@ function initApp() {
         const monthVal = String(i + 1).padStart(2, '0');
         filterMonth.innerHTML += `<option value="${monthVal}">${m}</option>`;
         rangeStartMonthSel.innerHTML += `<option value="${monthVal}">${m}</option>`;
-        
-        // ✅ NEW: Populate Resume Month Select
-        if (resumeMonthSel) {
-            resumeMonthSel.innerHTML += `<option value="${monthVal}">${m}</option>`;
-        }
     });
-
-    // ✅ NEW: Populate Resume Year Select
-    if (resumeYearSel) {
-        for (let y = currentYear; y <= currentYear + 2; y++) {
-            resumeYearSel.innerHTML += `<option value="${y}">${y}</option>`;
-        }
-    }
 
     const now = new Date();
     filterMonth.value = String(now.getMonth() + 1).padStart(2, '0');
@@ -131,6 +118,7 @@ function initApp() {
         });
     }
 
+    // ✅ UPDATED: Hide range controls when "Current Year" is selected
     viewModeSelect.addEventListener('change', () => {
         viewMode = viewModeSelect.value;
         
@@ -142,8 +130,7 @@ function initApp() {
             activeTabYear = filterYear.value;
         } else if (viewMode === 'year') {
             singleMonthControls.classList.add('hidden');
-            rangeControls.classList.remove('hidden');
-            updateRangeEndLabel();
+            rangeControls.classList.add('hidden'); // ✅ Hide range controls for Current Year
             generateMonthTabs();
         } else if (viewMode === 'range') {
             singleMonthControls.classList.add('hidden');
@@ -177,41 +164,94 @@ function initApp() {
         rangeEndLabel.textContent = `→ ${endMonthName} ${endYear}`;
     }
 
+    // ✅ UPDATED: Separated "Current Year" logic from "12-Month Range" logic
     function generateMonthTabs() {
         monthTabs.innerHTML = '';
         
-        let startMonth, startYear;
-        startMonth = parseInt(rangeStartMonthSel.value);
-        startYear = parseInt(rangeStartYearSel.value);
-
-        for (let i = 0; i < 12; i++) {
-            let month = startMonth + i;
-            let year = startYear;
+        if (viewMode === 'year') {
+            // ✅ CURRENT YEAR LOGIC (Strict Jan - Dec)
+            const now = new Date();
+            const currentYear = now.getFullYear();
             
-            if (month > 12) {
-                month = month - 12;
-                year = year + 1;
+            // Calculate next month for default tab
+            let defaultMonth = now.getMonth() + 2; 
+            let defaultYear = currentYear;
+            if (defaultMonth > 12) { 
+                defaultMonth = 1; 
+                defaultYear += 1; 
+            }
+            // Edge case: If we are in December, next month is next year. 
+            // Since this view is strictly "Current Year", default to current month instead.
+            if (defaultYear !== currentYear) {
+                defaultMonth = now.getMonth() + 1;
+                defaultYear = currentYear;
             }
 
-            const tab = document.createElement('button');
-            tab.className = 'tab-btn';
-            tab.textContent = `${MONTH_NAMES[month - 1]} ${year}`;
-            tab.dataset.month = String(month).padStart(2, '0');
-            tab.dataset.year = year;
+            for (let m = 1; m <= 12; m++) {
+                const tab = document.createElement('button');
+                tab.className = 'tab-btn';
+                tab.textContent = `${MONTH_NAMES[m - 1]} ${currentYear}`;
+                tab.dataset.month = String(m).padStart(2, '0');
+                tab.dataset.year = currentYear;
+                
+                // Set default active tab to next month
+                if (m === defaultMonth) {
+                    tab.classList.add('active');
+                    activeTabMonth = tab.dataset.month;
+                    activeTabYear = tab.dataset.year;
+                }
+                
+                tab.addEventListener('click', () => {
+                    document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    activeTabMonth = tab.dataset.month;
+                    activeTabYear = tab.dataset.year;
+                    renderTable();
+                });
+                
+                monthTabs.appendChild(tab);
+            }
             
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
-                tab.classList.add('active');
-                activeTabMonth = tab.dataset.month;
-                activeTabYear = tab.dataset.year;
-                renderTable();
-            });
-            
-            monthTabs.appendChild(tab);
-        }
+            // Fallback if no tab was set to active
+            if (!activeTabMonth) {
+                const firstTab = monthTabs.querySelector('.tab-btn');
+                if (firstTab) firstTab.click();
+            }
 
-        const firstTab = monthTabs.querySelector('.tab-btn');
-        if (firstTab) firstTab.click();
+        } else if (viewMode === 'range') {
+            // ✅ 12-MONTH RANGE LOGIC (Existing logic preserved)
+            let startMonth = parseInt(rangeStartMonthSel.value);
+            let startYear = parseInt(rangeStartYearSel.value);
+
+            for (let i = 0; i < 12; i++) {
+                let month = startMonth + i;
+                let year = startYear;
+                
+                if (month > 12) {
+                    month = month - 12;
+                    year = year + 1;
+                }
+
+                const tab = document.createElement('button');
+                tab.className = 'tab-btn';
+                tab.textContent = `${MONTH_NAMES[month - 1]} ${year}`;
+                tab.dataset.month = String(month).padStart(2, '0');
+                tab.dataset.year = year;
+                
+                tab.addEventListener('click', () => {
+                    document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    activeTabMonth = tab.dataset.month;
+                    activeTabYear = tab.dataset.year;
+                    renderTable();
+                });
+                
+                monthTabs.appendChild(tab);
+            }
+
+            const firstTab = monthTabs.querySelector('.tab-btn');
+            if (firstTab) firstTab.click();
+        }
     }
 
     [filterMonth, filterYear, filterStatus].forEach(el => 
@@ -257,13 +297,12 @@ function initApp() {
         return false;
     }
 
-    // 🆕 UPDATED: Robustly handles Direct Drops, Pending Requests, Cancelled Requests, and Resume Requests
-    // 🆕 UPDATED: Robustly handles Direct Drops, Pending Requests, Cancelled Requests, and Resume Requests
+    // 🆕 UPDATED: Robustly handles Direct Drops, Pending Requests, Cancelled Requests, Resume Requests, and Historical Resumes
     function getFilteredEntries() {
         const mStatus = filterStatus.value;
         const entries = [];
 
-        // ✅ FIX: Added the missing outer loop for allStudentsData
+        // ✅ FIX: Ensure we iterate over allStudentsData
         allStudentsData.forEach(student => {
             const subjects = Array.isArray(student.subjects) ? student.subjects : Object.values(student.subjects || {});
             
@@ -273,7 +312,7 @@ function initApp() {
                 const hasActivePendingRequest = sub.pendingRequest && !sub.pendingRequest.cancelled && sub.pendingRequest.type;
                 const isDirectDropPause = sub.status === 'drop' || sub.status === 'pause';
                 const hasActiveResume = sub.resumeRequest && !sub.resumeRequest.processed && (sub.status === 'drop' || sub.status === 'pause');
-                const isHistoricallyResumed = sub.resumed === true; // ✅ NEW: Check for permanent resume history
+                const isHistoricallyResumed = sub.resumed === true; // ✅ Check for permanent resume history
 
                 if (hasActivePendingRequest) {
                     isPending = true;
@@ -301,7 +340,7 @@ function initApp() {
                     targetYear = sub.status === 'drop' ? sub.dropYear : sub.pauseFromYear;
                 } 
                 else if (isHistoricallyResumed) {
-                    // ✅ NEW: Handle historically resumed students (Keep them in the log!)
+                    // ✅ Handle historically resumed students (Keep them in the log!)
                     isResumed = true;
                     type = sub.dropMonth ? 'drop' : 'pause'; // Infer original type from existing data
                     reason = type === 'drop' ? (sub.dropReason || 'Resumed') : (sub.pauseReason || 'Resumed');
@@ -328,10 +367,18 @@ function initApp() {
                     const mYear = filterYear.value;
                     if (mMonth && targetMonth !== mMonth) return;
                     if (mYear && targetYear !== mYear) return;
-                } else if (viewMode === 'year' || viewMode === 'range') {
-                    let startMonth, startYear;
-                    startMonth = parseInt(rangeStartMonthSel.value);
-                    startYear = parseInt(rangeStartYearSel.value);
+                } else if (viewMode === 'year') {
+                    // ✅ CURRENT YEAR FILTERING: Strictly only show entries from the current calendar year
+                    const currentYear = new Date().getFullYear();
+                    if (parseInt(targetYear) !== currentYear) return;
+
+                    if (activeTabMonth && activeTabYear) {
+                        if (targetMonth !== activeTabMonth || targetYear !== activeTabYear) return;
+                    }
+                } else if (viewMode === 'range') {
+                    // ✅ 12-MONTH RANGE FILTERING
+                    let startMonth = parseInt(rangeStartMonthSel.value);
+                    let startYear = parseInt(rangeStartYearSel.value);
 
                     const entryDate = new Date(parseInt(targetYear), parseInt(targetMonth) - 1);
                     const startDate = new Date(startYear, startMonth - 1);
@@ -407,7 +454,7 @@ function initApp() {
             
             let actionBtn = '';
             if (isResumed) {
-                // ✅ NEW: Resolved Resumed State
+                // ✅ Resolved Resumed State
                 actionBtn = `<button class="confirm-row-btn" disabled style="padding: 0.3rem 0.6rem; font-size: 0.8rem; background:#dcfce7; color:#166534; border:1px solid #86efac;">✅ Resumed</button>`;
             } else if (isCancelled) {
                 actionBtn = `
@@ -485,7 +532,6 @@ function initApp() {
         }
     });
 
-    // 🆕 UPDATED: Now handles both Pending Requests and Direct Drops/Pauses
     async function triggerCancelAction(studentId, subjectIndex) {
         const student = allStudentsData.find(s => s.id === studentId);
         if (!student) return;
@@ -548,7 +594,7 @@ function initApp() {
 
     // ✅ NEW: Cancel Resume Action
     async function triggerCancelResumeAction(studentId, subjectIndex) {
-        if (!confirm('Are you sure you want to cancel this resume request? The student will remain dropped.')) return;
+        if (!confirm('Are you sure you want to cancel this resume request? The student will remain dropped/paused.')) return;
 
         try {
             const studentRef = ref(db, `centers/${centerId}/students/${studentId}`);
@@ -701,7 +747,7 @@ function initApp() {
             reinstateRequestBtn.style.display = 'none';
         }
 
-        // ✅ UPDATED: Resume button visibility logic (Now includes 'pause')
+        // ✅ UPDATED: Resume button visibility logic (Now uses single month picker)
         const isDroppedOrPaused = subject.status === 'drop' || subject.status === 'pause';
         const hasActiveResume = subject.resumeRequest && !subject.resumeRequest.processed;
 
@@ -709,16 +755,21 @@ function initApp() {
             if (resumeBtn) resumeBtn.style.display = 'inline-block';
             if (cancelResumeRequestBtn) cancelResumeRequestBtn.style.display = 'none';
             if (resumeSection) resumeSection.style.display = 'none';
+            if (resumeMonthYearSel) resumeMonthYearSel.value = '';
         } else if (isDroppedOrPaused && hasActiveResume) {
             if (resumeBtn) resumeBtn.style.display = 'none';
             if (cancelResumeRequestBtn) cancelResumeRequestBtn.style.display = 'inline-block';
             if (resumeSection) resumeSection.style.display = 'block';
-            if (resumeMonthSel) resumeMonthSel.value = subject.resumeRequest.returnMonth || '';
-            if (resumeYearSel) resumeYearSel.value = subject.resumeRequest.returnYear || '';
+            if (resumeMonthYearSel) {
+                const rM = subject.resumeRequest.returnMonth || '';
+                const rY = subject.resumeRequest.returnYear || '';
+                resumeMonthYearSel.value = (rY && rM) ? `${rY}-${rM}` : '';
+            }
         } else {
             if (resumeBtn) resumeBtn.style.display = 'none';
             if (cancelResumeRequestBtn) cancelResumeRequestBtn.style.display = 'none';
             if (resumeSection) resumeSection.style.display = 'none';
+            if (resumeMonthYearSel) resumeMonthYearSel.value = '';
         }
 
         modal.classList.remove('hidden');
@@ -785,16 +836,16 @@ function initApp() {
             const sub = subjects[subjectIndex];
             const newReason = document.getElementById('mReason').value.trim();
             
-            // ✅ NEW: Handle Resume Request save
+            // ✅ NEW: Handle Resume Request save (Parsing YYYY-MM from input)
             if (resumeSection && resumeSection.style.display !== 'none') {
-                const rMonth = resumeMonthSel ? resumeMonthSel.value : '';
-                const rYear = resumeYearSel ? resumeYearSel.value : '';
-                if (!rMonth || !rYear) {
-                    alert('⚠️ Please select a return month and year for resume.');
+                const rMY = resumeMonthYearSel ? resumeMonthYearSel.value : '';
+                if (!rMY) {
+                    alert('⚠️ Please select a return month for resume.');
                     saveBtn.disabled = false;
                     saveBtn.textContent = '💾 Save Changes';
                     return;
                 }
+                const [rYear, rMonth] = rMY.split('-');
                 sub.resumeRequest = {
                     returnMonth: rMonth,
                     returnYear: rYear,
@@ -953,7 +1004,7 @@ function initApp() {
         }
     });
 
-    // ✅ NEW: Resume button event listeners
+    // ✅ NEW: Resume button event listeners (Using single month picker)
     resumeBtn?.addEventListener('click', () => {
         if (resumeSection) resumeSection.style.display = 'block';
         if (resumeBtn) resumeBtn.style.display = 'none';
@@ -961,20 +1012,20 @@ function initApp() {
         let nextM = now.getMonth() + 2;
         let nextY = now.getFullYear();
         if (nextM > 12) { nextM = 1; nextY++; }
-        if (resumeMonthSel) resumeMonthSel.value = String(nextM).padStart(2, '0');
-        if (resumeYearSel) resumeYearSel.value = nextY;
+        if (resumeMonthYearSel) {
+            resumeMonthYearSel.value = `${nextY}-${String(nextM).padStart(2, '0')}`;
+        }
     });
 
     cancelResumeBtn?.addEventListener('click', () => {
         if (resumeSection) resumeSection.style.display = 'none';
         if (resumeBtn) resumeBtn.style.display = 'inline-block';
-        if (resumeMonthSel) resumeMonthSel.value = '';
-        if (resumeYearSel) resumeYearSel.value = '';
+        if (resumeMonthYearSel) resumeMonthYearSel.value = '';
     });
 
     cancelResumeRequestBtn?.addEventListener('click', async () => {
         if (!currentEditContext) return;
-        if (!confirm('Are you sure you want to cancel this resume request? The student will remain dropped.')) return;
+        if (!confirm('Are you sure you want to cancel this resume request? The student will remain dropped/paused.')) return;
 
         const { studentId, subjectIndex } = currentEditContext;
         const btn = cancelResumeRequestBtn;
@@ -1356,8 +1407,7 @@ function initApp() {
     
     viewMode = 'year';
     singleMonthControls.classList.add('hidden');
-    rangeControls.classList.remove('hidden');
-    updateRangeEndLabel();
+    rangeControls.classList.add('hidden'); // ✅ Hide range controls for Current Year default view
     generateMonthTabs(); 
 
     loadData();

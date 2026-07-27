@@ -2,7 +2,7 @@ import { auth, db, logout } from './auth.js';
 import { ref, get, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-const REQUIRED_PERMISSION = 'parentOrientation';
+const REQUIRED_PERMISSION = 'followUps';
 const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 // 🔐 PERMISSION CHECK

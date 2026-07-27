@@ -39,7 +39,7 @@
                 <label for="viewMode">📅 View Mode:</label>
                 <select id="viewMode">
                     <option value="single">Single Month</option>
-                    <option value="year">Whole Year</option>
+                    <option value="year" selected>Current Year</option> 
                     <option value="range">12-Month Range</option>
                 </select>
             </div>
@@ -176,14 +176,7 @@
 
             <div id="resumeSection" style="display:none; margin-bottom:1rem; padding:1rem; background:#e8f5e9; border-radius:8px; border-left:4px solid #4caf50;">
                 <label style="color:#2e7d32; font-weight:600; margin-bottom:0.5rem; display:block;">📅 Return Month</label>
-                <div style="display:flex; gap:0.5rem;">
-                    <select id="mResumeMonth" style="flex:1; padding:0.6rem; border:1px solid #ddd; border-radius:6px;">
-                        <option value="">Month</option>
-                    </select>
-                    <select id="mResumeYear" style="flex:1; padding:0.6rem; border:1px solid #ddd; border-radius:6px;">
-                        <option value="">Year</option>
-                    </select>
-                </div>
+                <input type="month" id="mResumeMonthYear" style="width:100%; padding:0.6rem; border:1px solid #ddd; border-radius:6px; font-size:1rem; font-family:inherit;">
                 <button id="cancelResumeBtn" type="button" style="margin-top:0.5rem; font-size:0.85rem; padding:0.4rem 0.8rem; background:#fff; border:1px solid #ccc; border-radius:6px; cursor:pointer;">Cancel</button>
             </div>
 

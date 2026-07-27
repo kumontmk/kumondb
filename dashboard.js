@@ -176,7 +176,7 @@ async function applyDashboardPermissions(user) {
       'card-monthlyReports': 'monthlyReports',
       'card-progressCharts': 'progressCharts',
       'card-attendance': 'attendance',
-      'card-followUps': 'parentOrientation',
+      'card-followUps': 'followUps',
       'card-dropBook': 'dropBook' ,
       'card-bulletin': 'bulletin',
       'card-newStudentList': 'newStudentList' 
