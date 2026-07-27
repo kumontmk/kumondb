@@ -109,20 +109,65 @@ function initApp() {
                 
                 if (triggerYear && triggerMonth) {
                     if (triggerYear < currentYear || (triggerYear === currentYear && triggerMonth <= currentMonth)) {
-                        sub.status = pr.type;
-                        if (pr.type === 'drop') { sub.dropMonth = pr.dropMonth; sub.dropYear = pr.dropYear; sub.dropReason = pr.reason; } 
-                        else { sub.pauseFromMonth = pr.pauseFromMonth; sub.pauseFromYear = pr.pauseFromYear; sub.pauseToMonth = pr.pauseToMonth; sub.pauseToYear = pr.pauseToYear; sub.pauseReason = pr.reason; }
-                        
-                        if (!sub.dropBook) sub.dropBook = {};
-                        sub.dropBook.confirmed = true;
-                        sub.dropBook.confirmedAt = new Date().toISOString();
-
-                        delete sub.pendingRequest;
+                        // If it was a resume request being fulfilled:
+                        if (sub.resumeRequest && !sub.resumeRequest.processed) {
+                            sub.status = 'current';
+                            sub.resumed = true; // ✅ NEW: Mark as resumed, preserving history
+                            sub.resumedAt = new Date().toISOString();
+                            delete sub.resumeRequest;
+                        } else {
+                            // Normal pending drop/pause execution
+                            sub.status = pr.type;
+                            if (pr.type === 'drop') { sub.dropMonth = pr.dropMonth; sub.dropYear = pr.dropYear; sub.dropReason = pr.reason; } 
+                            else { sub.pauseFromMonth = pr.pauseFromMonth; sub.pauseFromYear = pr.pauseFromYear; sub.pauseToMonth = pr.pauseToMonth; sub.pauseToYear = pr.pauseToYear; sub.pauseReason = pr.reason; }
+                            if (!sub.dropBook) sub.dropBook = {};
+                            sub.dropBook.confirmed = true;
+                            sub.dropBook.confirmedAt = new Date().toISOString();
+                            delete sub.pendingRequest;
+                        }
                         changed = true;
                     }
                 }
             }
         });
+        return changed;
+    }
+
+    // ✅ NEW: Process Resume Requests
+    function processResumeRequests(studentData) {
+        if (!studentData.subjects) return false;
+        const subjects = Array.isArray(studentData.subjects) ? studentData.subjects : Object.values(studentData.subjects);
+        const now = new Date();
+        const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+        const currentYear = String(now.getFullYear());
+        let changed = false;
+
+        subjects.forEach(sub => {
+            if (sub.resumeRequest && !sub.resumeRequest.processed) {
+                const { returnMonth, returnYear } = sub.resumeRequest;
+                if (returnYear && returnMonth) {
+                    if (parseInt(returnYear) < parseInt(currentYear) || 
+                        (parseInt(returnYear) === parseInt(currentYear) && parseInt(returnMonth) <= parseInt(currentMonth))) {
+                        
+                        // ✅ 1. Change status back to current
+                        sub.status = 'current';
+                        
+                        // ✅ 2. Add flags for Drop Book to recognize this as a historical resumed entry
+                        sub.resumed = true; 
+                        sub.resumedAt = now.toISOString();
+                        
+                        // ❌ 3. DO NOT delete the drop/pause fields! 
+                        // We keep them so the Drop Book can show the original drop/pause month and reason.
+                        // (Remove the delete sub.dropMonth, dropYear, dropReason lines)
+                        
+                        // ✅ 4. Clear the resume request since it has been fulfilled
+                        delete sub.resumeRequest;
+                        changed = true;
+                    }
+                }
+            }
+        });
+
         return changed;
     }
 
@@ -1442,6 +1487,12 @@ function initApp() {
                     s.updatedAt = new Date().toISOString();
                     await update(ref(db, `centers/${centerId}/students/${studentId}`), s);
                     console.log("⏳ Pending Drop/Pause requests auto-executed and saved.");
+                }
+
+                if (processResumeRequests(s)) {
+                    s.updatedAt = new Date().toISOString();
+                    await update(ref(db, `centers/${centerId}/students/${studentId}`), s);
+                    console.log("🔄 Resume requests auto-executed and saved.");
                 }
                 
                 currentStudentData = s;

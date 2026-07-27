@@ -174,9 +174,24 @@
                 </div>
             </div>
 
+            <div id="resumeSection" style="display:none; margin-bottom:1rem; padding:1rem; background:#e8f5e9; border-radius:8px; border-left:4px solid #4caf50;">
+                <label style="color:#2e7d32; font-weight:600; margin-bottom:0.5rem; display:block;">📅 Return Month</label>
+                <div style="display:flex; gap:0.5rem;">
+                    <select id="mResumeMonth" style="flex:1; padding:0.6rem; border:1px solid #ddd; border-radius:6px;">
+                        <option value="">Month</option>
+                    </select>
+                    <select id="mResumeYear" style="flex:1; padding:0.6rem; border:1px solid #ddd; border-radius:6px;">
+                        <option value="">Year</option>
+                    </select>
+                </div>
+                <button id="cancelResumeBtn" type="button" style="margin-top:0.5rem; font-size:0.85rem; padding:0.4rem 0.8rem; background:#fff; border:1px solid #ccc; border-radius:6px; cursor:pointer;">Cancel</button>
+            </div>
+
             <div class="modal-actions">
                 <button id="reinstateRequestBtn" class="reinstate-request-btn" style="display: none; background: #0d6efd; color: white; margin-right: auto;">🔄 Reinstate Request</button>
                 <button id="cancelRequestBtn" class="cancel-request-btn" style="display: none; background: #dc3545; color: white; margin-right: auto;">❌ Cancel Request</button>
+                <button id="resumeBtn" style="display:none; background:#4caf50; color:white; padding:0.6rem 1.2rem; font-weight:600; border:none; border-radius:6px; cursor:pointer;">🔄 Resume</button>
+                <button id="cancelResumeRequestBtn" style="display:none; background:#ff9800; color:white; padding:0.6rem 1.2rem; font-weight:600; border:none; border-radius:6px; cursor:pointer;">❌ Cancel Resume</button>
                 <button id="confirmDropBtn" class="confirm-drop-btn">✔️ Confirm Drop/Pause</button>
                 <button id="cancelModalBtn" class="secondary">Cancel</button>
                 <button id="saveModalBtn" class="primary">💾 Save Changes</button>

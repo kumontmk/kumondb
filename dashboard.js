@@ -62,7 +62,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 5. ✅ NEW: Load and display Center Name in Calendar
   await loadCenterName();
-
+  await processResumeRequests();  
   await syncPendingRequests(centerId);
 
   // 6. Initialize PO Calendar and Hide Loader
@@ -107,6 +107,55 @@ async function loadCenterName() {
   } catch (err) {
     console.error("Error loading center name:", err);
   }
+}
+
+// ✅ NEW: Process Resume Requests when dashboard loads
+async function processResumeRequests() {
+    if (!centerId) return;
+    try {
+        const snap = await get(ref(db, `centers/${centerId}/students`));
+        if (!snap.exists()) return;
+
+        const students = snap.val();
+        const now = new Date();
+        const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+        const currentYear = String(now.getFullYear());
+
+        for (const [studentId, student] of Object.entries(students)) {
+            const subjects = Array.isArray(student.subjects) ? student.subjects : Object.values(student.subjects || {});
+            let changed = false;
+
+            subjects.forEach(sub => {
+                if (sub.resumeRequest && !sub.resumeRequest.processed) {
+                    const { returnMonth, returnYear } = sub.resumeRequest;
+                    if (returnYear && returnMonth) {
+                      if (parseInt(returnYear) < parseInt(currentYear) || 
+                          (parseInt(returnYear) === parseInt(currentYear) && parseInt(returnMonth) <= parseInt(currentMonth))) {
+                          
+                          console.log(`🔄 Resuming student ${studentId}, subject ${sub.name}...`);
+                          sub.status = 'current';
+                          sub.resumed = true; // ✅ NEW: Mark as resumed, KEEPING dropMonth/dropYear for Drop Book history
+                          sub.resumedAt = new Date().toISOString();
+                          
+                          // DO NOT delete dropMonth, dropYear, dropReason, etc. 
+                          // They are needed for the Drop Book permanent log.
+                          
+                          delete sub.resumeRequest; // Clear the pending resume request
+                          changed = true;
+                        }
+                    }
+                }
+            });
+
+            if (changed) {
+                student.subjects = subjects;
+                student.updatedAt = new Date().toISOString();
+                await update(ref(db, `centers/${centerId}/students/${studentId}`), student);
+            }
+        }
+    } catch (err) {
+        console.error("Error processing resume requests:", err);
+    }
 }
 
 // ✅ Permission Logic Function

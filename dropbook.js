@@ -32,7 +32,7 @@ onAuthStateChanged(auth, async (user) => {
             document.getElementById('mainContent')?.classList.remove('hidden');
             initApp();
         } else {
-            document.getElementById('accessDenied')?.remove('hidden');
+            document.getElementById('accessDenied')?.classList.remove('hidden');
             document.getElementById('mainContent')?.classList.add('hidden');
             document.getElementById('page-loader')?.classList.add('hidden');
             document.getElementById('backToDashboardBtn')?.addEventListener('click', () => window.location.href = 'dashboard.html');
@@ -59,6 +59,14 @@ function initApp() {
     const modal = document.getElementById('detailModal');
     const callStatusBtn = document.getElementById('mCallStatusBtn');
 
+    // ✅ NEW: Resume UI Elements
+    const resumeBtn = document.getElementById('resumeBtn');
+    const resumeSection = document.getElementById('resumeSection');
+    const resumeMonthSel = document.getElementById('mResumeMonth');
+    const resumeYearSel = document.getElementById('mResumeYear');
+    const cancelResumeBtn = document.getElementById('cancelResumeBtn');
+    const cancelResumeRequestBtn = document.getElementById('cancelResumeRequestBtn');
+
     document.getElementById('logoutBtn')?.addEventListener('click', logout);
 
     // Populate Filters
@@ -72,7 +80,19 @@ function initApp() {
         const monthVal = String(i + 1).padStart(2, '0');
         filterMonth.innerHTML += `<option value="${monthVal}">${m}</option>`;
         rangeStartMonthSel.innerHTML += `<option value="${monthVal}">${m}</option>`;
+        
+        // ✅ NEW: Populate Resume Month Select
+        if (resumeMonthSel) {
+            resumeMonthSel.innerHTML += `<option value="${monthVal}">${m}</option>`;
+        }
     });
+
+    // ✅ NEW: Populate Resume Year Select
+    if (resumeYearSel) {
+        for (let y = currentYear; y <= currentYear + 2; y++) {
+            resumeYearSel.innerHTML += `<option value="${y}">${y}</option>`;
+        }
+    }
 
     const now = new Date();
     filterMonth.value = String(now.getMonth() + 1).padStart(2, '0');
@@ -237,19 +257,23 @@ function initApp() {
         return false;
     }
 
-    // 🆕 UPDATED: Robustly handles Direct Drops, Pending Requests, and Cancelled Requests
+    // 🆕 UPDATED: Robustly handles Direct Drops, Pending Requests, Cancelled Requests, and Resume Requests
+    // 🆕 UPDATED: Robustly handles Direct Drops, Pending Requests, Cancelled Requests, and Resume Requests
     function getFilteredEntries() {
         const mStatus = filterStatus.value;
         const entries = [];
 
+        // ✅ FIX: Added the missing outer loop for allStudentsData
         allStudentsData.forEach(student => {
             const subjects = Array.isArray(student.subjects) ? student.subjects : Object.values(student.subjects || {});
+            
             subjects.forEach((sub, index) => {
-                let targetMonth, targetYear, reason, type, isPending = false;
+                let targetMonth, targetYear, reason, type, isPending = false, isResume = false, isResumed = false;
                 
-                // Check if there is an ACTIVE (non-cancelled) pending request
                 const hasActivePendingRequest = sub.pendingRequest && !sub.pendingRequest.cancelled && sub.pendingRequest.type;
                 const isDirectDropPause = sub.status === 'drop' || sub.status === 'pause';
+                const hasActiveResume = sub.resumeRequest && !sub.resumeRequest.processed && (sub.status === 'drop' || sub.status === 'pause');
+                const isHistoricallyResumed = sub.resumed === true; // ✅ NEW: Check for permanent resume history
 
                 if (hasActivePendingRequest) {
                     isPending = true;
@@ -263,15 +287,28 @@ function initApp() {
                         targetYear = sub.pendingRequest.pauseFromYear;
                     }
                 } 
+                else if (hasActiveResume) {
+                    isResume = true;
+                    type = sub.status; 
+                    reason = sub.status === 'drop' ? (sub.dropReason || 'Resume requested') : (sub.pauseReason || 'Resume requested');
+                    targetMonth = sub.status === 'drop' ? sub.dropMonth : sub.pauseFromMonth;
+                    targetYear = sub.status === 'drop' ? sub.dropYear : sub.pauseFromYear;
+                }
                 else if (isDirectDropPause) {
-                    // 🆕 Handles direct drops/pauses changed manually in Student Form
                     type = sub.status;
                     reason = sub.status === 'drop' ? sub.dropReason : sub.pauseReason;
                     targetMonth = sub.status === 'drop' ? sub.dropMonth : sub.pauseFromMonth;
                     targetYear = sub.status === 'drop' ? sub.dropYear : sub.pauseFromYear;
                 } 
+                else if (isHistoricallyResumed) {
+                    // ✅ NEW: Handle historically resumed students (Keep them in the log!)
+                    isResumed = true;
+                    type = sub.dropMonth ? 'drop' : 'pause'; // Infer original type from existing data
+                    reason = type === 'drop' ? (sub.dropReason || 'Resumed') : (sub.pauseReason || 'Resumed');
+                    targetMonth = type === 'drop' ? sub.dropMonth : sub.pauseFromMonth;
+                    targetYear = type === 'drop' ? sub.dropYear : sub.pauseFromYear;
+                }
                 else if (sub.pendingRequest && sub.pendingRequest.cancelled) {
-                    // Handles requests that were cancelled but status hasn't changed yet
                     isPending = true;
                     type = sub.pendingRequest.type || 'drop'; 
                     reason = sub.pendingRequest.reason || 'Cancelled';
@@ -308,9 +345,8 @@ function initApp() {
                     }
                 }
 
-                // 🆕 Only mark as cancelled if it's NOT already a direct drop/pause
                 let isCancelled = false;
-                if (sub.pendingRequest && sub.pendingRequest.cancelled && !isDirectDropPause) {
+                if (sub.pendingRequest && sub.pendingRequest.cancelled && !isDirectDropPause && !isResumed) {
                     isCancelled = true;
                 }
 
@@ -321,6 +357,8 @@ function initApp() {
                     subject: sub, 
                     isPending,
                     isCancelled, 
+                    isResume,
+                    isResumed, // ✅ NEW
                     targetMonth,
                     targetYear,
                     type,
@@ -351,7 +389,7 @@ function initApp() {
         }
 
         entries.forEach((entry, idx) => {
-            const { student, subject, isPending, type, isCancelled } = entry; 
+            const { student, subject, isPending, type, isCancelled, isResume, isResumed } = entry; 
             const sub = entry.subject;
             const tMonth = entry.targetMonth;
             const tYear = entry.targetYear;
@@ -365,21 +403,29 @@ function initApp() {
             
             const reason = entry.reason || '-';
             const isConfirmed = sub.dropBook?.confirmed;
-            const pendingBadge = (isPending && !isConfirmed && !isCancelled) ? '<span class="status-badge-pending">⏳ Pending</span>' : '';
+            const pendingBadge = (isPending && !isConfirmed && !isCancelled && !isResumed) ? '<span class="status-badge-pending">⏳ Pending</span>' : '';
             
-            // 🆕 UPDATED ACTION BUTTON LOGIC (Now handles Direct Drops/Pauses)
             let actionBtn = '';
-            if (isCancelled) {
+            if (isResumed) {
+                // ✅ NEW: Resolved Resumed State
+                actionBtn = `<button class="confirm-row-btn" disabled style="padding: 0.3rem 0.6rem; font-size: 0.8rem; background:#dcfce7; color:#166534; border:1px solid #86efac;">✅ Resumed</button>`;
+            } else if (isCancelled) {
                 actionBtn = `
                     <div style="display:flex; gap:4px; flex-wrap:wrap;">
                         <button class="confirm-row-btn cancelled" disabled style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">❌ Cancelled</button>
                         <button class="confirm-row-btn reinstate-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" data-student-id="${student.id}" data-sub-index="${entry.subjectIndex}" data-action="reinstate">🔄 Reinstate</button>
                     </div>
                 `;
+            } else if (isResume) {
+                actionBtn = `
+                    <div style="display:flex; gap:4px; flex-wrap:wrap;">
+                        <button class="confirm-row-btn" disabled style="padding: 0.3rem 0.6rem; font-size: 0.8rem; background:#e8f5e9; color:#2e7d32; border:1px solid #a5d6a7;">🔄 Resume Pending</button>
+                        <button class="confirm-row-btn cancel-btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" data-student-id="${student.id}" data-sub-index="${entry.subjectIndex}" data-action="cancel-resume">❌ Cancel Resume</button>
+                    </div>
+                `;
             } else if (isConfirmed) {
                 actionBtn = `<button class="confirm-row-btn confirmed" disabled>✔️ Confirmed</button>`;
             } else {
-                // 🆕 Show "Cancel" button for pending requests OR direct drops/pauses
                 const isDirectDropPause = (sub.status === 'drop' || sub.status === 'pause') && !isPending;
                 const showCancelBtn = isPending || isDirectDropPause;
                 const cancelBtnText = isPending ? '❌ Cancel Request' : '❌ Cancel Drop/Pause';
@@ -393,11 +439,15 @@ function initApp() {
             }
 
             const tr = document.createElement('tr');
-            if (isCancelled) tr.classList.add('cancelled-row'); 
+            if (isCancelled) tr.classList.add('cancelled-row');
+            if (isResumed) tr.classList.add('resumed-row'); // ✅ NEW
+
+            const resumeBadge = isResume ? ' <span class="status-badge-resume">🔄 Resume Pending</span>' : '';
+            const resumedBadge = isResumed ? ' <span class="status-badge-resumed">✅ Resumed</span>' : ''; // ✅ NEW
 
             tr.innerHTML = `
                 <td>${idx + 1}</td>
-                <td>${student.nameCn || '-'}</td>
+                <td>${student.nameCn || '-'}${resumeBadge}${resumedBadge}</td>
                 <td>${student.nickname || '-'}</td>
                 <td>${dateStr} <span class="${statusClass}">${statusText}</span>${pendingBadge}</td>
                 <td>${student.grade || '-'}</td>
@@ -425,6 +475,8 @@ function initApp() {
 
             if (action === 'cancel') {
                 triggerCancelAction(studentId, subjectIndex);
+            } else if (action === 'cancel-resume') {
+                triggerCancelResumeAction(studentId, subjectIndex); // ✅ NEW
             } else if (action === 'reinstate') {
                 triggerReinstateAction(studentId, subjectIndex);
             } else {
@@ -465,7 +517,6 @@ function initApp() {
                     subjectsData[subjectIndex].pendingRequest.cancelledAt = new Date().toISOString();
                 } 
                 else if (isDirectDropPause) {
-                    // Revert direct drop/pause to 'current' and wipe data
                     subjectsData[subjectIndex].status = 'current';
                     delete subjectsData[subjectIndex].dropMonth;
                     delete subjectsData[subjectIndex].dropYear;
@@ -492,6 +543,37 @@ function initApp() {
         } catch (err) {
             console.error("Cancel error: ", err);
             alert('❌ Failed to cancel: ' + err.message);
+        }
+    }
+
+    // ✅ NEW: Cancel Resume Action
+    async function triggerCancelResumeAction(studentId, subjectIndex) {
+        if (!confirm('Are you sure you want to cancel this resume request? The student will remain dropped.')) return;
+
+        try {
+            const studentRef = ref(db, `centers/${centerId}/students/${studentId}`);
+            const snap = await get(studentRef);
+            if (!snap.exists()) throw new Error("Student not found");
+            
+            const studentData = snap.val();
+            let subjectsData = Array.isArray(studentData.subjects) ? studentData.subjects : Object.values(studentData.subjects || {});
+            
+            if (subjectsData[subjectIndex]) {
+                delete subjectsData[subjectIndex].resumeRequest;
+            }
+            
+            studentData.subjects = subjectsData;
+            studentData.updatedAt = new Date().toISOString();
+            await set(studentRef, studentData);
+            
+            const localStudent = allStudentsData.find(s => s.id === studentId);
+            if (localStudent) localStudent.subjects = subjectsData;
+            
+            renderTable();
+            alert('✅ Resume request cancelled.');
+        } catch (err) {
+            console.error("Cancel resume error: ", err);
+            alert('❌ Failed to cancel resume: ' + err.message);
         }
     }
 
@@ -599,10 +681,8 @@ function initApp() {
             confirmDropBtn.style.display = 'inline-block';
         }
 
-        // 🆕 UPDATED: Show/Hide Cancel OR Reinstate Request Button in Modal
         const cancelRequestBtn = document.getElementById('cancelRequestBtn');
         const reinstateRequestBtn = document.getElementById('reinstateRequestBtn');
-        
         const isDirectDropPause = (subject.status === 'drop' || subject.status === 'pause') && !isPending;
 
         if (isPending && !subject.pendingRequest.cancelled) {
@@ -619,6 +699,26 @@ function initApp() {
         } else {
             cancelRequestBtn.style.display = 'none';
             reinstateRequestBtn.style.display = 'none';
+        }
+
+        // ✅ UPDATED: Resume button visibility logic (Now includes 'pause')
+        const isDroppedOrPaused = subject.status === 'drop' || subject.status === 'pause';
+        const hasActiveResume = subject.resumeRequest && !subject.resumeRequest.processed;
+
+        if (isDroppedOrPaused && !hasActiveResume) {
+            if (resumeBtn) resumeBtn.style.display = 'inline-block';
+            if (cancelResumeRequestBtn) cancelResumeRequestBtn.style.display = 'none';
+            if (resumeSection) resumeSection.style.display = 'none';
+        } else if (isDroppedOrPaused && hasActiveResume) {
+            if (resumeBtn) resumeBtn.style.display = 'none';
+            if (cancelResumeRequestBtn) cancelResumeRequestBtn.style.display = 'inline-block';
+            if (resumeSection) resumeSection.style.display = 'block';
+            if (resumeMonthSel) resumeMonthSel.value = subject.resumeRequest.returnMonth || '';
+            if (resumeYearSel) resumeYearSel.value = subject.resumeRequest.returnYear || '';
+        } else {
+            if (resumeBtn) resumeBtn.style.display = 'none';
+            if (cancelResumeRequestBtn) cancelResumeRequestBtn.style.display = 'none';
+            if (resumeSection) resumeSection.style.display = 'none';
         }
 
         modal.classList.remove('hidden');
@@ -685,6 +785,24 @@ function initApp() {
             const sub = subjects[subjectIndex];
             const newReason = document.getElementById('mReason').value.trim();
             
+            // ✅ NEW: Handle Resume Request save
+            if (resumeSection && resumeSection.style.display !== 'none') {
+                const rMonth = resumeMonthSel ? resumeMonthSel.value : '';
+                const rYear = resumeYearSel ? resumeYearSel.value : '';
+                if (!rMonth || !rYear) {
+                    alert('⚠️ Please select a return month and year for resume.');
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = '💾 Save Changes';
+                    return;
+                }
+                sub.resumeRequest = {
+                    returnMonth: rMonth,
+                    returnYear: rYear,
+                    requestedAt: new Date().toISOString(),
+                    processed: false
+                };
+            }
+            
             if (isPending && sub.pendingRequest.type) {
                 sub.pendingRequest.reason = newReason;
             } else {
@@ -723,7 +841,6 @@ function initApp() {
         }
     });
 
-    // 🆕 UPDATED: Now handles both Pending Requests and Direct Drops/Pauses
     document.getElementById('cancelRequestBtn').addEventListener('click', async () => {
         if (!currentEditContext) return;
         const { studentId, subjectIndex } = currentEditContext;
@@ -763,7 +880,6 @@ function initApp() {
                     subjectsData[subjectIndex].pendingRequest.cancelledAt = new Date().toISOString();
                 } 
                 else if (isDirectDropPause) {
-                    // Revert direct drop/pause to 'current' and wipe data
                     subjectsData[subjectIndex].status = 'current';
                     delete subjectsData[subjectIndex].dropMonth;
                     delete subjectsData[subjectIndex].dropYear;
@@ -834,6 +950,63 @@ function initApp() {
         } finally {
             btn.disabled = false;
             btn.textContent = '🔄 Reinstate Request';
+        }
+    });
+
+    // ✅ NEW: Resume button event listeners
+    resumeBtn?.addEventListener('click', () => {
+        if (resumeSection) resumeSection.style.display = 'block';
+        if (resumeBtn) resumeBtn.style.display = 'none';
+        const now = new Date();
+        let nextM = now.getMonth() + 2;
+        let nextY = now.getFullYear();
+        if (nextM > 12) { nextM = 1; nextY++; }
+        if (resumeMonthSel) resumeMonthSel.value = String(nextM).padStart(2, '0');
+        if (resumeYearSel) resumeYearSel.value = nextY;
+    });
+
+    cancelResumeBtn?.addEventListener('click', () => {
+        if (resumeSection) resumeSection.style.display = 'none';
+        if (resumeBtn) resumeBtn.style.display = 'inline-block';
+        if (resumeMonthSel) resumeMonthSel.value = '';
+        if (resumeYearSel) resumeYearSel.value = '';
+    });
+
+    cancelResumeRequestBtn?.addEventListener('click', async () => {
+        if (!currentEditContext) return;
+        if (!confirm('Are you sure you want to cancel this resume request? The student will remain dropped.')) return;
+
+        const { studentId, subjectIndex } = currentEditContext;
+        const btn = cancelResumeRequestBtn;
+        btn.disabled = true;
+        btn.textContent = 'Cancelling...';
+
+        try {
+            const studentRef = ref(db, `centers/${centerId}/students/${studentId}`);
+            const snap = await get(studentRef);
+            if (!snap.exists()) throw new Error("Student not found");
+            const studentData = snap.val();
+            let subjects = Array.isArray(studentData.subjects) ? studentData.subjects : Object.values(studentData.subjects || {});
+            
+            if (subjects[subjectIndex]) {
+                delete subjects[subjectIndex].resumeRequest;
+            }
+            
+            studentData.subjects = subjects;
+            studentData.updatedAt = new Date().toISOString();
+            await set(studentRef, studentData);
+
+            const localStudent = allStudentsData.find(s => s.id === studentId);
+            if (localStudent) localStudent.subjects = subjects;
+            renderTable();
+            closeModal();
+            alert('✅ Resume request cancelled.');
+        } catch (err) {
+            console.error("Cancel resume error:", err);
+            alert('❌ Failed to cancel resume: ' + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '❌ Cancel Resume';
         }
     });
 
