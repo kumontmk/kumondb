@@ -190,6 +190,59 @@
         </div>
     </div>
 
+
+    <!-- =========================================
+     FLOATING ACTION BUTTON (FAB)
+     ========================================= -->
+        <div class="fab-container">
+        <div class="fab-menu hidden" id="fabMenu">
+            <button class="fab-menu-item" id="fabAddStudent">
+            <span class="fab-icon">👤</span>
+            <span>Add New Student</span>
+            </button>
+            <button class="fab-menu-item" id="fabSchedulePO">
+            <span class="fab-icon">📅</span>
+            <span>Schedule Parent Orientation</span>
+            </button>
+        </div>
+        <button class="fab-btn" id="fabBtn">
+            <span class="fab-icon-plus">+</span>
+        </button>
+        </div>
+
+    <!-- =========================================
+        SCHEDULE PO MODAL
+    ========================================= -->
+    <div id="schedulePOModal" class="modal-overlay hidden">
+    <div class="modal-content" style="max-width: 500px;">
+        <span class="close-modal" id="closeSchedulePOModal">&times;</span>
+        <h2 style="margin-bottom: 1.5rem; color: var(--primary-dark);">📅 Schedule Parent Orientation</h2>
+        
+        <div style="margin-bottom: 1rem;">
+        <label style="display:block; font-weight:600; margin-bottom:0.4rem; font-size:0.9rem;">Search Student</label>
+        <div style="position: relative;">
+            <input type="text" id="poStudentSearch" placeholder="Type name, pinyin, or student number..." 
+                style="width:100%; padding:0.6rem; border:1px solid #cbd5e1; border-radius:6px; font-size:0.95rem;">
+            <ul id="poStudentListDropdown" style="position:absolute; top:100%; left:0; right:0; background:white; border:1px solid #cbd5e1; border-radius:6px; max-height:200px; overflow-y:auto; z-index:10; margin-top:4px; list-style:none; padding:0; display:none; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></ul>
+        </div>
+        <div id="selectedPOStudentInfo" style="margin-top:0.5rem; padding:0.6rem; background:#e8f5e9; border-radius:6px; display:none; font-size:0.9rem; color:#2e7d32; font-weight:500;"></div>
+        <input type="hidden" id="selectedPOStudentId">
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+        <label style="display:block; font-weight:600; margin-bottom:0.4rem; font-size:0.9rem;">PO Date *</label>
+        <input type="date" id="poDateInput" required style="width:100%; padding:0.6rem; border:1px solid #cbd5e1; border-radius:6px; font-size:0.95rem;">
+        </div>
+
+        <div style="margin-bottom: 1.5rem;">
+        <label style="display:block; font-weight:600; margin-bottom:0.4rem; font-size:0.9rem;">Notes (Optional)</label>
+        <textarea id="poNotesInput" rows="3" placeholder="Add any notes about the orientation..." 
+                    style="width:100%; padding:0.6rem; border:1px solid #cbd5e1; border-radius:6px; font-size:0.95rem; resize:vertical;"></textarea>
+        </div>
+
+        <button id="saveSchedulePOBtn" class="save-note-btn" style="width: 100%; padding: 0.75rem; font-size: 1rem;">💾 Schedule PO</button>
+        </div>
+    </div>
     <script type="module" src="dashboard.js"></script>
 </body>
 </html>

@@ -98,7 +98,7 @@ function initApp() {
   let currentTimeclockEmpId = null;
   let initialLoadDone = false; 
   let currentEditingEmpId = null;
-  let yearlyResetChecked = false; // 🔽 NEW: Flag to ensure reset only runs once per session
+  let yearlyResetChecked = false;
 
   function openModal(id) {
     const el = document.getElementById(id);
@@ -242,8 +242,6 @@ function initApp() {
       if (!initialLoadDone) {
         initialLoadDone = true;
         updateIncompleteBadge();
-        
-        // 🔽 NEW: Trigger yearly leave reset check on first load
         if (!yearlyResetChecked) {
           yearlyResetChecked = true;
           performYearlyLeaveReset();
@@ -252,32 +250,24 @@ function initApp() {
     }, { onlyOnce: false });
   }
 
-  // 🔽 NEW: Automatic Yearly Leave Reset Function
   async function performYearlyLeaveReset() {
     const currentYear = new Date().getFullYear();
     const updates = {};
-    
     Object.entries(employees).forEach(([empId, emp]) => {
       const leave = emp.leaveEntitlement || {};
-      
       if (!leave.lastResetYear) {
-        // Safe Migration: If the field doesn't exist yet, just stamp the current year 
-        // so we don't accidentally wipe out their used credits for the current year.
         updates[`employees/${empId}/leaveEntitlement/lastResetYear`] = currentYear;
       } else if (currentYear > leave.lastResetYear) {
-        // 🎉 New year detected! Reset used credits to 0, but keep the "Entitled" limits intact.
         updates[`employees/${empId}/leaveEntitlement/annualUsed`] = 0;
         updates[`employees/${empId}/leaveEntitlement/sickUsed`] = 0;
         updates[`employees/${empId}/leaveEntitlement/timeOffUsed`] = 0;
         updates[`employees/${empId}/leaveEntitlement/lastResetYear`] = currentYear;
       }
     });
-    
-    // Apply all updates to Firebase in one batch
     if (Object.keys(updates).length > 0) {
       try {
         await update(ref(db), updates);
-        console.log(`✅ Yearly leave reset completed. Used credits set to 0 for the new year.`);
+        console.log(`✅ Yearly leave reset completed.`);
       } catch (err) {
         console.error('❌ Error during yearly leave reset:', err);
       }
@@ -290,9 +280,7 @@ function initApp() {
       const tbody = document.getElementById('verificationsTableBody');
       if (!tbody) return;
       tbody.innerHTML = '';
-      
       const pending = Object.entries(users).filter(([uid, u]) => !u.isVerified);
-      
       const vBadge = document.getElementById('verificationsBadge');
       if (vBadge) {
         if (pending.length > 0) {
@@ -302,12 +290,10 @@ function initApp() {
           vBadge.classList.add('hidden');
         }
       }
-      
       if (pending.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No pending verifications.</td></tr>';
         return;
       }
-      
       pending.forEach(([uid, u]) => {
         const row = document.createElement('tr');
         const userPositions = getEmpPositions(u).join(', ') || '-';
@@ -355,7 +341,7 @@ function initApp() {
   loadCentersForPermissions();
   setupTabs();
   seedMasterAdmin();
-  setupLeaveEntitlementListeners(); // Initialize leave listeners
+  setupLeaveEntitlementListeners();
 
   function renderTable(filter = '') {
     const lower = filter.toLowerCase();
@@ -366,11 +352,9 @@ function initApp() {
         positionsStr.includes(lower) ||
         e.email?.toLowerCase().includes(lower);
     });
-    
     tableBody.innerHTML = filtered.length === 0
       ? '<tr><td colspan="7" class="empty-state">No employees found</td></tr>'
       : '';
-      
     filtered.forEach(([id, e]) => {
       const isDisabled = e.isDisabled === true;
       const rowClass = isDisabled ? 'disabled-row' : '';
@@ -380,7 +364,6 @@ function initApp() {
       const toggleBtnText = isDisabled ? 'Enable' : 'Disable';
       const toggleBtnClass = isDisabled ? 'secondary' : 'danger';
       const positionsText = getEmpPositions(e).join(', ') || '-'; 
-      
       const row = document.createElement('tr');
       row.className = rowClass;
       row.innerHTML = `
@@ -444,9 +427,8 @@ function initApp() {
       const selectedDate = timeclockDateFilter?.value || null;
       loadTimeclock(id, selectedDate);
       
-      if (id) {
-          loadLeaveEntitlement(id);
-      }
+      if (id) loadLeaveEntitlement(id);
+      
       const perms = e.permissions || {};
       const centerPerms = perms.centers || {};
       const dashPerms = perms.dashboardCards || {};
@@ -457,11 +439,9 @@ function initApp() {
     } else {
       document.getElementById('empId').value = '';
       document.getElementById('empDate').value = new Date().toISOString().split('T')[0];
-
       document.getElementById('empAnnualLeave').value = '';
       document.getElementById('empSickLeave').value = '';
       document.getElementById('empTimeOff').value = '';
-      
       document.getElementById('annualEntitled').textContent = '0';
       document.getElementById('annualUsed').textContent = '0';
       document.getElementById('annualBalance').textContent = '0';
@@ -575,9 +555,7 @@ function initApp() {
     
     const positions = [];
     document.querySelectorAll('#empPositionsGroup input:checked').forEach(cb => positions.push(cb.value));
-    if (positions.length === 0) {
-      return alert('Please select at least one position.');
-    }
+    if (positions.length === 0) return alert('Please select at least one position.');
     const position = positions[0];
 
     const employmentDate = document.getElementById('empDate')?.value;
@@ -593,7 +571,6 @@ function initApp() {
     const dashboardCards = {};
     document.querySelectorAll('#dashboardPermissions input').forEach(cb => { dashboardCards[cb.value] = cb.checked; });
 
-    // Preserve existing "Used" credits so they don't reset to 0 on edit
     let existingLeave = {};
     if (empId && employees[empId]) {
         existingLeave = employees[empId].leaveEntitlement || {};
@@ -606,7 +583,7 @@ function initApp() {
         sickUsed: existingLeave.sickUsed || 0,
         timeOff: parseInt(document.getElementById('empTimeOff')?.value) || existingLeave.timeOff || 0,
         timeOffUsed: existingLeave.timeOffUsed || 0,
-        lastResetYear: existingLeave.lastResetYear || new Date().getFullYear() // 🔽 Auto-stamp current year for new employees
+        lastResetYear: existingLeave.lastResetYear || new Date().getFullYear()
     };
 
     const employeeData = {
@@ -620,13 +597,12 @@ function initApp() {
       terms,
       qrCode: currentQrData,
       permissions: { centers, dashboardCards },
-      leaveEntitlement: leaveEntitlement, // <-- CRITICAL FIX: This was missing
+      leaveEntitlement: leaveEntitlement,
       updatedAt: new Date().toISOString()
     };
 
     try {
       let saveId = empId;
-
       if (!empId) {
         saveBtn.disabled = true;
         saveBtn.textContent = 'Creating Account...';
@@ -634,55 +610,33 @@ function initApp() {
           const userCred = await createUserWithEmailAndPassword(secondaryAuth, email, initialPassword);
           const newUid = userCred.user.uid;
           await signOut(secondaryAuth); 
-
           await set(ref(db, `users/${newUid}`), {
-            email,
-            englishName,
-            chineseName,
-            nationality,
-            positions: positions,
-            position: position,
-            employmentDate,
-            terms,
-            isVerified: true,
-            mustChangePassword: true,
-            permissions: { centers, dashboardCards },
-            createdAt: new Date().toISOString()
+            email, englishName, chineseName, nationality, positions: positions, position: position,
+            employmentDate, terms, isVerified: true, mustChangePassword: true,
+            permissions: { centers, dashboardCards }, createdAt: new Date().toISOString()
           });
-
           saveId = newUid; 
           employeeData.authUid = newUid;
         } catch (authErr) {
           saveBtn.disabled = false;
           saveBtn.textContent = 'Save Employee';
-          if (authErr.code === 'auth/email-already-in-use') {
-            return alert('❌ This email is already registered in the system.');
-          }
+          if (authErr.code === 'auth/email-already-in-use') return alert('❌ This email is already registered.');
           throw authErr;
         }
       }
 
-      const empRef = ref(db, `employees/${saveId}`);
-      await set(empRef, employeeData);
+      await set(ref(db, `employees/${saveId}`), employeeData);
 
       if (empId) {
         const usersSnap = await get(ref(db, 'users'));
         const usersData = usersSnap.val();
         if (usersData) {
           if (usersData[empId]) {
-            await update(ref(db, `users/${empId}`), {
-              permissions: { centers, dashboardCards },
-              positions: positions,
-              position: position
-            });
+            await update(ref(db, `users/${empId}`), { permissions: { centers, dashboardCards }, positions: positions, position: position });
           } else {
             const matchingUserUid = Object.keys(usersData).find(uid => usersData[uid].email?.toLowerCase() === employeeData.email.toLowerCase());
             if (matchingUserUid) {
-              await update(ref(db, `users/${matchingUserUid}`), {
-                permissions: { centers, dashboardCards },
-                positions: positions,
-                position: position
-              });
+              await update(ref(db, `users/${matchingUserUid}`), { permissions: { centers, dashboardCards }, positions: positions, position: position });
             }
           }
         }
@@ -691,7 +645,7 @@ function initApp() {
       employees[saveId] = { ...employeeData, id: saveId };
       renderTable(searchInput?.value || '');
       closeModal('employeeModal');
-      alert(`✅ Employee ${empId ? 'updated' : 'added'} successfully!${!empId ? '\n\nThey can now log in with the default password. They will be prompted to change it on first login.' : ''}`);
+      alert(`✅ Employee ${empId ? 'updated' : 'added'} successfully!${!empId ? '\n\nDefault password: Kumon123' : ''}`);
     } catch (err) {
       console.error('Save error:', err);
       alert('❌ Failed to save employee: ' + err.message);
@@ -743,10 +697,7 @@ function initApp() {
           if (terms === 'Full-time') {
             const inTimeMins = timeToMinutes(log.time);
             const autoOutMins = Math.max(0, inTimeMins - 1);
-            fixedLogs.push({
-              type: 'out', time: minutesToTime(autoOutMins),
-              location: currentInLog.location, autoGenerated: true
-            });
+            fixedLogs.push({ type: 'out', time: minutesToTime(autoOutMins), location: currentInLog.location, autoGenerated: true });
             changed = true;
           }
         }
@@ -807,7 +758,6 @@ function initApp() {
       if (filterDate.length === 7) { 
         const startAtVal = filterDate;
         const endAtVal = filterDate + '\uf8ff'; 
-        
         fetchPromise = get(query(ref(db, 'timecards'), orderByKey(), startAt(startAtVal), endAt(endAtVal))).then(snap => {
           const allData = snap.val() || {};
           const filteredData = {};
@@ -821,10 +771,7 @@ function initApp() {
       } else { 
         fetchPromise = get(ref(db, `timecards/${filterDate}/${empId}`)).then(snap => {
           const data = snap.val();
-          if (data) {
-            return { [filterDate]: { [empId]: data } };
-          }
-          return {};
+          return data ? { [filterDate]: { [empId]: data } } : {};
         });
       }
     } else {
@@ -835,19 +782,20 @@ function initApp() {
       timeclockBody.innerHTML = '';
       const records = [];
       let maxCycles = 3;
+      
       Object.entries(all).forEach(([date, dayData]) => {
         if (dayData[empId]?.logs?.length) {
           const rawLogs = dayData[empId].logs;
           const { logs: fixedLogs } = autoFixLogs(rawLogs, employees[empId]?.terms || 'Full-time');
           const sortedLogs = [...fixedLogs].sort((a, b) => a.time.localeCompare(b.time));
           const rows = getLogsRows(sortedLogs);
-          if (rows.length > maxCycles) {
-            maxCycles = rows.length;
-          }
+          if (rows.length > maxCycles) maxCycles = rows.length;
+          
           let totalMinutes = 0;
           let hasValidCycle = false;
           let currentIn = null;
           let currentInLocation = null;
+          
           for (const log of sortedLogs) {
             if (log.type === 'in') {
               currentIn = timeToMinutes(log.time);
@@ -871,11 +819,13 @@ function initApp() {
           records.push({ date, rows, durationText });
         }
       });
+      
       records.sort((a, b) => b.date.localeCompare(a.date));
       if (records.length === 0) {
-        timeclockBody.innerHTML = `<tr><td colspan="${maxCycles * 2 + 3}" class="empty-state">No records found</td></tr>`;
+        timeclockBody.innerHTML = `<tr><td colspan="9" class="empty-state">No records found</td></tr>`;
         return;
       }
+      
       const table = timeclockBody.parentElement;
       let theadHtml = `<thead id="timeclockThead"><tr><th rowspan="2">Date</th>`;
       for (let i = 0; i < maxCycles; i++) {
@@ -888,31 +838,50 @@ function initApp() {
         theadHtml += `<th>In</th><th>Out</th>`;
       }
       theadHtml += `</tr></thead>`;
+      
       const existingThead = table.querySelector('thead');
-      if (existingThead) {
-        existingThead.outerHTML = theadHtml;
-      } else {
-        table.insertAdjacentHTML('afterbegin', theadHtml);
-      }
+      if (existingThead) existingThead.outerHTML = theadHtml;
+      else table.insertAdjacentHTML('afterbegin', theadHtml);
+      
       records.forEach(r => {
         const row = document.createElement('tr');
         row.dataset.editing = 'false';
         row.dataset.date = r.date;
         let rowHtml = `<td>${r.date}</td>`;
+        
         for (let i = 0; i < maxCycles; i++) {
-          const cycle = r.rows[i] || { inTime: '', inIndex: -1, outTime: '', outIndex: -1 };
+          const cycle = r.rows[i] || { inTime: '', inIndex: -1, outTime: '', outIndex: -1, inLocation: '' };
+          const inLoc = cycle.inLocation || '';
           rowHtml += `
-            <td><input type="time" value="${cycle.inTime}" disabled class="tc-input" data-idx="${cycle.inIndex}" data-type="in"></td>
-            <td><input type="time" value="${cycle.outTime}" disabled class="tc-input" data-idx="${cycle.outIndex}" data-type="out"></td>
+            <td>
+              <div style="display:flex; gap:4px; align-items:center;">
+                <input type="time" value="${cycle.inTime}" disabled class="tc-input" data-type="in" data-location="${inLoc}" style="flex:1;">
+                ${cycle.inTime ? `<button class="delete-log-btn" data-type="in" data-time="${cycle.inTime}" title="Delete">🗑️</button>` : ''}
+              </div>
+            </td>
+            <td>
+              <div style="display:flex; gap:4px; align-items:center;">
+                <input type="time" value="${cycle.outTime}" disabled class="tc-input" data-type="out" data-location="${inLoc}" style="flex:1;">
+                ${cycle.outTime ? `<button class="delete-log-btn" data-type="out" data-time="${cycle.outTime}" title="Delete">🗑️</button>` : ''}
+              </div>
+            </td>
           `;
         }
+        
         rowHtml += `
           <td style="font-weight: 600; color: #4682B4; text-align: center;">${r.durationText}</td>
-          <td><button class="edit-log-btn secondary" data-date="${r.date}">Edit</button></td>
+          <td>
+            <div style="display:flex; gap:4px; flex-direction:column;">
+              <button class="edit-log-btn secondary" data-date="${r.date}">Edit</button>
+              <button class="add-log-btn primary" data-date="${r.date}" style="font-size:0.85rem; padding:0.4rem 0.6rem;">+ Add</button>
+            </div>
+          </td>
         `;
         row.innerHTML = rowHtml;
         timeclockBody.appendChild(row);
       });
+
+      // Edit Button Logic
       document.querySelectorAll('.edit-log-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           e.preventDefault();
@@ -920,6 +889,7 @@ function initApp() {
           const isEditing = mainRow.dataset.editing === 'true';
           const date = btn.dataset.date;
           const inputs = mainRow.querySelectorAll('.tc-input');
+          
           if (!isEditing) {
             mainRow.dataset.editing = 'true';
             inputs.forEach(input => {
@@ -929,6 +899,7 @@ function initApp() {
             btn.textContent = 'Save';
             btn.classList.remove('secondary');
             btn.classList.add('primary');
+            
             const modalContent = document.querySelector('#employeeModal .modal-content');
             let dropdownContainer = modalContent?.querySelector('.center-selector-container');
             if (!dropdownContainer) {
@@ -936,92 +907,49 @@ function initApp() {
               dropdownContainer.className = 'center-selector-container';
               dropdownContainer.style.cssText = 'margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 8px; border: 1px solid #e2e8f0;';
               dropdownContainer.innerHTML = `
-                <label style="font-size: 0.9rem; font-weight: 600; color: #4682B4; display: block; margin-bottom: 0.5rem;">
-                  📍 Center for New Entries:
-                </label>
+                <label style="font-size: 0.9rem; font-weight: 600; color: #4682B4; display: block; margin-bottom: 0.5rem;">📍 Center for New Entries:</label>
                 <select id="newEntryCenter" style="width: 100%; max-width: 400px; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; background: white;">
                   <option value="auto">🔍 Auto-detect (from nearby logs)</option>
                   ${availableCenters.map(c => `<option value="${c.name}">${c.name}</option>`).join('')}
                 </select>
-                <small style="font-size: 0.8rem; color: #666; display: block; margin-top: 0.5rem;">
-                  Only applies to newly added time entries
-                </small>
+                <small style="font-size: 0.8rem; color: #666; display: block; margin-top: 0.5rem;">Only applies to newly added time entries</small>
               `;
-              if (modalContent) {
-                modalContent.appendChild(dropdownContainer);
-              }
+              if (modalContent) modalContent.appendChild(dropdownContainer);
             }
           } else {
+            // FIXED SAVE LOGIC: Rebuild array directly from DOM inputs to prevent index mismatch bugs
             btn.textContent = 'Saving...';
             btn.disabled = true;
             try {
-              const daySnap = await get(ref(db, `timecards/${date}/${empId}`));
-              let currentLogs = daySnap.val()?.logs || [];
-              if (!Array.isArray(currentLogs)) currentLogs = Object.values(currentLogs);
-              const { logs: logsToSaveBase } = autoFixLogs(currentLogs, employees[empId]?.terms || 'Full-time');
-              let logsToSave = [...logsToSaveBase];
-              const modifications = [];
+              const newLogs = [];
               inputs.forEach(input => {
-                modifications.push({
-                  idx: parseInt(input.dataset.idx, 10),
-                  type: input.dataset.type,
-                  newTime: input.value
-                });
-              });
-              modifications.sort((a, b) => b.idx - a.idx);
-              const centerSelect = document.getElementById('newEntryCenter');
-              const selectedCenter = centerSelect?.value || 'auto';
-              modifications.forEach(mod => {
-                if (mod.idx !== -1) {
-                  if (mod.newTime) {
-                    logsToSave[mod.idx].time = mod.newTime;
-                  } else {
-                    logsToSave.splice(mod.idx, 1);
-                  }
-                } else {
-                  if (mod.newTime) {
-                    let matchedLocation = 'Manual Edit';
-                    if (selectedCenter !== 'auto') {
-                      matchedLocation = selectedCenter;
-                    } else {
-                      const newTimeMins = timeToMinutes(mod.newTime);
-                      let closestLog = null;
-                      let minTimeDiff = Infinity;
-                      currentLogs.forEach(existingLog => {
-                        const existingTimeMins = timeToMinutes(existingLog.time);
-                        const timeDiff = Math.abs(existingTimeMins - newTimeMins);
-                        if (timeDiff < 120 && timeDiff < minTimeDiff) {
-                          minTimeDiff = timeDiff;
-                          closestLog = existingLog;
-                        }
-                      });
-                      if (closestLog && closestLog.location && closestLog.location !== 'Manual Edit') {
-                        matchedLocation = closestLog.location;
-                      }
-                    }
-                    logsToSave.push({
-                      type: mod.type,
-                      time: mod.newTime,
-                      location: matchedLocation
-                    });
-                  }
+                if (input.value) {
+                  newLogs.push({
+                    type: input.dataset.type,
+                    time: input.value,
+                    location: input.dataset.location || 'Manual Edit'
+                  });
                 }
               });
-              logsToSave.sort((a, b) => a.time.localeCompare(b.time));
-              await update(ref(db, `timecards/${date}/${empId}`), { logs: logsToSave });
+              
+              newLogs.sort((a, b) => a.time.localeCompare(b.time));
+              await update(ref(db, `timecards/${date}/${empId}`), { logs: newLogs });
+              
               mainRow.dataset.editing = 'false';
               inputs.forEach(input => {
                 input.disabled = true;
                 input.style.borderColor = '#cbd5e1';
               });
+              
               const dropdown = document.querySelector('#employeeModal .modal-content .center-selector-container');
               if (dropdown) dropdown.remove();
+              
               btn.textContent = 'Edit';
               btn.classList.remove('primary');
               btn.classList.add('secondary');
               btn.disabled = false;
-              const selectedDate = timeclockDateFilter?.value || null;
-              loadTimeclock(empId, selectedDate);
+              
+              loadTimeclock(empId, timeclockDateFilter?.value || null);
             } catch (err) {
               console.error("Error saving timeclock:", err);
               alert("Failed to save. Check console.");
@@ -1031,64 +959,221 @@ function initApp() {
           }
         });
       });
+
+      // Delete Button Logic
+      document.querySelectorAll('.delete-log-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const date = btn.closest('tr').dataset.date;
+          const type = btn.dataset.type;
+          const time = btn.dataset.time;
+          showDeleteConfirmation(date, empId, type, time);
+        });
+      });
+
+      // Add Button Logic
+      document.querySelectorAll('.add-log-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const date = btn.dataset.date;
+          showAddEntryModal(date, empId);
+        });
+      });
+
     }).catch(err => {
       console.error("Error loading timeclock:", err);
       timeclockBody.innerHTML = '<tr><td colspan="9" class="empty-state">Error loading records</td></tr>';
     });
   }
 
-  async function exportToExcel() {
-    if (typeof XLSX === 'undefined') {
-      return alert('❌ Excel library not loaded. Please check your internet connection or script tags.');
+  // ==========================================
+  // ADD / DELETE MODAL FUNCTIONS
+  // ==========================================
+  
+  function showAddEntryModal(date, empId) {
+    const modalHtml = `
+      <div id="addEntryModal" class="confirmation-modal" style="display: flex;">
+        <div class="modal-content">
+          <span class="close-btn" onclick="closeAddEntryModal()">&times;</span>
+          <h3>Add Time Entry</h3>
+          <p>Add a new clock-in or clock-out record for ${date}</p>
+          <div class="add-entry-form">
+            <div class="time-type-selector">
+              <label><input type="radio" name="entryType" value="in" checked> Clock In</label>
+              <label><input type="radio" name="entryType" value="out"> Clock Out</label>
+            </div>
+            <div class="form-group">
+              <label for="newEntryTime">Time</label>
+              <input type="time" id="newEntryTime" required>
+            </div>
+            <div class="form-group">
+              <label for="newEntryLocation">Location</label>
+              <select id="newEntryLocation">
+                <option value="auto">Auto-detect from nearby logs</option>
+                ${availableCenters.map(c => `<option value="${c.name}">${c.name}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="secondary" onclick="closeAddEntryModal()">Cancel</button>
+            <button class="primary" onclick="confirmAddEntry('${date}', '${empId}')">Add Entry</button>
+          </div>
+        </div>
+      </div>
+    `;
+    const existing = document.getElementById('addEntryModal');
+    if (existing) existing.remove();
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+  }
+
+  window.closeAddEntryModal = function() {
+    const modal = document.getElementById('addEntryModal');
+    if (modal) modal.remove();
+  };
+
+  window.confirmAddEntry = async function(date, empId) {
+    const entryType = document.querySelector('input[name="entryType"]:checked').value;
+    const newTime = document.getElementById('newEntryTime').value;
+    const locationSelect = document.getElementById('newEntryLocation').value;
+    
+    if (!newTime) { alert('Please enter a time'); return; }
+    
+    try {
+      const daySnap = await get(ref(db, `timecards/${date}/${empId}`));
+      let currentLogs = daySnap.val()?.logs || [];
+      if (!Array.isArray(currentLogs)) currentLogs = Object.values(currentLogs);
+      
+      let matchedLocation = 'Manual Edit';
+      if (locationSelect !== 'auto') {
+        matchedLocation = locationSelect;
+      } else {
+        const newTimeMins = timeToMinutes(newTime);
+        let closestLog = null;
+        let minTimeDiff = Infinity;
+        currentLogs.forEach(existingLog => {
+          const existingTimeMins = timeToMinutes(existingLog.time);
+          const timeDiff = Math.abs(existingTimeMins - newTimeMins);
+          if (timeDiff < 120 && timeDiff < minTimeDiff) {
+            minTimeDiff = timeDiff;
+            closestLog = existingLog;
+          }
+        });
+        if (closestLog && closestLog.location && closestLog.location !== 'Manual Edit') {
+          matchedLocation = closestLog.location;
+        }
+      }
+      
+      currentLogs.push({ type: entryType, time: newTime, location: matchedLocation });
+      currentLogs.sort((a, b) => a.time.localeCompare(b.time));
+      
+      await update(ref(db, `timecards/${date}/${empId}`), { logs: currentLogs });
+      closeAddEntryModal();
+      loadTimeclock(empId, timeclockDateFilter?.value || null);
+      alert('✅ Time entry added successfully');
+    } catch (err) {
+      console.error('Error adding entry:', err);
+      alert('❌ Failed to add entry');
     }
+  };
+
+  function showDeleteConfirmation(date, empId, type, time) {
+    const typeLabel = type === 'in' ? 'Clock In' : 'Clock Out';
+    const modalHtml = `
+      <div id="deleteConfirmationModal" class="confirmation-modal" style="display: flex;">
+        <div class="modal-content">
+          <span class="close-btn" onclick="closeDeleteConfirmation()">&times;</span>
+          <h3>Delete Time Entry</h3>
+          <p>Are you sure you want to delete this ${typeLabel} entry?</p>
+          <p style="font-weight: 600; color: #4682B4; font-size: 1.1rem;">${time}</p>
+          <p style="font-size: 0.9rem; color: #999;">Date: ${date}</p>
+          <div class="modal-actions">
+            <button class="secondary" onclick="closeDeleteConfirmation()">Cancel</button>
+            <button class="danger" onclick="confirmDeleteEntry('${date}', '${empId}', '${type}', '${time}')">Delete</button>
+          </div>
+        </div>
+      </div>
+    `;
+    const existing = document.getElementById('deleteConfirmationModal');
+    if (existing) existing.remove();
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+  }
+
+  window.closeDeleteConfirmation = function() {
+    const modal = document.getElementById('deleteConfirmationModal');
+    if (modal) modal.remove();
+  };
+
+  window.confirmDeleteEntry = async function(date, empId, type, time) {
+    try {
+      const daySnap = await get(ref(db, `timecards/${date}/${empId}`));
+      let currentLogs = daySnap.val()?.logs || [];
+      if (!Array.isArray(currentLogs)) currentLogs = Object.values(currentLogs);
+      
+      currentLogs = currentLogs.filter(log => !(log.type === type && log.time === time));
+      currentLogs.sort((a, b) => a.time.localeCompare(b.time));
+      
+      await update(ref(db, `timecards/${date}/${empId}`), { logs: currentLogs });
+      closeDeleteConfirmation();
+      loadTimeclock(empId, timeclockDateFilter?.value || null);
+      alert('✅ Time entry deleted successfully');
+    } catch (err) {
+      console.error('Error deleting entry:', err);
+      alert('❌ Failed to delete entry');
+    }
+  };
+
+  // ==========================================
+  // EXPORT & OTHER FUNCTIONS
+  // ==========================================
+
+  async function exportToExcel() {
+    if (typeof XLSX === 'undefined') return alert('❌ Excel library not loaded.');
     const selectedMonth = monthPicker?.value;
     if (!selectedMonth) return alert('️ Please select a month to export.');
     const [year, month] = selectedMonth.split('-');
     const originalText = exportBtn.textContent;
     exportBtn.textContent = 'Exporting...';
     exportBtn.disabled = true;
+    
     try {
       const timecardsSnap = await get(ref(db, 'timecards'));
       const timecards = timecardsSnap.val() || {};
       const employeesSnap = await get(ref(db, 'employees'));
       const employeesData = employeesSnap.val() || {};
       const empData = {};
+      
       Object.entries(timecards).forEach(([date, dayData]) => {
         if (!date.startsWith(selectedMonth)) return;
         Object.entries(dayData).forEach(([empId, empDayData]) => {
           if (!empData[empId]) {
             const emp = employeesData[empId] || {};
-            empData[empId] = {
-              name: emp.englishName || 'Unknown',
-              position: getEmpPositions(emp).join(', ') || 'Unknown',
-              totalMinutes: 0,
-              centers: {}
-            };
+            empData[empId] = { name: emp.englishName || 'Unknown', position: getEmpPositions(emp).join(', ') || 'Unknown', totalMinutes: 0, centers: {} };
           }
           const rawLogs = empDayData.logs || [];
           const { logs } = autoFixLogs(rawLogs, employeesData[empId]?.terms || 'Full-time');
           const centerLogs = {};
+          
           logs.forEach(log => {
             const abbr = getCenterAbbr(log.location);
             if (abbr === 'Unknown') return;
             if (!centerLogs[abbr]) centerLogs[abbr] = [];
             centerLogs[abbr].push(log);
           });
+          
           Object.entries(centerLogs).forEach(([abbr, cLogs]) => {
-            if (!empData[empId].centers[abbr]) {
-              empData[empId].centers[abbr] = { minutes: 0, records: [] };
-            }
+            if (!empData[empId].centers[abbr]) empData[empId].centers[abbr] = { minutes: 0, records: [] };
             cLogs.sort((a, b) => a.time.localeCompare(b.time));
             const rows = getLogsRows(cLogs);
             let dayTotalMinutes = 0;
             const cycles = [];
+            
             rows.forEach(row => {
               if (row.inTime && row.outTime) {
                 const inMins = timeToMinutes(row.inTime);
                 const outMins = timeToMinutes(row.outTime);
                 if (inMins !== null && outMins !== null && outMins >= inMins) {
-                  const diff = outMins - inMins;
-                  dayTotalMinutes += diff;
+                  dayTotalMinutes += (outMins - inMins);
                   cycles.push({ in: row.inTime, out: row.outTime });
                 }
               } else if (row.inTime && !row.outTime) {
@@ -1097,48 +1182,44 @@ function initApp() {
                 cycles.push({ in: '', out: row.outTime });
               }
             });
+            
             empData[empId].centers[abbr].minutes += dayTotalMinutes;
             empData[empId].totalMinutes += dayTotalMinutes;
-            if (cycles.length > 0) {
-              empData[empId].centers[abbr].records.push({ date, cycles });
-            }
+            if (cycles.length > 0) empData[empId].centers[abbr].records.push({ date, cycles });
           });
         });
       });
+      
       if (Object.keys(empData).length === 0) {
         alert('️ No records found for the selected month.');
         exportBtn.textContent = originalText;
         exportBtn.disabled = false;
         return;
       }
+      
       const wb = XLSX.utils.book_new();
       const summaryData = [['Name', 'Position', 'Total Hours', 'C', 'PT', 'MK', 'TS']];
       Object.values(empData).forEach(emp => {
         summaryData.push([
-          emp.name,
-          emp.position,
-          formatExcelTime(emp.totalMinutes),
-          formatExcelTime(emp.centers['C']?.minutes || 0),
-          formatExcelTime(emp.centers['PT']?.minutes || 0),
-          formatExcelTime(emp.centers['MK']?.minutes || 0),
-          formatExcelTime(emp.centers['TS']?.minutes || 0)
+          emp.name, emp.position, formatExcelTime(emp.totalMinutes),
+          formatExcelTime(emp.centers['C']?.minutes || 0), formatExcelTime(emp.centers['PT']?.minutes || 0),
+          formatExcelTime(emp.centers['MK']?.minutes || 0), formatExcelTime(emp.centers['TS']?.minutes || 0)
         ]);
       });
-      const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
-      XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
+      
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryData), 'Summary');
+      
       Object.entries(empData).forEach(([empId, emp]) => {
         Object.entries(emp.centers).forEach(([abbr, centerData]) => {
           if (centerData.records.length === 0) return;
           let maxCycles = 0;
-          centerData.records.forEach(rec => {
-            if (rec.cycles.length > maxCycles) maxCycles = rec.cycles.length;
-          });
+          centerData.records.forEach(rec => { if (rec.cycles.length > maxCycles) maxCycles = rec.cycles.length; });
+          
           const headers = ['Date'];
-          for (let i = 1; i <= maxCycles; i++) {
-            headers.push(`In${i}`, `Out${i}`);
-          }
+          for (let i = 1; i <= maxCycles; i++) headers.push(`In${i}`, `Out${i}`);
           headers.push('Overall Total');
           const sheetData = [headers];
+          
           centerData.records.forEach(rec => {
             const row = [rec.date];
             let dayMins = 0;
@@ -1149,9 +1230,7 @@ function initApp() {
                 if (cycle.in && cycle.out) {
                   const inM = timeToMinutes(cycle.in);
                   const outM = timeToMinutes(cycle.out);
-                  if (inM !== null && outM !== null && outM >= inM) {
-                    dayMins += (outM - inM);
-                  }
+                  if (inM !== null && outM !== null && outM >= inM) dayMins += (outM - inM);
                 }
               } else {
                 row.push('', '');
@@ -1160,11 +1239,12 @@ function initApp() {
             row.push(formatExcelTime(dayMins));
             sheetData.push(row);
           });
+          
           const sheet = XLSX.utils.aoa_to_sheet(sheetData);
-          const tabName = `${abbr}_${emp.name}`.substring(0, 31);
-          XLSX.utils.book_append_sheet(wb, sheet, tabName);
+          XLSX.utils.book_append_sheet(wb, sheet, `${abbr}_${emp.name}`.substring(0, 31));
         });
       });
+      
       XLSX.writeFile(wb, `Kumon_Timeclock_Records_${month}-${year}.xlsx`);
       alert('✅ Export successful!');
     } catch (err) {
@@ -1200,9 +1280,7 @@ function initApp() {
         document.querySelectorAll('[id^="main-tab-"]').forEach(c => c.classList.remove('active'));
         btn.classList.add('active');
         document.getElementById(`main-tab-${btn.dataset.mainTab}`)?.classList.add('active');
-        if (btn.dataset.mainTab === 'incomplete') {
-          loadIncompleteTimecards();
-        }
+        if (btn.dataset.mainTab === 'incomplete') loadIncompleteTimecards();
       });
     });
     document.querySelectorAll('#employeeModal .tab-btn').forEach(btn => {
@@ -1219,13 +1297,10 @@ function initApp() {
     if (Object.keys(employees).length === 0) return;
     try {
       const [timecardsSnap, verificationsSnap] = await Promise.all([
-        get(ref(db, 'timecards')),
-        get(ref(db, 'timecardVerifications'))
+        get(ref(db, 'timecards')), get(ref(db, 'timecardVerifications'))
       ]);
-      
       const timecards = timecardsSnap.val() || {};
       const verifications = verificationsSnap.val() || {};
-      
       let count = 0;
       const seenKeys = new Set();
 
@@ -1241,10 +1316,7 @@ function initApp() {
             if (log.type === 'in') {
               if (pendingIn) {
                 const key = `${empId}_${date}_${pendingIn.time}_out`;
-                if (!seenKeys.has(key)) {
-                  seenKeys.add(key);
-                  count++;
-                }
+                if (!seenKeys.has(key)) { seenKeys.add(key); count++; }
               }
               pendingIn = log;
             } else if (log.type === 'out') {
@@ -1253,26 +1325,17 @@ function initApp() {
               } else {
                 if (pendingIn) {
                   const key = `${empId}_${date}_${pendingIn.time}_out`;
-                  if (!seenKeys.has(key)) {
-                    seenKeys.add(key);
-                    count++;
-                  }
+                  if (!seenKeys.has(key)) { seenKeys.add(key); count++; }
                 }
                 const key = `${empId}_${date}_${log.time}_in`;
-                if (!seenKeys.has(key)) {
-                  seenKeys.add(key);
-                  count++;
-                }
+                if (!seenKeys.has(key)) { seenKeys.add(key); count++; }
                 pendingIn = null;
               }
             }
           }
           if (pendingIn) {
             const key = `${empId}_${date}_${pendingIn.time}_out`;
-            if (!seenKeys.has(key)) {
-              seenKeys.add(key);
-              count++;
-            }
+            if (!seenKeys.has(key)) { seenKeys.add(key); count++; }
           }
         });
       });
@@ -1309,176 +1372,137 @@ function initApp() {
   // ==========================================
 
   function loadLeaveEntitlement(empId) {
-      currentEditingEmpId = empId;
-      const emp = employees[empId];
-      if (!emp) return;
+    currentEditingEmpId = empId;
+    const emp = employees[empId];
+    if (!emp) return;
+    const terms = emp.terms || 'Full-time';
+    const leaveData = emp.leaveEntitlement || {};
+    const fullTimeSection = document.getElementById('fullTimeLeaveSection');
+    const partTimeSection = document.getElementById('partTimeLeaveSection');
+    
+    if (terms === 'Full-time') {
+      fullTimeSection.style.display = 'block';
+      partTimeSection.style.display = 'none';
+      const annualEntitled = leaveData.annual || 0;
+      const annualUsed = leaveData.annualUsed || 0;
+      document.getElementById('annualEntitled').textContent = annualEntitled;
+      document.getElementById('annualUsed').textContent = annualUsed;
+      document.getElementById('annualBalance').textContent = Math.max(0, annualEntitled - annualUsed);
       
-      const terms = emp.terms || 'Full-time';
-      const leaveData = emp.leaveEntitlement || {};
-      
-      const fullTimeSection = document.getElementById('fullTimeLeaveSection');
-      const partTimeSection = document.getElementById('partTimeLeaveSection');
-      
-      if (terms === 'Full-time') {
-          fullTimeSection.style.display = 'block';
-          partTimeSection.style.display = 'none';
-          
-          const annualEntitled = leaveData.annual || 0;
-          const annualUsed = leaveData.annualUsed || 0;
-          const annualBalance = Math.max(0, annualEntitled - annualUsed);
-          
-          document.getElementById('annualEntitled').textContent = annualEntitled;
-          document.getElementById('annualUsed').textContent = annualUsed;
-          document.getElementById('annualBalance').textContent = annualBalance;
-          
-          const sickEntitled = leaveData.sick || 0;
-          const sickUsed = leaveData.sickUsed || 0;
-          const sickBalance = Math.max(0, sickEntitled - sickUsed);
-          
-          document.getElementById('sickEntitled').textContent = sickEntitled;
-          document.getElementById('sickUsed').textContent = sickUsed;
-          document.getElementById('sickBalance').textContent = sickBalance;
-          
-      } else {
-          fullTimeSection.style.display = 'none';
-          partTimeSection.style.display = 'block';
-          
-          const partTimeUsed = leaveData.timeOffUsed || 0;
-          document.getElementById('partTimeUsed').textContent = partTimeUsed;
-      }
+      const sickEntitled = leaveData.sick || 0;
+      const sickUsed = leaveData.sickUsed || 0;
+      document.getElementById('sickEntitled').textContent = sickEntitled;
+      document.getElementById('sickUsed').textContent = sickUsed;
+      document.getElementById('sickBalance').textContent = Math.max(0, sickEntitled - sickUsed);
+    } else {
+      fullTimeSection.style.display = 'none';
+      partTimeSection.style.display = 'block';
+      document.getElementById('partTimeUsed').textContent = leaveData.timeOffUsed || 0;
+    }
   }
 
   async function saveEntitlement(leaveType, newEntitledValue) {
-      if (!currentEditingEmpId) return;
+    if (!currentEditingEmpId) return;
+    try {
+      const empRef = ref(db, `employees/${currentEditingEmpId}`);
+      const empSnap = await get(empRef);
+      const empData = empSnap.val();
+      if (!empData) throw new Error('Employee not found');
       
-      try {
-          const empRef = ref(db, `employees/${currentEditingEmpId}`);
-          const empSnap = await get(empRef);
-          const empData = empSnap.val();
-          
-          if (!empData) throw new Error('Employee not found');
-          
-          const currentLeave = empData.leaveEntitlement || {};
-          const updatedLeave = { 
-              ...currentLeave,
-              annualUsed: currentLeave.annualUsed || 0,
-              sickUsed: currentLeave.sickUsed || 0,
-              timeOffUsed: currentLeave.timeOffUsed || 0
-          };
-          
-          if (leaveType === 'annual') {
-              updatedLeave.annual = parseInt(newEntitledValue) || 0;
-          } else if (leaveType === 'sick') {
-              updatedLeave.sick = parseInt(newEntitledValue) || 0;
-          }
-          
-          await update(empRef, {
-              leaveEntitlement: updatedLeave,
-              updatedAt: new Date().toISOString()
-          });
-          
-          loadLeaveEntitlement(currentEditingEmpId);
-          alert(`✅ ${leaveType.charAt(0).toUpperCase() + leaveType.slice(1)} leave entitlement updated to ${newEntitledValue} days`);
-      } catch (err) {
-          console.error('Error saving entitlement:', err);
-          alert('❌ Failed to update entitlement');
-      }
+      const currentLeave = empData.leaveEntitlement || {};
+      const updatedLeave = { 
+        ...currentLeave,
+        annualUsed: currentLeave.annualUsed || 0,
+        sickUsed: currentLeave.sickUsed || 0,
+        timeOffUsed: currentLeave.timeOffUsed || 0
+      };
+      
+      if (leaveType === 'annual') updatedLeave.annual = parseInt(newEntitledValue) || 0;
+      else if (leaveType === 'sick') updatedLeave.sick = parseInt(newEntitledValue) || 0;
+      
+      await update(empRef, { leaveEntitlement: updatedLeave, updatedAt: new Date().toISOString() });
+      loadLeaveEntitlement(currentEditingEmpId);
+      alert(`✅ ${leaveType.charAt(0).toUpperCase() + leaveType.slice(1)} leave entitlement updated to ${newEntitledValue} days`);
+    } catch (err) {
+      console.error('Error saving entitlement:', err);
+      alert('❌ Failed to update entitlement');
+    }
   }
 
   function showEditEntitledModal(leaveType) {
-      const currentValue = leaveType === 'annual' 
-          ? document.getElementById('annualEntitled').textContent 
-          : document.getElementById('sickEntitled').textContent;
-      
-      const modalHtml = `
-          <div id="editEntitledModal" class="modal edit-entitled-modal" style="display: flex;">
-              <div class="modal-content">
-                  <span class="close-btn" onclick="closeEditEntitledModal()">&times;</span>
-                  <h3 style="color: #4682B4; margin-bottom: 1.5rem;">Edit ${leaveType.charAt(0).toUpperCase() + leaveType.slice(1)} Leave</h3>
-                  <div class="edit-entitled-form">
-                      <div class="form-group">
-                          <label for="newEntitledValue">New Entitlement (Days)</label>
-                          <input type="number" id="newEntitledValue" min="0" max="365" value="${currentValue}" 
-                                oninput="this.value = this.value.replace(/[^0-9]/g, '')">
-                      </div>
-                      <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-                          <button class="primary" onclick="confirmEditEntitled('${leaveType}')" style="flex: 1;">💾 Save</button>
-                          <button class="secondary" onclick="closeEditEntitledModal()" style="flex: 1;">Cancel</button>
-                      </div>
-                  </div>
-              </div>
+    const currentValue = leaveType === 'annual' ? document.getElementById('annualEntitled').textContent : document.getElementById('sickEntitled').textContent;
+    const modalHtml = `
+      <div id="editEntitledModal" class="modal edit-entitled-modal" style="display: flex;">
+        <div class="modal-content">
+          <span class="close-btn" onclick="closeEditEntitledModal()">&times;</span>
+          <h3 style="color: #4682B4; margin-bottom: 1.5rem;">Edit ${leaveType.charAt(0).toUpperCase() + leaveType.slice(1)} Leave</h3>
+          <div class="edit-entitled-form">
+            <div class="form-group">
+              <label for="newEntitledValue">New Entitlement (Days)</label>
+              <input type="number" id="newEntitledValue" min="0" max="365" value="${currentValue}" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+            </div>
+            <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+              <button class="primary" onclick="confirmEditEntitled('${leaveType}')" style="flex: 1;">💾 Save</button>
+              <button class="secondary" onclick="closeEditEntitledModal()" style="flex: 1;">Cancel</button>
+            </div>
           </div>
-      `;
-      
-      const existingModal = document.getElementById('editEntitledModal');
-      if (existingModal) existingModal.remove();
-      
-      document.body.insertAdjacentHTML('beforeend', modalHtml);
+        </div>
+      </div>
+    `;
+    const existingModal = document.getElementById('editEntitledModal');
+    if (existingModal) existingModal.remove();
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
   }
 
   window.closeEditEntitledModal = function() {
-      const modal = document.getElementById('editEntitledModal');
-      if (modal) modal.remove();
+    const modal = document.getElementById('editEntitledModal');
+    if (modal) modal.remove();
   };
 
   window.confirmEditEntitled = function(leaveType) {
-      const newValue = document.getElementById('newEntitledValue').value;
-      if (!newValue || newValue < 0) {
-          alert('Please enter a valid number');
-          return;
-      }
-      
-      if (leaveType === 'annual') {
-          document.getElementById('annualEntitled').textContent = newValue;
-          document.getElementById('empAnnualLeave').value = newValue;
-          const used = parseInt(document.getElementById('annualUsed').textContent) || 0;
-          document.getElementById('annualBalance').textContent = Math.max(0, parseInt(newValue) - used);
-      } else if (leaveType === 'sick') {
-          document.getElementById('sickEntitled').textContent = newValue;
-          document.getElementById('empSickLeave').value = newValue;
-          const used = parseInt(document.getElementById('sickUsed').textContent) || 0;
-          document.getElementById('sickBalance').textContent = Math.max(0, parseInt(newValue) - used);
-      }
-      
-      if (currentEditingEmpId) {
-          saveEntitlement(leaveType, newValue);
-      }
-      
-      closeEditEntitledModal();
+    const newValue = document.getElementById('newEntitledValue').value;
+    if (!newValue || newValue < 0) { alert('Please enter a valid number'); return; }
+    
+    if (leaveType === 'annual') {
+      document.getElementById('annualEntitled').textContent = newValue;
+      document.getElementById('empAnnualLeave').value = newValue;
+      const used = parseInt(document.getElementById('annualUsed').textContent) || 0;
+      document.getElementById('annualBalance').textContent = Math.max(0, parseInt(newValue) - used);
+    } else if (leaveType === 'sick') {
+      document.getElementById('sickEntitled').textContent = newValue;
+      document.getElementById('empSickLeave').value = newValue;
+      const used = parseInt(document.getElementById('sickUsed').textContent) || 0;
+      document.getElementById('sickBalance').textContent = Math.max(0, parseInt(newValue) - used);
+    }
+    
+    if (currentEditingEmpId) saveEntitlement(leaveType, newValue);
+    closeEditEntitledModal();
   };
 
   function setupLeaveEntitlementListeners() {
-      document.addEventListener('click', (e) => {
-          if (e.target.classList.contains('edit-entitled-btn')) {
-              const leaveType = e.target.dataset.leaveType;
-              showEditEntitledModal(leaveType);
-          }
-      });
+    document.addEventListener('click', (e) => {
+      if (e.target.classList.contains('edit-entitled-btn')) {
+        showEditEntitledModal(e.target.dataset.leaveType);
+      }
+    });
   }
 
   function toggleLeaveFields() {
-      const isFullTime = document.getElementById('empTerms')?.value === 'Full-time';
-      const fullTimeSection = document.getElementById('fullTimeLeaveSection');
-      const partTimeSection = document.getElementById('partTimeLeaveSection');
-      
-      if (fullTimeSection) fullTimeSection.style.display = isFullTime ? 'block' : 'none';
-      if (partTimeSection) partTimeSection.style.display = isFullTime ? 'none' : 'block';
+    const isFullTime = document.getElementById('empTerms')?.value === 'Full-time';
+    const fullTimeSection = document.getElementById('fullTimeLeaveSection');
+    const partTimeSection = document.getElementById('partTimeLeaveSection');
+    if (fullTimeSection) fullTimeSection.style.display = isFullTime ? 'block' : 'none';
+    if (partTimeSection) partTimeSection.style.display = isFullTime ? 'none' : 'block';
   }
 
   document.getElementById('empTerms')?.addEventListener('change', toggleLeaveFields);
 
   ['empAnnualLeave', 'empSickLeave', 'empTimeOff'].forEach(id => {
-      const input = document.getElementById(id);
-      if (input) {
-          input.addEventListener('input', (e) => {
-              e.target.value = e.target.value.replace(/[^0-9]/g, '');
-          });
-          input.addEventListener('keydown', (e) => {
-              if (['-', '+', '.', 'e', 'E'].includes(e.key)) {
-                  e.preventDefault();
-              }
-          });
-      }
+    const input = document.getElementById(id);
+    if (input) {
+      input.addEventListener('input', (e) => { e.target.value = e.target.value.replace(/[^0-9]/g, ''); });
+      input.addEventListener('keydown', (e) => { if (['-', '+', '.', 'e', 'E'].includes(e.key)) e.preventDefault(); });
+    }
   });
 
   async function loadIncompleteTimecards() {
@@ -1488,22 +1512,17 @@ function initApp() {
     
     try {
       const [timecardsSnap, verificationsSnap] = await Promise.all([
-        get(ref(db, 'timecards')),
-        get(ref(db, 'timecardVerifications'))
+        get(ref(db, 'timecards')), get(ref(db, 'timecardVerifications'))
       ]);
-      
       const timecards = timecardsSnap.val() || {};
       const verifications = verificationsSnap.val() || {};
-      
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       const cutoffDate = thirtyDaysAgo.toISOString().split('T')[0];
-      
       const incompleteRecords = [];
       
       Object.entries(timecards).forEach(([date, dayData]) => {
         if (date < cutoffDate) return;
-        
         Object.entries(dayData).forEach(([empId, empData]) => {
           const emp = employees[empId];
           if (!emp) return;
@@ -1515,17 +1534,7 @@ function initApp() {
             const log = sortedLogs[i];
             if (log.type === 'in') {
               if (currentIn !== null) {
-                incompleteRecords.push({ 
-                  empId, date, 
-                  name: emp.englishName || '', 
-                  chineseName: emp.chineseName || '', 
-                  position: getEmpPositions(emp).join(', ') || '', 
-                  terms: emp.terms || 'Full-time', 
-                  center: currentIn.location || '', 
-                  type: 'IN', 
-                  time: currentIn.time, 
-                  missingType: 'out' 
-                });
+                incompleteRecords.push({ empId, date, name: emp.englishName || '', chineseName: emp.chineseName || '', position: getEmpPositions(emp).join(', ') || '', terms: emp.terms || 'Full-time', center: currentIn.location || '', type: 'IN', time: currentIn.time, missingType: 'out' });
               }
               currentIn = log;
             } else if (log.type === 'out') {
@@ -1533,47 +1542,21 @@ function initApp() {
                 currentIn = null;
               } else {
                 if (currentIn !== null) {
-                  incompleteRecords.push({ 
-                    empId, date, 
-                    name: emp.englishName || '', 
-                    chineseName: emp.chineseName || '', 
-                    position: getEmpPositions(emp).join(', ') || '', 
-                    terms: emp.terms || 'Full-time', 
-                    center: currentIn.location || '', 
-                    type: 'IN', 
-                    time: currentIn.time, 
-                    missingType: 'out' 
-                  });
+                  incompleteRecords.push({ empId, date, name: emp.englishName || '', chineseName: emp.chineseName || '', position: getEmpPositions(emp).join(', ') || '', terms: emp.terms || 'Full-time', center: currentIn.location || '', type: 'IN', time: currentIn.time, missingType: 'out' });
                 }
                 currentIn = null;
               }
             }
           }
           if (currentIn !== null) {
-            incompleteRecords.push({ 
-              empId, date, 
-              name: emp.englishName || '', 
-              chineseName: emp.chineseName || '', 
-              position: getEmpPositions(emp).join(', ') || '', 
-              terms: emp.terms || 'Full-time', 
-              center: currentIn.location || '', 
-              type: 'IN', 
-              time: currentIn.time, 
-              missingType: 'out' 
-            });
+            incompleteRecords.push({ empId, date, name: emp.englishName || '', chineseName: emp.chineseName || '', position: getEmpPositions(emp).join(', ') || '', terms: emp.terms || 'Full-time', center: currentIn.location || '', type: 'IN', time: currentIn.time, missingType: 'out' });
           }
         });
       });
       
-      const verificationList = Object.entries(verifications)
-        .map(([id, v]) => ({ id, ...v }))
-        .filter(v => v.status !== 'confirmed');
-      
+      const verificationList = Object.entries(verifications).map(([id, v]) => ({ id, ...v })).filter(v => v.status !== 'confirmed');
       const verificationKeys = new Set(verificationList.map(v => `${v.empId}_${v.date}_${v.inTime}`));
-      
-      const filteredIncomplete = incompleteRecords.filter(rec => 
-        !verificationKeys.has(`${rec.empId}_${rec.date}_${rec.time}`)
-      );
+      const filteredIncomplete = incompleteRecords.filter(rec => !verificationKeys.has(`${rec.empId}_${rec.date}_${rec.time}`));
       
       const allRecords = [
         ...filteredIncomplete.map(r => ({ ...r, isVerification: false, status: 'Incomplete' })),
@@ -1616,46 +1599,24 @@ function initApp() {
           const inTime = rec.inTime || rec.proposedInTime || '-';
           const outTime = rec.outTime || rec.proposedOutTime || rec.actualOutTime || '-';
           const isMissingOut = rec.missingType === 'out';
-          
           if (rec.status === 'pending') {
             statusBadge = '<span class="status-badge" style="background:#fef3c7;color:#92400e;">Pending</span>';
-            timeCell = isMissingOut 
-              ? `IN: <strong>${inTime}</strong><br>Proposed OUT: <strong>${outTime}</strong>` 
-              : `Proposed IN: <strong>${inTime}</strong><br>OUT: <strong>${outTime}</strong>`;
-            actionCell = `
-              <button class="primary verify-btn" data-id="${rec.id}" data-action="confirm" style="padding:0.4rem 0.8rem;font-size:0.85rem;margin-right:0.25rem;">✅ Confirm</button>
-              <button class="danger verify-btn" data-id="${rec.id}" data-action="deny" style="padding:0.4rem 0.8rem;font-size:0.85rem;">❌ Deny</button>
-            `;
+            timeCell = isMissingOut ? `IN: <strong>${inTime}</strong><br>Proposed OUT: <strong>${outTime}</strong>` : `Proposed IN: <strong>${inTime}</strong><br>OUT: <strong>${outTime}</strong>`;
+            actionCell = `<button class="primary verify-btn" data-id="${rec.id}" data-action="confirm" style="padding:0.4rem 0.8rem;font-size:0.85rem;margin-right:0.25rem;">✅ Confirm</button><button class="danger verify-btn" data-id="${rec.id}" data-action="deny" style="padding:0.4rem 0.8rem;font-size:0.85rem;">❌ Deny</button>`;
           } else if (rec.status === 'denied') {
             statusBadge = '<span class="status-badge" style="background:#fee2e2;color:#991b1b;">Denied</span>';
             const inputVal = isMissingOut ? (rec.actualOutTime || '') : (rec.actualInTime || '');
-            timeCell = isMissingOut
-              ? `IN: <strong>${inTime}</strong><br>Manual OUT: <input type="time" class="manual-time-input" value="${inputVal}" style="width:130px;padding:0.4rem;border:1px solid #cbd5e1;border-radius:4px;">`
-              : `Manual IN: <input type="time" class="manual-time-input" value="${inputVal}" style="width:130px;padding:0.4rem;border:1px solid #cbd5e1;border-radius:4px;"><br>OUT: <strong>${outTime}</strong>`;
+            timeCell = isMissingOut ? `IN: <strong>${inTime}</strong><br>Manual OUT: <input type="time" class="manual-time-input" value="${inputVal}" style="width:130px;padding:0.4rem;border:1px solid #cbd5e1;border-radius:4px;">` : `Manual IN: <input type="time" class="manual-time-input" value="${inputVal}" style="width:130px;padding:0.4rem;border:1px solid #cbd5e1;border-radius:4px;"><br>OUT: <strong>${outTime}</strong>`;
             actionCell = `<button class="primary save-manual-btn" data-id="${rec.id}" style="padding:0.4rem 0.8rem;font-size:0.85rem;">💾 Save</button>`;
           }
         } else {
-          const typeLabel = rec.type === 'IN' 
-            ? '<span class="status-badge" style="background:#dbeafe;color:#1e40af;">IN only</span>' 
-            : '<span class="status-badge" style="background:#fef3c7;color:#92400e;">OUT only</span>';
+          const typeLabel = rec.type === 'IN' ? '<span class="status-badge" style="background:#dbeafe;color:#1e40af;">IN only</span>' : '<span class="status-badge" style="background:#fef3c7;color:#92400e;">OUT only</span>';
           statusBadge = '<span class="status-badge" style="background:#e2e8f0;color:#475569;">Incomplete</span>';
           timeCell = `${typeLabel} <small style="color:#666;">missing ${rec.missingType.toUpperCase()}</small><br><strong>${rec.time}</strong>`;
-          actionCell = `
-            <input type="time" class="incomplete-time-input" style="width:130px;padding:0.4rem;border:1px solid #cbd5e1;border-radius:4px;">
-            <button class="primary save-incomplete-btn" style="padding:0.4rem 0.8rem;font-size:0.85rem;margin-left:0.25rem;">💾 Save</button>
-          `;
+          actionCell = `<input type="time" class="incomplete-time-input" style="width:130px;padding:0.4rem;border:1px solid #cbd5e1;border-radius:4px;"><button class="primary save-incomplete-btn" style="padding:0.4rem 0.8rem;font-size:0.85rem;margin-left:0.25rem;">💾 Save</button>`;
         }
         
-        tr.innerHTML = `
-          <td>${name} ${chineseName ? '(' + chineseName + ')' : ''}</td>
-          <td>${position}</td>
-          <td>${terms}</td>
-          <td>${date}</td>
-          <td>${center}</td>
-          <td>${timeCell}</td>
-          <td>${statusBadge}</td>
-          <td>${actionCell}</td>
-        `;
+        tr.innerHTML = `<td>${name} ${chineseName ? '(' + chineseName + ')' : ''}</td><td>${position}</td><td>${terms}</td><td>${date}</td><td>${center}</td><td>${timeCell}</td><td>${statusBadge}</td><td>${actionCell}</td>`;
         tbody.appendChild(tr);
       });
       
@@ -1688,7 +1649,6 @@ function initApp() {
           }
         });
       });
-      
     } catch (err) {
       console.error('Error loading incomplete timecards:', err);
       tbody.innerHTML = '<tr><td colspan="8" class="empty-state">❌ Error loading records</td></tr>';
@@ -1702,13 +1662,10 @@ function initApp() {
     if (btn.classList.contains('verify-btn')) {
       const id = btn.dataset.id;
       const action = btn.dataset.action;
-      
       if (action === 'confirm') {
         if (!confirm('Confirm this proposed time?')) return;
         try {
-          await update(ref(db, `timecardVerifications/${id}`), {
-            status: 'confirmed', resolvedBy: auth.currentUser.uid, resolvedAt: new Date().toISOString()
-          });
+          await update(ref(db, `timecardVerifications/${id}`), { status: 'confirmed', resolvedBy: auth.currentUser.uid, resolvedAt: new Date().toISOString() });
           const vSnap = await get(ref(db, `timecardVerifications/${id}`));
           const v = vSnap.val();
           const daySnap = await get(ref(db, `timecards/${v.date}/${v.empId}`));
@@ -1723,9 +1680,7 @@ function initApp() {
       } else if (action === 'deny') {
         if (!confirm('Deny this proposed time? You will be able to enter the correct time manually.')) return;
         try {
-          await update(ref(db, `timecardVerifications/${id}`), {
-            status: 'denied', resolvedBy: auth.currentUser.uid, resolvedAt: new Date().toISOString()
-          });
+          await update(ref(db, `timecardVerifications/${id}`), { status: 'denied', resolvedBy: auth.currentUser.uid, resolvedAt: new Date().toISOString() });
           loadIncompleteTimecards();
           updateIncompleteBadge();
         } catch (err) { console.error(err); alert('Failed to deny.'); }
@@ -1749,9 +1704,7 @@ function initApp() {
         logs.push({ type: 'out', time: newTime, location: v.center || 'Manual Fix' });
         logs.sort((a, b) => a.time.localeCompare(b.time));
         await update(ref(db, `timecards/${v.date}/${v.empId}`), { logs });
-        await update(ref(db, `timecardVerifications/${id}`), {
-          status: 'confirmed', actualOutTime: newTime, resolvedBy: auth.currentUser.uid, resolvedAt: new Date().toISOString()
-        });
+        await update(ref(db, `timecardVerifications/${id}`), { status: 'confirmed', actualOutTime: newTime, resolvedBy: auth.currentUser.uid, resolvedAt: new Date().toISOString() });
         loadIncompleteTimecards();
         updateIncompleteBadge();
       } catch (err) {

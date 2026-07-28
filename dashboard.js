@@ -68,6 +68,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 6. Initialize PO Calendar and Hide Loader
   try {
     await initPOCalendar();
+    initFAB();
+    setupSchedulePOModalListeners();
   } catch (err) {
     console.error("Error initializing dashboard:", err);
   } finally {
@@ -77,6 +79,235 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   console.log('Dashboard loaded successfully for user:', auth.currentUser?.email);
 });
+
+// ============================================
+// FAB & SCHEDULE PO LOGIC
+// ============================================
+let allStudentsForPO = []; // Cache for students without PO
+
+function initFAB() {
+    const fabBtn = document.getElementById('fabBtn');
+    const fabMenu = document.getElementById('fabMenu');
+    const fabAddStudent = document.getElementById('fabAddStudent');
+    const fabSchedulePO = document.getElementById('fabSchedulePO');
+
+    if (!fabBtn || !fabMenu) return;
+
+    // Toggle FAB menu
+    fabBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        fabBtn.classList.toggle('active');
+        fabMenu.classList.toggle('hidden');
+    });
+
+    // Close menu when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.fab-container')) {
+            fabBtn.classList.remove('active');
+            fabMenu.classList.add('hidden');
+        }
+    });
+
+    // Action 1: Add New Student
+    fabAddStudent.addEventListener('click', () => {
+        window.location.href = 'student-form.html'; // Navigates to new student form
+    });
+
+    // Action 2: Schedule PO
+    fabSchedulePO.addEventListener('click', () => {
+        openSchedulePOModal();
+        fabBtn.classList.remove('active');
+        fabMenu.classList.add('hidden');
+    });
+}
+
+function setupSchedulePOModalListeners() {
+    const modal = document.getElementById('schedulePOModal');
+    const closeBtn = document.getElementById('closeSchedulePOModal');
+    
+    if (closeBtn) closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
+    if (modal) modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.classList.add('hidden');
+    });
+}
+
+async function openSchedulePOModal() {
+    const modal = document.getElementById('schedulePOModal');
+    const searchInput = document.getElementById('poStudentSearch');
+    const dropdown = document.getElementById('poStudentListDropdown');
+    const selectedInfo = document.getElementById('selectedPOStudentInfo');
+    const hiddenId = document.getElementById('selectedPOStudentId');
+    const dateInput = document.getElementById('poDateInput');
+    const notesInput = document.getElementById('poNotesInput');
+    const saveBtn = document.getElementById('saveSchedulePOBtn');
+
+    // Reset form
+    searchInput.value = '';
+    dropdown.innerHTML = '';
+    dropdown.style.display = 'none';
+    selectedInfo.style.display = 'none';
+    selectedInfo.textContent = '';
+    hiddenId.value = '';
+    dateInput.value = '';
+    notesInput.value = '';
+    saveBtn.disabled = false;
+    saveBtn.textContent = '💾 Schedule PO';
+
+    // Fetch students without PO
+    await fetchStudentsWithoutPO();
+
+    modal.classList.remove('hidden');
+
+    // Search logic
+    searchInput.oninput = () => {
+        const term = searchInput.value.toLowerCase().trim();
+        if (!term) {
+            dropdown.style.display = 'none';
+            return;
+        }
+
+        const matches = allStudentsForPO.filter(s => 
+            (s.namePinyin || '').toLowerCase().includes(term) ||
+            (s.nameCn || '').toLowerCase().includes(term) ||
+            (s.studentNumber || '').toLowerCase().includes(term)
+        );
+
+        dropdown.innerHTML = '';
+        if (matches.length === 0) {
+            dropdown.innerHTML = '<li style="padding:0.75rem; color:#999; text-align:center;">No students found</li>';
+        } else {
+            matches.slice(0, 20).forEach(s => {
+                const li = document.createElement('li');
+                li.style.padding = '0.75rem';
+                li.style.cursor = 'pointer';
+                li.style.borderBottom = '1px solid #f1f5f9';
+                li.innerHTML = `
+                    <div style="font-weight:600; color:var(--text);">${s.nameCn || 'N/A'} <span style="color:var(--text-light); font-weight:400;">(${s.namePinyin || ''})</span></div>
+                    <div style="font-size:0.8rem; color:var(--text-light);">Grade: ${s.grade || '-'} | No: ${s.studentNumber || '-'}</div>
+                `;
+                li.onclick = () => {
+                    hiddenId.value = s.id;
+                    searchInput.value = `${s.nameCn} (${s.namePinyin})`;
+                    selectedInfo.textContent = `✅ Selected: ${s.nameCn} (${s.namePinyin})`;
+                    selectedInfo.style.display = 'block';
+                    dropdown.style.display = 'none';
+                };
+                li.onmouseover = () => li.style.background = '#f8fafc';
+                li.onmouseout = () => li.style.background = 'white';
+                dropdown.appendChild(li);
+            });
+        }
+        dropdown.style.display = 'block';
+    };
+
+    // Hide dropdown on blur
+    searchInput.onblur = () => {
+        setTimeout(() => { dropdown.style.display = 'none'; }, 200);
+    };
+
+    // Save logic
+    saveBtn.onclick = async () => {
+        const studentId = hiddenId.value;
+        const poDate = dateInput.value;
+        const poNote = notesInput.value.trim();
+
+        if (!studentId) return alert('⚠️ Please select a student.');
+        if (!poDate) return alert('⚠️ Please select a PO date.');
+
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+
+        try {
+            // 1. Update Firebase
+            await update(ref(db, `centers/${centerId}/students/${studentId}`), {
+                parentOrientation: 'Yes',
+                poDate: poDate,
+                poNote: poNote,
+                updatedAt: new Date().toISOString()
+            });
+
+            // 2. Update local poDataMap to reflect immediately on calendar without full reload
+            const studentSnap = await get(ref(db, `centers/${centerId}/students/${studentId}`));
+            const s = studentSnap.val();
+            
+            if (!poDataMap[poDate]) poDataMap[poDate] = [];
+            
+            const subjectsArray = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
+            const activeSubjects = subjectsArray
+                .filter(sub => sub.status !== 'drop' && sub.status !== 'pause')
+                .map(sub => ({ 
+                    name: sub.name, 
+                    startLevel: sub.startLevel || '-', 
+                    startWS: sub.startWS || '-',
+                    currentLevel: sub.currentLevel || '-' 
+                }));
+
+            poDataMap[poDate].push({
+                id: studentId,
+                nameCn: s.nameCn || '',
+                namePinyin: s.namePinyin || '',
+                nickname: s.nickname || '',
+                grade: s.grade || '-',
+                school: s.school || '-',
+                subjects: activeSubjects,
+                diagnosticTests: s.diagnosticTests || [],
+                poNote: poNote
+            });
+
+            // 3. Re-render calendar
+            renderDualCalendar();
+            
+            // 4. Close modal & notify
+            modal.classList.add('hidden');
+            alert('✅ Parent Orientation scheduled successfully!');
+
+        } catch (err) {
+            console.error('Error scheduling PO:', err);
+            alert('❌ Failed to schedule PO. Please try again.');
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = '💾 Schedule PO';
+        }
+    };
+}
+
+async function fetchStudentsWithoutPO() {
+    try {
+        const snap = await get(ref(db, `centers/${centerId}/students`));
+        if (!snap.exists()) {
+            allStudentsForPO = [];
+            return;
+        }
+        
+        allStudentsForPO = [];
+        snap.forEach(child => {
+            const val = child.val();
+            // Filter students who DO NOT have a scheduled PO date yet
+            if (!val.poDate) {
+                allStudentsForPO.push({
+                    id: child.key,
+                    nameCn: val.nameCn || '',
+                    namePinyin: val.namePinyin || '',
+                    grade: val.grade || '',
+                    studentNumber: val.studentNumber || ''
+                });
+            }
+        });
+
+        // Sort by name
+        allStudentsForPO.sort((a, b) => {
+            const nameA = (a.namePinyin || a.nameCn || '').toLowerCase();
+            const nameB = (b.namePinyin || b.nameCn || '').toLowerCase();
+            if (nameA < nameB) return -1;
+            if (nameA > nameB) return 1;
+            return 0;
+        });
+
+    } catch (err) {
+        console.error('Error fetching students for PO:', err);
+        allStudentsForPO = [];
+    }
+}
 
 // ✅ NEW: Function to fetch and display the Center Name
 async function loadCenterName() {

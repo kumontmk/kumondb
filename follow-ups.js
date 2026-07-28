@@ -11,12 +11,12 @@ onAuthStateChanged(auth, async (user) => {
     try {
         const userSnap = await get(ref(db, `users/${user.uid}`));
         if (!userSnap.exists()) { window.location.href = 'index.html'; return; }
-
+        
         const userData = userSnap.val();
         const isAdmin = user.email?.toLowerCase() === 'kumonchamps@gmail.com';
         const dashPerms = userData.permissions?.dashboardCards || {};
         const hasAccess = isAdmin || dashPerms[REQUIRED_PERMISSION] === true;
-
+        
         if (hasAccess) {
             document.getElementById('accessDenied')?.classList.add('hidden');
             document.getElementById('mainContent')?.classList.remove('hidden');
@@ -42,7 +42,7 @@ function initializeFollowUps() {
     const centerId = sessionStorage.getItem('selectedCenter');
     const searchInput = document.getElementById('searchInput');
     const refreshBtn = document.getElementById('refreshBtn');
-
+    
     // Tab switching
     const tabButtons = document.querySelectorAll('.tab-btn');
     const tabContents = document.querySelectorAll('.tab-content');
@@ -96,7 +96,7 @@ function initializeFollowUps() {
         let doneCount = 0;
         const doneSubjects = [];
         const missingSubjects = [];
-
+        
         subjects.forEach(sub => {
             const subName = (sub.name || '').toLowerCase();
             const hasDT = dts.some(dt => {
@@ -131,19 +131,23 @@ function initializeFollowUps() {
     }
 
     // ==========================================
-    // ✅ PAUSE FOLLOW-UP INFO (No date filtering)
+    // ✅ PAUSE & RESUME FOLLOW-UP INFO
     // ==========================================
     function getPauseFollowUpInfo(sub) {
-        if (sub.status !== 'pause') return null;
+        const isActivePause = sub.status === 'pause';
+        // ✅ UNIFIED: Check for the new resumeRequest object
+        const hasActiveResume = sub.resumeRequest && !sub.resumeRequest.processed && (sub.status === 'drop' || sub.status === 'pause');
+        
+        // Show in follow-ups if it's an active pause, OR if it has an active resume request
+        if (!isActivePause && !hasActiveResume) return null;
 
         const toMonth = parseInt(sub.pauseToMonth);
         const toYear = parseInt(sub.pauseToYear);
         const fromMonth = parseInt(sub.pauseFromMonth || '01');
         const fromYear = parseInt(sub.pauseFromYear || toYear);
-
+        
         let pauseEnd = null;
         let isOverdue = false;
-
         if (toMonth && toYear) {
             pauseEnd = new Date(toYear, toMonth, 0); 
             pauseEnd.setHours(23, 59, 59, 999);
@@ -152,14 +156,31 @@ function initializeFollowUps() {
             isOverdue = today > pauseEnd;
         }
 
+        // ✅ Check for resumeRequest (The unified "Resume" data structure)
+        let hasResumeRequest = false;
+        let resumeMonth = '';
+        let resumeYear = '';
+        
+        if (hasActiveResume) {
+            hasResumeRequest = true;
+            resumeMonth = sub.resumeRequest.returnMonth;
+            resumeYear = sub.resumeRequest.returnYear;
+        } 
+        // Fallback for legacy pendingReturn data
+        else if (sub.pendingReturn) {
+            hasResumeRequest = true;
+            resumeMonth = sub.pendingReturn.month;
+            resumeYear = sub.pendingReturn.year;
+        }
+
         return {
             pauseFrom: `${MONTH_SHORT[fromMonth - 1]} ${fromYear}`,
             pauseTo: toMonth ? `${MONTH_SHORT[toMonth - 1]} ${toYear}` : 'Open',
             pauseEnd,
             isOverdue,
-            hasPendingReturn: !!sub.pendingReturn,
-            pendingReturnMonth: sub.pendingReturn?.month,
-            pendingReturnYear: sub.pendingReturn?.year
+            hasResumeRequest,
+            resumeMonth,
+            resumeYear
         };
     }
 
@@ -171,11 +192,10 @@ function initializeFollowUps() {
             document.getElementById('poTableBody').innerHTML = `<tr><td colspan="8" class="empty-state">⚠️ No center selected.</td></tr>`;
             return;
         }
-
         document.getElementById('poLoader').classList.remove('hidden');
         document.getElementById('inquiryLoader').classList.remove('hidden');
         document.getElementById('pauseLoader').classList.remove('hidden');
-
+        
         try {
             const snap = await get(ref(db, `centers/${centerId}/students`));
             if (!snap.exists()) {
@@ -183,65 +203,80 @@ function initializeFollowUps() {
                 buildLists();
                 return;
             }
-
+            
             const students = snap.val();
             const now = new Date();
             const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
             const currentYear = String(now.getFullYear());
             const updates = [];
-
+            
             allStudents = Object.entries(students).map(([id, s]) => {
                 let studentChanged = false;
                 
-                // 🆕 Auto-execute pending returns in background
+                // 🆕 Auto-execute pending returns / resumes in background
                 if (s.subjects) {
                     const subjects = safeArray(s.subjects);
                     subjects.forEach(sub => {
-                        if (sub.status === 'pause' && sub.pendingReturn) {
+                        // ✅ UNIFIED: Auto-execute resumeRequest (matches student-form.js and dropbook.js)
+                        if (sub.resumeRequest && !sub.resumeRequest.processed) {
+                            const { returnMonth, returnYear } = sub.resumeRequest;
+                            if (returnYear && returnMonth) {
+                                if (parseInt(returnYear) < parseInt(currentYear) || 
+                                    (parseInt(returnYear) === parseInt(currentYear) && parseInt(returnMonth) <= parseInt(currentMonth))) {
+                                    
+                                    sub.status = 'current';
+                                    sub.resumed = true; // Mark as resumed, preserving drop/pause history
+                                    sub.resumedAt = new Date().toISOString();
+                                    delete sub.resumeRequest;
+                                    studentChanged = true;
+                                }
+                            }
+                        }
+                        // Legacy fallback: auto-execute pendingReturn just in case
+                        else if (sub.status === 'pause' && sub.pendingReturn) {
                             const pr = sub.pendingReturn;
                             if (pr.year < currentYear || (pr.year === currentYear && pr.month <= currentMonth)) {
                                 sub.status = 'current';
+                                sub.resumed = true;
+                                sub.resumedAt = new Date().toISOString();
                                 delete sub.pendingReturn;
                                 studentChanged = true;
                             }
                         }
                     });
+                    
                     if (studentChanged) {
                         s.subjects = subjects;
                         s.updatedAt = new Date().toISOString();
                         updates.push({ id, data: s });
                     }
                 }
-
+                
                 const subjectsList = safeArray(s.subjects);
                 const activeSubjects = [];
-                const allSubjectsDisplay = []; // 🆕 Track all subjects for display
+                const allSubjectsDisplay = []; 
                 const inquirySubjects = [];
                 const pausedSubjects = [];
                 let earliestEnrol = null;
                 let earliestInquiry = null;
-                
-                // 🆕 Track paused and dropped counts
                 let pausedCount = 0;
                 let droppedCount = 0;
-
+                
                 subjectsList.forEach((sub, idx) => {
-                    if (!sub.name) return; // 🆕 Safety check
-
+                    if (!sub.name) return; 
                     const level = sub.currentLevel || sub.startLevel || '-';
                     const cleanName = sub.name
                         .replace('English ', '')
                         .replace('Chinese (Trad)', 'Chinese')
                         .replace('Chinese (Simp)', 'Chinese');
-
-                    // 🆕 Build display object for all subjects
+                    
                     allSubjectsDisplay.push({
                         name: cleanName,
                         level: level,
                         status: sub.status || 'current',
                         displayText: `${cleanName} ${level}`
                     });
-
+                    
                     if (sub.status === 'drop') {
                         droppedCount++;
                         return;
@@ -249,19 +284,18 @@ function initializeFollowUps() {
                     if (sub.status === 'pause') {
                         pausedCount++;
                     }
-
+                    
                     const formatted = formatSubjectLevel(sub);
                     if (formatted) activeSubjects.push(formatted);
-
+                    
                     if (sub.status !== 'inquiry' && sub.enrolDate) {
                         if (!earliestEnrol || sub.enrolDate < earliestEnrol) earliestEnrol = sub.enrolDate;
                     }
-
                     if (sub.status === 'inquiry' && sub.inquiryDate) {
                         inquirySubjects.push(sub);
                         if (!earliestInquiry || sub.inquiryDate < earliestInquiry) earliestInquiry = sub.inquiryDate;
                     }
-
+                    
                     const pauseInfo = getPauseFollowUpInfo(sub);
                     if (pauseInfo) {
                         pausedSubjects.push({
@@ -272,7 +306,7 @@ function initializeFollowUps() {
                         });
                     }
                 });
-
+                
                 return {
                     id,
                     name: s.namePinyin || s.nameCn || s.name || 'Unknown Student',
@@ -280,7 +314,7 @@ function initializeFollowUps() {
                     nickname: s.nickname || '-',
                     grade: s.grade || '-',
                     subjects: activeSubjects.length > 0 ? activeSubjects : ['No active subjects'],
-                    allSubjectsDisplay, // 🆕 Added
+                    allSubjectsDisplay,
                     enrolDate: earliestEnrol || '-',
                     inquiryDate: earliestInquiry || '-',
                     hasInquiry: inquirySubjects.length > 0,
@@ -290,21 +324,21 @@ function initializeFollowUps() {
                     poReason: s.poReason?.trim() || 'No reason provided.',
                     parentOrientation: s.parentOrientation,
                     rawData: s,
-                    pausedCount,   // 🆕 Added
-                    droppedCount   // 🆕 Added
+                    pausedCount,
+                    droppedCount
                 };
             });
-
+            
             // Save auto-executed returns in background
             if (updates.length > 0) {
-                console.log(`⏳ Auto-executing ${updates.length} pending return(s)...`);
+                console.log(`⏳ Auto-executing ${updates.length} pending return/resume(s)...`);
                 updates.forEach(u => {
                     set(ref(db, `centers/${centerId}/students/${u.id}`), u.data).catch(err => {
                         console.error(`Failed to auto-execute return for ${u.id}:`, err);
                     });
                 });
             }
-
+            
             buildLists();
         } catch (err) {
             document.getElementById('poTableBody').innerHTML = `<tr><td colspan="8" class="empty-state">❌ Error: ${err.message}</td></tr>`;
@@ -321,12 +355,10 @@ function initializeFollowUps() {
     // ==========================================
     function buildLists() {
         pendingPOList = allStudents.filter(s => s.parentOrientation === 'No');
-
         inquiryList = allStudents.filter(s => s.hasInquiry).sort((a, b) => {
             return (b.inquiryDate || '').localeCompare(a.inquiryDate || '');
         });
-
-        // 🆕 Flatten paused subjects into individual rows
+        
         pauseFollowUpList = [];
         allStudents.forEach(s => {
             s.pausedSubjects.forEach(p => {
@@ -343,23 +375,21 @@ function initializeFollowUps() {
                 });
             });
         });
-
+        
         // Sort: Overdue first, then no pending return, then pending return (by date)
         pauseFollowUpList.sort((a, b) => {
             if (a.isOverdue && !b.isOverdue) return -1;
             if (!a.isOverdue && b.isOverdue) return 1;
-            
-            if (a.hasPendingReturn && b.hasPendingReturn) {
-                const dateA = new Date(a.pendingReturnYear, a.pendingReturnMonth - 1);
-                const dateB = new Date(b.pendingReturnYear, b.pendingReturnMonth - 1);
+            if (a.hasResumeRequest && b.hasResumeRequest) {
+                const dateA = new Date(a.resumeYear, a.resumeMonth - 1);
+                const dateB = new Date(b.resumeYear, b.resumeMonth - 1);
                 return dateA - dateB;
             }
-            if (a.hasPendingReturn) return 1; 
-            if (b.hasPendingReturn) return -1;
-            
+            if (a.hasResumeRequest) return 1; 
+            if (b.hasResumeRequest) return -1;
             return 0;
         });
-
+        
         renderPOTable();
         renderInquiryTable();
         renderPauseFollowUpTable();
@@ -373,11 +403,11 @@ function initializeFollowUps() {
         const poBadge = document.getElementById('poBadge');
         const inquiryBadge = document.getElementById('inquiryBadge');
         const pauseBadge = document.getElementById('pauseBadge');
-
+        
         poBadge.textContent = pendingPOList.length;
         inquiryBadge.textContent = inquiryList.length;
         pauseBadge.textContent = pauseFollowUpList.length;
-
+        
         poBadge.classList.toggle('zero', pendingPOList.length === 0);
         inquiryBadge.classList.toggle('zero', inquiryList.length === 0);
         pauseBadge.classList.toggle('zero', pauseFollowUpList.length === 0);
@@ -391,21 +421,19 @@ function initializeFollowUps() {
         const noResults = document.getElementById('noResults');
         const poTable = document.getElementById('poTable');
         tbody.innerHTML = '';
+        
         const lf = filter.toLowerCase().trim();
-
-        // 🆕 Updated filter to search through all subjects (including dropped)
         const filtered = pendingPOList.filter(s =>
             s.name.toLowerCase().includes(lf) || s.nameCn.toLowerCase().includes(lf) ||
             s.nickname.toLowerCase().includes(lf) || s.grade.toLowerCase().includes(lf) ||
             s.poReason.toLowerCase().includes(lf) || s.allSubjectsDisplay.some(sub => sub.displayText.toLowerCase().includes(lf))
         );
-
+        
         if (filtered.length === 0) {
             noResults.classList.add('visible'); poTable.style.display = 'none';
         } else {
             noResults.classList.remove('visible'); poTable.style.display = 'table';
             filtered.forEach(s => {
-                // 🆕 Render pills with specific status badges attached
                 const pills = s.allSubjectsDisplay.map(sub => {
                     let statusBadge = '';
                     let extraClass = '';
@@ -418,7 +446,7 @@ function initializeFollowUps() {
                     }
                     return `<span class="subj-pill ${getSubjectClass(sub.name)} ${extraClass}">${sub.displayText} ${statusBadge}</span>`;
                 }).join(' ');
-
+                
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td><strong>${s.name}</strong></td><td>${s.nameCn}</td><td>${s.nickname}</td>
@@ -435,14 +463,14 @@ function initializeFollowUps() {
         const noResults = document.getElementById('noInquiryResults');
         const table = document.getElementById('inquiryTable');
         tbody.innerHTML = '';
+        
         const lf = filter.toLowerCase().trim();
-
         const filtered = inquiryList.filter(s =>
             s.name.toLowerCase().includes(lf) || s.nameCn.toLowerCase().includes(lf) ||
             s.nickname.toLowerCase().includes(lf) || s.grade.toLowerCase().includes(lf) ||
             s.subjects.some(sub => sub.toLowerCase().includes(lf))
         );
-
+        
         if (filtered.length === 0) {
             noResults.classList.add('visible'); table.style.display = 'none';
         } else {
@@ -451,6 +479,7 @@ function initializeFollowUps() {
                 const pills = s.subjects.map(sub => `<span class="subj-pill ${getSubjectClass(sub)}">${sub}</span>`).join(' ');
                 const dtInfo = checkDTStatus(s.rawData);
                 const dtBadge = renderDTBadge(dtInfo);
+                
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td><strong>${s.name}</strong></td><td>${s.nameCn}</td><td>${s.nickname}</td>
@@ -463,37 +492,38 @@ function initializeFollowUps() {
     }
 
     // ==========================================
-    // ✅ RENDER TAB 3: PAUSE FOLLOW-UP (Per-Subject)
+    // ✅ RENDER TAB 3: PAUSE & RESUME FOLLOW-UP
     // ==========================================
     function renderPauseFollowUpTable(filter = '') {
         const tbody = document.getElementById('pauseTableBody');
         const noResults = document.getElementById('noPauseResults');
         const table = document.getElementById('pauseTable');
         tbody.innerHTML = '';
+        
         const lf = filter.toLowerCase().trim();
-
         const filtered = pauseFollowUpList.filter(s =>
             s.studentName.toLowerCase().includes(lf) || s.nameCn.toLowerCase().includes(lf) ||
             s.nickname.toLowerCase().includes(lf) || s.grade.toLowerCase().includes(lf) ||
             s.subjectName.toLowerCase().includes(lf)
         );
-
+        
         if (filtered.length === 0) {
             noResults.classList.add('visible'); table.style.display = 'none';
         } else {
             noResults.classList.remove('visible'); table.style.display = 'table';
-
             filtered.forEach(s => {
                 const pill = `<span class="subj-pill ${getSubjectClass(s.subjectName)}">${s.subjectName} ${s.subjectLevel}</span>`;
                 const overdueTag = s.isOverdue ? '<span class="overdue-tag">OVERDUE</span>' : '';
                 const pauseDuration = `${s.pauseFrom} → ${s.pauseTo}${overdueTag}`;
-
+                
                 let actionHtml = '';
-                if (s.hasPendingReturn) {
-                    const retMonth = MONTH_SHORT[parseInt(s.pendingReturnMonth) - 1];
+                // ✅ UNIFIED UI: Handle resumeRequest prominently
+                if (s.hasResumeRequest) {
+                    const retMonth = MONTH_SHORT[parseInt(s.resumeMonth) - 1];
                     actionHtml = `
-                        <span class="return-confirmed-badge">✔ Return (${retMonth} ${s.pendingReturnYear})</span>
-                        <button class="pause-action-btn drop" data-student-id="${s.studentId}" data-subject-index="${s.subjectIndex}" data-action="drop">✖ Confirm Drop</button>
+                        <span class="return-confirmed-badge" style="background:#e8f5e9; color:#2e7d32; border:1px solid #a5d6a7;">🔄 Resume Pending (${retMonth} ${s.resumeYear})</span>
+                        <button class="pause-action-btn continue" data-student-id="${s.studentId}" data-subject-index="${s.subjectIndex}" data-action="confirm-resume">✔ Confirm Resume Now</button>
+                        <button class="pause-action-btn drop" data-student-id="${s.studentId}" data-subject-index="${s.subjectIndex}" data-action="cancel-resume">❌ Cancel Resume</button>
                     `;
                 } else {
                     actionHtml = `
@@ -501,7 +531,7 @@ function initializeFollowUps() {
                         <button class="pause-action-btn continue" data-student-id="${s.studentId}" data-subject-index="${s.subjectIndex}" data-action="return">✔ Confirm Return</button>
                     `;
                 }
-
+                
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td><strong>${s.studentName}</strong></td>
@@ -518,50 +548,50 @@ function initializeFollowUps() {
     }
 
     // ==========================================
-    // ✅ PAUSE ACTION HANDLERS
+    // ✅ PAUSE & RESUME ACTION HANDLERS
     // ==========================================
     let activeReturnStudentId = null;
     let activeReturnSubjectIndex = null;
-
+    
     document.getElementById('pauseTableBody').addEventListener('click', async (e) => {
         const btn = e.target.closest('.pause-action-btn');
         if (!btn) return;
-
+        
         const studentId = btn.dataset.studentId;
         const subjectIndex = parseInt(btn.dataset.subjectIndex);
         const action = btn.dataset.action; 
-
+        
         const student = allStudents.find(s => s.id === studentId);
         if (!student) return;
-
+        
         if (action === 'drop') {
             const subName = student.pausedSubjects.find(p => p.index === subjectIndex)?.name || 'Subject';
             if (!confirm(`⚠️ Confirm DROP for ${student.name}?\n\nSubject: ${subName}\n\nThis will change the status to "Drop".`)) return;
             
             btn.disabled = true;
             btn.textContent = '⏳ Saving...';
-
             try {
                 const studentRef = ref(db, `centers/${centerId}/students/${studentId}`);
                 const snap = await get(studentRef);
                 if (!snap.exists()) throw new Error("Student not found");
-
+                
                 const studentData = snap.val();
                 let subjects = safeArray(studentData.subjects);
                 const sub = subjects[subjectIndex];
                 if (!sub) throw new Error("Subject not found");
-
+                
                 sub.status = 'drop';
                 const now = new Date();
                 sub.dropMonth = String(now.getMonth() + 1).padStart(2, '0');
                 sub.dropYear = String(now.getFullYear());
                 sub.dropReason = sub.dropReason || 'Confirmed drop after pause follow-up';
-                delete sub.pendingReturn; // Clear any pending return
-
+                delete sub.pendingReturn; 
+                delete sub.resumeRequest;
+                
                 studentData.subjects = subjects;
                 studentData.updatedAt = new Date().toISOString();
-
                 await set(studentRef, studentData);
+                
                 await fetchAllStudents();
                 alert(`✅ ${student.name} — Drop confirmed successfully!`);
             } catch (err) {
@@ -570,11 +600,76 @@ function initializeFollowUps() {
                 btn.disabled = false;
                 btn.textContent = '✖ Confirm Drop';
             }
-        } else if (action === 'return') {
+        } 
+        else if (action === 'confirm-resume') {
+            if (!confirm(`✅ Confirm RESUME for ${student.name} now?\n\nThis will change the status to "Current" and mark the drop/pause as historically resumed.`)) return;
+            
+            btn.disabled = true;
+            btn.textContent = '⏳ Saving...';
+            try {
+                const studentRef = ref(db, `centers/${centerId}/students/${studentId}`);
+                const snap = await get(studentRef);
+                if (!snap.exists()) throw new Error("Student not found");
+                
+                const studentData = snap.val();
+                let subjects = safeArray(studentData.subjects);
+                const sub = subjects[subjectIndex];
+                if (!sub) throw new Error("Subject not found");
+                
+                // ✅ Execute resume logic (matches student-form.js)
+                sub.status = 'current';
+                sub.resumed = true;
+                sub.resumedAt = new Date().toISOString();
+                delete sub.resumeRequest;
+                delete sub.pendingReturn; 
+                
+                studentData.subjects = subjects;
+                studentData.updatedAt = new Date().toISOString();
+                await set(studentRef, studentData);
+                
+                await fetchAllStudents();
+                alert(`✅ ${student.name} — Resume confirmed successfully!`);
+            } catch (err) {
+                console.error("Confirm resume error:", err);
+                alert('❌ Failed to save: ' + err.message);
+                btn.disabled = false;
+                btn.textContent = '✔ Confirm Resume Now';
+            }
+        }
+        else if (action === 'cancel-resume') {
+            if (!confirm(`❌ Cancel RESUME request for ${student.name}?\n\nThe student will remain dropped/paused.`)) return;
+            
+            btn.disabled = true;
+            btn.textContent = '⏳ Saving...';
+            try {
+                const studentRef = ref(db, `centers/${centerId}/students/${studentId}`);
+                const snap = await get(studentRef);
+                if (!snap.exists()) throw new Error("Student not found");
+                
+                const studentData = snap.val();
+                let subjects = safeArray(studentData.subjects);
+                const sub = subjects[subjectIndex];
+                if (!sub) throw new Error("Subject not found");
+                
+                delete sub.resumeRequest;
+                
+                studentData.subjects = subjects;
+                studentData.updatedAt = new Date().toISOString();
+                await set(studentRef, studentData);
+                
+                await fetchAllStudents();
+                alert(`✅ ${student.name} — Resume request cancelled.`);
+            } catch (err) {
+                console.error("Cancel resume error:", err);
+                alert('❌ Failed to save: ' + err.message);
+                btn.disabled = false;
+                btn.textContent = '❌ Cancel Resume';
+            }
+        }
+        else if (action === 'return') {
             activeReturnStudentId = studentId;
             activeReturnSubjectIndex = subjectIndex;
             
-            // Default to next month
             const now = new Date();
             let nextM = String(now.getMonth() + 2).padStart(2, '0');
             let nextY = String(now.getFullYear());
@@ -582,7 +677,6 @@ function initializeFollowUps() {
             
             document.getElementById('returnMonth').value = nextM;
             document.getElementById('returnYear').value = nextY;
-            
             document.getElementById('confirmReturnModal').classList.remove('hidden');
         }
     });
@@ -591,38 +685,40 @@ function initializeFollowUps() {
     document.getElementById('cancelReturnBtn')?.addEventListener('click', () => {
         document.getElementById('confirmReturnModal').classList.add('hidden');
     });
-
+    
     document.getElementById('saveReturnBtn')?.addEventListener('click', async () => {
         const month = document.getElementById('returnMonth').value;
         const year = document.getElementById('returnYear').value;
-        
         if (!month || !year) {
             alert('Please select a month and year.');
             return;
         }
-
         document.getElementById('confirmReturnModal').classList.add('hidden');
         
         try {
             const studentRef = ref(db, `centers/${centerId}/students/${activeReturnStudentId}`);
             const snap = await get(studentRef);
             if (!snap.exists()) throw new Error("Student not found");
-
+            
             const studentData = snap.val();
             let subjects = safeArray(studentData.subjects);
             const sub = subjects[activeReturnSubjectIndex];
             if (!sub) throw new Error("Subject not found");
-
-            sub.pendingReturn = {
-                month,
-                year,
-                confirmedAt: new Date().toISOString()
+            
+            // ✅ UNIFIED: Save as resumeRequest to handshake with Drop Book & Student Form
+            sub.resumeRequest = {
+                returnMonth: month,
+                returnYear: year,
+                requestedAt: new Date().toISOString(),
+                processed: false
             };
-
+            // Clean up legacy pendingReturn if it exists
+            delete sub.pendingReturn;
+            
             studentData.subjects = subjects;
             studentData.updatedAt = new Date().toISOString();
-
             await set(studentRef, studentData);
+            
             await fetchAllStudents();
             alert(`✅ Return confirmed for ${MONTH_SHORT[parseInt(month)-1]} ${year}. Status will auto-update to Current when that month arrives.`);
         } catch (err) {
@@ -642,7 +738,7 @@ function initializeFollowUps() {
             monthOpts += `<option value="${val}">${m}</option>`;
         });
         returnMonthSelect.innerHTML = monthOpts;
-
+        
         const currentYear = new Date().getFullYear();
         let yearOpts = '';
         for (let y = currentYear; y <= currentYear + 5; y++) {
@@ -660,7 +756,8 @@ function initializeFollowUps() {
         renderInquiryTable(val);
         renderPauseFollowUpTable(val);
     });
+    
     refreshBtn.addEventListener('click', fetchAllStudents);
-
+    
     fetchAllStudents();
 }
