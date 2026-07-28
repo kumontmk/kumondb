@@ -267,7 +267,12 @@ function initializeReports() {
                     if (isPencil) {
                         if (!sub.pencilSkill || !sub.pencilSkill.level) return;
                     } else {
-                        if ((sub.name || '').trim() !== subName) return; 
+                        const dbName = (sub.name || '').trim();
+                        if (subName === 'Chinese') {
+                            if (dbName !== 'Chinese (Trad)' && dbName !== 'Chinese (Simp)' && dbName !== 'Chinese') return;
+                        } else {
+                            if (dbName !== subName) return; 
+                        }
                     }
                     
                     let progress = Array.isArray(sub.progress) ? sub.progress : Object.values(sub.progress || {});
@@ -461,12 +466,19 @@ function initializeReports() {
                     let subjectKey = null;
                     let subjectData = null;
 
+                    const matchSubject = (dbName) => {
+                        if (subjectName === 'Chinese') {
+                            return dbName === 'Chinese (Trad)' || dbName === 'Chinese (Simp)' || dbName === 'Chinese';
+                        }
+                        return dbName === subjectName;
+                    };
+
                     if (Array.isArray(subjects)) {
-                        subjectKey = subjects.findIndex(s => (s.name || '').trim() === subjectName);
+                        subjectKey = subjects.findIndex(s => matchSubject((s.name || '').trim()));
                         subjectData = subjectKey !== -1 ? subjects[subjectKey] : null;
                     } else {
                         for (const key in subjects) {
-                            if ((subjects[key]?.name || '').trim() === subjectName) {
+                            if (matchSubject((subjects[key]?.name || '').trim())) {
                                 subjectKey = key; subjectData = subjects[key]; break;
                             }
                         }

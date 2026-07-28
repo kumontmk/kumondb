@@ -632,37 +632,78 @@ tr.disabled-row td:first-child {
     .leave-header { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
 }
 
-/* Add to employees.css */
-.timeclock-edit-table .add-log-btn {
-  padding: 0.3rem 0.6rem;
-  background: #059669;
-  color: white;
+/* ============================================
+✅ TIMECLOCK ADD / DELETE BUTTONS & MODALS
+============================================ */
+
+/* Clean container for stacked action buttons */
+.action-buttons-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.edit-log-btn {
+  width: 100%;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.6rem;
+  text-align: center;
+}
+
+/* Force green styling for Add button, overriding default .primary blue */
+.add-log-btn {
+  width: 100%;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.6rem;
+  background: #059669 !important;
+  color: white !important;
   border: none;
   border-radius: 4px;
   cursor: pointer;
+  text-align: center;
+  font-weight: 500;
+}
+
+.add-log-btn:hover {
+  background: #047857 !important;
+}
+
+.delete-log-btn {
+  padding: 0.3rem 0.5rem;
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  border-radius: 4px;
+  cursor: pointer;
   font-size: 0.85rem;
-  margin-left: 0.25rem;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
 }
 
-.timeclock-edit-table .add-log-btn:hover {
-  background: #047857;
-}
-
-.timeclock-edit-table .delete-log-btn {
-  padding: 0.3rem 0.6rem;
+.delete-log-btn:hover {
   background: #dc3545;
   color: white;
-  border: none;
+  border-color: #dc3545;
+}
+
+.tc-input {
+  width: 100%;
+  padding: 0.4rem;
+  border: 1px solid #cbd5e1;
   border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  margin-left: 0.25rem;
+  font-size: 0.9rem;
 }
 
-.timeclock-edit-table .delete-log-btn:hover {
-  background: #c82333;
+.tc-input:disabled {
+  background-color: #f8fafc;
+  color: #334155;
 }
 
+/* Modal Styling */
 .confirmation-modal {
   position: fixed;
   top: 0;
@@ -680,6 +721,7 @@ tr.disabled-row td:first-child {
 .confirmation-modal .modal-content {
   max-width: 450px;
   text-align: center;
+  padding: 1.5rem;
 }
 
 .confirmation-modal h3 {
@@ -758,4 +800,13 @@ tr.disabled-row td:first-child {
 .add-entry-form .time-type-selector label:has(input:checked) {
   background: #e8f0fe;
   border-color: #4682B4;
+}
+
+button.danger {
+  background: #dc3545;
+  color: white;
+}
+
+button.danger:hover {
+  background: #c82333;
 }

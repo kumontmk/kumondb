@@ -852,28 +852,34 @@ function initApp() {
         for (let i = 0; i < maxCycles; i++) {
           const cycle = r.rows[i] || { inTime: '', inIndex: -1, outTime: '', outIndex: -1, inLocation: '' };
           const inLoc = cycle.inLocation || '';
-          rowHtml += `
-            <td>
-              <div style="display:flex; gap:4px; align-items:center;">
-                <input type="time" value="${cycle.inTime}" disabled class="tc-input" data-type="in" data-location="${inLoc}" style="flex:1;">
-                ${cycle.inTime ? `<button class="delete-log-btn" data-type="in" data-time="${cycle.inTime}" title="Delete">🗑️</button>` : ''}
-              </div>
-            </td>
-            <td>
-              <div style="display:flex; gap:4px; align-items:center;">
-                <input type="time" value="${cycle.outTime}" disabled class="tc-input" data-type="out" data-location="${inLoc}" style="flex:1;">
-                ${cycle.outTime ? `<button class="delete-log-btn" data-type="out" data-time="${cycle.outTime}" title="Delete">🗑️</button>` : ''}
-              </div>
-            </td>
-          `;
+          
+          // FIX: Show clean "-" instead of blank input fields for empty cycles
+          if (cycle.inTime === '' && cycle.outTime === '') {
+            rowHtml += `<td style="color:#cbd5e1; text-align:center;">-</td><td style="color:#cbd5e1; text-align:center;">-</td>`;
+          } else {
+            rowHtml += `
+              <td>
+                <div style="display:flex; gap:4px; align-items:center;">
+                  <input type="time" value="${cycle.inTime}" disabled class="tc-input" data-type="in" data-location="${inLoc}">
+                  ${cycle.inTime ? `<button class="delete-log-btn" data-type="in" data-time="${cycle.inTime}" title="Delete">🗑️</button>` : ''}
+                </div>
+              </td>
+              <td>
+                <div style="display:flex; gap:4px; align-items:center;">
+                  <input type="time" value="${cycle.outTime}" disabled class="tc-input" data-type="out" data-location="${inLoc}">
+                  ${cycle.outTime ? `<button class="delete-log-btn" data-type="out" data-time="${cycle.outTime}" title="Delete">🗑️</button>` : ''}
+                </div>
+              </td>
+            `;
+          }
         }
         
         rowHtml += `
           <td style="font-weight: 600; color: #4682B4; text-align: center;">${r.durationText}</td>
           <td>
-            <div style="display:flex; gap:4px; flex-direction:column;">
+            <div class="action-buttons-container">
               <button class="edit-log-btn secondary" data-date="${r.date}">Edit</button>
-              <button class="add-log-btn primary" data-date="${r.date}" style="font-size:0.85rem; padding:0.4rem 0.6rem;">+ Add</button>
+              <button class="add-log-btn" data-date="${r.date}">+ Add</button>
             </div>
           </td>
         `;
@@ -917,7 +923,6 @@ function initApp() {
               if (modalContent) modalContent.appendChild(dropdownContainer);
             }
           } else {
-            // FIXED SAVE LOGIC: Rebuild array directly from DOM inputs to prevent index mismatch bugs
             btn.textContent = 'Saving...';
             btn.disabled = true;
             try {
