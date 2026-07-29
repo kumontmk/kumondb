@@ -96,7 +96,7 @@ function initApp() {
   let currentQrData = "";
   let availableCenters = [];
   let currentTimeclockEmpId = null;
-  let initialLoadDone = false; 
+  let initialLoadDone = false;
   let currentEditingEmpId = null;
   let yearlyResetChecked = false;
 
@@ -327,7 +327,7 @@ function initApp() {
           checkbox.type = 'checkbox';
           checkbox.value = centerId;
           label.appendChild(checkbox);
-          label.appendChild(document.createTextNode(` ${centerData.name || centerId}`));
+          label.appendChild(document.createTextNode(`${centerData.name || centerId}`));
           centerPermsContainer.appendChild(label);
         });
       }
@@ -363,7 +363,7 @@ function initApp() {
         : `<span class="status-badge active">Active</span>`;
       const toggleBtnText = isDisabled ? 'Enable' : 'Disable';
       const toggleBtnClass = isDisabled ? 'secondary' : 'danger';
-      const positionsText = getEmpPositions(e).join(', ') || '-'; 
+      const positionsText = getEmpPositions(e).join(', ') || '-';
       const row = document.createElement('tr');
       row.className = rowClass;
       row.innerHTML = `
@@ -405,7 +405,7 @@ function initApp() {
       document.getElementById('empEmail').value = e.email || '';
       document.getElementById('empNationality').value = ['Filipino', 'Chinese', 'Portuguese'].includes(e.nationality) ? e.nationality : 'Others';
       if (!['Filipino', 'Chinese', 'Portuguese'].includes(e.nationality)) natOther.value = e.nationality || '';
-      
+
       document.querySelectorAll('#empPositionsGroup input').forEach(cb => cb.checked = false);
       const empPositions = getEmpPositions(e);
       empPositions.forEach(pos => {
@@ -420,15 +420,15 @@ function initApp() {
       document.getElementById('empAnnualLeave').value = leaveData.annual || '';
       document.getElementById('empSickLeave').value = leaveData.sick || '';
       document.getElementById('empTimeOff').value = leaveData.timeOff || '';
-      
+
       toggleLeaveFields();
 
       currentQrData = e.qrCode || `EMP_${id}`;
       const selectedDate = timeclockDateFilter?.value || null;
       loadTimeclock(id, selectedDate);
-      
+
       if (id) loadLeaveEntitlement(id);
-      
+
       const perms = e.permissions || {};
       const centerPerms = perms.centers || {};
       const dashPerms = perms.dashboardCards || {};
@@ -552,7 +552,7 @@ function initApp() {
     const email = document.getElementById('empEmail')?.value.trim();
     let nationality = document.getElementById('empNationality')?.value;
     if (nationality === 'Others') nationality = document.getElementById('empNationalityOther')?.value.trim();
-    
+
     const positions = [];
     document.querySelectorAll('#empPositionsGroup input:checked').forEach(cb => positions.push(cb.value));
     if (positions.length === 0) return alert('Please select at least one position.');
@@ -573,17 +573,17 @@ function initApp() {
 
     let existingLeave = {};
     if (empId && employees[empId]) {
-        existingLeave = employees[empId].leaveEntitlement || {};
+      existingLeave = employees[empId].leaveEntitlement || {};
     }
 
     const leaveEntitlement = {
-        annual: parseInt(document.getElementById('empAnnualLeave')?.value) || existingLeave.annual || 0,
-        annualUsed: existingLeave.annualUsed || 0,
-        sick: parseInt(document.getElementById('empSickLeave')?.value) || existingLeave.sick || 0,
-        sickUsed: existingLeave.sickUsed || 0,
-        timeOff: parseInt(document.getElementById('empTimeOff')?.value) || existingLeave.timeOff || 0,
-        timeOffUsed: existingLeave.timeOffUsed || 0,
-        lastResetYear: existingLeave.lastResetYear || new Date().getFullYear()
+      annual: parseInt(document.getElementById('empAnnualLeave')?.value) || existingLeave.annual || 0,
+      annualUsed: existingLeave.annualUsed || 0,
+      sick: parseInt(document.getElementById('empSickLeave')?.value) || existingLeave.sick || 0,
+      sickUsed: existingLeave.sickUsed || 0,
+      timeOff: parseInt(document.getElementById('empTimeOff')?.value) || existingLeave.timeOff || 0,
+      timeOffUsed: existingLeave.timeOffUsed || 0,
+      lastResetYear: existingLeave.lastResetYear || new Date().getFullYear()
     };
 
     const employeeData = {
@@ -609,13 +609,13 @@ function initApp() {
         try {
           const userCred = await createUserWithEmailAndPassword(secondaryAuth, email, initialPassword);
           const newUid = userCred.user.uid;
-          await signOut(secondaryAuth); 
+          await signOut(secondaryAuth);
           await set(ref(db, `users/${newUid}`), {
             email, englishName, chineseName, nationality, positions: positions, position: position,
             employmentDate, terms, isVerified: true, mustChangePassword: true,
             permissions: { centers, dashboardCards }, createdAt: new Date().toISOString()
           });
-          saveId = newUid; 
+          saveId = newUid;
           employeeData.authUid = newUid;
         } catch (authErr) {
           saveBtn.disabled = false;
@@ -753,11 +753,11 @@ function initApp() {
   function loadTimeclock(empId, filterDate = null) {
     currentTimeclockEmpId = empId;
     let fetchPromise;
-    
+
     if (filterDate) {
-      if (filterDate.length === 7) { 
+      if (filterDate.length === 7) {
         const startAtVal = filterDate;
-        const endAtVal = filterDate + '\uf8ff'; 
+        const endAtVal = filterDate + '\uf8ff';
         fetchPromise = get(query(ref(db, 'timecards'), orderByKey(), startAt(startAtVal), endAt(endAtVal))).then(snap => {
           const allData = snap.val() || {};
           const filteredData = {};
@@ -768,7 +768,7 @@ function initApp() {
           });
           return filteredData;
         });
-      } else { 
+      } else {
         fetchPromise = get(ref(db, `timecards/${filterDate}/${empId}`)).then(snap => {
           const data = snap.val();
           return data ? { [filterDate]: { [empId]: data } } : {};
@@ -777,12 +777,12 @@ function initApp() {
     } else {
       fetchPromise = get(ref(db, 'timecards')).then(snap => snap.val() || {});
     }
-    
+
     fetchPromise.then(all => {
       timeclockBody.innerHTML = '';
       const records = [];
       let maxCycles = 3;
-      
+
       Object.entries(all).forEach(([date, dayData]) => {
         if (dayData[empId]?.logs?.length) {
           const rawLogs = dayData[empId].logs;
@@ -790,12 +790,12 @@ function initApp() {
           const sortedLogs = [...fixedLogs].sort((a, b) => a.time.localeCompare(b.time));
           const rows = getLogsRows(sortedLogs);
           if (rows.length > maxCycles) maxCycles = rows.length;
-          
+
           let totalMinutes = 0;
           let hasValidCycle = false;
           let currentIn = null;
           let currentInLocation = null;
-          
+
           for (const log of sortedLogs) {
             if (log.type === 'in') {
               currentIn = timeToMinutes(log.time);
@@ -819,13 +819,13 @@ function initApp() {
           records.push({ date, rows, durationText });
         }
       });
-      
+
       records.sort((a, b) => b.date.localeCompare(a.date));
       if (records.length === 0) {
         timeclockBody.innerHTML = `<tr><td colspan="9" class="empty-state">No records found</td></tr>`;
         return;
       }
-      
+
       const table = timeclockBody.parentElement;
       let theadHtml = `<thead id="timeclockThead"><tr><th rowspan="2">Date</th>`;
       for (let i = 0; i < maxCycles; i++) {
@@ -838,22 +838,21 @@ function initApp() {
         theadHtml += `<th>In</th><th>Out</th>`;
       }
       theadHtml += `</tr></thead>`;
-      
+
       const existingThead = table.querySelector('thead');
       if (existingThead) existingThead.outerHTML = theadHtml;
       else table.insertAdjacentHTML('afterbegin', theadHtml);
-      
+
       records.forEach(r => {
         const row = document.createElement('tr');
         row.dataset.editing = 'false';
         row.dataset.date = r.date;
         let rowHtml = `<td>${r.date}</td>`;
-        
+
         for (let i = 0; i < maxCycles; i++) {
           const cycle = r.rows[i] || { inTime: '', inIndex: -1, outTime: '', outIndex: -1, inLocation: '' };
           const inLoc = cycle.inLocation || '';
-          
-          // FIX: Show clean "-" instead of blank input fields for empty cycles
+
           if (cycle.inTime === '' && cycle.outTime === '') {
             rowHtml += `<td style="color:#cbd5e1; text-align:center;">-</td><td style="color:#cbd5e1; text-align:center;">-</td>`;
           } else {
@@ -861,19 +860,19 @@ function initApp() {
               <td>
                 <div style="display:flex; gap:4px; align-items:center;">
                   <input type="time" value="${cycle.inTime}" disabled class="tc-input" data-type="in" data-location="${inLoc}">
-                  ${cycle.inTime ? `<button class="delete-log-btn" data-type="in" data-time="${cycle.inTime}" title="Delete">🗑️</button>` : ''}
+                  ${cycle.inTime ? `<button class="delete-log-btn" data-type="in" data-time="${cycle.inTime}" data-idx="${cycle.inIndex}" title="Delete">🗑️</button>` : ''}
                 </div>
               </td>
               <td>
                 <div style="display:flex; gap:4px; align-items:center;">
                   <input type="time" value="${cycle.outTime}" disabled class="tc-input" data-type="out" data-location="${inLoc}">
-                  ${cycle.outTime ? `<button class="delete-log-btn" data-type="out" data-time="${cycle.outTime}" title="Delete">🗑️</button>` : ''}
+                  ${cycle.outTime ? `<button class="delete-log-btn" data-type="out" data-time="${cycle.outTime}" data-idx="${cycle.outIndex}" title="Delete">🗑️</button>` : ''}
                 </div>
               </td>
             `;
           }
         }
-        
+
         rowHtml += `
           <td style="font-weight: 600; color: #4682B4; text-align: center;">${r.durationText}</td>
           <td>
@@ -895,7 +894,7 @@ function initApp() {
           const isEditing = mainRow.dataset.editing === 'true';
           const date = btn.dataset.date;
           const inputs = mainRow.querySelectorAll('.tc-input');
-          
+
           if (!isEditing) {
             mainRow.dataset.editing = 'true';
             inputs.forEach(input => {
@@ -905,7 +904,7 @@ function initApp() {
             btn.textContent = 'Save';
             btn.classList.remove('secondary');
             btn.classList.add('primary');
-            
+
             const modalContent = document.querySelector('#employeeModal .modal-content');
             let dropdownContainer = modalContent?.querySelector('.center-selector-container');
             if (!dropdownContainer) {
@@ -936,24 +935,24 @@ function initApp() {
                   });
                 }
               });
-              
+
               newLogs.sort((a, b) => a.time.localeCompare(b.time));
               await update(ref(db, `timecards/${date}/${empId}`), { logs: newLogs });
-              
+
               mainRow.dataset.editing = 'false';
               inputs.forEach(input => {
                 input.disabled = true;
                 input.style.borderColor = '#cbd5e1';
               });
-              
+
               const dropdown = document.querySelector('#employeeModal .modal-content .center-selector-container');
               if (dropdown) dropdown.remove();
-              
+
               btn.textContent = 'Edit';
               btn.classList.remove('primary');
               btn.classList.add('secondary');
               btn.disabled = false;
-              
+
               loadTimeclock(empId, timeclockDateFilter?.value || null);
             } catch (err) {
               console.error("Error saving timeclock:", err);
@@ -965,7 +964,7 @@ function initApp() {
         });
       });
 
-      // Delete Button Logic
+      // Delete Button Logic (FIXED: Passes exact index to prevent deleting wrong/multiple records)
       document.querySelectorAll('.delete-log-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
           e.preventDefault();
@@ -973,7 +972,8 @@ function initApp() {
           const date = btn.closest('tr').dataset.date;
           const type = btn.dataset.type;
           const time = btn.dataset.time;
-          showDeleteConfirmation(date, empId, type, time);
+          const idx = parseInt(btn.dataset.idx, 10);
+          showDeleteConfirmation(date, empId, type, time, idx);
         });
       });
 
@@ -995,7 +995,7 @@ function initApp() {
   // ==========================================
   // ADD / DELETE MODAL FUNCTIONS
   // ==========================================
-  
+
   function showAddEntryModal(date, empId) {
     const modalHtml = `
       <div id="addEntryModal" class="confirmation-modal" style="display: flex;">
@@ -1041,14 +1041,14 @@ function initApp() {
     const entryType = document.querySelector('input[name="entryType"]:checked').value;
     const newTime = document.getElementById('newEntryTime').value;
     const locationSelect = document.getElementById('newEntryLocation').value;
-    
+
     if (!newTime) { alert('Please enter a time'); return; }
-    
+
     try {
       const daySnap = await get(ref(db, `timecards/${date}/${empId}`));
       let currentLogs = daySnap.val()?.logs || [];
       if (!Array.isArray(currentLogs)) currentLogs = Object.values(currentLogs);
-      
+
       let matchedLocation = 'Manual Edit';
       if (locationSelect !== 'auto') {
         matchedLocation = locationSelect;
@@ -1068,10 +1068,10 @@ function initApp() {
           matchedLocation = closestLog.location;
         }
       }
-      
+
       currentLogs.push({ type: entryType, time: newTime, location: matchedLocation });
       currentLogs.sort((a, b) => a.time.localeCompare(b.time));
-      
+
       await update(ref(db, `timecards/${date}/${empId}`), { logs: currentLogs });
       closeAddEntryModal();
       loadTimeclock(empId, timeclockDateFilter?.value || null);
@@ -1082,7 +1082,7 @@ function initApp() {
     }
   };
 
-  function showDeleteConfirmation(date, empId, type, time) {
+  function showDeleteConfirmation(date, empId, type, time, idx) {
     const typeLabel = type === 'in' ? 'Clock In' : 'Clock Out';
     const modalHtml = `
       <div id="deleteConfirmationModal" class="confirmation-modal" style="display: flex;">
@@ -1094,7 +1094,7 @@ function initApp() {
           <p style="font-size: 0.9rem; color: #999;">Date: ${date}</p>
           <div class="modal-actions">
             <button class="secondary" onclick="closeDeleteConfirmation()">Cancel</button>
-            <button class="danger" onclick="confirmDeleteEntry('${date}', '${empId}', '${type}', '${time}')">Delete</button>
+            <button class="danger" onclick="confirmDeleteEntry('${date}', '${empId}', '${type}', '${time}', ${idx})">Delete</button>
           </div>
         </div>
       </div>
@@ -1109,16 +1109,28 @@ function initApp() {
     if (modal) modal.remove();
   };
 
-  window.confirmDeleteEntry = async function(date, empId, type, time) {
+  // FIXED: Uses exact array index to splice out exactly one record
+  window.confirmDeleteEntry = async function(date, empId, type, time, idx) {
     try {
       const daySnap = await get(ref(db, `timecards/${date}/${empId}`));
       let currentLogs = daySnap.val()?.logs || [];
       if (!Array.isArray(currentLogs)) currentLogs = Object.values(currentLogs);
-      
-      currentLogs = currentLogs.filter(log => !(log.type === type && log.time === time));
+
+      if (typeof idx === 'number' && idx >= 0 && idx < currentLogs.length) {
+        if (currentLogs[idx].type === type && currentLogs[idx].time === time) {
+          currentLogs.splice(idx, 1);
+        } else {
+          const fallbackIdx = currentLogs.findIndex(l => l.type === type && l.time === time);
+          if (fallbackIdx !== -1) currentLogs.splice(fallbackIdx, 1);
+        }
+      } else {
+        const fallbackIdx = currentLogs.findIndex(l => l.type === type && l.time === time);
+        if (fallbackIdx !== -1) currentLogs.splice(fallbackIdx, 1);
+      }
+
       currentLogs.sort((a, b) => a.time.localeCompare(b.time));
-      
       await update(ref(db, `timecards/${date}/${empId}`), { logs: currentLogs });
+      
       closeDeleteConfirmation();
       loadTimeclock(empId, timeclockDateFilter?.value || null);
       alert('✅ Time entry deleted successfully');
@@ -1140,14 +1152,14 @@ function initApp() {
     const originalText = exportBtn.textContent;
     exportBtn.textContent = 'Exporting...';
     exportBtn.disabled = true;
-    
+
     try {
       const timecardsSnap = await get(ref(db, 'timecards'));
       const timecards = timecardsSnap.val() || {};
       const employeesSnap = await get(ref(db, 'employees'));
       const employeesData = employeesSnap.val() || {};
       const empData = {};
-      
+
       Object.entries(timecards).forEach(([date, dayData]) => {
         if (!date.startsWith(selectedMonth)) return;
         Object.entries(dayData).forEach(([empId, empDayData]) => {
@@ -1158,21 +1170,21 @@ function initApp() {
           const rawLogs = empDayData.logs || [];
           const { logs } = autoFixLogs(rawLogs, employeesData[empId]?.terms || 'Full-time');
           const centerLogs = {};
-          
+
           logs.forEach(log => {
             const abbr = getCenterAbbr(log.location);
             if (abbr === 'Unknown') return;
             if (!centerLogs[abbr]) centerLogs[abbr] = [];
             centerLogs[abbr].push(log);
           });
-          
+
           Object.entries(centerLogs).forEach(([abbr, cLogs]) => {
             if (!empData[empId].centers[abbr]) empData[empId].centers[abbr] = { minutes: 0, records: [] };
             cLogs.sort((a, b) => a.time.localeCompare(b.time));
             const rows = getLogsRows(cLogs);
             let dayTotalMinutes = 0;
             const cycles = [];
-            
+
             rows.forEach(row => {
               if (row.inTime && row.outTime) {
                 const inMins = timeToMinutes(row.inTime);
@@ -1187,21 +1199,21 @@ function initApp() {
                 cycles.push({ in: '', out: row.outTime });
               }
             });
-            
+
             empData[empId].centers[abbr].minutes += dayTotalMinutes;
             empData[empId].totalMinutes += dayTotalMinutes;
             if (cycles.length > 0) empData[empId].centers[abbr].records.push({ date, cycles });
           });
         });
       });
-      
+
       if (Object.keys(empData).length === 0) {
         alert('️ No records found for the selected month.');
         exportBtn.textContent = originalText;
         exportBtn.disabled = false;
         return;
       }
-      
+
       const wb = XLSX.utils.book_new();
       const summaryData = [['Name', 'Position', 'Total Hours', 'C', 'PT', 'MK', 'TS']];
       Object.values(empData).forEach(emp => {
@@ -1211,20 +1223,20 @@ function initApp() {
           formatExcelTime(emp.centers['MK']?.minutes || 0), formatExcelTime(emp.centers['TS']?.minutes || 0)
         ]);
       });
-      
+
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryData), 'Summary');
-      
+
       Object.entries(empData).forEach(([empId, emp]) => {
         Object.entries(emp.centers).forEach(([abbr, centerData]) => {
           if (centerData.records.length === 0) return;
           let maxCycles = 0;
           centerData.records.forEach(rec => { if (rec.cycles.length > maxCycles) maxCycles = rec.cycles.length; });
-          
+
           const headers = ['Date'];
           for (let i = 1; i <= maxCycles; i++) headers.push(`In${i}`, `Out${i}`);
           headers.push('Overall Total');
           const sheetData = [headers];
-          
+
           centerData.records.forEach(rec => {
             const row = [rec.date];
             let dayMins = 0;
@@ -1244,12 +1256,12 @@ function initApp() {
             row.push(formatExcelTime(dayMins));
             sheetData.push(row);
           });
-          
+
           const sheet = XLSX.utils.aoa_to_sheet(sheetData);
           XLSX.utils.book_append_sheet(wb, sheet, `${abbr}_${emp.name}`.substring(0, 31));
         });
       });
-      
+
       XLSX.writeFile(wb, `Kumon_Timeclock_Records_${month}-${year}.xlsx`);
       alert('✅ Export successful!');
     } catch (err) {
@@ -1384,7 +1396,7 @@ function initApp() {
     const leaveData = emp.leaveEntitlement || {};
     const fullTimeSection = document.getElementById('fullTimeLeaveSection');
     const partTimeSection = document.getElementById('partTimeLeaveSection');
-    
+
     if (terms === 'Full-time') {
       fullTimeSection.style.display = 'block';
       partTimeSection.style.display = 'none';
@@ -1393,7 +1405,7 @@ function initApp() {
       document.getElementById('annualEntitled').textContent = annualEntitled;
       document.getElementById('annualUsed').textContent = annualUsed;
       document.getElementById('annualBalance').textContent = Math.max(0, annualEntitled - annualUsed);
-      
+
       const sickEntitled = leaveData.sick || 0;
       const sickUsed = leaveData.sickUsed || 0;
       document.getElementById('sickEntitled').textContent = sickEntitled;
@@ -1413,18 +1425,18 @@ function initApp() {
       const empSnap = await get(empRef);
       const empData = empSnap.val();
       if (!empData) throw new Error('Employee not found');
-      
+
       const currentLeave = empData.leaveEntitlement || {};
-      const updatedLeave = { 
+      const updatedLeave = {
         ...currentLeave,
         annualUsed: currentLeave.annualUsed || 0,
         sickUsed: currentLeave.sickUsed || 0,
         timeOffUsed: currentLeave.timeOffUsed || 0
       };
-      
+
       if (leaveType === 'annual') updatedLeave.annual = parseInt(newEntitledValue) || 0;
       else if (leaveType === 'sick') updatedLeave.sick = parseInt(newEntitledValue) || 0;
-      
+
       await update(empRef, { leaveEntitlement: updatedLeave, updatedAt: new Date().toISOString() });
       loadLeaveEntitlement(currentEditingEmpId);
       alert(`✅ ${leaveType.charAt(0).toUpperCase() + leaveType.slice(1)} leave entitlement updated to ${newEntitledValue} days`);
@@ -1467,7 +1479,7 @@ function initApp() {
   window.confirmEditEntitled = function(leaveType) {
     const newValue = document.getElementById('newEntitledValue').value;
     if (!newValue || newValue < 0) { alert('Please enter a valid number'); return; }
-    
+
     if (leaveType === 'annual') {
       document.getElementById('annualEntitled').textContent = newValue;
       document.getElementById('empAnnualLeave').value = newValue;
@@ -1479,7 +1491,7 @@ function initApp() {
       const used = parseInt(document.getElementById('sickUsed').textContent) || 0;
       document.getElementById('sickBalance').textContent = Math.max(0, parseInt(newValue) - used);
     }
-    
+
     if (currentEditingEmpId) saveEntitlement(leaveType, newValue);
     closeEditEntitledModal();
   };
@@ -1514,7 +1526,7 @@ function initApp() {
     const tbody = document.getElementById('incompleteTableBody');
     if (!tbody) return;
     tbody.innerHTML = '<tr><td colspan="8" class="empty-state">⏳ Loading...</td></tr>';
-    
+
     try {
       const [timecardsSnap, verificationsSnap] = await Promise.all([
         get(ref(db, 'timecards')), get(ref(db, 'timecardVerifications'))
@@ -1525,7 +1537,7 @@ function initApp() {
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       const cutoffDate = thirtyDaysAgo.toISOString().split('T')[0];
       const incompleteRecords = [];
-      
+
       Object.entries(timecards).forEach(([date, dayData]) => {
         if (date < cutoffDate) return;
         Object.entries(dayData).forEach(([empId, empData]) => {
@@ -1534,7 +1546,7 @@ function initApp() {
           const rawLogs = empData.logs || [];
           const sortedLogs = [...rawLogs].sort((a, b) => a.time.localeCompare(b.time));
           let currentIn = null;
-          
+
           for (let i = 0; i < sortedLogs.length; i++) {
             const log = sortedLogs[i];
             if (log.type === 'in') {
@@ -1558,29 +1570,30 @@ function initApp() {
           }
         });
       });
-      
+
       const verificationList = Object.entries(verifications).map(([id, v]) => ({ id, ...v })).filter(v => v.status !== 'confirmed');
       const verificationKeys = new Set(verificationList.map(v => `${v.empId}_${v.date}_${v.inTime}`));
       const filteredIncomplete = incompleteRecords.filter(rec => !verificationKeys.has(`${rec.empId}_${rec.date}_${rec.time}`));
-      
+
       const allRecords = [
         ...filteredIncomplete.map(r => ({ ...r, isVerification: false, status: 'Incomplete' })),
         ...verificationList.map(v => ({ ...v, isVerification: true, status: v.status }))
       ];
-      
+
+      // FIX: Changed 'Pending' and 'Denied' to lowercase to match actual database values
       allRecords.sort((a, b) => {
-        const statusOrder = { 'Pending': 0, 'Denied': 1, 'Incomplete': 2 };
+        const statusOrder = { 'pending': 0, 'denied': 1, 'Incomplete': 2 };
         const orderDiff = (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99);
         if (orderDiff !== 0) return orderDiff;
         return b.date.localeCompare(a.date) || (a.name || a.empName || '').localeCompare(b.name || b.empName || '');
       });
-      
+
       tbody.innerHTML = '';
       if (allRecords.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" class="empty-state"> No incomplete timecards or pending verifications!</td></tr>';
         return;
       }
-      
+
       allRecords.forEach(rec => {
         const tr = document.createElement('tr');
         tr.dataset.empId = rec.empId;
@@ -1588,18 +1601,18 @@ function initApp() {
         tr.dataset.missingType = rec.missingType;
         tr.dataset.center = rec.center;
         tr.dataset.time = rec.time || rec.inTime;
-        
+
         const name = rec.name || rec.empName || 'Unknown';
         const chineseName = rec.chineseName || '';
         const position = rec.position || '-';
         const terms = rec.terms || '-';
         const date = rec.date;
         const center = rec.center || '-';
-        
+
         let statusBadge = '';
         let timeCell = '';
         let actionCell = '';
-        
+
         if (rec.isVerification) {
           const inTime = rec.inTime || rec.proposedInTime || '-';
           const outTime = rec.outTime || rec.proposedOutTime || rec.actualOutTime || '-';
@@ -1620,23 +1633,23 @@ function initApp() {
           timeCell = `${typeLabel} <small style="color:#666;">missing ${rec.missingType.toUpperCase()}</small><br><strong>${rec.time}</strong>`;
           actionCell = `<input type="time" class="incomplete-time-input" style="width:130px;padding:0.4rem;border:1px solid #cbd5e1;border-radius:4px;"><button class="primary save-incomplete-btn" style="padding:0.4rem 0.8rem;font-size:0.85rem;margin-left:0.25rem;">💾 Save</button>`;
         }
-        
+
         tr.innerHTML = `<td>${name} ${chineseName ? '(' + chineseName + ')' : ''}</td><td>${position}</td><td>${terms}</td><td>${date}</td><td>${center}</td><td>${timeCell}</td><td>${statusBadge}</td><td>${actionCell}</td>`;
         tbody.appendChild(tr);
       });
-      
+
       tbody.querySelectorAll('.save-incomplete-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
           const tr = btn.closest('tr');
           const input = tr.querySelector('.incomplete-time-input');
           const newTime = input.value.trim();
           if (!newTime) { alert('⚠️ Please enter the missing time.'); input.focus(); return; }
-          
+
           const empId = tr.dataset.empId;
           const date = tr.dataset.date;
           const missingType = tr.dataset.missingType;
           const center = tr.dataset.center;
-          
+
           btn.disabled = true; btn.textContent = 'Saving...';
           try {
             const daySnap = await get(ref(db, `timecards/${date}/${empId}`));
@@ -1663,7 +1676,7 @@ function initApp() {
   document.getElementById('incompleteTableBody').addEventListener('click', async (e) => {
     const btn = e.target.closest('button');
     if (!btn) return;
-    
+
     if (btn.classList.contains('verify-btn')) {
       const id = btn.dataset.id;
       const action = btn.dataset.action;
@@ -1691,14 +1704,14 @@ function initApp() {
         } catch (err) { console.error(err); alert('Failed to deny.'); }
       }
     }
-    
+
     if (btn.classList.contains('save-manual-btn')) {
       const id = btn.dataset.id;
       const tr = btn.closest('tr');
       const input = tr.querySelector('.manual-time-input');
       const newTime = input.value.trim();
       if (!newTime) { alert('Please enter the correct time.'); return; }
-      
+
       btn.disabled = true; btn.textContent = 'Saving...';
       try {
         const vSnap = await get(ref(db, `timecardVerifications/${id}`));

@@ -88,36 +88,47 @@ let allStudentsForPO = []; // Cache for students without PO
 function initFAB() {
     const fabBtn = document.getElementById('fabBtn');
     const fabMenu = document.getElementById('fabMenu');
+    const fabOverlay = document.getElementById('fabOverlay'); // New overlay
     const fabAddStudent = document.getElementById('fabAddStudent');
     const fabSchedulePO = document.getElementById('fabSchedulePO');
 
-    if (!fabBtn || !fabMenu) return;
+    if (!fabBtn || !fabMenu || !fabOverlay) return;
+
+    // Helper to close the FAB menu
+    function closeFAB() {
+        fabBtn.classList.remove('active');
+        fabMenu.classList.add('hidden');
+        fabOverlay.classList.add('hidden');
+    }
 
     // Toggle FAB menu
     fabBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        fabBtn.classList.toggle('active');
-        fabMenu.classList.toggle('hidden');
+        const isActive = fabBtn.classList.toggle('active');
+        fabMenu.classList.toggle('hidden', !isActive);
+        fabOverlay.classList.toggle('hidden', !isActive);
     });
 
-    // Close menu when clicking outside
-    document.addEventListener('click', (e) => {
-        if (!e.target.closest('.fab-container')) {
-            fabBtn.classList.remove('active');
-            fabMenu.classList.add('hidden');
-        }
-    });
+    // Close menu when clicking the blurred overlay
+    fabOverlay.addEventListener('click', closeFAB);
 
     // Action 1: Add New Student
     fabAddStudent.addEventListener('click', () => {
-        window.location.href = 'student-form.html'; // Navigates to new student form
+        closeFAB();
+        window.location.href = 'student-form.html'; 
     });
 
     // Action 2: Schedule PO
     fabSchedulePO.addEventListener('click', () => {
+        closeFAB();
         openSchedulePOModal();
-        fabBtn.classList.remove('active');
-        fabMenu.classList.add('hidden');
+    });
+    
+    // Optional: Close on Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !fabMenu.classList.contains('hidden')) {
+            closeFAB();
+        }
     });
 }
 
