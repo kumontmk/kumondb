@@ -70,6 +70,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await initPOCalendar();
     initFAB();
     setupSchedulePOModalListeners();
+    setupSearchStudentModalListeners();
   } catch (err) {
     console.error("Error initializing dashboard:", err);
   } finally {
@@ -88,9 +89,11 @@ let allStudentsForPO = []; // Cache for students without PO
 function initFAB() {
     const fabBtn = document.getElementById('fabBtn');
     const fabMenu = document.getElementById('fabMenu');
-    const fabOverlay = document.getElementById('fabOverlay'); // New overlay
+    const fabOverlay = document.getElementById('fabOverlay'); 
     const fabAddStudent = document.getElementById('fabAddStudent');
     const fabSchedulePO = document.getElementById('fabSchedulePO');
+    const fabSearchStudent = document.getElementById('fabSearchStudent'); 
+
 
     if (!fabBtn || !fabMenu || !fabOverlay) return;
 
@@ -123,7 +126,12 @@ function initFAB() {
         closeFAB();
         openSchedulePOModal();
     });
-    
+  
+    fabSearchStudent.addEventListener('click', () => {
+        closeFAB();
+        openSearchStudentModal();
+    });
+
     // Optional: Close on Escape key
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && !fabMenu.classList.contains('hidden')) {
@@ -838,3 +846,135 @@ window.savePoNote = async function(studentId, textareaId, btnElement) {
     btnElement.textContent = '💾 Save Note';
   }
 };
+
+// ============================================
+// SEARCH STUDENT MODAL LOGIC
+// ============================================
+let allStudentsForSearch = []; // Cache for search
+
+function setupSearchStudentModalListeners() {
+    const modal = document.getElementById('searchStudentModal');
+    const closeBtn = document.getElementById('closeSearchStudentModal');
+    
+    if (closeBtn) closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
+    if (modal) modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.classList.add('hidden');
+    });
+}
+
+async function openSearchStudentModal() {
+    const modal = document.getElementById('searchStudentModal');
+    const searchInput = document.getElementById('searchStudentInput');
+    const dropdown = document.getElementById('searchStudentDropdown');
+    const selectedInfo = document.getElementById('selectedSearchStudentInfo');
+    const hiddenId = document.getElementById('selectedSearchStudentId');
+    const openFormBtn = document.getElementById('openStudentFormBtn');
+
+    // Reset form
+    searchInput.value = '';
+    dropdown.innerHTML = '';
+    dropdown.style.display = 'none';
+    selectedInfo.style.display = 'none';
+    selectedInfo.textContent = '';
+    hiddenId.value = '';
+    openFormBtn.disabled = true;
+
+    // Fetch all students for search
+    await fetchStudentsForSearch();
+
+    modal.classList.remove('hidden');
+    setTimeout(() => searchInput.focus(), 100); // Auto-focus for better UX
+
+    // Search logic
+    searchInput.oninput = () => {
+        const term = searchInput.value.toLowerCase().trim();
+        if (!term) {
+            dropdown.style.display = 'none';
+            return;
+        }
+
+        const matches = allStudentsForSearch.filter(s => 
+            (s.namePinyin || '').toLowerCase().includes(term) ||
+            (s.nameCn || '').toLowerCase().includes(term) ||
+            (s.studentNumber || '').toLowerCase().includes(term)
+        );
+
+        dropdown.innerHTML = '';
+        if (matches.length === 0) {
+            dropdown.innerHTML = '<li style="padding:0.75rem; color:#999; text-align:center;">No students found</li>';
+        } else {
+            matches.slice(0, 20).forEach(s => {
+                const li = document.createElement('li');
+                li.style.padding = '0.75rem';
+                li.style.cursor = 'pointer';
+                li.style.borderBottom = '1px solid #f1f5f9';
+                li.innerHTML = `
+                    <div style="font-weight:600; color:var(--text);">${s.nameCn || 'N/A'} <span style="color:var(--text-light); font-weight:400;">(${s.namePinyin || ''})</span></div>
+                    <div style="font-size:0.8rem; color:var(--text-light);">Grade: ${s.grade || '-'} | No: ${s.studentNumber || '-'}</div>
+                `;
+                li.onclick = () => {
+                    hiddenId.value = s.id;
+                    searchInput.value = `${s.nameCn} (${s.namePinyin})`;
+                    selectedInfo.textContent = `✅ Selected: ${s.nameCn} (${s.namePinyin})`;
+                    selectedInfo.style.display = 'block';
+                    dropdown.style.display = 'none';
+                    openFormBtn.disabled = false; // Enable the button
+                };
+                li.onmouseover = () => li.style.background = '#f8fafc';
+                li.onmouseout = () => li.style.background = 'white';
+                dropdown.appendChild(li);
+            });
+        }
+        dropdown.style.display = 'block';
+    };
+
+    // Hide dropdown on blur
+    searchInput.onblur = () => {
+        setTimeout(() => { dropdown.style.display = 'none'; }, 200);
+    };
+
+    // Open Form logic
+    openFormBtn.onclick = () => {
+        const studentId = hiddenId.value;
+        if (!studentId) return alert('⚠️ Please select a student.');
+        
+        // Navigate to the student form
+        window.location.href = `student-form.html?id=${studentId}`;
+    };
+}
+
+async function fetchStudentsForSearch() {
+    try {
+        const snap = await get(ref(db, `centers/${centerId}/students`));
+        if (!snap.exists()) {
+            allStudentsForSearch = [];
+            return;
+        }
+        
+        allStudentsForSearch = [];
+        snap.forEach(child => {
+            const val = child.val();
+            // Include ALL students (active, paused, dropped) for search purposes
+            allStudentsForSearch.push({
+                id: child.key,
+                nameCn: val.nameCn || '',
+                namePinyin: val.namePinyin || '',
+                grade: val.grade || '',
+                studentNumber: val.studentNumber || ''
+            });
+        });
+
+        // Sort by name
+        allStudentsForSearch.sort((a, b) => {
+            const nameA = (a.namePinyin || a.nameCn || '').toLowerCase();
+            const nameB = (b.namePinyin || b.nameCn || '').toLowerCase();
+            if (nameA < nameB) return -1;
+            if (nameA > nameB) return 1;
+            return 0;
+        });
+
+    } catch (err) {
+        console.error('Error fetching students for search:', err);
+        allStudentsForSearch = [];
+    }
+}

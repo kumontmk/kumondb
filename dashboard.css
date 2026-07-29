@@ -592,7 +592,7 @@ RESPONSIVE ADJUSTMENTS
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(5px);
-  z-index: 998; /* Below header (1001), above content */
+  z-index: 998; 
   opacity: 1;
   transition: opacity 0.3s ease;
 }
@@ -606,10 +606,7 @@ RESPONSIVE ADJUSTMENTS
   bottom: 2rem;
   right: 2rem;
   z-index: 999;
-  display: flex;
-  flex-direction: column-reverse;
-  align-items: flex-end; /* Aligns menu pills to the right on desktop */
-  gap: 1rem;
+  /* No flex-direction needed anymore since menu is absolute */
 }
 
 .fab-btn {
@@ -644,22 +641,28 @@ RESPONSIVE ADJUSTMENTS
   line-height: 1;
 }
 
+/* DESKTOP MENU: Absolutely positioned so it doesn't push the button */
 .fab-menu {
+  position: absolute;
+  bottom: 76px; /* Sits right above the 60px button */
+  right: 0;
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   gap: 0.75rem;
-  opacity: 1;
-  transform: translateY(0);
+  pointer-events: none;
   transition: all 0.3s ease;
-  pointer-events: auto;
-  align-items: flex-end; 
-}
-
-.fab-menu.hidden {
-  display: flex !important; 
+  
+  /* Default Hidden State */
   opacity: 0;
   transform: translateY(20px);
-  pointer-events: none;
+}
+
+/* Active State */
+.fab-menu:not(.hidden) {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
 }
 
 .fab-menu-item {
@@ -695,115 +698,50 @@ RESPONSIVE ADJUSTMENTS
   .fab-container {
     bottom: 1.5rem;
     right: 1.5rem;
-    left: 1.5rem;
-    width: calc(100% - 3rem);
-    align-items: stretch; 
   }
 
+  /* MOBILE MENU: Fixed to the bottom of the screen */
   .fab-menu {
-    align-items: stretch;
-    width: 100%;
-    background: var(--white);
-    border-radius: 16px 16px 0 0; /* Rounded top corners for bottom sheet */
-    padding: 1rem;
-    box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
-    gap: 0.5rem;
-    position: absolute;
-    bottom: 76px; /* Positions it just above the FAB */
+    position: fixed;
+    bottom: 0;
     left: 0;
     right: 0;
-    max-height: 70vh; /* Prevents overflow if many buttons are added */
-    overflow-y: auto;
-  }
-
-  .fab-menu.hidden {
-    transform: translateY(100%); /* Slides down to hide */
-    opacity: 1; /* Keep opacity 1 so the slide animation is visible */
-  }
-
-  .fab-menu-item {
-    width: 100%;
-    border-radius: 12px;
-    padding: 1rem 1.25rem;
-    justify-content: flex-start;
-    white-space: normal;
-  }
-
-  .fab-menu-item:hover {
-    transform: none; /* Disable hover translation on touch devices */
-    background: var(--secondary);
-  }
-  
-  .fab-btn {
-    width: 56px;
-    height: 56px;
-    align-self: flex-end; /* Keeps the + button anchored to the bottom right */
-  }
-}
-
-/* =========================================
-   MOBILE RESPONSIVE FAB (Bottom Sheet Style)
-   ========================================= */
-@media (max-width: 768px) {
-  .fab-container {
-    bottom: 1.5rem;
-    right: 1.5rem;
-    left: 1.5rem;
-    width: calc(100% - 3rem);
-    align-items: stretch; 
-  }
-
-  .fab-menu {
-    align-items: stretch;
     width: 100%;
     background: var(--white);
     border-radius: 16px 16px 0 0;
-    padding: 0; /* ✅ Changed from 1rem to 0 - buttons will handle spacing */
+    padding: 0;
+    gap: 0;
     box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
-    gap: 0; /* ✅ Changed from 0.5rem to 0 - buttons will be flush */
-    position: absolute;
-    bottom: 76px;
-    left: 0;
-    right: 0;
     max-height: 70vh;
     overflow-y: auto;
-    opacity: 0;
+    align-items: stretch;
+    
+    /* Default Hidden State (Slides down) */
     transform: translateY(100%);
-    pointer-events: none;
   }
 
   .fab-menu:not(.hidden) {
-    opacity: 1;
     transform: translateY(0);
-    pointer-events: auto;
-  }
-
-  .fab-menu.hidden {
-    opacity: 0;
-    transform: translateY(100%);
-    pointer-events: none;
   }
 
   .fab-menu-item {
     width: 100%;
-    border-radius: 0; /* ✅ Removed border-radius - buttons are now square */
+    border-radius: 0;
     padding: 1.25rem 1.5rem;
     justify-content: flex-start;
     white-space: normal;
-    border: none; /* ✅ Removed border */
-    border-bottom: 1px solid #f1f5f9; /* ✅ Added subtle divider */
-    box-shadow: none; /* ✅ Removed individual shadow */
+    border: none;
+    border-bottom: 1px solid #f1f5f9;
+    box-shadow: none;
   }
 
-  /* ✅ Round only the top corners of the first button */
   .fab-menu-item:first-child {
     border-radius: 16px 16px 0 0;
   }
 
-  /* ✅ Round only the bottom corners of the last button */
   .fab-menu-item:last-child {
     border-radius: 0 0 16px 16px;
-    border-bottom: none; /* ✅ Remove divider from last item */
+    border-bottom: none;
   }
 
   .fab-menu-item:hover {
@@ -814,6 +752,5 @@ RESPONSIVE ADJUSTMENTS
   .fab-btn {
     width: 56px;
     height: 56px;
-    align-self: flex-end;
   }
 }

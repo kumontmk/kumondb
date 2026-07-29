@@ -119,6 +119,34 @@ function initializeTimetable() {
     };
     const DAY_ABBR = ['MON', 'TUES', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
+    function getDayViewHeaderInfo(selectedDay) {
+        const today = new Date();
+        const currentDayNum = today.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+        
+        const targetDayMap = {
+            'Monday': 1, 'Tuesday': 2, 'Wednesday': 3,
+            'Thursday': 4, 'Friday': 5, 'Saturday': 6, 'Sunday': 0
+        };
+        const targetDayNum = targetDayMap[selectedDay];
+        
+        // Calculate days to add to get to the target day (if it already passed this week, go to next week)
+        let daysToAdd = targetDayNum - currentDayNum;
+        if (daysToAdd < 0) daysToAdd += 7;
+        
+        const targetDate = new Date(today);
+        targetDate.setDate(today.getDate() + daysToAdd);
+        
+        const dd = targetDate.getDate();
+        const mm = targetDate.getMonth() + 1;
+        const dateStr = `${dd}/${mm}`;
+        
+        // Day of week number (1=Mon ... 7=Sun)
+        const dayOfWeekNum = targetDayNum === 0 ? 7 : targetDayNum;
+        const dayStr = `${dayOfWeekNum} - ${selectedDay}`;
+        
+        return { dateStr, dayStr };
+    }
+
     function getTimeSlots(day) {
         const isWeekend = ['Saturday', 'Sunday'].includes(day);
         const slots = [];
@@ -303,6 +331,15 @@ function initializeTimetable() {
             cachedStudentsSnap = snap;
             timetableBody.innerHTML = '';
             const day = daySelect.value;
+
+            const headerDateEl = document.querySelector('#dayViewHeaderRow .header-date');
+            const headerDayEl = document.querySelector('#dayViewHeaderRow .header-day');
+            if (headerDateEl && headerDayEl) {
+                const info = getDayViewHeaderInfo(day);
+                headerDateEl.textContent = info.dateStr;
+                headerDayEl.textContent = info.dayStr;
+            }
+
             const timeSlots = getTimeSlots(day);
             const schedule = {};
             timeSlots.forEach(t => schedule[t] = {
@@ -726,6 +763,21 @@ function initializeTimetable() {
         }
 
         const tableClone = activeTable.cloneNode(true);
+
+        if (viewName === 'Day_View') {
+                const headerRow = tableClone.querySelector('#dayViewHeaderRow');
+                if (headerRow) {
+                    const th = headerRow.querySelector('th');
+                    const dateText = th.querySelector('.header-date')?.textContent || '';
+                    const dayText = th.querySelector('.header-day')?.textContent || '';
+                    
+                    // Replace the single merged cell with two separate cells (1 col + 12 cols = 13 total)
+                    headerRow.innerHTML = `
+                        <th style="text-align: left; padding: 8px 12px; font-size: 14pt; font-weight: 600; background: #fff !important; color: #000 !important; border: 1px solid #333 !important;">${dateText}</th>
+                        <th colspan="12" style="text-align: right; padding: 8px 12px; font-size: 18pt; font-weight: 700; background: #fff !important; color: #dc3545 !important; border: 1px solid #333 !important;">${dayText}</th>
+                    `;
+                }
+        }
 
         // ✅ CRITICAL FIX: Use nested tables for Week View. 
         // Excel's HTML engine IGNORES background-color on <div> elements.

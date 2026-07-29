@@ -439,3 +439,43 @@ td.kc-cell {
     .champ-view-controls { display: none !important; }
     header, #page-loader, .timetable-controls, .access-denied, .tab-navigation, .week-view-info, .day-view-controls, .champ-view-controls { display: none !important; }
 }
+
+/* ============================================
+✅ DAY VIEW DATE & DAY HEADER
+============================================ */
+.day-view-header-row th {
+    background: #fff !important;
+    padding: 0 !important;
+    border-bottom: 2px solid #333 !important;
+}
+
+.day-view-date-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+}
+
+.header-date {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #333;
+}
+
+.header-day {
+    font-size: 1.5rem; /* Bigger font */
+    font-weight: 700;
+    color: #dc3545; /* Red color */
+}
+
+/* Print adjustments to ensure red color prints */
+@media print {
+    .day-view-header-row th {
+        background: #fff !important;
+    }
+    .header-day {
+        color: #dc3545 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+}
