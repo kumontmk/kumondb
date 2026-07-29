@@ -429,7 +429,8 @@ async function applyDashboardPermissions(user) {
       'card-followUps': 'followUps',
       'card-dropBook': 'dropBook' ,
       'card-bulletin': 'bulletin',
-      'card-newStudentList': 'newStudentList' 
+      'card-newStudentList': 'newStudentList',
+      'card-labelEditor': 'labelEditor' // ✅ NEW
     };
 
     for (const [cardId, permKey] of Object.entries(cardMap)) {
@@ -896,21 +897,34 @@ async function openSearchStudentModal() {
         const matches = allStudentsForSearch.filter(s => 
             (s.namePinyin || '').toLowerCase().includes(term) ||
             (s.nameCn || '').toLowerCase().includes(term) ||
-            (s.studentNumber || '').toLowerCase().includes(term)
+            (s.studentNumber || '').toLowerCase().includes(term) ||
+            (s.phoneMom || '').toLowerCase().includes(term) ||  // ✅ NEW: Search mom's phone
+            (s.phoneDad || '').toLowerCase().includes(term) ||  // ✅ NEW: Search dad's phone
+            (s.phoneOwn || '').toLowerCase().includes(term)     // ✅ NEW: Search student's own phone
         );
 
         dropdown.innerHTML = '';
         if (matches.length === 0) {
             dropdown.innerHTML = '<li style="padding:0.75rem; color:#999; text-align:center;">No students found</li>';
         } else {
-            matches.slice(0, 20).forEach(s => {
+            matches.slice(0, 30).forEach(s => { // ✅ Increased from 20 to 30 results
                 const li = document.createElement('li');
                 li.style.padding = '0.75rem';
                 li.style.cursor = 'pointer';
                 li.style.borderBottom = '1px solid #f1f5f9';
                 li.innerHTML = `
                     <div style="font-weight:600; color:var(--text);">${s.nameCn || 'N/A'} <span style="color:var(--text-light); font-weight:400;">(${s.namePinyin || ''})</span></div>
-                    <div style="font-size:0.8rem; color:var(--text-light);">Grade: ${s.grade || '-'} | No: ${s.studentNumber || '-'}</div>
+                    <div style="font-size:0.8rem; color:var(--text-light); margin-top:0.25rem;">
+                        Grade: ${s.grade || '-'} | No: ${s.studentNumber || '-'}
+                    </div>
+                    ${s.phoneMom || s.phoneDad || s.phoneOwn ? `
+                    <div style="font-size:0.75rem; color:#666; margin-top:0.25rem;">
+                        📞 ${s.phoneMom ? `Mom: ${s.phoneMom}` : ''} 
+                        ${s.phoneMom && s.phoneDad ? ' | ' : ''}
+                        ${s.phoneDad ? `Dad: ${s.phoneDad}` : ''}
+                        ${s.phoneMom && s.phoneOwn || s.phoneDad && s.phoneOwn ? ' | ' : ''}
+                        ${s.phoneOwn ? `Student: ${s.phoneOwn}` : ''}
+                    </div>` : ''}
                 `;
                 li.onclick = () => {
                     hiddenId.value = s.id;
@@ -960,7 +974,11 @@ async function fetchStudentsForSearch() {
                 nameCn: val.nameCn || '',
                 namePinyin: val.namePinyin || '',
                 grade: val.grade || '',
-                studentNumber: val.studentNumber || ''
+                studentNumber: val.studentNumber || '',
+                // ✅ NEW: Include phone numbers for search
+                phoneMom: val.phone?.mom || '',
+                phoneDad: val.phone?.dad || '',
+                phoneOwn: val.phone?.own || ''
             });
         });
 
@@ -978,3 +996,4 @@ async function fetchStudentsForSearch() {
         allStudentsForSearch = [];
     }
 }
+

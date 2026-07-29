@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Label Editor - Kumon DB</title>
+    <link rel="stylesheet" href="dashboard.css">
+    <link rel="stylesheet" href="label-editor.css">
+    
+    <!-- DOCX generator -->
+   <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="dashboard.html">← Dashboard</a>
+        </nav>
+        <h1>🏷️ Label Editor</h1>
+    </header>
+
+    <div id="accessDenied" class="access-denied hidden" style="display:none;">
+        <div class="access-denied-content">
+            <h2>🔐 Access Restricted</h2>
+            <p>You do not have permission to use the Label Editor.</p>
+            <button onclick="window.location.href='dashboard.html'" class="primary">Back to Dashboard</button>
+        </div>
+    </div>
+
+    <div id="mainContent" class="dashboard hidden">
+        <div class="dashboard-header">
+            <h2>Generate Student Labels</h2>
+            <p>Select a grade to generate labels for students. Export as DOCX (Word) or PDF.</p>
+        </div>
+
+        <div class="controls-section" style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 2rem;">
+            <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                <label for="gradeSelect" style="font-weight: 600;">Select Grade:</label>
+                <select id="gradeSelect" style="padding: 0.5rem; border-radius: 6px; border: 1px solid #cbd5e1; min-width: 200px;">
+                    <option value="all">All Grades</option>
+                </select>
+                
+                <button id="generateBtn" class="primary" style="background: var(--primary-dark); color: white; border: none; padding: 0.6rem 1.5rem; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                    👁️ Generate Preview
+                </button>
+
+                <button id="exportDocxBtn" class="primary" style="display: none; background: #2b579a; color: white; border: none; padding: 0.6rem 1.5rem; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                    📄 Export as DOCX
+                </button>
+            </div>
+            <p id="studentCount" style="margin-top: 1rem; color: var(--text-light); font-size: 0.9rem;"></p>
+        </div>
+
+        <!-- Preview Area -->
+        <div id="print-area"></div>
+    </div>
+
+    <!-- ✅ REQUIRED: Module Script Tag -->
+    <script type="module" src="label-editor.js"></script>
+</body>
+</html>
