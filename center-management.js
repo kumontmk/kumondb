@@ -20,12 +20,18 @@ let nfcAbortController = null;
 // ==========================================
 // 1. AUTHORIZATION CHECK
 // ==========================================
+function getEmpPositions(emp) {
+    if (Array.isArray(emp.positions)) return emp.positions;
+    if (emp.position) return [emp.position];
+    return [];
+}
+
 async function checkAuthorization(user) {
     if (!user) {
         showAccessDenied('🔐 Please log in first', 'No user session found.');
         return false;
     }
-
+    
     const actualEmail = user.email?.toLowerCase() || '';
     if (actualEmail === 'kumonchamps@gmail.com') {
         grantAccess();
@@ -33,26 +39,38 @@ async function checkAuthorization(user) {
     }
 
     try {
+        // 1. Check users/{uid} path
         const userSnap = await get(ref(db, `users/${user.uid}`));
         const userData = userSnap.val();
-        if (userData && userData.position?.trim().toLowerCase() === 'manager') {
-            grantAccess();
-            return true;
-        }
-
-        const empSnap = await get(ref(db, 'employees'));
-        const empData = empSnap.val();
-        if (empData) {
-            const matchingEmp = Object.values(empData).find(e => e.email?.toLowerCase() === user.email?.toLowerCase());
-            if (matchingEmp && matchingEmp.position?.trim().toLowerCase() === 'manager') {
+        
+        if (userData) {
+            // Convert all positions to lowercase and check if it includes 'manager' or 'master admin'
+            const userPositions = getEmpPositions(userData).map(p => p.trim().toLowerCase());
+            if (userPositions.includes('manager') || userPositions.includes('master admin')) {
                 grantAccess();
                 return true;
             }
         }
+
+        // 2. Check employees path
+        const empSnap = await get(ref(db, 'employees'));
+        const empData = empSnap.val();
+        
+        if (empData) {
+            const matchingEmp = Object.values(empData).find(e => e.email?.toLowerCase() === user.email?.toLowerCase());
+            if (matchingEmp) {
+                const empPositions = getEmpPositions(matchingEmp).map(p => p.trim().toLowerCase());
+                if (empPositions.includes('manager') || empPositions.includes('master admin')) {
+                    grantAccess();
+                    return true;
+                }
+            }
+        }
     } catch (err) {
-        console.error('Error checking user role:', err);
+        console.error('❌ Error checking user role:', err);
     }
 
+    // If all checks fail
     showAccessDenied('🔐 Access Restricted', `<p><strong>${user.email} is not authorized.</strong></p><p>Only Administrators and Managers can access Center Management.</p>`);
     return false;
 }
