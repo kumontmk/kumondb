@@ -265,25 +265,33 @@
         </div>
         <button type="button" class="secondary" id="addDTBtn" style="padding: 0.5rem 1rem; font-size: 0.9rem;">+ Add Diagnostic Test</button>
 
-        <h3 style="margin-top: 2.5rem; margin-bottom: 1rem; color: var(--primary-dark);">Achievement Tests (AT) - Auto-filled from Reports</h3>
-        <div class="table-wrapper" style="overflow-x: auto;">
-          <table class="schedule-table" id="atTable" style="min-width: 700px;">
-            <thead>
-              <tr>
-                <th>Subject</th>
-                <th>AT</th>
-                <th>Date</th>
-                <th>Score</th>
-                <th>Time (mins)</th>
-                <th>Group</th>
-              </tr>
-            </thead>
-            <tbody id="atTableBody">
-              <!-- Rows injected via JS -->
-            </tbody>
-          </table>
+        <!--AT table section with this: -->
+        <div style="margin-top: 1.5rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                <h3 style="font-size:1.1rem; color: var(--primary-dark); margin:0;">Achievement Tests (AT)</h3>
+            </div>
+            <p class="hint" style="margin-bottom:0.75rem;">Auto-filled from monthly reports. You can also add manual entries below.</p>
+            <div style="overflow-x: auto;">
+                <table id="atTable" class="schedule-table" style="min-width:600px;">
+                    <thead>
+                        <tr>
+                            <th>Subject *</th>
+                            <th>AT Level *</th>
+                            <th>Date *</th>
+                            <th>Score *</th>
+                            <th>Time (mins) *</th>
+                            <th>Group</th>
+                            <th>Source</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="atTableBody">
+                        <!-- Rows injected by JS -->
+                    </tbody>
+                </table>
+            </div>
+          <button type="button" id="addATBtn" class="secondary" style="margin-top: 1.5rem; margin-bottom: 0; padding: 0.5rem 1rem; font-size: 0.9rem; width: auto;">+ Add Achievement Test</button>
         </div>
-      </div>
 
       <!-- ✅ Actions -->
       <div class="form-actions" style="margin-top:1.5rem; display:flex; gap:1rem; flex-wrap:wrap; align-items:center;">

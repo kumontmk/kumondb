@@ -948,3 +948,26 @@ input[type="month"]::-webkit-calendar-picker-indicator:hover {
 #addAnywayBtn:hover {
     background: #4b5563;
 }
+
+/* ============================================
+🛠️ FIX: FORM ACTION BUTTONS SPACING & POSITION
+============================================ */
+.form-actions {
+    display: flex !important;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: center;
+    margin-top: 2rem;
+    padding: 1.5rem 0;
+    border-top: 2px solid #e2e8f0;
+}
+/* Force reset any accidental absolute positioning leaks */
+.form-actions button {
+    position: static !important; 
+    width: auto !important;
+    min-width: 130px;
+    margin: 0 !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: auto !important;
+}

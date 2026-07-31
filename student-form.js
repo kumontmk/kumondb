@@ -994,6 +994,19 @@ function initApp() {
                 actualStart: row.querySelector('.dt-actual')?.value || ''
             });
         });
+
+        const achievementTests = [];
+        document.querySelectorAll('#atTableBody tr.manual-at-row').forEach(row => {
+            achievementTests.push({
+                subject: row.querySelector('.at-subject')?.value || '',
+                level: row.querySelector('.at-level')?.value || '',
+                date: row.querySelector('.at-date')?.value || '',
+                score: row.querySelector('.at-score')?.value || '',
+                time: row.querySelector('.at-time')?.value || '',
+                group: row.querySelector('.at-group')?.value?.trim() || ''
+            });
+        });
+
         const getVal = (id) => {
             const select = document.getElementById(id);
             const other = document.getElementById(id + 'Other');
@@ -1032,6 +1045,7 @@ function initApp() {
             kcNo: document.getElementById('kcNo')?.value?.trim() || '',
             subjects,
             diagnosticTests,
+            achievementTests,
             assignedTeachers 
         };
     }
@@ -1445,43 +1459,100 @@ function initApp() {
         tr.querySelector('.remove-dt-btn').onclick = () => tr.remove();
     }
 
+    function addATRow(data = {}, isManual = true) {
+        const tbody = document.getElementById('atTableBody');
+        if (!tbody) return;
+
+            // ✅ FIX: Remove the "No data" placeholder if it exists
+        const placeholderRow = tbody.querySelector('tr td[colspan="8"]');
+        if (placeholderRow) {
+            placeholderRow.closest('tr').remove();
+        }
+
+        const tr = document.createElement('tr');
+        if (isManual) tr.classList.add('manual-at-row');
+        
+        const subjectOptions = SUBJECTS.map(s => `<option value="${s}" ${data.subject === s ? 'selected' : ''}>${s}</option>`).join('');
+        
+        tr.innerHTML = `
+            <td>
+                ${isManual ? `<select class="at-subject" required style="width:100%; padding:0.5rem;">
+                    <option value="">Select Subject</option>${subjectOptions}
+                </select>` : `<span>${data.subject || 'Unknown'}</span>`}
+            </td>
+            <td>
+                ${isManual ? `<input type="text" class="at-level" placeholder="e.g., 7A" value="${data.level || ''}" required style="width:100%; padding:0.5rem;">` : `<span>${data.level || '-'}</span>`}
+            </td>
+            <td>
+                ${isManual ? `<input type="date" class="at-date" value="${data.date || ''}" required style="width:100%; padding:0.5rem;">` : `<span>${data.date || '-'}</span>`}
+            </td>
+            <td>
+                ${isManual ? `<input type="text" class="at-score" placeholder="e.g., 85/100" value="${data.score || ''}" required style="width:100%; padding:0.5rem;">` : `<span>${data.score || '-'}</span>`}
+            </td>
+            <td>
+                ${isManual ? `<input type="number" class="at-time" placeholder="30" value="${data.time || ''}" required style="width:100%; padding:0.5rem;">` : `<span>${data.time || '-'}</span>`}
+            </td>
+            <td>
+                ${isManual ? `<input type="text" class="at-group" placeholder="e.g., A" value="${data.group || ''}" style="width:100%; padding:0.5rem;">` : `<span>${data.group || '-'}</span>`}
+            </td>
+            <td><span style="font-size:0.8rem; color:${isManual ? '#FF8C00' : '#008B8B'}; font-weight:600;">${isManual ? 'Manual' : 'Auto'}</span></td>
+            <td style="text-align:center;">
+                ${isManual ? `<button type="button" class="remove-at-btn danger" style="padding:0.4rem 0.8rem;">🗑️</button>` : `-`}
+            </td>`;
+            
+        if (isManual) {
+            tr.querySelector('.remove-at-btn').onclick = () => tr.remove();
+        }
+        tbody.appendChild(tr);
+    }
+
     function renderATTable() {
         const tbody = document.getElementById('atTableBody');
         if (!tbody) return;
         tbody.innerHTML = '';
-        if (!currentStudentData || !currentStudentData.subjects) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#999; padding:1rem;">No student data loaded.</td></tr>';
-            return;
-        }
-        const subjects = Array.isArray(currentStudentData.subjects) ? currentStudentData.subjects : Object.values(currentStudentData.subjects || {});
+        
         let hasData = false;
-        subjects.forEach(sub => {
-            if (!sub.progress) return;
-            const progArray = Array.isArray(sub.progress) ? sub.progress : Object.values(sub.progress || {});
-            progArray.forEach(prog => {
-                const testsToRender = prog.tests || (prog.test ? [prog.test] : []);
-                testsToRender.forEach(test => {
-                    if (test && (test.date || test.level || test.score || test.time || test.group)) {
-                        hasData = true;
-                        const tr = document.createElement('tr');
-                        tr.innerHTML = `
-                         <td>${sub.name || 'Unknown'}</td>
-                         <td>${test.level || '-'}</td>
-                         <td>${test.date || '-'}</td>
-                         <td>${test.score || '-'}</td>
-                         <td>${test.time || '-'}</td>
-                         <td>${test.group || '-'}</td>`;
-                        tbody.appendChild(tr);
-                    }
+
+        // 1. Render Auto-filled ATs (from monthly reports)
+        if (currentStudentData && currentStudentData.subjects) {
+            const subjects = Array.isArray(currentStudentData.subjects) ? currentStudentData.subjects : Object.values(currentStudentData.subjects || {});
+            subjects.forEach(sub => {
+                if (!sub.progress) return;
+                const progArray = Array.isArray(sub.progress) ? sub.progress : Object.values(sub.progress || {});
+                progArray.forEach(prog => {
+                    const testsToRender = prog.tests || (prog.test ? [prog.test] : []);
+                    testsToRender.forEach(test => {
+                        if (test && (test.date || test.level || test.score || test.time || test.group)) {
+                            hasData = true;
+                            addATRow({
+                                subject: sub.name || 'Unknown',
+                                level: test.level,
+                                date: test.date,
+                                score: test.score,
+                                time: test.time,
+                                group: test.group
+                            }, false); // false = Auto-filled
+                        }
+                    });
                 });
             });
-        });
+        }
+
+        // 2. Render Manual ATs
+        if (currentStudentData && Array.isArray(currentStudentData.achievementTests)) {
+            currentStudentData.achievementTests.forEach(at => {
+                hasData = true;
+                addATRow(at, true); // true = Manual
+            });
+        }
+
         if (!hasData) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#999; padding:1rem;">No Achievement Tests recorded yet. Update monthly reports to see data here.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:#999; padding:1rem;">No Achievement Tests recorded yet. Update monthly reports or add manually.</td></tr>';
         }
     }
 
     document.getElementById('addDTBtn')?.addEventListener('click', () => addDTRow());
+    document.getElementById('addATBtn')?.addEventListener('click', () => addATRow());
 
     async function loadStudentData() {
         try {
@@ -1778,6 +1849,25 @@ function initApp() {
             }
             dtIdx++;
         }
+
+        let atIdx = 1;
+        for (const row of document.querySelectorAll('#atTableBody tr.manual-at-row')) {
+            const subject = row.querySelector('.at-subject')?.value;
+            const level = row.querySelector('.at-level')?.value;
+            const date = row.querySelector('.at-date')?.value;
+            const score = row.querySelector('.at-score')?.value;
+            const time = row.querySelector('.at-time')?.value;
+            
+            // Only validate if the user started filling out the row
+            if (subject || level || date || score || time) {
+                if (!subject) return showError(`⚠️ AT #${atIdx}: Subject is required.`);
+                if (!level) return showError(`⚠️ AT #${atIdx}: AT Level is required.`);
+                if (!date) return showError(`⚠️ AT #${atIdx}: Date is required.`);
+                if (!score) return showError(`⚠️ AT #${atIdx}: Score is required.`);
+                if (!time) return showError(`⚠️ AT #${atIdx}: Time is required.`);
+            }
+            atIdx++;
+        }
         
         const globalTimeslots = new Map();
         let hasConflict = false;
@@ -1840,7 +1930,7 @@ function initApp() {
     });
 
         document.getElementById('cancelBtn')?.addEventListener('click', () => { if (confirm('Discard changes?')) navigateBack(); });    
-        
+
         document.getElementById('backToStudents')?.addEventListener('click', (e) => {
             e.preventDefault();
             if (!originalFormData) { navigateBack(); return; }
