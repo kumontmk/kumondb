@@ -231,32 +231,23 @@
                     </div>
                 </div>
 
-                <!-- Pause Fields -->
-                <div id="reqPauseFields" class="modal-grid">
+                <!-- Pause Fields: REMOVE "hidden" class (visible by default since Pause is default) -->
+                <div id="reqPauseFields" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
                     <div class="info-group">
                         <label>Pause From *</label>
-                        <div style="display:flex; gap:0.5rem;">
-                            <select id="reqPauseFromMonth" class="req-month-select"></select>
-                            <select id="reqPauseFromYear" class="req-year-select"></select>
-                        </div>
+                        <input type="month" id="reqPauseFrom" required>
                     </div>
                     <div class="info-group">
                         <label>Pause To *</label>
-                        <div style="display:flex; gap:0.5rem;">
-                            <select id="reqPauseToMonth" class="req-month-select"></select>
-                            <select id="reqPauseToYear" class="req-year-select"></select>
-                        </div>
+                        <input type="month" id="reqPauseTo" required>
                     </div>
                 </div>
 
-                <!-- Drop Fields -->
-                <div id="reqDropFields" class="modal-grid hidden">
-                    <div class="info-group full-width">
+                <!-- Drop Fields: ADD "hidden" class (hidden by default) -->
+                <div id="reqDropFields" class="hidden" style="margin-bottom: 1rem;">
+                    <div class="info-group">
                         <label>Drop Month/Year *</label>
-                        <div style="display:flex; gap:0.5rem;">
-                            <select id="reqDropMonth" class="req-month-select"></select>
-                            <select id="reqDropYear" class="req-year-select"></select>
-                        </div>
+                        <input type="month" id="reqDrop" required>
                     </div>
                 </div>
 

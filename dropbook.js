@@ -1221,24 +1221,7 @@ function initApp() {
     const detailsStep = document.getElementById('detailsStep');
     const reqTypeSelect = document.getElementById('reqType');
 
-    function getReqMonthOptions() {
-        let opts = '<option value="">Month</option>';
-        MONTH_NAMES.forEach((m, i) => {
-            opts += `<option value="${String(i + 1).padStart(2, '0')}">${m}</option>`;
-        });
-        return opts;
-    }
-    function getReqYearOptions() {
-        const cy = new Date().getFullYear();
-        let opts = '<option value="">Year</option>';
-        for (let y = cy; y <= cy + 2; y++) {
-            opts += `<option value="${y}">${y}</option>`;
-        }
-        return opts;
-    }
 
-    document.querySelectorAll('.req-month-select').forEach(el => el.innerHTML = getReqMonthOptions());
-    document.querySelectorAll('.req-year-select').forEach(el => el.innerHTML = getReqYearOptions());
 
     document.getElementById('addRequestBtn').addEventListener('click', () => {
         selectedStudent = null;
@@ -1249,6 +1232,22 @@ function initApp() {
         searchModal.classList.remove('hidden');
         searchModal.style.display = 'flex';
         searchInput.focus();
+
+        // ✅ Reset request type to default and sync field visibility
+        reqTypeSelect.value = 'pause';
+        document.getElementById('reqPauseFields').classList.remove('hidden');
+        document.getElementById('reqDropFields').classList.add('hidden');
+        document.getElementById('reqReason').value = '';
+        document.getElementById('reqPauseFrom').value = '';
+        document.getElementById('reqPauseTo').value = '';
+        document.getElementById('reqDrop').value = '';
+
+        // ✅ Set minimum selectable month to current month
+        const now = new Date();
+        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        document.getElementById('reqPauseFrom').min = currentMonth;
+        document.getElementById('reqPauseTo').min = currentMonth;
+        document.getElementById('reqDrop').min = currentMonth;
     });
 
     function closeSearchModal() {
@@ -1339,26 +1338,36 @@ function initApp() {
         const subjectIndex = parseInt(document.getElementById('reqSubjectSelect').value);
         const type = reqTypeSelect.value;
         const reason = document.getElementById('reqReason').value.trim();
-        
+
         if (isNaN(subjectIndex)) return alert('⚠️ Please select a valid subject.');
         if (!reason) return alert('⚠️ Reason is required.');
-        
+
         let pendingRequest = { type, reason };
-        
+
         if (type === 'pause') {
-            const fm = document.getElementById('reqPauseFromMonth').value;
-            const fy = document.getElementById('reqPauseFromYear').value;
-            const tm = document.getElementById('reqPauseToMonth').value;
-            const ty = document.getElementById('reqPauseToYear').value;
-            if (!fm || !fy || !tm || !ty) return alert('⚠️ Please select Pause From and To dates.');
+            // ✅ NEW: Get values from <input type="month"> (Format: "YYYY-MM")
+            const pauseFromVal = document.getElementById('reqPauseFrom').value;
+            const pauseToVal = document.getElementById('reqPauseTo').value;
+
+            if (!pauseFromVal || !pauseToVal) return alert('⚠️ Please select Pause From and To dates.');
+
+            // Split "YYYY-MM" into Year and Month
+            const [fy, fm] = pauseFromVal.split('-');
+            const [ty, tm] = pauseToVal.split('-');
+
             pendingRequest.pauseFromMonth = fm;
             pendingRequest.pauseFromYear = fy;
             pendingRequest.pauseToMonth = tm;
             pendingRequest.pauseToYear = ty;
         } else {
-            const dm = document.getElementById('reqDropMonth').value;
-            const dy = document.getElementById('reqDropYear').value;
-            if (!dm || !dy) return alert('⚠️ Please select Drop Month and Year.');
+            // ✅ NEW: Get values from <input type="month"> (Format: "YYYY-MM")
+            const dropVal = document.getElementById('reqDrop').value;
+            
+            if (!dropVal) return alert('⚠️ Please select Drop Month and Year.');
+
+            // Split "YYYY-MM" into Year and Month
+            const [dy, dm] = dropVal.split('-');
+
             pendingRequest.dropMonth = dm;
             pendingRequest.dropYear = dy;
         }
