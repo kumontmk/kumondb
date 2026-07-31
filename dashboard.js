@@ -119,9 +119,9 @@ function initFAB() {
     // Action 1: Add New Student
     fabAddStudent.addEventListener('click', () => {
         closeFAB();
-        window.location.href = 'student-form.html'; 
+        // ✅ UPDATED: Return to dashboard after adding
+        window.location.href = 'student-form.html?returnUrl=dashboard.html'; 
     });
-
     // Action 2: Schedule PO
     fabSchedulePO.addEventListener('click', () => {
         closeFAB();
@@ -995,8 +995,8 @@ async function openSearchStudentModal() {
         const studentId = hiddenId.value;
         if (!studentId) return alert('⚠️ Please select a student.');
         
-        // Navigate to the student form
-        window.location.href = `student-form.html?id=${studentId}`;
+        // ✅ UPDATED: Append returnUrl so it knows to come back to the dashboard
+        window.location.href = `student-form.html?id=${studentId}&returnUrl=dashboard.html`;
     };
 }
 

@@ -47,7 +47,7 @@ onAuthStateChanged(auth, async (user) => {
             document.getElementById('page-loader')?.classList.add('hidden');
 
             document.getElementById('backToStudentsBtn')?.addEventListener('click', () => {
-                window.location.href = 'students.html'; 
+                navigateBack(); ; 
             });
         }
     } catch (err) {
@@ -184,6 +184,14 @@ function initApp() {
     const isEdit = !!studentId;
     const formTitleEl = document.getElementById('formTitle');
     if (formTitleEl) formTitleEl.textContent = isEdit ? '✏️ Edit Student' : '➕ Add Student';
+
+    // ✅ NEW: Read returnUrl parameter, default to students.html if not provided
+    const returnUrl = urlParams.get('returnUrl') || 'students.html';
+
+    // ✅ NEW: Helper function to handle all navigation back
+    function navigateBack() {
+        window.location.href = returnUrl;
+    }
 
     // ==========================================
     // 🧭 NAVIGATION & AUTOCOMPLETE SEARCH LOGIC
@@ -1571,7 +1579,7 @@ function initApp() {
                 originalFormData = collectFormData();
             } else {
                 showError('Student not found in database.');
-                setTimeout(() => window.location.href = 'students.html', 1500);
+                        setTimeout(() => navigateBack(), 1500);
             }
         } catch (err) {
             console.error('Load Error:', err);
@@ -1590,7 +1598,7 @@ function initApp() {
                     showLoader();
                     await remove(ref(db, `centers/${centerId}/students/${studentId}`));
                     alert('Deleted!');
-                    window.location.href='students.html';
+                        navigateBack();
                 } catch(err) {
                     showError('Error: '+err.message);
                 } finally {
@@ -1640,7 +1648,7 @@ function initApp() {
             await push(ref(db, `centers/${targetId}/students`), data);
             await remove(sourceRef);
             alert('✅ Transferred!');
-            window.location.href = 'students.html';
+                        navigateBack();
         } catch(err) {
             showError('Transfer failed: ' + err.message);
         } finally {
@@ -1823,7 +1831,7 @@ function initApp() {
             if (isEdit) await set(ref(db, `centers/${centerId}/students/${studentId}`), studentData);
             else await push(ref(db, `centers/${centerId}/students`), studentData);
             alert(isEdit ? '✅ Updated!' : '✅ Added!');
-            window.location.href = 'students.html';
+                navigateBack();
         } catch (err) {
             showError('Error saving: ' + err.message);
         } finally {
@@ -1831,16 +1839,17 @@ function initApp() {
         }
     });
 
-    document.getElementById('cancelBtn')?.addEventListener('click', () => { if (confirm('Discard changes?')) window.location.href = 'students.html'; });
-    document.getElementById('backToStudents')?.addEventListener('click', (e) => {
-        e.preventDefault();
-        if (!originalFormData) { window.location.href = 'students.html'; return; }
-        if (JSON.stringify(collectFormData()) !== JSON.stringify(originalFormData)) {
-            if (confirm('You have unsaved changes. Are you sure you want to leave?')) window.location.href = 'students.html';
-        } else {
-            window.location.href = 'students.html';
-        }
-    });
+        document.getElementById('cancelBtn')?.addEventListener('click', () => { if (confirm('Discard changes?')) navigateBack(); });    
+        
+        document.getElementById('backToStudents')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (!originalFormData) { navigateBack(); return; }
+            if (JSON.stringify(collectFormData()) !== JSON.stringify(originalFormData)) {
+                if (confirm('You have unsaved changes. Are you sure you want to leave?')) navigateBack();
+            } else {
+                navigateBack();
+            }
+        });
 
     function initParentOrientation() {
         const poSelect = document.getElementById('parentOrientation');
