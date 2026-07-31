@@ -119,6 +119,77 @@ function initializeTimetable() {
     };
     const DAY_ABBR = ['MON', 'TUES', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
+    // 🆕 NEW: Robustly checks if a subject should be visible on a specific date
+    function isSubjectActiveOnDate(sub, targetDate) {
+        if (!sub || !targetDate) return false;
+        
+        const tM = targetDate.getMonth() + 1;
+        const tY = targetDate.getFullYear();
+
+        // 1. Check Resume Request (Brings student back)
+        if (sub.resumeRequest && sub.resumeRequest.returnMonth && sub.resumeRequest.returnYear) {
+            const rM = parseInt(sub.resumeRequest.returnMonth);
+            const rY = parseInt(sub.resumeRequest.returnYear);
+            if (rY < tY || (rY === tY && rM <= tM)) {
+                return true; 
+            }
+        }
+
+        // 2. Check Current Status (Direct Drop/Pause)
+        if (sub.status === 'drop') {
+            const dM = parseInt(sub.dropMonth);
+            const dY = parseInt(sub.dropYear);
+            if (dY < tY || (dY === tY && dM <= tM)) {
+                return false; 
+            }
+        } else if (sub.status === 'pause') {
+            const pfM = parseInt(sub.pauseFromMonth);
+            const pfY = parseInt(sub.pauseFromYear);
+            const ptM = sub.pauseToMonth ? parseInt(sub.pauseToMonth) : null;
+            const ptY = sub.pauseToYear ? parseInt(sub.pauseToYear) : null;
+            
+            const isAfterFrom = (pfY < tY || (pfY === tY && pfM <= tM));
+            const isBeforeTo = !ptM || !ptY || (ptY > tY || (ptY === tY && ptM >= tM));
+            
+            if (isAfterFrom && isBeforeTo) {
+                return false; 
+            }
+        } else if (sub.status === 'inquiry') {
+            return false;
+        }
+
+        // 3. Check Pending Request
+        if (sub.pendingRequest && !sub.pendingRequest.cancelled) {
+            const pr = sub.pendingRequest;
+            if (pr.type === 'drop') {
+                const dM = parseInt(pr.dropMonth);
+                const dY = parseInt(pr.dropYear);
+                if (dY < tY || (dY === tY && dM <= tM)) {
+                    return false; 
+                }
+            } else if (pr.type === 'pause') {
+                const pfM = parseInt(pr.pauseFromMonth);
+                const pfY = parseInt(pr.pauseFromYear);
+                const ptM = pr.pauseToMonth ? parseInt(pr.pauseToMonth) : null;
+                const ptY = pr.pauseToYear ? parseInt(pr.pauseToYear) : null;
+                
+                const isAfterFrom = (pfY < tY || (pfY === tY && pfM <= tM));
+                const isBeforeTo = !ptM || !ptY || (ptY > tY || (ptY === tY && ptM >= tM));
+                
+                if (isAfterFrom && isBeforeTo) {
+                    return false; 
+                }
+            }
+        }
+
+        if (sub.status === 'current') {
+            return true;
+        }
+
+        return false;
+    }
+
+    // ✅ UPDATED: Now returns targetDate object for accurate month/year evaluation
     function getDayViewHeaderInfo(selectedDay) {
         const today = new Date();
         const currentDayNum = today.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
@@ -144,7 +215,7 @@ function initializeTimetable() {
         const dayOfWeekNum = targetDayNum === 0 ? 7 : targetDayNum;
         const dayStr = `${dayOfWeekNum} - ${selectedDay}`;
         
-        return { dateStr, dayStr };
+        return { dateStr, dayStr, targetDate };
     }
 
     function getTimeSlots(day) {
@@ -236,11 +307,12 @@ function initializeTimetable() {
         return String(next);
     }
 
-    function getDaySubjectOrder(subjects, currentDay) {
+    // ✅ UPDATED: Accepts targetDate to accurately filter active subjects for ordering
+    function getDaySubjectOrder(subjects, currentDay, targetDate) {
         const daySubjects = [];
         const seen = new Set();
         subjects.forEach(sub => {
-            if (sub.status !== 'current' || !sub.timeslots) return;
+            if (!isSubjectActiveOnDate(sub, targetDate) || !sub.timeslots) return;
             const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
             const dayTs = tsList.filter(ts => (DAY_MAP[ts.day] || ts.day) === currentDay);
             if (dayTs.length > 0) {
@@ -290,7 +362,8 @@ function initializeTimetable() {
         };
     }
 
-    function buildStudentObj(s, sub, tsDay, tsList) {
+    // ✅ UPDATED: Accepts targetDate to pass to getDaySubjectOrder
+    function buildStudentObj(s, sub, tsDay, tsList, targetDate) {
         const group = getSubjectGroup(sub.name);
         if (!group) return null;
         
@@ -306,7 +379,8 @@ function initializeTimetable() {
         const nick = s.nickname ? ` (${s.nickname})` : '';
         const dayOrderStr = getDaySubjectOrder(
             Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {}),
-            tsDay
+            tsDay,
+            targetDate
         );
         const indicators = [enType, nextDayNum].filter(Boolean).join('');
         const displayName = `${baseName}${nick}${indicators}${dayOrderStr ? ' ' + dayOrderStr : ''}`;
@@ -334,8 +408,12 @@ function initializeTimetable() {
 
             const headerDateEl = document.querySelector('#dayViewHeaderRow .header-date');
             const headerDayEl = document.querySelector('#dayViewHeaderRow .header-day');
+            
+            // ✅ UPDATED: Extract targetDate for evaluation
+            const info = getDayViewHeaderInfo(day);
+            const targetDate = info.targetDate;
+            
             if (headerDateEl && headerDayEl) {
-                const info = getDayViewHeaderInfo(day);
                 headerDateEl.textContent = info.dateStr;
                 headerDayEl.textContent = info.dayStr;
             }
@@ -355,7 +433,9 @@ function initializeTimetable() {
                     if (!s?.subjects) return;
                     const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
                     subjects.forEach(sub => {
-                        if (sub.status !== 'current' || !sub.timeslots) return;
+                        // ✅ CRITICAL FIX: Use isSubjectActiveOnDate instead of sub.status !== 'current'
+                        if (!isSubjectActiveOnDate(sub, targetDate) || !sub.timeslots) return;
+                        
                         const group = getSubjectGroup(sub.name);
                         if (!group) return;
                         const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
@@ -366,7 +446,7 @@ function initializeTimetable() {
 
                             const tsDay = DAY_MAP[ts.day] || ts.day;
                             if (tsDay === day && schedule[ts.time]) {
-                                const studentObj = buildStudentObj(s, sub, tsDay, tsList);
+                                const studentObj = buildStudentObj(s, sub, tsDay, tsList, targetDate);
                                 if (!studentObj) return;
                                 if (group === 'Math') {
                                     if (isMathHighLevel(studentObj.level)) {
@@ -501,7 +581,8 @@ function initializeTimetable() {
                     if (!s?.subjects) return;
                     const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
                     subjects.forEach(sub => {
-                        if (sub.status !== 'current' || !sub.timeslots) return;
+                        if (!sub.timeslots) return;
+                        
                         const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
                         tsList.forEach(ts => {
                             // ✅ CRITICAL FILTER: Only include if timeslot is for THIS center
@@ -510,8 +591,14 @@ function initializeTimetable() {
 
                             const tsDay = DAY_MAP[ts.day] || ts.day;
                             const time = ts.time;
+                            
+                            // ✅ CRITICAL FIX: Evaluate if subject is active on this specific week day
+                            const dayIdx = days.indexOf(tsDay);
+                            const targetDate = weekDates[dayIdx].fullDate;
+                            if (!isSubjectActiveOnDate(sub, targetDate)) return;
+
                             if (schedule[time] && schedule[time][tsDay]) {
-                                const studentObj = buildStudentObj(s, sub, tsDay, tsList);
+                                const studentObj = buildStudentObj(s, sub, tsDay, tsList, targetDate);
                                 if (studentObj) {
                                     schedule[time][tsDay].push(studentObj);
                                 }
@@ -603,6 +690,11 @@ function initializeTimetable() {
         const render = (snap) => {
             champBody.innerHTML = '';
             const day = champDaySelect.value;
+            
+            // ✅ UPDATED: Extract targetDate for evaluation
+            const info = getDayViewHeaderInfo(day);
+            const targetDate = info.targetDate;
+            
             const timeSlots = getTimeSlots(day);
 
             const schedule = {};
@@ -624,7 +716,9 @@ function initializeTimetable() {
                     const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
 
                     subjects.forEach(sub => {
-                        if (sub.status !== 'current' || !sub.timeslots) return;
+                        // ✅ CRITICAL FIX: Use isSubjectActiveOnDate instead of sub.status !== 'current'
+                        if (!isSubjectActiveOnDate(sub, targetDate) || !sub.timeslots) return;
+                        
                         const group = getSubjectGroup(sub.name);
                         if (!group) return;
 
@@ -637,7 +731,7 @@ function initializeTimetable() {
                             const tsDay = DAY_MAP[ts.day] || ts.day;
                             if (tsDay !== day || !schedule[ts.time]) return;
 
-                            const studentObj = buildStudentObj(s, sub, tsDay, tsList);
+                            const studentObj = buildStudentObj(s, sub, tsDay, tsList, targetDate);
                             if (!studentObj) return;
 
                             if (group === 'Math') {

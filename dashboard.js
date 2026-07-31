@@ -63,6 +63,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 5. ✅ NEW: Load and display Center Name in Calendar
   await loadCenterName();
   await processResumeRequests();  
+  await processGradeUpdates();
   await syncPendingRequests(centerId);
 
   // 6. Initialize PO Calendar and Hide Loader
@@ -405,6 +406,48 @@ async function processResumeRequests() {
         }
     } catch (err) {
         console.error("Error processing resume requests:", err);
+    }
+}
+
+// ==========================================
+// 🍂 BULK GRADE UPGRADE LOGIC (August 15th)
+// ==========================================
+async function processGradeUpdates() {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const isAug15OrLater = (now.getMonth() > 7) || (now.getMonth() === 7 && now.getDate() >= 15);
+    
+    if (!isAug15OrLater) return; 
+    
+    const academicYear = currentYear;
+    const studentsRef = ref(db, `centers/${centerId}/students`);
+    const snapshot = await get(studentsRef);
+    if (!snapshot.exists()) return;
+
+    const GRADE_ORDER = ['K0', 'K1', 'K2', 'K3', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13'];
+    const getNextGrade = (grade) => {
+        const idx = GRADE_ORDER.indexOf(String(grade));
+        return (idx !== -1 && idx < GRADE_ORDER.length - 1) ? GRADE_ORDER[idx + 1] : grade;
+    };
+
+    const updates = {};
+    snapshot.forEach(child => {
+        const student = child.val();
+        const studentId = child.key;
+        
+        if (!student.lastGradeUpdateYear || student.lastGradeUpdateYear < academicYear) {
+            const oldGrade = student.grade;
+            const newGrade = getNextGrade(oldGrade);
+            
+            updates[`${studentId}/grade`] = newGrade;
+            updates[`${studentId}/lastGradeUpdateYear`] = academicYear;
+            updates[`${studentId}/updatedAt`] = new Date().toISOString();
+        }
+    });
+
+    if (Object.keys(updates).length > 0) {
+        await update(studentsRef, updates);
+        console.log(`🍂 Auto-updated grades for ${Object.keys(updates).length / 3} students.`);
     }
 }
 

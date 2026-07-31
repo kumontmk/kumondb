@@ -74,13 +74,16 @@ function initApp() {
         return (idx !== -1 && idx < GRADE_ORDER.length - 1) ? GRADE_ORDER[idx + 1] : grade;
     }
 
-    function checkSeptemberGradeUpdate(studentData) {
+    function checkAugustGradeUpdate(studentData) {
         const now = new Date();
         const currentYear = now.getFullYear();
-        const isSeptOrLater = now.getMonth() >= 8;
-        const academicYear = isSeptOrLater ? currentYear : currentYear - 1;
+        
+        // August is month 7 (0-indexed). Trigger if month is > 7 (Sept-Dec) 
+        // OR if it's August (7) and the date is >= 15.
+        const isAug15OrLater = (now.getMonth() > 7) || (now.getMonth() === 7 && now.getDate() >= 15);
+        const academicYear = isAug15OrLater ? currentYear : currentYear - 1;
 
-        if (isSeptOrLater && (!studentData.lastGradeUpdateYear || studentData.lastGradeUpdateYear < academicYear)) {
+        if (isAug15OrLater && (!studentData.lastGradeUpdateYear || studentData.lastGradeUpdateYear < academicYear)) {
             const oldGrade = studentData.grade;
             studentData.grade = getNextGrade(oldGrade);
             studentData.lastGradeUpdateYear = academicYear;
@@ -1496,10 +1499,11 @@ function initApp() {
                 }
                 
                 currentStudentData = s;
-                if (checkSeptemberGradeUpdate(s)) {
+                if (checkAugustGradeUpdate(s)) {
                     await set(ref(db, `centers/${centerId}/students/${studentId}`), s);
-                    console.log(`🍂 Grade auto-updated for Sept: ${s.grade}`);
+                    console.log(`🍂 Grade auto-updated for August 15th: ${s.grade}`);
                 }
+                
                 const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
                 const setFieldWithOther = (id, value) => {
                     const select = document.getElementById(id);
