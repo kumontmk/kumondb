@@ -180,7 +180,7 @@ function initializeReports() {
                     <th rowspan="2">Prev Level</th>
                     <th rowspan="2">Prev WS</th>
                     <th rowspan="2">Current Level</th>
-                    <th rowspan="2">No. WS</th>
+                    <th rowspan="2">No. of WS</th>
                     <th colspan="5" style="text-align:center; background: rgba(135,206,235,0.3);">Achievement Tests (AT)</th>
                 </tr>
                 <tr>
