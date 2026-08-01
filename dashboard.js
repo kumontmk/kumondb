@@ -171,8 +171,8 @@ async function openSchedulePOModal() {
     // Reset form
     searchInput.value = '';
     dropdown.innerHTML = '';
-    dropdown.style.display = 'none';
-    selectedInfo.style.display = 'none';
+    dropdown.classList.add('hidden');
+    selectedInfo.classList.add('hidden');
     selectedInfo.textContent = '';
     hiddenId.value = '';
     dateInput.value = '';
@@ -189,7 +189,7 @@ async function openSchedulePOModal() {
     searchInput.oninput = () => {
         const term = searchInput.value.toLowerCase().trim();
         if (!term) {
-            dropdown.style.display = 'none';
+              dropdown.classList.add('hidden');
             return;
         }
 
@@ -216,8 +216,8 @@ async function openSchedulePOModal() {
                     hiddenId.value = s.id;
                     searchInput.value = `${s.nameCn} (${s.namePinyin})`;
                     selectedInfo.textContent = `✅ Selected: ${s.nameCn} (${s.namePinyin})`;
-                    selectedInfo.style.display = 'block';
-                    dropdown.style.display = 'none';
+                    selectedInfo.classList.remove('hidden'); // Show selected info
+                    dropdown.classList.add('hidden'); // Hide dropdown
                 };
                 li.onmouseover = () => li.style.background = '#f8fafc';
                 li.onmouseout = () => li.style.background = 'white';
@@ -229,7 +229,7 @@ async function openSchedulePOModal() {
 
     // Hide dropdown on blur
     searchInput.onblur = () => {
-        setTimeout(() => { dropdown.style.display = 'none'; }, 200);
+        setTimeout(() => { dropdown.classList.add('hidden'); }, 200);
     };
 
     // Save logic

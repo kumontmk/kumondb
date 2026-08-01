@@ -778,3 +778,101 @@ RESPONSIVE ADJUSTMENTS
     background: #e65100;
     border-radius: 50%;
 }
+
+/* =========================================
+📝 SCHEDULE DT MODAL STYLES
+========================================= */
+.schedule-dt-modal-content {
+    max-width: 500px;
+    text-align: center;
+}
+
+.dt-choice-buttons {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.dt-choice-buttons button {
+    flex: 1;
+    padding: 0.75rem;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.dt-existing-form {
+    text-align: left;
+    background: #f8fafc;
+    padding: 1.5rem;
+    border-radius: var(--radius);
+    border: 1px solid #e2e8f0;
+    animation: fadeIn 0.3s ease;
+}
+
+.dt-existing-form .form-group {
+    margin-bottom: 1rem;
+}
+
+.dt-existing-form label {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 0.4rem;
+}
+
+.dt-existing-form input[type="text"],
+.dt-existing-form input[type="date"],
+.dt-existing-form select {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #cbd5e1;
+    border-radius: var(--radius);
+    font-size: 0.95rem;
+    background: #fff;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.dt-existing-form input:focus,
+.dt-existing-form select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.25);
+}
+
+.dt-existing-form .selected-info {
+    margin-top: 0.5rem;
+    color: #16a34a;
+    font-weight: 600;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    animation: fadeIn 0.3s ease;
+}
+
+.dt-existing-form .full-width {
+    width: 100%;
+    margin-top: 0.5rem;
+    padding: 0.85rem;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+/* Ensure the search dropdown inside this modal is positioned correctly */
+.dt-existing-form .search-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    margin-top: 4px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 0 0 var(--radius) var(--radius);
+    max-height: 200px;
+    overflow-y: auto;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    list-style: none;
+    padding: 0;
+}

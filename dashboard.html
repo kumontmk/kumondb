@@ -288,31 +288,40 @@
     <!-- 📝 SCHEDULE DT MODAL (FAB ACTION)         -->
     <!-- ========================================= -->
     <div id="scheduleDTModalDash" class="modal-overlay hidden">
-        <div class="modal-content" style="max-width: 500px; text-align: center;">
+        <div class="modal-content schedule-dt-modal-content">
             <span class="close-modal" id="closeScheduleDTModalDash">&times;</span>
-            <h2 style="margin-bottom: 1rem;">📝 Schedule Diagnostic Test</h2>
+            <h2 style="margin-bottom: 0.5rem;">📝 Schedule Diagnostic Test</h2>
             <p class="hint" style="margin-bottom: 1.5rem;">Is this for a new or existing student?</p>
-            <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
-                <button id="dtNewStudentBtn" class="primary" style="flex:1;">➕ New Student</button>
-                <button id="dtExistingStudentBtn" class="secondary" style="flex:1;">🔍 Existing Student</button>
+            
+            <div class="dt-choice-buttons">
+                <button id="dtNewStudentBtn" class="primary">➕ New Student</button>
+                <button id="dtExistingStudentBtn" class="secondary">🔍 Existing Student</button>
             </div>
             
-            <div id="dtExistingForm" style="display: none; text-align: left;">
-                <label>Search Student *</label>
-                <input type="text" id="dtStudentSearch" placeholder="Search by name or number..." style="margin-bottom: 0.5rem;">
-                <ul id="dtStudentListDropdown" style="display: none; position: absolute; width: calc(100% - 3rem); background: white; border: 1px solid #ddd; border-radius: 0 0 8px 8px; max-height: 200px; overflow-y: auto; z-index: 10; list-style: none; padding: 0; margin: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"></ul>
-                <div id="selectedDTStudentInfo" style="display:none; margin: 0.5rem 0; color: #16a34a; font-weight: 600;"></div>
-                <input type="hidden" id="selectedDTStudentId">
+            <div id="dtExistingForm" class="dt-existing-form hidden">
+                <div class="form-group">
+                    <label for="dtStudentSearch">Search Student *</label>
+                    <div style="position: relative;">
+                        <input type="text" id="dtStudentSearch" placeholder="Search by name or number...">
+                        <ul id="dtStudentListDropdown" class="search-dropdown hidden"></ul>
+                    </div>
+                    <div id="selectedDTStudentInfo" class="selected-info hidden">✅ Selected: <span id="selectedDTStudentName"></span></div>
+                    <input type="hidden" id="selectedDTStudentId">
+                </div>
                 
-                <label>Subject *</label>
-                <select id="dtSubjectSelect" style="margin-bottom: 0.5rem;">
-                    <option value="">Select Subject</option>
-                </select>
+                <div class="form-group">
+                    <label for="dtSubjectSelect">Subject *</label>
+                    <select id="dtSubjectSelect">
+                        <option value="">Select Subject</option>
+                    </select>
+                </div>
                 
-                <label>Diagnostic Date *</label>
-                <input type="date" id="dtDateInput" style="margin-bottom: 1rem;">
+                <div class="form-group">
+                    <label for="dtDateInput">Diagnostic Date *</label>
+                    <input type="date" id="dtDateInput">
+                </div>
                 
-                <button id="saveScheduleDTBtnDash" class="primary" style="width: 100%;">💾 Schedule DT</button>
+                <button id="saveScheduleDTBtnDash" class="primary full-width">💾 Schedule DT</button>
             </div>
         </div>
     </div>
