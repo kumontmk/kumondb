@@ -1,4 +1,4 @@
-import { auth, requireAuth, logout, db, syncPendingRequests  } from './auth.js';
+import { auth, requireAuth, logout, db, syncPendingRequests } from './auth.js';
 import { ref, get, update, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 // ============================================
@@ -8,7 +8,7 @@ let isAdmin = false;
 let poDataMap = {};
 let dtDataMap = {}; // Stores Diagnostic Test events
 let calendarEventsMap = {}; // Stores holiday events
-let centerName = ""; // ✅ NEW: Stores the center name to determine closed days
+let centerName = ""; // Stores the center name to determine closed days
 const centerId = sessionStorage.getItem('selectedCenter');
 
 // ============================================
@@ -29,13 +29,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         userInfoEl.textContent = `Welcome, ${user.name}`;
       }
       
-      // ✅ NEW: Update dashboard header with the logged-in user's name
       const dashboardUserNameEl = document.getElementById('dashboard-user-name');
       if (dashboardUserNameEl) {
         dashboardUserNameEl.textContent = user.name || 'there';
       }
       
-      // ✅ Apply Dashboard Permissions & Set Admin Status
       await applyDashboardPermissions(user);
     } catch (error) {
       console.error('Error parsing user data:', error);
@@ -61,7 +59,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const dateEl = document.getElementById('current-date');
   if (dateEl) dateEl.textContent = formattedDate;
 
-  // 5. ✅ NEW: Load and display Center Name in Calendar
+  // 5. Load and display Center Name in Calendar
   await loadCenterName();
   await processResumeRequests();  
   await processGradeUpdates();
@@ -97,17 +95,14 @@ function initFAB() {
     const fabSearchStudent = document.getElementById('fabSearchStudent'); 
     const fabScheduleDT = document.getElementById('fabScheduleDT');
 
-
     if (!fabBtn || !fabMenu || !fabOverlay) return;
 
-    // Helper to close the FAB menu
     function closeFAB() {
         fabBtn.classList.remove('active');
         fabMenu.classList.add('hidden');
         fabOverlay.classList.add('hidden');
     }
 
-    // Toggle FAB menu
     fabBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         const isActive = fabBtn.classList.toggle('active');
@@ -115,16 +110,13 @@ function initFAB() {
         fabOverlay.classList.toggle('hidden', !isActive);
     });
 
-    // Close menu when clicking the blurred overlay
     fabOverlay.addEventListener('click', closeFAB);
 
-    // Action 1: Add New Student
     fabAddStudent.addEventListener('click', () => {
         closeFAB();
-        // ✅ UPDATED: Return to dashboard after adding
         window.location.href = 'student-form.html?returnUrl=dashboard.html'; 
     });
-    // Action 2: Schedule PO
+    
     fabSchedulePO.addEventListener('click', () => {
         closeFAB();
         openSchedulePOModal();
@@ -135,12 +127,13 @@ function initFAB() {
         openSearchStudentModal();
     });
 
-    fabScheduleDT.addEventListener('click', () => {
-    closeFAB();
-    openScheduleDTModalDash();
-    });
+    if (fabScheduleDT) {
+        fabScheduleDT.addEventListener('click', () => {
+            closeFAB();
+            openScheduleDTModalDash();
+        });
+    }
 
-    // Optional: Close on Escape key
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && !fabMenu.classList.contains('hidden')) {
             closeFAB();
@@ -168,11 +161,10 @@ async function openSchedulePOModal() {
     const notesInput = document.getElementById('poNotesInput');
     const saveBtn = document.getElementById('saveSchedulePOBtn');
 
-    // Reset form
     searchInput.value = '';
     dropdown.innerHTML = '';
-    dropdown.classList.add('hidden');
-    selectedInfo.classList.add('hidden');
+    dropdown.style.display = 'none';
+    selectedInfo.style.display = 'none';
     selectedInfo.textContent = '';
     hiddenId.value = '';
     dateInput.value = '';
@@ -180,16 +172,13 @@ async function openSchedulePOModal() {
     saveBtn.disabled = false;
     saveBtn.textContent = '💾 Schedule PO';
 
-    // Fetch students without PO
     await fetchStudentsWithoutPO();
-
     modal.classList.remove('hidden');
 
-    // Search logic
     searchInput.oninput = () => {
         const term = searchInput.value.toLowerCase().trim();
         if (!term) {
-              dropdown.classList.add('hidden');
+            dropdown.style.display = 'none';
             return;
         }
 
@@ -216,8 +205,8 @@ async function openSchedulePOModal() {
                     hiddenId.value = s.id;
                     searchInput.value = `${s.nameCn} (${s.namePinyin})`;
                     selectedInfo.textContent = `✅ Selected: ${s.nameCn} (${s.namePinyin})`;
-                    selectedInfo.classList.remove('hidden'); // Show selected info
-                    dropdown.classList.add('hidden'); // Hide dropdown
+                    selectedInfo.style.display = 'block';
+                    dropdown.style.display = 'none';
                 };
                 li.onmouseover = () => li.style.background = '#f8fafc';
                 li.onmouseout = () => li.style.background = 'white';
@@ -227,12 +216,10 @@ async function openSchedulePOModal() {
         dropdown.style.display = 'block';
     };
 
-    // Hide dropdown on blur
     searchInput.onblur = () => {
-        setTimeout(() => { dropdown.classList.add('hidden'); }, 200);
+        setTimeout(() => { dropdown.style.display = 'none'; }, 200);
     };
 
-    // Save logic
     saveBtn.onclick = async () => {
         const studentId = hiddenId.value;
         const poDate = dateInput.value;
@@ -245,7 +232,6 @@ async function openSchedulePOModal() {
         saveBtn.textContent = 'Saving...';
 
         try {
-            // 1. Update Firebase
             await update(ref(db, `centers/${centerId}/students/${studentId}`), {
                 parentOrientation: 'Yes',
                 poDate: poDate,
@@ -253,7 +239,6 @@ async function openSchedulePOModal() {
                 updatedAt: new Date().toISOString()
             });
 
-            // 2. Update local poDataMap to reflect immediately on calendar without full reload
             const studentSnap = await get(ref(db, `centers/${centerId}/students/${studentId}`));
             const s = studentSnap.val();
             
@@ -281,10 +266,7 @@ async function openSchedulePOModal() {
                 poNote: poNote
             });
 
-            // 3. Re-render calendar
             renderDualCalendar();
-            
-            // 4. Close modal & notify
             modal.classList.add('hidden');
             alert('✅ Parent Orientation scheduled successfully!');
 
@@ -309,7 +291,6 @@ async function fetchStudentsWithoutPO() {
         allStudentsForPO = [];
         snap.forEach(child => {
             const val = child.val();
-            // Filter students who DO NOT have a scheduled PO date yet
             if (!val.poDate) {
                 allStudentsForPO.push({
                     id: child.key,
@@ -321,7 +302,6 @@ async function fetchStudentsWithoutPO() {
             }
         });
 
-        // Sort by name
         allStudentsForPO.sort((a, b) => {
             const nameA = (a.namePinyin || a.nameCn || '').toLowerCase();
             const nameB = (b.namePinyin || b.nameCn || '').toLowerCase();
@@ -336,15 +316,12 @@ async function fetchStudentsWithoutPO() {
     }
 }
 
-// ✅ NEW: Function to fetch and display the Center Name
 async function loadCenterName() {
   if (!centerId) return;
   try {
     const centerSnap = await get(ref(db, `centers/${centerId}`));
     if (centerSnap.exists()) {
       const centerData = centerSnap.val();
-      
-      // ✅ UPDATED: Save to global variable (removed 'const' to avoid shadowing)
       centerName = centerData.name || centerData.centerName || "Center";
       
       const calendarNameEl = document.getElementById('calendar-center-name');
@@ -353,12 +330,11 @@ async function loadCenterName() {
       const titleCenterNameEl = document.getElementById('title-center-name');
       if (titleCenterNameEl) titleCenterNameEl.textContent = centerName;
 
-      // ✅ NEW: Show MK Progress Report link if center is Mei Keng
       const mkLink = document.getElementById('link-mk-progress');
       if (mkLink) {
         const isMK = centerName.toLowerCase().includes('mei keng');
         if (isMK) {
-          mkLink.style.display = 'flex'; // Reveal the card
+          mkLink.style.display = 'flex';
         }
       }
     }
@@ -367,7 +343,6 @@ async function loadCenterName() {
   }
 }
 
-// ✅ NEW: Process Resume Requests when dashboard loads
 async function processResumeRequests() {
     if (!centerId) return;
     try {
@@ -389,16 +364,10 @@ async function processResumeRequests() {
                     if (returnYear && returnMonth) {
                       if (parseInt(returnYear) < parseInt(currentYear) || 
                           (parseInt(returnYear) === parseInt(currentYear) && parseInt(returnMonth) <= parseInt(currentMonth))) {
-                          
-                          console.log(`🔄 Resuming student ${studentId}, subject ${sub.name}...`);
                           sub.status = 'current';
-                          sub.resumed = true; // ✅ NEW: Mark as resumed, KEEPING dropMonth/dropYear for Drop Book history
+                          sub.resumed = true;
                           sub.resumedAt = new Date().toISOString();
-                          
-                          // DO NOT delete dropMonth, dropYear, dropReason, etc. 
-                          // They are needed for the Drop Book permanent log.
-                          
-                          delete sub.resumeRequest; // Clear the pending resume request
+                          delete sub.resumeRequest;
                           changed = true;
                         }
                     }
@@ -416,9 +385,6 @@ async function processResumeRequests() {
     }
 }
 
-// ==========================================
-// 🍂 BULK GRADE UPGRADE LOGIC (August 15th)
-// ==========================================
 async function processGradeUpdates() {
     const now = new Date();
     const currentYear = now.getFullYear();
@@ -458,15 +424,12 @@ async function processGradeUpdates() {
     }
 }
 
-// ✅ Permission Logic Function
 async function applyDashboardPermissions(user) {
   try {
     const userSnap = await get(ref(db, `users/${user.uid}`));
     if (!userSnap.exists()) return;
 
     const userData = userSnap.val();
-    
-    // ✅ Set global admin status
     isAdmin = user.email?.toLowerCase() === 'kumonchamps@gmail.com';
     const dashPerms = userData.permissions?.dashboardCards || {};
 
@@ -477,10 +440,10 @@ async function applyDashboardPermissions(user) {
       'card-progressCharts': 'progressCharts',
       'card-attendance': 'attendance',
       'card-followUps': 'followUps',
-      'card-dropBook': 'dropBook' ,
+      'card-dropBook': 'dropBook',
       'card-bulletin': 'bulletin',
       'card-newStudentList': 'newStudentList',
-      'card-labelEditor': 'labelEditor' // ✅ NEW
+      'card-labelEditor': 'labelEditor'
     };
 
     for (const [cardId, permKey] of Object.entries(cardMap)) {
@@ -504,13 +467,11 @@ async function applyDashboardPermissions(user) {
 async function initPOCalendar() {
   if (!centerId) return;
   try {
-    // 1. Load PO Data (EXISTING LOGIC PRESERVED)
     const snap = await get(ref(db, `centers/${centerId}/students`));
     if (snap.exists()) {
       const students = snap.val();
       poDataMap = {};
 
-      // --- Existing PO Mapping ---
       Object.entries(students).forEach(([id, s]) => {
         if (s.parentOrientation === 'Yes' && s.poDate) {
           const dateKey = s.poDate; 
@@ -540,7 +501,7 @@ async function initPOCalendar() {
         }
       });
 
-      // ✅ NEW: Map Diagnostic Tests to dtDataMap
+      // Map Diagnostic Tests to dtDataMap
       dtDataMap = {};
       Object.entries(students).forEach(([id, s]) => {
         if (s.diagnosticTests && Array.isArray(s.diagnosticTests)) {
@@ -558,7 +519,6 @@ async function initPOCalendar() {
       });
     }
 
-    // 2. Load Calendar Events (Holidays)
     const calSnap = await get(ref(db, `centers/${centerId}/calendar`));
     if (calSnap.exists()) {
       calendarEventsMap = calSnap.val();
@@ -566,7 +526,6 @@ async function initPOCalendar() {
       calendarEventsMap = {};
     }
 
-    // 3. Render and Setup
     renderDualCalendar();
     setupModalListeners();
 
@@ -590,14 +549,13 @@ function renderDualCalendar() {
   renderMonthGrid(nextYear, nextMonth, 'calendarNext', today);
 }
 
-// ✅ NEW: Helper function to get closed days based on center name
 function getClosedDaysForCenter(name) {
     const lowerName = name.toLowerCase();
-    if (lowerName.includes('mei keng')) return [0]; // 0 = Sunday
-    if (lowerName.includes('pac tat')) return [0, 6]; // 0 = Sunday, 6 = Saturday
-    if (lowerName.includes('champs')) return [0]; // 0 = Sunday
-    if (lowerName.includes('tap siac')) return [2]; // 2 = Tuesday
-    return []; // Default fallback
+    if (lowerName.includes('mei keng')) return [0];
+    if (lowerName.includes('pac tat')) return [0, 6];
+    if (lowerName.includes('champs')) return [0];
+    if (lowerName.includes('tap siac')) return [2];
+    return [];
 }
 
 function renderMonthGrid(year, month, containerId, todayDate) {
@@ -613,8 +571,6 @@ function renderMonthGrid(year, month, containerId, todayDate) {
 
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  
-  // ✅ NEW: Get closed days for this specific center
   const closedDays = getClosedDaysForCenter(centerName);
 
   for (let i = 0; i < firstDay; i++) {
@@ -634,44 +590,69 @@ function renderMonthGrid(year, month, containerId, todayDate) {
       cell.classList.add('today');
     }
 
-    // ✅ NEW: Check if this day of the week is closed for the center
     const dayOfWeek = new Date(year, month, day).getDay();
     const isClosed = closedDays.includes(dayOfWeek);
 
-    // ✅ UPDATED: Apply Holiday Classes (Public & Center)
     const event = calendarEventsMap[dateStr];
     if (event) {
       if (event.type === 'public') cell.classList.add('has-public-holiday');
       if (event.type === 'center') cell.classList.add('has-center-holiday');
     }
 
-    // ✅ UPDATED: Apply PO Class & Sync Notes/MUC
     if (poDataMap[dateStr] && poDataMap[dateStr].length > 0) {
       cell.classList.add('has-po');
       let tooltipText = `${poDataMap[dateStr].length} Parent Orientation(s) scheduled`;
       if (event) {
         let hType = event.type === 'center' ? 'Center' : 'Public';
         tooltipText += ` | ${hType} Holiday`;
-        if (event.name) tooltipText += `: ${event.name}`; // Synced Holiday Name
-        if (event.muc) tooltipText += ' (MUC)';           // Synced MUC status
+        if (event.name) tooltipText += `: ${event.name}`;
+        if (event.muc) tooltipText += ' (MUC)';
       }
       cell.title = tooltipText;
     } else if (event) {
       let hType = event.type === 'center' ? 'Center' : 'Public';
       let titleText = `${hType} Holiday`;
-      if (event.name) titleText += `: ${event.name}`;     // Synced Holiday Name
-      if (event.muc) titleText += ' (MUC)';               // Synced MUC status
+      if (event.name) titleText += `: ${event.name}`;
+      if (event.muc) titleText += ' (MUC)';
       cell.title = titleText;
     } else if (isClosed) {
-      // ✅ NEW: Gray out the day if it's a closed day and has no PO/Holiday
       cell.classList.add('closed-day');
     }
     
-    // ✅ NEW: Apply DT Class & Tooltip
+    // ✅ UPDATED: Apply DT Class, Tooltip, AND Visual Indicators
     const hasDT = dtDataMap[dateStr] && dtDataMap[dateStr].length > 0;
     if (hasDT) {
         cell.classList.add('has-dt');
-        let dtTooltip = `${dtDataMap[dateStr].length} Diagnostic Test(s)`;
+        
+        // 1. Count DTs by subject abbreviation
+        const dtCounts = {};
+        dtDataMap[dateStr].forEach(entry => {
+            const subj = entry.dtData.subject || '';
+            let abbr = '';
+            
+            if (subj === 'Math') abbr = 'M';
+            else if (subj === 'English EFL') abbr = 'L';
+            else if (subj === 'English ERP') abbr = 'R';
+            else if (subj.includes('Chinese')) abbr = 'C'; // Covers both Trad & Simp
+            
+            if (abbr) {
+                dtCounts[abbr] = (dtCounts[abbr] || 0) + 1;
+            }
+        });
+        
+        // 2. Build indicator string, e.g., "M (2) L (1)"
+        const indicators = Object.entries(dtCounts)
+            .map(([abbr, count]) => `${abbr} (${count})`)
+            .join(' ');
+            
+        // 3. Add indicator visually inside the calendar cell
+        const indicatorEl = document.createElement('div');
+        indicatorEl.className = 'dt-indicator';
+        indicatorEl.textContent = indicators;
+        cell.appendChild(indicatorEl);
+        
+        // 4. Update the hover tooltip to be more descriptive
+        const dtTooltip = `DTs Scheduled: ${indicators.replace(/ /g, ', ')}`;
         cell.title = cell.title ? `${cell.title} | ${dtTooltip}` : dtTooltip;
     }
 
@@ -682,47 +663,36 @@ function renderMonthGrid(year, month, containerId, todayDate) {
 function setupModalListeners() {
   const poModal = document.getElementById('poModal');
   const closePoBtn = document.getElementById('closePoModal');
-  
   const editModal = document.getElementById('editCalendarModal');
   const closeEditBtn = document.getElementById('closeEditCalendarModal');
+  const dtModal = document.getElementById('dtModal');
+  const closeDtBtn = document.getElementById('closeDtModal');
 
-  // ✅ UPDATED CLICK LOGIC
   document.addEventListener('click', (e) => {
     if (e.target.classList.contains('calendar-day') && !e.target.classList.contains('empty')) {
       const dateStr = e.target.dataset.date;
       if (!dateStr) return;
 
-      // 1. If there's a PO, ALWAYS open the full PO modal (for everyone, including admin)
       if (e.target.classList.contains('has-po')) {
           openPOModal(dateStr);
       } else if (e.target.classList.contains('has-dt')) {
           openDTModal(dateStr);
       } else if (isAdmin) {
-      // 2. If no PO, only admin can click to edit holidays
           openEditCalendarModal(dateStr);
       }
     }
   });
 
-  const dtModal = document.getElementById('dtModal');
-  const closeDtBtn = document.getElementById('closeDtModal');
   closeDtBtn.addEventListener('click', () => dtModal.classList.add('hidden'));
   dtModal.addEventListener('click', (e) => { if (e.target === dtModal) dtModal.classList.add('hidden'); });
 
   closePoBtn.addEventListener('click', () => poModal.classList.add('hidden'));
-  poModal.addEventListener('click', (e) => {
-    if (e.target === poModal) poModal.classList.add('hidden');
-  });
+  poModal.addEventListener('click', (e) => { if (e.target === poModal) poModal.classList.add('hidden'); });
 
   closeEditBtn.addEventListener('click', () => editModal.classList.add('hidden'));
-  editModal.addEventListener('click', (e) => {
-    if (e.target === editModal) editModal.classList.add('hidden');
-  });
+  editModal.addEventListener('click', (e) => { if (e.target === editModal) editModal.classList.add('hidden'); });
 }
 
-// ============================================
-// EXISTING PO MODAL LOGIC (100% PRESERVED)
-// ============================================
 function openPOModal(dateStr) {
   const modal = document.getElementById('poModal');
   const title = document.getElementById('modalDateTitle');
@@ -808,21 +778,20 @@ function openPOModal(dateStr) {
     });
   }
 
-  // ✅ NEW: Add button for Admin to edit holidays from the PO Modal
   const existingBtn = document.getElementById('adminEditHolidayBtn');
-  if (existingBtn) existingBtn.remove(); // Prevent duplicates if reopened
+  if (existingBtn) existingBtn.remove();
 
   if (isAdmin) {
     const editCalBtn = document.createElement('button');
     editCalBtn.id = 'adminEditHolidayBtn';
     editCalBtn.className = 'save-note-btn';
     editCalBtn.style.marginTop = '1.5rem';
-    editCalBtn.style.background = '#e65100'; // Orange to match Center Holiday
+    editCalBtn.style.background = '#e65100';
     editCalBtn.style.width = '100%';
     editCalBtn.textContent = '📅 Edit Center/Public Holidays for this Date';
     editCalBtn.onclick = () => {
-      modal.classList.add('hidden'); // Close PO modal
-      openEditCalendarModal(dateStr); // Open Edit Calendar modal
+      modal.classList.add('hidden');
+      openEditCalendarModal(dateStr);
     };
     modal.querySelector('.modal-content').appendChild(editCalBtn);
   }
@@ -830,9 +799,6 @@ function openPOModal(dateStr) {
   modal.classList.remove('hidden');
 }
 
-// ============================================
-// NEW: ADMIN CALENDAR EDIT MODAL
-// ============================================
 function openEditCalendarModal(dateStr) {
   const modal = document.getElementById('editCalendarModal');
   const title = document.getElementById('editCalendarDateTitle');
@@ -846,7 +812,6 @@ function openEditCalendarModal(dateStr) {
   if (event) {
     const radio = form.querySelector(`input[name="eventType"][value="${event.type}"]`);
     if (radio) radio.checked = true;
-    // ✅ UPDATED: Load the 'name' into the note textarea
     document.getElementById('calendarNote').value = event.name || ''; 
   } else {
     form.querySelector('input[name="eventType"][value="none"]').checked = true;
@@ -867,12 +832,11 @@ function openEditCalendarModal(dateStr) {
         await remove(ref(db, `centers/${centerId}/calendar/${dateStr}`));
         delete calendarEventsMap[dateStr];
       } else {
-        // ✅ UPDATED: Save as 'name' and PRESERVE the 'muc' status from calendar.js
         const existingEvent = calendarEventsMap[dateStr] || {};
         await update(ref(db, `centers/${centerId}/calendar/${dateStr}`), {
           type: eventType,
           name: note, 
-          muc: existingEvent.muc || false, // Prevents dashboard from wiping out MUC
+          muc: existingEvent.muc || false,
           updatedAt: new Date().toISOString()
         });
         calendarEventsMap[dateStr] = { type: eventType, name: note, muc: existingEvent.muc || false };
@@ -897,9 +861,6 @@ function openEditCalendarModal(dateStr) {
   };
 }
 
-// ============================================
-// EXISTING: PO NOTE SAVE FUNCTION (100% PRESERVED)
-// ============================================
 window.savePoNote = async function(studentId, textareaId, btnElement) {
   const textarea = document.getElementById(textareaId);
   const statusEl = document.getElementById(`status-${studentId}`);
@@ -935,7 +896,7 @@ window.savePoNote = async function(studentId, textareaId, btnElement) {
 // ============================================
 // SEARCH STUDENT MODAL LOGIC
 // ============================================
-let allStudentsForSearch = []; // Cache for search
+let allStudentsForSearch = [];
 
 function setupSearchStudentModalListeners() {
     const modal = document.getElementById('searchStudentModal');
@@ -955,7 +916,6 @@ async function openSearchStudentModal() {
     const hiddenId = document.getElementById('selectedSearchStudentId');
     const openFormBtn = document.getElementById('openStudentFormBtn');
 
-    // Reset form
     searchInput.value = '';
     dropdown.innerHTML = '';
     dropdown.style.display = 'none';
@@ -964,13 +924,11 @@ async function openSearchStudentModal() {
     hiddenId.value = '';
     openFormBtn.disabled = true;
 
-    // Fetch all students for search
     await fetchStudentsForSearch();
 
     modal.classList.remove('hidden');
-    setTimeout(() => searchInput.focus(), 100); // Auto-focus for better UX
+    setTimeout(() => searchInput.focus(), 100);
 
-    // Search logic
     searchInput.oninput = () => {
         const term = searchInput.value.toLowerCase().trim();
         if (!term) {
@@ -982,16 +940,16 @@ async function openSearchStudentModal() {
             (s.namePinyin || '').toLowerCase().includes(term) ||
             (s.nameCn || '').toLowerCase().includes(term) ||
             (s.studentNumber || '').toLowerCase().includes(term) ||
-            (s.phoneMom || '').toLowerCase().includes(term) ||  // ✅ NEW: Search mom's phone
-            (s.phoneDad || '').toLowerCase().includes(term) ||  // ✅ NEW: Search dad's phone
-            (s.phoneOwn || '').toLowerCase().includes(term)     // ✅ NEW: Search student's own phone
+            (s.phoneMom || '').toLowerCase().includes(term) ||
+            (s.phoneDad || '').toLowerCase().includes(term) ||
+            (s.phoneOwn || '').toLowerCase().includes(term)
         );
 
         dropdown.innerHTML = '';
         if (matches.length === 0) {
             dropdown.innerHTML = '<li style="padding:0.75rem; color:#999; text-align:center;">No students found</li>';
         } else {
-            matches.slice(0, 30).forEach(s => { // ✅ Increased from 20 to 30 results
+            matches.slice(0, 30).forEach(s => {
                 const li = document.createElement('li');
                 li.style.padding = '0.75rem';
                 li.style.cursor = 'pointer';
@@ -1016,7 +974,7 @@ async function openSearchStudentModal() {
                     selectedInfo.textContent = `✅ Selected: ${s.nameCn} (${s.namePinyin})`;
                     selectedInfo.style.display = 'block';
                     dropdown.style.display = 'none';
-                    openFormBtn.disabled = false; // Enable the button
+                    openFormBtn.disabled = false;
                 };
                 li.onmouseover = () => li.style.background = '#f8fafc';
                 li.onmouseout = () => li.style.background = 'white';
@@ -1026,17 +984,13 @@ async function openSearchStudentModal() {
         dropdown.style.display = 'block';
     };
 
-    // Hide dropdown on blur
     searchInput.onblur = () => {
         setTimeout(() => { dropdown.style.display = 'none'; }, 200);
     };
 
-    // Open Form logic
     openFormBtn.onclick = () => {
         const studentId = hiddenId.value;
         if (!studentId) return alert('⚠️ Please select a student.');
-        
-        // ✅ UPDATED: Append returnUrl so it knows to come back to the dashboard
         window.location.href = `student-form.html?id=${studentId}&returnUrl=dashboard.html`;
     };
 }
@@ -1056,7 +1010,6 @@ function openDTModal(dateStr) {
     if (entries.length === 0) {
         list.innerHTML = '<p style="text-align:center; color:#666;">No diagnostic tests scheduled for this date.</p>';
     } else {
-        // Group by student ID
         const groupedByStudent = {};
         entries.forEach(entry => {
             if (!groupedByStudent[entry.id]) groupedByStudent[entry.id] = [];
@@ -1067,7 +1020,7 @@ function openDTModal(dateStr) {
             const s = studentEntries[0].studentData;
             const card = document.createElement('div');
             card.className = 'po-student-card';
-            card.style.borderLeftColor = '#FF8C00'; // Orange border
+            card.style.borderLeftColor = '#FF8C00';
             
             const nameParts = [];
             if (s.nameCn) nameParts.push(`<span class="student-name-cn">${s.nameCn}</span>`);
@@ -1085,12 +1038,25 @@ function openDTModal(dateStr) {
                 
             let dtTableHtml = `
                 <table class="dt-mini-table">
-                    <thead><tr><th>Subject</th><th>Test</th><th>Score</th><th>Time</th><th>Suggested</th><th>Actual</th><th>Note</th></tr></thead>
+                    <thead><tr><th>Subject</th><th>Test</th><th>Score</th><th>Time</th><th>Suggested</th><th>Actual</th><th>Note</th><th>Action</th></tr></thead>
                     <tbody>
             `;
             studentEntries.forEach(entry => {
                 const dt = entry.dtData;
-                dtTableHtml += `<tr><td>${dt.subject || '-'}</td><td>${dt.test || '-'}</td><td>${dt.score || '-'}</td><td>${dt.time || '-'}</td><td>${dt.suggestedStart || '-'}</td><td>${dt.actualStart || '-'}</td><td>${dt.dtNote || '-'}</td></tr>`;
+                const safeSubject = (dt.subject || '').replace(/'/g, "\\'"); 
+                dtTableHtml += `<tr>
+                    <td>${dt.subject || '-'}</td>
+                    <td>${dt.test || '-'}</td>
+                    <td>${dt.score || '-'}</td>
+                    <td>${dt.time || '-'}</td>
+                    <td>${dt.suggestedStart || '-'}</td>
+                    <td>${dt.actualStart || '-'}</td>
+                    <td>${dt.dtNote || '-'}</td>
+                    <td style="white-space: nowrap;">
+                        <button class="dt-action-btn cancel" data-student="${studentId}" data-date="${dateStr}" data-subject="${safeSubject}" title="Cancel DT">❌</button>
+                        <button class="dt-action-btn reschedule" data-student="${studentId}" data-date="${dateStr}" data-subject="${safeSubject}" title="Reschedule DT">📅</button>
+                    </td>
+                </tr>`;
             });
             dtTableHtml += `</tbody></table>`;
             
@@ -1114,9 +1080,112 @@ function openDTModal(dateStr) {
                 </div>
             `;
             list.appendChild(card);
+
+            card.querySelectorAll('.dt-action-btn.cancel').forEach(btn => {
+                btn.onclick = () => cancelDT(btn.dataset.student, btn.dataset.date, btn.dataset.subject);
+            });
+            
+            card.querySelectorAll('.dt-action-btn.reschedule').forEach(btn => {
+                btn.onclick = (e) => {
+                    const cell = e.target.closest('td');
+                    e.target.outerHTML = `<input type="date" class="inline-reschedule-date">`;
+                    const cancelBtn = cell.querySelector('.cancel');
+                    if(cancelBtn) cancelBtn.style.display = 'none';
+
+                    const dateInput = cell.querySelector('.inline-reschedule-date');
+                    dateInput.focus();
+
+                    const saveReschedule = async () => {
+                        const newDate = dateInput.value;
+                        if (!newDate) { revertUI(); return; }
+                        await rescheduleDT(btn.dataset.student, btn.dataset.date, btn.dataset.subject, newDate);
+                    };
+
+                    dateInput.onchange = saveReschedule;
+                    dateInput.onblur = () => setTimeout(revertUI, 200);
+
+                    function revertUI() {
+                        openDTModal(dateStr);
+                    }
+                };
+            });
         });
     }
     modal.classList.remove('hidden');
+}
+
+async function cancelDT(studentId, dateStr, subject) {
+    if (!confirm(`Cancel Diagnostic Test for ${subject} on ${dateStr}?\nThis will also remove it from the student's form.`)) return;
+
+    try {
+        const snap = await get(ref(db, `centers/${centerId}/students/${studentId}`));
+        if (!snap.exists()) return;
+        const s = snap.val();
+
+        if (s.diagnosticTests) {
+            s.diagnosticTests = s.diagnosticTests.filter(dt => !(dt.date === dateStr && dt.subject === subject));
+            await update(ref(db, `centers/${centerId}/students/${studentId}`), { diagnosticTests: s.diagnosticTests });
+        }
+
+        if (dtDataMap[dateStr]) {
+            dtDataMap[dateStr] = dtDataMap[dateStr].filter(entry => !(entry.id === studentId && entry.dtData.date === dateStr && entry.dtData.subject === subject));
+            if (dtDataMap[dateStr].length === 0) delete dtDataMap[dateStr];
+        }
+
+        renderDualCalendar();
+        openDTModal(dateStr);
+        alert('✅ DT Cancelled successfully.');
+    } catch (err) {
+        console.error('Error cancelling DT:', err);
+        alert('❌ Failed to cancel DT.');
+    }
+}
+
+async function rescheduleDT(studentId, oldDateStr, subject, newDateStr) {
+    if (oldDateStr === newDateStr) {
+        openDTModal(oldDateStr);
+        return;
+    }
+
+    try {
+        const snap = await get(ref(db, `centers/${centerId}/students/${studentId}`));
+        if (!snap.exists()) return;
+        const s = snap.val();
+
+        if (s.diagnosticTests) {
+            const dt = s.diagnosticTests.find(d => d.date === oldDateStr && d.subject === subject);
+            if (dt) {
+                const exists = s.diagnosticTests.some(d => d.date === newDateStr && d.subject === subject);
+                if (exists) {
+                    alert('⚠️ This student already has a DT for this subject on the new date.');
+                    openDTModal(oldDateStr);
+                    return;
+                }
+                dt.date = newDateStr;
+                await update(ref(db, `centers/${centerId}/students/${studentId}`), { diagnosticTests: s.diagnosticTests });
+            }
+        }
+
+        if (dtDataMap[oldDateStr]) {
+            const entryIndex = dtDataMap[oldDateStr].findIndex(e => e.id === studentId && e.dtData.date === oldDateStr && e.dtData.subject === subject);
+            if (entryIndex !== -1) {
+                const entry = dtDataMap[oldDateStr][entryIndex];
+                entry.dtData.date = newDateStr;
+
+                if (!dtDataMap[newDateStr]) dtDataMap[newDateStr] = [];
+                dtDataMap[newDateStr].push(entry);
+                dtDataMap[oldDateStr].splice(entryIndex, 1);
+                if (dtDataMap[oldDateStr].length === 0) delete dtDataMap[oldDateStr];
+            }
+        }
+
+        renderDualCalendar();
+        openDTModal(newDateStr); 
+        alert('✅ DT Rescheduled successfully.');
+    } catch (err) {
+        console.error('Error rescheduling DT:', err);
+        alert('❌ Failed to reschedule DT.');
+    }
 }
 
 window.saveDtNote = async function(studentId, dateStr, textareaId, btnElement) {
@@ -1163,17 +1232,19 @@ function openScheduleDTModalDash() {
     const dropdown = document.getElementById('dtStudentListDropdown');
     const selectedInfo = document.getElementById('selectedDTStudentInfo');
     const hiddenId = document.getElementById('selectedDTStudentId');
-    const subjectSelect = document.getElementById('dtSubjectSelect');
-    const dateInput = document.getElementById('dtDateInput');
+    const container = document.getElementById('dtSubjectsContainer');
     
+    // 1. Hard reset using inline styles to guarantee visibility state
     existingForm.style.display = 'none';
     searchInput.value = '';
     dropdown.innerHTML = '';
     dropdown.style.display = 'none';
     selectedInfo.style.display = 'none';
     hiddenId.value = '';
-    subjectSelect.innerHTML = '<option value="">Select Subject</option>';
-    dateInput.value = '';
+    container.innerHTML = '';
+    addDTSubjectRow(); // Start with one empty row
+    
+    // 2. Show modal
     modal.classList.remove('hidden');
     
     document.getElementById('dtNewStudentBtn').onclick = () => {
@@ -1184,10 +1255,15 @@ function openScheduleDTModalDash() {
         existingForm.style.display = 'block';
         if (allStudentsForSearch.length === 0) await fetchStudentsForSearch();
     };
+
+    document.getElementById('addDTSubjectRowBtn').onclick = () => addDTSubjectRow();
     
     searchInput.oninput = () => {
         const term = searchInput.value.toLowerCase().trim();
-        if (!term) { dropdown.style.display = 'none'; return; }
+        if (!term) { 
+            dropdown.style.display = 'none'; 
+            return; 
+        }
         const matches = allStudentsForSearch.filter(s => 
             (s.namePinyin || '').toLowerCase().includes(term) ||
             (s.nameCn || '').toLowerCase().includes(term) ||
@@ -1204,18 +1280,9 @@ function openScheduleDTModalDash() {
                 li.onclick = () => {
                     hiddenId.value = s.id;
                     searchInput.value = `${s.nameCn} (${s.namePinyin})`;
-                    selectedInfo.textContent = `✅ Selected: ${s.nameCn} (${s.namePinyin})`;
-                    selectedInfo.style.display = 'block';
+                    document.getElementById('selectedDTStudentName').textContent = `${s.nameCn} (${s.namePinyin})`;
+                    selectedInfo.style.display = 'flex'; // ✅ Reliably shows the indicator
                     dropdown.style.display = 'none';
-                    
-                    // Populate subjects
-                    const allSubjects = ['Math', 'Chinese (Trad)', 'Chinese (Simp)', 'English ERP', 'English EFL'];
-                    subjectSelect.innerHTML = '<option value="">Select Subject</option>';
-                    allSubjects.forEach(subj => {
-                        const opt = document.createElement('option');
-                        opt.value = subj; opt.textContent = subj;
-                        subjectSelect.appendChild(opt);
-                    });
                 };
                 li.onmouseover = () => li.style.background = '#f8fafc';
                 li.onmouseout = () => li.style.background = 'white';
@@ -1225,13 +1292,30 @@ function openScheduleDTModalDash() {
         dropdown.style.display = 'block';
     };
     
+    searchInput.onblur = () => {
+        setTimeout(() => { dropdown.style.display = 'none'; }, 200);
+    };
+    
     document.getElementById('saveScheduleDTBtnDash').onclick = async () => {
         const studentId = hiddenId.value;
-        const subject = subjectSelect.value;
-        const date = dateInput.value;
         if (!studentId) return alert('⚠️ Please select a student.');
-        if (!subject) return alert('⚠️ Please select a subject.');
-        if (!date) return alert('⚠️ Please select a date.');
+        
+        const rows = container.querySelectorAll('.dt-subject-row');
+        let dtEntries = [];
+        let hasError = false;
+
+        rows.forEach(row => {
+            const subject = row.querySelector('.dt-row-subject').value;
+            const date = row.querySelector('.dt-row-date').value;
+            if (subject && date) {
+                dtEntries.push({ subject, date });
+            } else if (subject || date) {
+                hasError = true;
+            }
+        });
+
+        if (hasError) return alert('⚠️ Please complete both Subject and Date for all added rows, or remove empty rows.');
+        if (dtEntries.length === 0) return alert('⚠️ Please add at least one subject and date.');
         
         const saveBtn = document.getElementById('saveScheduleDTBtnDash');
         saveBtn.disabled = true; saveBtn.textContent = 'Saving...';
@@ -1241,29 +1325,63 @@ function openScheduleDTModalDash() {
             const s = snap.val();
             if (!s.diagnosticTests) s.diagnosticTests = [];
             
-            const exists = s.diagnosticTests.some(dt => dt.subject === subject && dt.date === date);
-            if (exists) {
-                alert('⚠️ This student already has a DT scheduled for this subject on this date.');
-                saveBtn.disabled = false; saveBtn.textContent = '💾 Schedule DT'; return;
+            let addedCount = 0;
+            for (const entry of dtEntries) {
+                const exists = s.diagnosticTests.some(dt => dt.subject === entry.subject && dt.date === entry.date);
+                if (!exists) {
+                    const newDT = { subject: entry.subject, date: entry.date, test: '', score: '', time: '', suggestedStart: '', actualStart: '', dtNote: '' };
+                    s.diagnosticTests.push(newDT);
+                    addedCount++;
+                    
+                    if (!dtDataMap[entry.date]) dtDataMap[entry.date] = [];
+                    dtDataMap[entry.date].push({ id: studentId, studentData: s, dtData: newDT });
+                }
             }
             
-            const newDT = { subject, date, test: '', score: '', time: '', suggestedStart: '', actualStart: '', dtNote: '' };
-            s.diagnosticTests.push(newDT);
-            await update(ref(db, `centers/${centerId}/students/${studentId}`), { diagnosticTests: s.diagnosticTests });
-            
-            if (!dtDataMap[date]) dtDataMap[date] = [];
-            dtDataMap[date].push({ id: studentId, studentData: s, dtData: newDT });
+            if (addedCount > 0) {
+                await update(ref(db, `centers/${centerId}/students/${studentId}`), { diagnosticTests: s.diagnosticTests });
+            }
             
             renderDualCalendar();
             modal.classList.add('hidden');
-            alert('✅ Diagnostic Test scheduled successfully!');
+            alert(`✅ ${addedCount} Diagnostic Test(s) scheduled successfully!`);
         } catch (err) {
             console.error('Error scheduling DT:', err);
             alert('❌ Failed to schedule DT.');
         } finally {
-            saveBtn.disabled = false; saveBtn.textContent = '💾 Schedule DT';
+            saveBtn.disabled = false; saveBtn.textContent = '💾 Schedule DT(s)';
         }
     };
+}
+
+// ✅ SINGLE, CLEAN VERSION OF THIS FUNCTION
+function addDTSubjectRow() {
+    const container = document.getElementById('dtSubjectsContainer');
+    const row = document.createElement('div');
+    row.className = 'dt-subject-row';
+    row.innerHTML = `
+        <div class="dt-row-group">
+            <label>Subject *</label>
+            <select class="dt-row-subject">
+                <option value="">Select Subject</option>
+                <option value="Math">Math</option>
+                <option value="Chinese (Trad)">Chinese (Trad)</option>
+                <option value="Chinese (Simp)">Chinese (Simp)</option>
+                <option value="English ERP">English ERP</option>
+                <option value="English EFL">English EFL</option>
+            </select>
+        </div>
+        <div class="dt-row-group">
+            <label>Diagnostic Date *</label>
+            <input type="date" class="dt-row-date">
+        </div>
+        <button type="button" class="remove-dt-row-btn" title="Remove">×</button>
+    `;
+    row.querySelector('.remove-dt-row-btn').onclick = () => {
+        row.remove();
+        if (container.children.length === 0) addDTSubjectRow(); // Keep at least one row
+    };
+    container.appendChild(row);
 }
 
 // Close listeners for Schedule DT Modal
@@ -1281,21 +1399,18 @@ async function fetchStudentsForSearch() {
         allStudentsForSearch = [];
         snap.forEach(child => {
             const val = child.val();
-            // Include ALL students (active, paused, dropped) for search purposes
             allStudentsForSearch.push({
                 id: child.key,
                 nameCn: val.nameCn || '',
                 namePinyin: val.namePinyin || '',
                 grade: val.grade || '',
                 studentNumber: val.studentNumber || '',
-                // ✅ NEW: Include phone numbers for search
                 phoneMom: val.phone?.mom || '',
                 phoneDad: val.phone?.dad || '',
                 phoneOwn: val.phone?.own || ''
             });
         });
 
-        // Sort by name
         allStudentsForSearch.sort((a, b) => {
             const nameA = (a.namePinyin || a.nameCn || '').toLowerCase();
             const nameB = (b.namePinyin || b.nameCn || '').toLowerCase();
@@ -1309,4 +1424,3 @@ async function fetchStudentsForSearch() {
         allStudentsForSearch = [];
     }
 }
-

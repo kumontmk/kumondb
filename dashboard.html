@@ -284,6 +284,7 @@
         </div>
     </div>
 
+
     <!-- ========================================= -->
     <!-- 📝 SCHEDULE DT MODAL (FAB ACTION)         -->
     <!-- ========================================= -->
@@ -298,30 +299,29 @@
                 <button id="dtExistingStudentBtn" class="secondary">🔍 Existing Student</button>
             </div>
             
-            <div id="dtExistingForm" class="dt-existing-form hidden">
+            <div id="dtExistingForm" class="dt-existing-form" style="display: none;">
                 <div class="form-group">
                     <label for="dtStudentSearch">Search Student *</label>
                     <div style="position: relative;">
                         <input type="text" id="dtStudentSearch" placeholder="Search by name or number...">
-                        <ul id="dtStudentListDropdown" class="search-dropdown hidden"></ul>
+                        <ul id="dtStudentListDropdown" class="search-dropdown" style="display: none;"></ul>
                     </div>
-                    <div id="selectedDTStudentInfo" class="selected-info hidden">✅ Selected: <span id="selectedDTStudentName"></span></div>
+                    <!-- Hardcoded display: none ensures it's hidden on open -->
+                    <div id="selectedDTStudentInfo" class="selected-info" style="display: none;">
+                        ✅ Selected: <span id="selectedDTStudentName"></span>
+                    </div>
                     <input type="hidden" id="selectedDTStudentId">
                 </div>
                 
-                <div class="form-group">
-                    <label for="dtSubjectSelect">Subject *</label>
-                    <select id="dtSubjectSelect">
-                        <option value="">Select Subject</option>
-                    </select>
+                <!-- Dynamic Subject/Date Rows Container -->
+                <div id="dtSubjectsContainer" style="margin-bottom: 1rem;">
+                    <!-- Rows will be injected here by JS -->
                 </div>
                 
-                <div class="form-group">
-                    <label for="dtDateInput">Diagnostic Date *</label>
-                    <input type="date" id="dtDateInput">
-                </div>
+                <!-- Clean class instead of messy inline styles -->
+                <button type="button" id="addDTSubjectRowBtn" class="add-dt-row-btn">+ Add Another Subject</button>
                 
-                <button id="saveScheduleDTBtnDash" class="primary full-width">💾 Schedule DT</button>
+                <button id="saveScheduleDTBtnDash" class="primary full-width">💾 Schedule DT(s)</button>
             </div>
         </div>
     </div>

@@ -8,11 +8,13 @@
   --shadow: 0 2px 10px rgba(0,0,0,0.1);
   --radius: 8px;
 }
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: var(--secondary);
@@ -22,9 +24,10 @@ body {
   display: flex;
   flex-direction: column;
 }
+
 /* =========================================
-HEADER
-========================================= */
+   HEADER
+   ========================================= */
 header {
   background: var(--primary);
   color: var(--white);
@@ -38,6 +41,7 @@ header {
   position: relative;
   z-index: 1001;
 }
+
 header h1 {
   font-size: 1.25rem;
   font-weight: 600;
@@ -45,11 +49,13 @@ header h1 {
   align-items: center;
   gap: 0.5rem;
 }
+
 header nav {
   display: flex;
   gap: 1rem;
   align-items: center;
 }
+
 header a, header button {
   color: var(--white);
   text-decoration: none;
@@ -65,9 +71,11 @@ header a, header button {
   align-items: center;
   gap: 0.4rem;
 }
+
 header a:hover, header button:hover {
   background: rgba(255,255,255,0.35);
 }
+
 .user-info {
   font-size: 0.9rem;
   background: rgba(255,255,255,0.15);
@@ -75,9 +83,10 @@ header a:hover, header button:hover {
   border-radius: var(--radius);
   margin-right: 0.5rem;
 }
+
 /* =========================================
-DASHBOARD CONTAINER & GRID
-========================================= */
+   DASHBOARD CONTAINER & GRID
+   ========================================= */
 .dashboard {
   padding: 2rem;
   max-width: 1400px;
@@ -85,26 +94,31 @@ DASHBOARD CONTAINER & GRID
   width: 100%;
   flex: 1;
 }
+
 .dashboard-header {
   margin-bottom: 1.5rem;
 }
+
 .dashboard-header h2 {
   font-size: 1.5rem;
   color: var(--text);
   margin-bottom: 0.25rem;
 }
+
 .dashboard-header p {
   color: var(--text-light);
   font-size: 1rem;
 }
+
 .center-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 1.5rem;
 }
+
 /* =========================================
-DASHBOARD CARDS
-========================================= */
+   DASHBOARD CARDS
+   ========================================= */
 .center-card {
   background: var(--white);
   padding: 1.5rem;
@@ -122,6 +136,7 @@ DASHBOARD CARDS
   text-decoration: none;
   color: inherit;
 }
+
 .center-card::before {
   content: '';
   position: absolute;
@@ -132,14 +147,17 @@ DASHBOARD CARDS
   background: var(--primary);
   transition: width 0.25s ease;
 }
+
 .center-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 8px 20px rgba(0,0,0,0.12);
   border-color: var(--primary);
 }
+
 .center-card:hover::before {
   width: 6px;
 }
+
 .center-card .card-icon {
   font-size: 2.25rem;
   margin-bottom: 0.25rem;
@@ -151,12 +169,14 @@ DASHBOARD CARDS
   align-items: center;
   justify-content: center;
 }
+
 .center-card .card-icon img {
   width: 100%;
   height: 100%;
   object-fit: contain;
   border-radius: 6px;
 }
+
 .center-card h3 {
   font-size: 1.15rem;
   font-weight: 600;
@@ -164,15 +184,17 @@ DASHBOARD CARDS
   margin: 0;
   line-height: 1.3;
 }
+
 .center-card p {
   font-size: 0.9rem;
   color: var(--text-light);
   margin: 0;
   line-height: 1.4;
 }
+
 /* =========================================
-LOADING SPINNER
-========================================= */
+   LOADING SPINNER
+   ========================================= */
 #page-loader {
   position: fixed;
   inset: 0;
@@ -183,10 +205,12 @@ LOADING SPINNER
   z-index: 9999;
   transition: opacity 0.3s ease;
 }
+
 #page-loader.hidden {
   opacity: 0;
   pointer-events: none;
 }
+
 .spinner {
   width: 48px;
   height: 48px;
@@ -195,12 +219,14 @@ LOADING SPINNER
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
+
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
 /* =========================================
-CALENDAR STYLES
-========================================= */
+   CALENDAR STYLES
+   ========================================= */
 .calendar-section {
   background: var(--white);
   padding: 1.5rem;
@@ -209,6 +235,7 @@ CALENDAR STYLES
   margin-bottom: 1.5rem;
   border: 1px solid #e2e8f0;
 }
+
 .calendar-header-main {
   display: flex;
   justify-content: space-between;
@@ -217,33 +244,39 @@ CALENDAR STYLES
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+
 .calendar-header-main h3 {
   font-size: 1.25rem;
   color: var(--text);
   margin: 0;
 }
+
 .calendar-hint {
   font-size: 0.9rem;
   color: var(--text-light);
   margin: 0;
 }
+
 .calendar-wrapper {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 2rem;
 }
+
 .calendar-month h4 {
   text-align: center;
   margin-bottom: 0.75rem;
   color: var(--primary-dark);
   font-size: 1.1rem;
 }
+
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
   text-align: center;
 }
+
 .calendar-day-header {
   font-weight: 600;
   color: var(--text-light);
@@ -251,20 +284,34 @@ CALENDAR STYLES
   padding: 0.5rem 0;
   text-transform: uppercase;
 }
+
 .calendar-day {
-  padding: 0.5rem;
+  padding: 0.25rem;
   border-radius: 6px;
   cursor: default;
   position: relative;
   transition: background 0.2s;
-  min-height: 40px;
+  min-height: 50px; /* Slightly taller to fit the indicator */
   display: flex;
+  flex-direction: column; /* Stack date number and indicator */
   align-items: center;
   justify-content: center;
   font-size: 0.9rem;
+  line-height: 1.2;
 }
 
-/* 🔵 Parent Orientation (PO) Styles - Changed to Blue */
+/* NEW: Style for the DT abbreviation indicators */
+.dt-indicator {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #e65100; /* Matches the orange DT theme */
+  margin-top: 2px;
+  white-space: nowrap;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* 🔵 Parent Orientation (PO) Styles */
 .calendar-day.has-po {
   background: #e3f2fd;
   color: #1565c0;
@@ -286,7 +333,7 @@ CALENDAR STYLES
   border-radius: 50%;
 }
 
-/* 🟢 Center Holiday Styles - Changed to Green */
+/* 🟢 Center Holiday Styles */
 .calendar-day.has-center-holiday {
   background: #e8f5e9;
   color: #2e7d32;
@@ -327,7 +374,8 @@ CALENDAR STYLES
   background: #c62828;
   border-radius: 50%;
 }
-/* Handle overlap gracefully if a day has both a PO and a Public Holiday */
+
+/* Handle overlap gracefully */
 .calendar-day.has-po.has-public-holiday {
   border-color: #c62828;
 }
@@ -336,13 +384,44 @@ CALENDAR STYLES
   border: 2px solid var(--primary);
   font-weight: bold;
 }
+
 .calendar-day.empty {
   cursor: default;
   background: transparent;
 }
+
+.calendar-day.closed-day {
+  background: #f3f4f6;
+  color: #9ca3af;
+  text-decoration: line-through;
+  cursor: default;
+}
+
+/* 🟠 Diagnostic Test (DT) Calendar Styles */
+.calendar-day.has-dt {
+  background: #fff3e0;
+  color: #e65100;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid #ffcc80;
+}
+.calendar-day.has-dt:hover {
+  background: #ffcc80;
+}
+.calendar-day.has-dt::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  background: #e65100;
+  border-radius: 50%;
+}
+
 /* =========================================
-MODAL STYLES
-========================================= */
+   MODAL STYLES
+   ========================================= */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -355,10 +434,12 @@ MODAL STYLES
   transition: opacity 0.3s ease;
   backdrop-filter: blur(2px);
 }
+
 .modal-overlay.hidden {
   opacity: 0;
   pointer-events: none;
 }
+
 .modal-content {
   background: var(--white);
   width: 90%;
@@ -370,6 +451,7 @@ MODAL STYLES
   position: relative;
   box-shadow: 0 10px 30px rgba(0,0,0,0.2);
 }
+
 .close-modal {
   position: absolute;
   top: 1rem;
@@ -379,15 +461,18 @@ MODAL STYLES
   color: var(--text-light);
   transition: color 0.2s;
 }
+
 .close-modal:hover {
   color: var(--text);
 }
+
 .po-student-list {
   display: flex;
   flex-direction: column;
   gap: 1rem;
   margin-top: 1rem;
 }
+
 .po-student-card {
   border: 1px solid #e2e8f0;
   border-radius: var(--radius);
@@ -395,6 +480,7 @@ MODAL STYLES
   background: #fafbfc;
   border-left: 4px solid var(--primary);
 }
+
 .po-student-card h4 {
   color: var(--primary-dark);
   margin: 0 0 0.75rem 0;
@@ -405,19 +491,23 @@ MODAL STYLES
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+
 .student-name-cn {
   font-weight: 700;
   color: var(--text);
 }
+
 .student-name-pinyin {
   color: var(--text-light);
   font-weight: 400;
 }
+
 .student-name-nickname {
   color: var(--primary-dark);
   font-weight: 500;
   font-style: italic;
 }
+
 .grade-school-badge {
   font-size: 0.85rem;
   font-weight: 500;
@@ -427,12 +517,14 @@ MODAL STYLES
   border-radius: 12px;
   white-space: nowrap;
 }
+
 .po-detail-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 0.75rem;
   margin-bottom: 1rem;
 }
+
 .po-detail-item strong {
   display: block;
   font-size: 0.75rem;
@@ -440,11 +532,13 @@ MODAL STYLES
   color: var(--text-light);
   margin-bottom: 0.2rem;
 }
+
 .po-detail-item span {
   font-size: 0.95rem;
   color: var(--text);
   font-weight: 500;
 }
+
 .po-subject-tag {
   display: inline-block;
   background: var(--secondary);
@@ -456,6 +550,7 @@ MODAL STYLES
   margin-bottom: 0.4rem;
   font-weight: 600;
 }
+
 .dt-mini-table {
   width: 100%;
   border-collapse: collapse;
@@ -465,21 +560,25 @@ MODAL STYLES
   border-radius: 4px;
   overflow: hidden;
 }
+
 .dt-mini-table th, .dt-mini-table td {
   border: 1px solid #e2e8f0;
   padding: 0.5rem;
   text-align: left;
 }
+
 .dt-mini-table th {
   background: #f1f5f9;
   font-weight: 600;
   color: var(--text-light);
 }
+
 .po-note-wrapper {
   margin-top: 1rem;
   padding-top: 1rem;
   border-top: 1px dashed #cbd5e1;
 }
+
 .po-note-wrapper label {
   display: block;
   font-size: 0.85rem;
@@ -487,6 +586,7 @@ MODAL STYLES
   color: var(--text);
   margin-bottom: 0.4rem;
 }
+
 .po-note-area {
   width: 100%;
   padding: 0.6rem;
@@ -498,11 +598,13 @@ MODAL STYLES
   min-height: 70px;
   transition: border-color 0.2s;
 }
+
 .po-note-area:focus {
   outline: none;
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.2);
 }
+
 .save-note-btn {
   margin-top: 0.5rem;
   padding: 0.5rem 1rem;
@@ -515,13 +617,16 @@ MODAL STYLES
   font-weight: 600;
   transition: background 0.2s;
 }
+
 .save-note-btn:hover {
   background: var(--primary-dark);
 }
+
 .save-note-btn:disabled {
   background: #cbd5e1;
   cursor: not-allowed;
 }
+
 .save-status {
   font-size: 0.8rem;
   margin-left: 0.5rem;
@@ -529,58 +634,9 @@ MODAL STYLES
   opacity: 0;
   transition: opacity 0.3s;
 }
+
 .save-status.visible {
   opacity: 1;
-}
-/* =========================================
-RESPONSIVE ADJUSTMENTS
-========================================= */
-@media (max-width: 768px) {
-  header {
-    padding: 1rem;
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  header nav {
-    width: 100%;
-    justify-content: space-between;
-    margin-top: 0.5rem;
-  }
-  .dashboard {
-    padding: 1rem;
-  }
-  .center-grid {
-    grid-template-columns: 1fr;
-  }
-  .calendar-wrapper {
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
-  }
-  .modal-content {
-    width: 95%;
-    padding: 1rem;
-  }
-}
-/* 🔐 ACCESS DENIED SCREEN */
-.access-denied {
-  position: fixed; inset: 0; background: var(--secondary);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 2000; padding: 2rem;
-}
-.access-denied-content {
-  background: var(--white); padding: 2.5rem 3rem; border-radius: var(--radius);
-  box-shadow: 0 10px 40px rgba(0,0,0,0.15); text-align: center; max-width: 480px;
-  border-top: 4px solid #dc3545;
-}
-.access-denied h2 { color: #dc3545; margin-bottom: 1rem; }
-.access-denied p { margin: 0.75rem 0; color: var(--text-light); }
-
-/* ⚫ Closed Days (Grayed Out) */
-.calendar-day.closed-day {
-  background: #f3f4f6;
-  color: #9ca3af;
-  text-decoration: line-through;
-  cursor: default;
 }
 
 /* =========================================
@@ -596,6 +652,7 @@ RESPONSIVE ADJUSTMENTS
   opacity: 1;
   transition: opacity 0.3s ease;
 }
+
 .fab-overlay.hidden {
   opacity: 0;
   pointer-events: none;
@@ -606,7 +663,6 @@ RESPONSIVE ADJUSTMENTS
   bottom: 2rem;
   right: 2rem;
   z-index: 999;
-  /* No flex-direction needed anymore since menu is absolute */
 }
 
 .fab-btn {
@@ -641,10 +697,9 @@ RESPONSIVE ADJUSTMENTS
   line-height: 1;
 }
 
-/* DESKTOP MENU: Absolutely positioned so it doesn't push the button */
 .fab-menu {
   position: absolute;
-  bottom: 76px; /* Sits right above the 60px button */
+  bottom: 76px;
   right: 0;
   display: flex;
   flex-direction: column;
@@ -652,13 +707,10 @@ RESPONSIVE ADJUSTMENTS
   gap: 0.75rem;
   pointer-events: none;
   transition: all 0.3s ease;
-  
-  /* Default Hidden State */
   opacity: 0;
   transform: translateY(20px);
 }
 
-/* Active State */
 .fab-menu:not(.hidden) {
   opacity: 1;
   transform: translateY(0);
@@ -692,15 +744,273 @@ RESPONSIVE ADJUSTMENTS
 }
 
 /* =========================================
-   MOBILE RESPONSIVE FAB (Bottom Sheet Style)
+   📝 SCHEDULE DT MODAL SPECIFIC STYLES
+   ========================================= */
+.schedule-dt-modal-content {
+  max-width: 500px;
+  text-align: center;
+}
+
+.dt-choice-buttons {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.dt-choice-buttons button {
+  flex: 1;
+  padding: 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.dt-existing-form {
+  text-align: left;
+  background: #f8fafc;
+  padding: 1.5rem;
+  border-radius: var(--radius);
+  border: 1px solid #e2e8f0;
+  animation: fadeIn 0.3s ease;
+}
+
+.dt-existing-form .form-group {
+  margin-bottom: 1rem;
+}
+
+.dt-existing-form label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 0.4rem;
+}
+
+.dt-existing-form input[type="text"],
+.dt-existing-form input[type="date"],
+.dt-existing-form select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  background: #fff;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.dt-existing-form input:focus,
+.dt-existing-form select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.25);
+}
+
+.dt-existing-form .selected-info {
+  margin-top: 0.5rem;
+  color: #16a34a;
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  animation: fadeIn 0.3s ease;
+}
+
+.dt-existing-form .full-width {
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.85rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+/* Search dropdown inside the modal */
+.dt-existing-form .search-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  margin-top: 4px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 0 0 var(--radius) var(--radius);
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  list-style: none;
+  padding: 0;
+}
+
+.dt-existing-form .search-dropdown li {
+  padding: 0.75rem;
+  cursor: pointer;
+  border-bottom: 1px solid #f1f5f9;
+  transition: background 0.2s;
+}
+
+.dt-existing-form .search-dropdown li:hover {
+  background: #f8fafc;
+}
+
+/* Add Another Subject Button */
+.add-dt-row-btn {
+  width: 100%;
+  margin-bottom: 1rem;
+  background: #e2e8f0;
+  color: var(--text);
+  border: 1px dashed #cbd5e1;
+  padding: 0.75rem;
+  border-radius: var(--radius);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.add-dt-row-btn:hover {
+  background: #cbd5e1;
+  border-color: #94a3b8;
+}
+
+/* Dynamic Row Styling */
+.dt-subject-row {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  align-items: flex-end;
+  animation: fadeIn 0.3s ease;
+}
+
+.dt-row-group {
+  flex: 1;
+}
+
+.dt-row-group label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+  color: var(--text);
+}
+
+.dt-row-group select, 
+.dt-row-group input {
+  width: 100%;
+  padding: 0.6rem;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  background: #fff;
+}
+
+.dt-row-group select:focus,
+.dt-row-group input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.25);
+}
+
+.remove-dt-row-btn {
+  flex: 0 0 40px;
+  height: 40px;
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  margin-bottom: 0;
+}
+
+.remove-dt-row-btn:hover {
+  background: #dc2626;
+  color: white;
+}
+
+/* DT Action Buttons (Cancel / Reschedule) */
+.dt-action-btn {
+  background: none;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  margin-right: 0.25rem;
+  transition: all 0.2s;
+}
+
+.dt-action-btn:hover {
+  background: #f1f5f9;
+}
+
+.dt-action-btn.cancel:hover { 
+  background: #fee2e2; 
+  border-color: #fca5a5; 
+  color: #dc2626; 
+}
+
+.dt-action-btn.reschedule:hover { 
+  background: #ffedd5; 
+  border-color: #fdba74; 
+  color: #ea580c; 
+}
+
+.inline-reschedule-date {
+  width: 140px;
+  padding: 0.3rem;
+  font-size: 0.85rem;
+  border: 1px solid var(--primary);
+  border-radius: 4px;
+  outline: none;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* =========================================
+   RESPONSIVE ADJUSTMENTS
    ========================================= */
 @media (max-width: 768px) {
+  header {
+    padding: 1rem;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  header nav {
+    width: 100%;
+    justify-content: space-between;
+    margin-top: 0.5rem;
+  }
+  
+  .dashboard {
+    padding: 1rem;
+  }
+  
+  .center-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .calendar-wrapper {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  
+  .modal-content {
+    width: 95%;
+    padding: 1rem;
+  }
+
   .fab-container {
     bottom: 1.5rem;
     right: 1.5rem;
   }
 
-  /* MOBILE MENU: Fixed to the bottom of the screen */
   .fab-menu {
     position: fixed;
     bottom: 0;
@@ -715,8 +1025,6 @@ RESPONSIVE ADJUSTMENTS
     max-height: 70vh;
     overflow-y: auto;
     align-items: stretch;
-    
-    /* Default Hidden State (Slides down) */
     transform: translateY(100%);
   }
 
@@ -755,124 +1063,34 @@ RESPONSIVE ADJUSTMENTS
   }
 }
 
-/* =========================================
-🟠 DIAGNOSTIC TEST (DT) CALENDAR STYLES
-========================================= */
-.calendar-day.has-dt {
-    background: #fff3e0;
-    color: #e65100;
-    font-weight: 700;
-    cursor: pointer;
-    border: 1px solid #ffcc80;
-}
-.calendar-day.has-dt:hover {
-    background: #ffcc80;
-}
-.calendar-day.has-dt::before {
-    content: '';
-    position: absolute;
-    top: 4px;
-    right: 4px;
-    width: 6px;
-    height: 6px;
-    background: #e65100;
-    border-radius: 50%;
+/* 🔐 ACCESS DENIED SCREEN */
+.access-denied {
+  position: fixed;
+  inset: 0;
+  background: var(--secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 2rem;
 }
 
-/* =========================================
-📝 SCHEDULE DT MODAL STYLES
-========================================= */
-.schedule-dt-modal-content {
-    max-width: 500px;
-    text-align: center;
+.access-denied-content {
+  background: var(--white);
+  padding: 2.5rem 3rem;
+  border-radius: var(--radius);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+  text-align: center;
+  max-width: 480px;
+  border-top: 4px solid #dc3545;
 }
 
-.dt-choice-buttons {
-    display: flex;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
+.access-denied h2 {
+  color: #dc3545;
+  margin-bottom: 1rem;
 }
 
-.dt-choice-buttons button {
-    flex: 1;
-    padding: 0.75rem;
-    font-size: 1rem;
-    font-weight: 600;
-}
-
-.dt-existing-form {
-    text-align: left;
-    background: #f8fafc;
-    padding: 1.5rem;
-    border-radius: var(--radius);
-    border: 1px solid #e2e8f0;
-    animation: fadeIn 0.3s ease;
-}
-
-.dt-existing-form .form-group {
-    margin-bottom: 1rem;
-}
-
-.dt-existing-form label {
-    display: block;
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--text);
-    margin-bottom: 0.4rem;
-}
-
-.dt-existing-form input[type="text"],
-.dt-existing-form input[type="date"],
-.dt-existing-form select {
-    width: 100%;
-    padding: 0.75rem;
-    border: 1px solid #cbd5e1;
-    border-radius: var(--radius);
-    font-size: 0.95rem;
-    background: #fff;
-    transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.dt-existing-form input:focus,
-.dt-existing-form select:focus {
-    outline: none;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.25);
-}
-
-.dt-existing-form .selected-info {
-    margin-top: 0.5rem;
-    color: #16a34a;
-    font-weight: 600;
-    font-size: 0.9rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    animation: fadeIn 0.3s ease;
-}
-
-.dt-existing-form .full-width {
-    width: 100%;
-    margin-top: 0.5rem;
-    padding: 0.85rem;
-    font-size: 1rem;
-    font-weight: 600;
-}
-
-/* Ensure the search dropdown inside this modal is positioned correctly */
-.dt-existing-form .search-dropdown {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    z-index: 100;
-    margin-top: 4px;
-    background: white;
-    border: 1px solid #ddd;
-    border-radius: 0 0 var(--radius) var(--radius);
-    max-height: 200px;
-    overflow-y: auto;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    list-style: none;
-    padding: 0;
+.access-denied p {
+  margin: 0.75rem 0;
+  color: var(--text-light);
 }
