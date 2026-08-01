@@ -6,6 +6,7 @@ import { ref, get, update, remove } from "https://www.gstatic.com/firebasejs/10.
 // ============================================
 let isAdmin = false;
 let poDataMap = {};
+let dtDataMap = {}; // Stores Diagnostic Test events
 let calendarEventsMap = {}; // Stores holiday events
 let centerName = ""; // ✅ NEW: Stores the center name to determine closed days
 const centerId = sessionStorage.getItem('selectedCenter');
@@ -94,6 +95,7 @@ function initFAB() {
     const fabAddStudent = document.getElementById('fabAddStudent');
     const fabSchedulePO = document.getElementById('fabSchedulePO');
     const fabSearchStudent = document.getElementById('fabSearchStudent'); 
+    const fabScheduleDT = document.getElementById('fabScheduleDT');
 
 
     if (!fabBtn || !fabMenu || !fabOverlay) return;
@@ -131,6 +133,11 @@ function initFAB() {
     fabSearchStudent.addEventListener('click', () => {
         closeFAB();
         openSearchStudentModal();
+    });
+
+    fabScheduleDT.addEventListener('click', () => {
+    closeFAB();
+    openScheduleDTModalDash();
     });
 
     // Optional: Close on Escape key
@@ -503,6 +510,7 @@ async function initPOCalendar() {
       const students = snap.val();
       poDataMap = {};
 
+      // --- Existing PO Mapping ---
       Object.entries(students).forEach(([id, s]) => {
         if (s.parentOrientation === 'Yes' && s.poDate) {
           const dateKey = s.poDate; 
@@ -531,9 +539,26 @@ async function initPOCalendar() {
           });
         }
       });
+
+      // ✅ NEW: Map Diagnostic Tests to dtDataMap
+      dtDataMap = {};
+      Object.entries(students).forEach(([id, s]) => {
+        if (s.diagnosticTests && Array.isArray(s.diagnosticTests)) {
+          s.diagnosticTests.forEach(dt => {
+            if (dt.date) {
+              if (!dtDataMap[dt.date]) dtDataMap[dt.date] = [];
+              dtDataMap[dt.date].push({
+                id: id,
+                studentData: s,
+                dtData: dt
+              });
+            }
+          });
+        }
+      });
     }
 
-    // 2. Load Calendar Events (Holidays) - NEW
+    // 2. Load Calendar Events (Holidays)
     const calSnap = await get(ref(db, `centers/${centerId}/calendar`));
     if (calSnap.exists()) {
       calendarEventsMap = calSnap.val();
@@ -541,8 +566,10 @@ async function initPOCalendar() {
       calendarEventsMap = {};
     }
 
+    // 3. Render and Setup
     renderDualCalendar();
     setupModalListeners();
+
   } catch (err) {
     console.error("Error loading calendar data: ", err);
   }
@@ -639,6 +666,14 @@ function renderMonthGrid(year, month, containerId, todayDate) {
       // ✅ NEW: Gray out the day if it's a closed day and has no PO/Holiday
       cell.classList.add('closed-day');
     }
+    
+    // ✅ NEW: Apply DT Class & Tooltip
+    const hasDT = dtDataMap[dateStr] && dtDataMap[dateStr].length > 0;
+    if (hasDT) {
+        cell.classList.add('has-dt');
+        let dtTooltip = `${dtDataMap[dateStr].length} Diagnostic Test(s)`;
+        cell.title = cell.title ? `${cell.title} | ${dtTooltip}` : dtTooltip;
+    }
 
     container.appendChild(cell);
   }
@@ -659,14 +694,20 @@ function setupModalListeners() {
 
       // 1. If there's a PO, ALWAYS open the full PO modal (for everyone, including admin)
       if (e.target.classList.contains('has-po')) {
-        openPOModal(dateStr);
-      } 
+          openPOModal(dateStr);
+      } else if (e.target.classList.contains('has-dt')) {
+          openDTModal(dateStr);
+      } else if (isAdmin) {
       // 2. If no PO, only admin can click to edit holidays
-      else if (isAdmin) {
-        openEditCalendarModal(dateStr);
+          openEditCalendarModal(dateStr);
       }
     }
   });
+
+  const dtModal = document.getElementById('dtModal');
+  const closeDtBtn = document.getElementById('closeDtModal');
+  closeDtBtn.addEventListener('click', () => dtModal.classList.add('hidden'));
+  dtModal.addEventListener('click', (e) => { if (e.target === dtModal) dtModal.classList.add('hidden'); });
 
   closePoBtn.addEventListener('click', () => poModal.classList.add('hidden'));
   poModal.addEventListener('click', (e) => {
@@ -999,6 +1040,235 @@ async function openSearchStudentModal() {
         window.location.href = `student-form.html?id=${studentId}&returnUrl=dashboard.html`;
     };
 }
+
+// ============================================
+// 🟠 DT DETAILS MODAL (CALENDAR CLICK)
+// ============================================
+function openDTModal(dateStr) {
+    const modal = document.getElementById('dtModal');
+    const title = document.getElementById('dtModalDateTitle');
+    const list = document.getElementById('dtStudentList');
+    const dateObj = new Date(dateStr + 'T00:00:00');
+    title.textContent = `Diagnostic Tests on ${dateObj.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`;
+    list.innerHTML = '';
+    
+    const entries = dtDataMap[dateStr] || [];
+    if (entries.length === 0) {
+        list.innerHTML = '<p style="text-align:center; color:#666;">No diagnostic tests scheduled for this date.</p>';
+    } else {
+        // Group by student ID
+        const groupedByStudent = {};
+        entries.forEach(entry => {
+            if (!groupedByStudent[entry.id]) groupedByStudent[entry.id] = [];
+            groupedByStudent[entry.id].push(entry);
+        });
+        
+        Object.entries(groupedByStudent).forEach(([studentId, studentEntries]) => {
+            const s = studentEntries[0].studentData;
+            const card = document.createElement('div');
+            card.className = 'po-student-card';
+            card.style.borderLeftColor = '#FF8C00'; // Orange border
+            
+            const nameParts = [];
+            if (s.nameCn) nameParts.push(`<span class="student-name-cn">${s.nameCn}</span>`);
+            if (s.namePinyin) nameParts.push(`<span class="student-name-pinyin">(${s.namePinyin})</span>`);
+            if (s.nickname) nameParts.push(`<span class="student-name-nickname">"${s.nickname}"</span>`);
+            const fullNameHtml = nameParts.length > 0 ? nameParts.join(' ') : 'Unknown Student';
+            
+            const phone = s.phone ? `${s.phone.mom || ''} ${s.phone.dad ? '| ' + s.phone.dad : ''} ${s.phone.own ? '| ' + s.phone.own : ''}`.trim().replace(/^\| /, '') : 'N/A';
+            
+            const subjectsArray = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
+            const activeSubjects = subjectsArray.filter(sub => sub.status !== 'drop').map(sub => sub.name);
+            const subjectsHtml = activeSubjects.length > 0 
+                ? activeSubjects.map(name => `<span class="po-subject-tag">${name}</span>`).join('')
+                : '<span style="color:#999; font-size:0.85rem;">No active subjects</span>';
+                
+            let dtTableHtml = `
+                <table class="dt-mini-table">
+                    <thead><tr><th>Subject</th><th>Test</th><th>Score</th><th>Time</th><th>Suggested</th><th>Actual</th><th>Note</th></tr></thead>
+                    <tbody>
+            `;
+            studentEntries.forEach(entry => {
+                const dt = entry.dtData;
+                dtTableHtml += `<tr><td>${dt.subject || '-'}</td><td>${dt.test || '-'}</td><td>${dt.score || '-'}</td><td>${dt.time || '-'}</td><td>${dt.suggestedStart || '-'}</td><td>${dt.actualStart || '-'}</td><td>${dt.dtNote || '-'}</td></tr>`;
+            });
+            dtTableHtml += `</tbody></table>`;
+            
+            const firstDt = studentEntries[0].dtData;
+            const noteId = `dt-note-${studentId}`;
+            
+            card.innerHTML = `
+                <h4><span>${fullNameHtml}</span><span class="grade-school-badge">Grade: ${s.grade || 'N/A'} | ${s.school || 'N/A'}</span></h4>
+                <div class="po-detail-grid">
+                    <div class="po-detail-item"><strong>Contact</strong><div>${phone}</div></div>
+                    <div class="po-detail-item"><strong>Subjects</strong><div>${subjectsHtml}</div></div>
+                </div>
+                <div class="po-detail-item"><strong>Diagnostic Test (DT) Details</strong>${dtTableHtml}</div>
+                <div class="po-note-wrapper">
+                    <label for="${noteId}">📝 DT Notes for this Student:</label>
+                    <textarea id="${noteId}" class="po-note-area" placeholder="Add notes about this student's diagnostic test...">${firstDt.dtNote || ''}</textarea>
+                    <div style="display:flex; align-items:center; margin-top: 0.5rem;">
+                        <button class="save-note-btn" onclick="saveDtNote('${studentId}', '${dateStr}', '${noteId}', this)">💾 Save Note</button>
+                        <span class="save-status" id="dt-status-${studentId}">✅ Saved!</span>
+                    </div>
+                </div>
+            `;
+            list.appendChild(card);
+        });
+    }
+    modal.classList.remove('hidden');
+}
+
+window.saveDtNote = async function(studentId, dateStr, textareaId, btnElement) {
+    const textarea = document.getElementById(textareaId);
+    const statusEl = document.getElementById(`dt-status-${studentId}`);
+    const noteText = textarea.value.trim();
+    btnElement.disabled = true;
+    btnElement.textContent = 'Saving...';
+    try {
+        const snap = await get(ref(db, `centers/${centerId}/students/${studentId}`));
+        if (snap.exists()) {
+            const s = snap.val();
+            if (s.diagnosticTests && Array.isArray(s.diagnosticTests)) {
+                let updated = false;
+                s.diagnosticTests.forEach(dt => {
+                    if (dt.date === dateStr) { dt.dtNote = noteText; updated = true; }
+                });
+                if (updated) await update(ref(db, `centers/${centerId}/students/${studentId}`), { diagnosticTests: s.diagnosticTests });
+            }
+        }
+        if (dtDataMap[dateStr]) {
+            dtDataMap[dateStr].forEach(entry => {
+                if (entry.id === studentId && entry.dtData.date === dateStr) entry.dtData.dtNote = noteText;
+            });
+        }
+        statusEl.classList.add('visible');
+        setTimeout(() => statusEl.classList.remove('visible'), 2500);
+    } catch (err) {
+        console.error("Error saving DT note:", err);
+        alert("Failed to save note.");
+    } finally {
+        btnElement.disabled = false;
+        btnElement.textContent = '💾 Save Note';
+    }
+};
+
+// ============================================
+// 📝 SCHEDULE DT MODAL (FAB ACTION)
+// ============================================
+function openScheduleDTModalDash() {
+    const modal = document.getElementById('scheduleDTModalDash');
+    const existingForm = document.getElementById('dtExistingForm');
+    const searchInput = document.getElementById('dtStudentSearch');
+    const dropdown = document.getElementById('dtStudentListDropdown');
+    const selectedInfo = document.getElementById('selectedDTStudentInfo');
+    const hiddenId = document.getElementById('selectedDTStudentId');
+    const subjectSelect = document.getElementById('dtSubjectSelect');
+    const dateInput = document.getElementById('dtDateInput');
+    
+    existingForm.style.display = 'none';
+    searchInput.value = '';
+    dropdown.innerHTML = '';
+    dropdown.style.display = 'none';
+    selectedInfo.style.display = 'none';
+    hiddenId.value = '';
+    subjectSelect.innerHTML = '<option value="">Select Subject</option>';
+    dateInput.value = '';
+    modal.classList.remove('hidden');
+    
+    document.getElementById('dtNewStudentBtn').onclick = () => {
+        window.location.href = 'student-form.html?returnUrl=dashboard.html';
+    };
+    
+    document.getElementById('dtExistingStudentBtn').onclick = async () => {
+        existingForm.style.display = 'block';
+        if (allStudentsForSearch.length === 0) await fetchStudentsForSearch();
+    };
+    
+    searchInput.oninput = () => {
+        const term = searchInput.value.toLowerCase().trim();
+        if (!term) { dropdown.style.display = 'none'; return; }
+        const matches = allStudentsForSearch.filter(s => 
+            (s.namePinyin || '').toLowerCase().includes(term) ||
+            (s.nameCn || '').toLowerCase().includes(term) ||
+            (s.studentNumber || '').toLowerCase().includes(term)
+        );
+        dropdown.innerHTML = '';
+        if (matches.length === 0) {
+            dropdown.innerHTML = '<li style="padding:0.75rem; color:#999; text-align:center;">No students found</li>';
+        } else {
+            matches.slice(0, 20).forEach(s => {
+                const li = document.createElement('li');
+                li.style.cssText = 'padding:0.75rem; cursor:pointer; border-bottom:1px solid #f1f5f9;';
+                li.innerHTML = `<div style="font-weight:600;">${s.nameCn || 'N/A'} <span style="color:var(--text-light); font-weight:400;">(${s.namePinyin || ''})</span></div><div style="font-size:0.8rem; color:var(--text-light);">Grade: ${s.grade || '-'} | No: ${s.studentNumber || '-'}</div>`;
+                li.onclick = () => {
+                    hiddenId.value = s.id;
+                    searchInput.value = `${s.nameCn} (${s.namePinyin})`;
+                    selectedInfo.textContent = `✅ Selected: ${s.nameCn} (${s.namePinyin})`;
+                    selectedInfo.style.display = 'block';
+                    dropdown.style.display = 'none';
+                    
+                    // Populate subjects
+                    const allSubjects = ['Math', 'Chinese (Trad)', 'Chinese (Simp)', 'English ERP', 'English EFL'];
+                    subjectSelect.innerHTML = '<option value="">Select Subject</option>';
+                    allSubjects.forEach(subj => {
+                        const opt = document.createElement('option');
+                        opt.value = subj; opt.textContent = subj;
+                        subjectSelect.appendChild(opt);
+                    });
+                };
+                li.onmouseover = () => li.style.background = '#f8fafc';
+                li.onmouseout = () => li.style.background = 'white';
+                dropdown.appendChild(li);
+            });
+        }
+        dropdown.style.display = 'block';
+    };
+    
+    document.getElementById('saveScheduleDTBtnDash').onclick = async () => {
+        const studentId = hiddenId.value;
+        const subject = subjectSelect.value;
+        const date = dateInput.value;
+        if (!studentId) return alert('⚠️ Please select a student.');
+        if (!subject) return alert('⚠️ Please select a subject.');
+        if (!date) return alert('⚠️ Please select a date.');
+        
+        const saveBtn = document.getElementById('saveScheduleDTBtnDash');
+        saveBtn.disabled = true; saveBtn.textContent = 'Saving...';
+        try {
+            const snap = await get(ref(db, `centers/${centerId}/students/${studentId}`));
+            if (!snap.exists()) throw new Error('Student not found.');
+            const s = snap.val();
+            if (!s.diagnosticTests) s.diagnosticTests = [];
+            
+            const exists = s.diagnosticTests.some(dt => dt.subject === subject && dt.date === date);
+            if (exists) {
+                alert('⚠️ This student already has a DT scheduled for this subject on this date.');
+                saveBtn.disabled = false; saveBtn.textContent = '💾 Schedule DT'; return;
+            }
+            
+            const newDT = { subject, date, test: '', score: '', time: '', suggestedStart: '', actualStart: '', dtNote: '' };
+            s.diagnosticTests.push(newDT);
+            await update(ref(db, `centers/${centerId}/students/${studentId}`), { diagnosticTests: s.diagnosticTests });
+            
+            if (!dtDataMap[date]) dtDataMap[date] = [];
+            dtDataMap[date].push({ id: studentId, studentData: s, dtData: newDT });
+            
+            renderDualCalendar();
+            modal.classList.add('hidden');
+            alert('✅ Diagnostic Test scheduled successfully!');
+        } catch (err) {
+            console.error('Error scheduling DT:', err);
+            alert('❌ Failed to schedule DT.');
+        } finally {
+            saveBtn.disabled = false; saveBtn.textContent = '💾 Schedule DT';
+        }
+    };
+}
+
+// Close listeners for Schedule DT Modal
+document.getElementById('closeScheduleDTModalDash')?.addEventListener('click', () => document.getElementById('scheduleDTModalDash').classList.add('hidden'));
+document.getElementById('scheduleDTModalDash')?.addEventListener('click', (e) => { if (e.target.id === 'scheduleDTModalDash') e.target.classList.add('hidden'); });
 
 async function fetchStudentsForSearch() {
     try {

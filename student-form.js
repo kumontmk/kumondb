@@ -1840,12 +1840,17 @@ function initApp() {
             const test = row.querySelector('.dt-test')?.value;
             const score = row.querySelector('.dt-score')?.value;
             const time = row.querySelector('.dt-time')?.value;
+            
             if (subject || date || test || score || time) {
                 if (!subject) return showError(`⚠️ DT #${dtIdx}: Subject is required.`);
                 if (!date) return showError(`⚠️ DT #${dtIdx}: Diagnostic Date is required.`);
-                if (!test) return showError(`⚠️ DT #${dtIdx}: Test Name/Level is required.`);
-                if (!score) return showError(`⚠️ DT #${dtIdx}: Score is required.`);
-                if (!time) return showError(`⚠️ DT #${dtIdx}: Time is required.`);
+                
+                // ✅ UPDATED: Allow blank test details for "Scheduled" DTs. 
+                // But if they start filling them, require all details.
+                const hasTestDetail = test || score || time;
+                if (hasTestDetail && (!test || !score || !time)) {
+                    return showError(`⚠️ DT #${dtIdx}: Please complete the Test Name, Score, and Time, or leave them blank if the test is scheduled but not yet taken.`);
+                }
             }
             dtIdx++;
         }
@@ -2016,6 +2021,108 @@ function initApp() {
         }
         updatePRBanner(activePREntry);
         prModal.classList.add('hidden');
+    });
+
+    // ==========================================
+    // 📅 SCHEDULE DT MODAL LOGIC
+    // ==========================================
+    const scheduleDTBtn = document.getElementById('scheduleDTBtn');
+    if (scheduleDTBtn) {
+        scheduleDTBtn.addEventListener('click', () => {
+            // 1. Validate required basic info before opening modal
+            const nameCn = document.getElementById('nameCn')?.value?.trim();
+            const phoneMom = document.getElementById('phoneMom')?.value?.trim();
+            const phoneDad = document.getElementById('phoneDad')?.value?.trim();
+            const phoneOwn = document.getElementById('phoneOwn')?.value?.trim();
+            const birthday = document.getElementById('birthday')?.value;
+            
+            const gradeSelect = document.getElementById('grade');
+            const gradeOther = document.getElementById('gradeOther');
+            const grade = gradeSelect?.value === 'Other' ? gradeOther?.value?.trim() : gradeSelect?.value?.trim();
+            
+            const schoolSelect = document.getElementById('school');
+            const schoolOther = document.getElementById('schoolOther');
+            const school = schoolSelect?.value === 'Other' ? schoolOther?.value?.trim() : schoolSelect?.value?.trim();
+
+            if (!nameCn) return showError('⚠️ Full Name (Chinese) is required to schedule a DT.');
+            if (!phoneMom && !phoneDad && !phoneOwn) return showError('⚠️ At least one Phone Number is required.');
+            if (!birthday) return showError('⚠️ Birthday is required.');
+            if (!grade) return showError('⚠️ Grade is required.');
+            if (!school) return showError('⚠️ School is required.');
+
+            openScheduleDTModal();
+        });
+    }
+
+    function openScheduleDTModal() {
+        const modal = document.getElementById('scheduleDTModal');
+        const list = document.getElementById('scheduleDTList');
+        list.innerHTML = '';
+        addScheduleDTRow(); // Start with one empty row
+        modal.classList.remove('hidden');
+        modal.style.display = 'flex';
+    }
+
+    function closeScheduleDTModal() {
+        const modal = document.getElementById('scheduleDTModal');
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+    }
+
+    function addScheduleDTRow() {
+        const list = document.getElementById('scheduleDTList');
+        const row = document.createElement('div');
+        row.style.cssText = 'display: flex; gap: 0.5rem; align-items: center;';
+        row.innerHTML = `
+            <select class="schedule-dt-subject" required style="flex: 1; padding: 0.5rem; border: 1px solid #ddd; border-radius: var(--radius);">
+                <option value="">Select Subject</option>
+                ${SUBJECTS.map(s => `<option value="${s}">${s}</option>`).join('')}
+            </select>
+            <input type="date" class="schedule-dt-date" required style="flex: 1; padding: 0.5rem; border: 1px solid #ddd; border-radius: var(--radius);">
+            <button type="button" class="remove-schedule-dt-btn danger" style="padding: 0.5rem 0.8rem; font-size: 1.2rem; line-height: 1; border-radius: var(--radius);">×</button>
+        `;
+        row.querySelector('.remove-schedule-dt-btn').onclick = () => {
+            row.remove();
+            if (list.children.length === 0) addScheduleDTRow(); // Keep at least one row
+        };
+        list.appendChild(row);
+    }
+
+    document.getElementById('addDTSubjectBtn')?.addEventListener('click', addScheduleDTRow);
+
+    document.getElementById('saveScheduleDTBtn')?.addEventListener('click', () => {
+        const rows = document.querySelectorAll('#scheduleDTList > div');
+        let hasData = false;
+        let errorMsg = '';
+        
+        rows.forEach((row, index) => {
+            const subject = row.querySelector('.schedule-dt-subject')?.value;
+            const date = row.querySelector('.schedule-dt-date')?.value;
+            
+            if (subject || date) {
+                if (!subject) errorMsg = `⚠️ Row ${index + 1}: Please select a Subject.`;
+                else if (!date) errorMsg = `⚠️ Row ${index + 1}: Please select a Diagnostic Date.`;
+                else {
+                    // Pre-populate the main DT table (leaving test details blank)
+                    addDTRow({ subject: subject, date: date });
+                    hasData = true;
+                }
+            }
+        });
+        
+        if (errorMsg) return showError(errorMsg);
+        if (!hasData) return showError('⚠️ Please add at least one subject and date.');
+        
+        closeScheduleDTModal();
+        
+        // Automatically switch to the DT & AT tab so the user sees the result
+        const dtTabBtn = document.querySelector('.tab-btn[data-tab="dt-at"]');
+        if (dtTabBtn) dtTabBtn.click();
+    });
+
+    document.getElementById('closeScheduleDTModal')?.addEventListener('click', closeScheduleDTModal);
+    document.getElementById('scheduleDTModal')?.addEventListener('click', (e) => {
+        if (e.target.id === 'scheduleDTModal') closeScheduleDTModal();
     });
 
     // ==========================================

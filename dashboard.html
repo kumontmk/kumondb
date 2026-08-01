@@ -22,12 +22,12 @@
         <!-- Calendar Section -->
         <section class="calendar-section">
             <div class="calendar-header-main">
-                <!-- UPDATED: Added span for dynamic center name -->
                 <h3>📅 <span id="calendar-center-name">Center</span> Calendar</h3>
                 <p class="calendar-hint">
                     <span style="color: #1565c0;">●</span> Blue = Parent Orientation &nbsp;|&nbsp; 
                     <span style="color: #2e7d32;">●</span> Green = Center Holiday &nbsp;|&nbsp; 
-                    <span style="color: #c62828;">●</span> Red = Public Holiday
+                    <span style="color: #c62828;">●</span> Red = Public Holiday &nbsp;|&nbsp;
+                    <span style="color: #e65100;">●</span> Orange = Diagnostic Test
                 </p>
             </div>
             <div class="calendar-wrapper">
@@ -211,6 +211,10 @@
                 <span class="fab-icon">🔍</span>
                 <span>Search Student</span>
             </button>
+            <button id="fabScheduleDT" class="fab-menu-item">
+                <span class="fab-icon">📝</span>
+                <span>Schedule Diagnostic Test</span>
+            </button>
             <button class="fab-menu-item" id="fabSchedulePO">
                 <span class="fab-icon">📅</span>
                 <span>Schedule Parent Orientation</span>
@@ -280,6 +284,49 @@
         </div>
     </div>
 
+    <!-- ========================================= -->
+    <!-- 📝 SCHEDULE DT MODAL (FAB ACTION)         -->
+    <!-- ========================================= -->
+    <div id="scheduleDTModalDash" class="modal-overlay hidden">
+        <div class="modal-content" style="max-width: 500px; text-align: center;">
+            <span class="close-modal" id="closeScheduleDTModalDash">&times;</span>
+            <h2 style="margin-bottom: 1rem;">📝 Schedule Diagnostic Test</h2>
+            <p class="hint" style="margin-bottom: 1.5rem;">Is this for a new or existing student?</p>
+            <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
+                <button id="dtNewStudentBtn" class="primary" style="flex:1;">➕ New Student</button>
+                <button id="dtExistingStudentBtn" class="secondary" style="flex:1;">🔍 Existing Student</button>
+            </div>
+            
+            <div id="dtExistingForm" style="display: none; text-align: left;">
+                <label>Search Student *</label>
+                <input type="text" id="dtStudentSearch" placeholder="Search by name or number..." style="margin-bottom: 0.5rem;">
+                <ul id="dtStudentListDropdown" style="display: none; position: absolute; width: calc(100% - 3rem); background: white; border: 1px solid #ddd; border-radius: 0 0 8px 8px; max-height: 200px; overflow-y: auto; z-index: 10; list-style: none; padding: 0; margin: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"></ul>
+                <div id="selectedDTStudentInfo" style="display:none; margin: 0.5rem 0; color: #16a34a; font-weight: 600;"></div>
+                <input type="hidden" id="selectedDTStudentId">
+                
+                <label>Subject *</label>
+                <select id="dtSubjectSelect" style="margin-bottom: 0.5rem;">
+                    <option value="">Select Subject</option>
+                </select>
+                
+                <label>Diagnostic Date *</label>
+                <input type="date" id="dtDateInput" style="margin-bottom: 1rem;">
+                
+                <button id="saveScheduleDTBtnDash" class="primary" style="width: 100%;">💾 Schedule DT</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================= -->
+    <!-- 🟠 DT DETAILS MODAL (CALENDAR CLICK)      -->
+    <!-- ========================================= -->
+    <div id="dtModal" class="modal-overlay hidden">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="close-modal" id="closeDtModal">&times;</span>
+            <h2 id="dtModalDateTitle" style="margin-bottom: 1rem;">Diagnostic Tests</h2>
+            <div id="dtStudentList" class="po-student-list"></div>
+        </div>
+    </div>
 
     <script type="module" src="dashboard.js"></script>
 </body>
