@@ -290,6 +290,7 @@ td.kc-cell {
      -webkit-print-color-adjust: exact; 
      print-color-adjust: exact; }
 
+    
     #timetableTable tr.empty-time-row td {
     height: 18pt !important;
     min-height: 18pt !important;
@@ -442,6 +443,15 @@ td.kc-cell {
         background-color: #fff9c4 !important;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
+    }
+
+    @media print {
+  #champTimetableTable tr.empty-time-row td {
+    height: 16pt !important;
+    min-height: 16pt !important;
+    line-height: 16pt !important;
+    padding: 0 2px !important;
+        }
     }
     .champ-view-controls { display: none !important; }
     header, #page-loader, .timetable-controls, .access-denied, .tab-navigation, .week-view-info, .day-view-controls, .champ-view-controls { display: none !important; }

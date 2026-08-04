@@ -66,39 +66,59 @@ function initializeTimetable() {
     const tabBtns = document.querySelectorAll('.tab-btn');
     const dayViewContainer = document.getElementById('dayViewContainer');
     const weekViewContainer = document.getElementById('weekViewContainer');
+    const champViewContainer = document.getElementById('champViewContainer');
+
+    function setPrintActive(container) {
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('print-active'));
+
+        if (container) {
+            container.classList.add('print-active');
+        }
+    }
+
+    function syncPrintActiveToActiveTab() {
+        const activePane =
+            document.querySelector('.tab-content.active') ||
+            document.querySelector('.tab-content.print-active') ||
+            dayViewContainer;
+
+        setPrintActive(activePane);
+    }
 
     tabBtns.forEach(btn => {
         btn.addEventListener('click', () => {
             const targetTab = btn.dataset.tab;
+
             // Update active tab button
             tabBtns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
+
             // Update active tab content
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            
+
             if (targetTab === 'dayView') {
                 dayViewContainer.classList.add('active');
-                dayViewContainer.classList.add('print-active');
-                weekViewContainer.classList.remove('print-active');
+                setPrintActive(dayViewContainer);
+
                 if (daySelect) loadTimetable();
             } else if (targetTab === 'weekView') {
                 weekViewContainer.classList.add('active');
-                weekViewContainer.classList.add('print-active');
-                dayViewContainer.classList.remove('print-active');
-                document.getElementById('champViewContainer')?.classList.remove('print-active');
+                setPrintActive(weekViewContainer);
+
                 loadWeekTimetable();
             } else if (targetTab === 'champView') {
-                const champContainer = document.getElementById('champViewContainer');
-                champContainer?.classList.add('active');
-                champContainer?.classList.add('print-active');
-                dayViewContainer.classList.remove('print-active');
-                weekViewContainer.classList.remove('print-active');
+                if (champViewContainer) {
+                    champViewContainer.classList.add('active');
+                    setPrintActive(champViewContainer);
+                }
+
                 loadChampTimetable();
             }
         });
     });
 
-    dayViewContainer.classList.add('print-active');
+    // Initialize print view correctly
+    syncPrintActiveToActiveTab();
 
     function showLoader() {
         document.getElementById('page-loader')?.classList.remove('hidden');
@@ -900,9 +920,14 @@ function initializeTimetable() {
                     const s = schedule[time];
                     const maxRows = Math.max(...BUCKETS.map(b => s[b].length));
                     const rowCount = maxRows === 0 ? 2 : maxRows;
+                    const isEmptyTimeSlot = maxRows === 0;
 
                     for (let i = 0; i < rowCount; i++) {
                         const row = document.createElement('tr');
+
+                        if (isEmptyTimeSlot) {
+                            row.classList.add('empty-time-row');
+                        }
                         if (i === 0) {
                             const timeCell = document.createElement('td');
                             timeCell.textContent = time;
@@ -974,8 +999,12 @@ function initializeTimetable() {
         loadTimetable();
     }
 
-    document.getElementById('printTimetable')?.addEventListener('click', () => window.print());
-    
+document.getElementById('printTimetable')?.addEventListener('click', () => {
+    syncPrintActiveToActiveTab();
+    window.print();
+});
+
+window.addEventListener('beforeprint', syncPrintActiveToActiveTab);    
     const champDaySelect = document.getElementById('champDay');
     if (champDaySelect) {
         const today = new Date();
