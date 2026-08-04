@@ -1,5 +1,5 @@
 import { auth, requireAuth, logout, db, syncPendingRequests } from './auth.js';
-import { ref, get, update, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { ref, get, update, remove, push } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 // ============================================
 // GLOBAL STATE
@@ -69,6 +69,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     await initPOCalendar();
     initFAB();
+    initQuickInquiry(); 
     setupSchedulePOModalListeners();
     setupSearchStudentModalListeners();
   } catch (err) {
@@ -1445,5 +1446,272 @@ async function fetchStudentsForSearch() {
     } catch (err) {
         console.error('Error fetching students for search:', err);
         allStudentsForSearch = [];
+    }
+}
+
+// ============================================
+// 🔍 QUICK INQUIRY MODAL LOGIC
+// ============================================
+const SUBJECTS_QI = ['Math', 'Chinese (Trad)', 'Chinese (Simp)', 'English ERP', 'English EFL'];
+const GRADES_QI = ['K0', 'K1', 'K2', 'K3', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13'];
+let qiSubjectCount = 0;
+
+function initQuickInquiry() {
+    const fabBtn = document.getElementById('fabAddInquiry');
+    if (fabBtn) {
+        fabBtn.addEventListener('click', () => {
+            // Close FAB menu
+            document.getElementById('fabBtn')?.classList.remove('active');
+            document.getElementById('fabMenu')?.classList.add('hidden');
+            document.getElementById('fabOverlay')?.classList.add('hidden');
+            openQuickInquiryModal();
+        });
+    }
+
+    const modal = document.getElementById('quickInquiryModal');
+    const closeBtn = document.getElementById('closeQuickInquiryModal');
+    const cancelBtn = document.getElementById('qiCancelBtn');
+    const form = document.getElementById('quickInquiryForm');
+    const addSubjectBtn = document.getElementById('qiAddSubjectBtn');
+
+    if (closeBtn) closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
+    if (cancelBtn) cancelBtn.addEventListener('click', () => modal.classList.add('hidden'));
+    if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
+    if (addSubjectBtn) addSubjectBtn.addEventListener('click', () => addQISubjectRow());
+
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await saveQuickInquiry();
+        });
+    }
+}
+
+function openQuickInquiryModal() {
+    const modal = document.getElementById('quickInquiryModal');
+    const form = document.getElementById('quickInquiryForm');
+    const container = document.getElementById('qiSubjectsContainer');
+    
+    form.reset();
+    container.innerHTML = '';
+    qiSubjectCount = 0;
+    
+    // Populate Grades
+    const gradeSelect = document.getElementById('qiGrade');
+    gradeSelect.innerHTML = '<option value="">Select Grade</option>' + 
+        GRADES_QI.map(g => `<option value="${g}">${g}</option>`).join('');
+
+    addQISubjectRow(); // Add first subject row
+    modal.classList.remove('hidden');
+}
+
+function addQISubjectRow() {
+    const container = document.getElementById('qiSubjectsContainer');
+    if (qiSubjectCount >= 3) {
+        alert('⚠️ Maximum 3 subjects allowed for inquiry.');
+        return;
+    }
+
+    const row = document.createElement('div');
+    row.className = 'qi-subject-row';
+    
+    const usedSubjects = new Set();
+    container.querySelectorAll('.qi-subject-select').forEach(sel => {
+        if (sel.value) usedSubjects.add(sel.value);
+    });
+
+    const subjectOptions = SUBJECTS_QI.map(s => {
+        const isUsed = usedSubjects.has(s);
+        return `<option value="${s}" ${isUsed ? 'disabled' : ''}>${s}${isUsed ? ' (Added)' : ''}</option>`;
+    }).join('');
+
+    row.innerHTML = `
+        <div class="qi-row-group" style="flex: 2;">
+            <label>Subject *</label>
+            <select class="qi-subject-select" required>
+                <option value="">Select Subject</option>
+                ${subjectOptions}
+            </select>
+        </div>
+        <div class="qi-row-group checkbox-group">
+            <label>
+                <input type="checkbox" class="qi-schedule-dt">
+                Schedule DT?
+            </label>
+        </div>
+        <div class="qi-row-group qi-dt-date-wrapper" style="flex: 1.5;">
+            <label>DT Date *</label>
+            <input type="date" class="qi-dt-date">
+        </div>
+        <button type="button" class="remove-qi-row-btn" title="Remove">×</button>
+    `;
+
+    const dtCheckbox = row.querySelector('.qi-schedule-dt');
+    const dtDateWrapper = row.querySelector('.qi-dt-date-wrapper');
+    const dtDateInput = row.querySelector('.qi-dt-date');
+
+    dtCheckbox.addEventListener('change', () => {
+        if (dtCheckbox.checked) {
+            dtDateWrapper.classList.add('visible');
+            dtDateInput.required = true;
+        } else {
+            dtDateWrapper.classList.remove('visible');
+            dtDateInput.required = false;
+            dtDateInput.value = '';
+        }
+    });
+
+    const removeBtn = row.querySelector('.remove-qi-row-btn');
+    removeBtn.addEventListener('click', () => {
+        row.remove();
+        qiSubjectCount--;
+        updateQISubjectOptions();
+    });
+
+    container.appendChild(row);
+    qiSubjectCount++;
+}
+
+function updateQISubjectOptions() {
+    const container = document.getElementById('qiSubjectsContainer');
+    const usedSubjects = new Set();
+    container.querySelectorAll('.qi-subject-select').forEach(sel => {
+        if (sel.value) usedSubjects.add(sel.value);
+    });
+
+    container.querySelectorAll('.qi-subject-select').forEach(sel => {
+        const currentVal = sel.value;
+        sel.innerHTML = '<option value="">Select Subject</option>' + 
+            SUBJECTS_QI.map(s => {
+                const isUsed = usedSubjects.has(s) && s !== currentVal;
+                return `<option value="${s}" ${s === currentVal ? 'selected' : ''} ${isUsed ? 'disabled' : ''}>${s}${isUsed ? ' (Added)' : ''}</option>`;
+            }).join('');
+    });
+}
+
+async function saveQuickInquiry() {
+    const nameCn = document.getElementById('qiNameCn').value.trim();
+    const namePinyin = document.getElementById('qiNamePinyin').value.trim();
+    const dob = document.getElementById('qiDOB').value;
+    const grade = document.getElementById('qiGrade').value;
+    const school = document.getElementById('qiSchool').value.trim();
+    const gender = document.getElementById('qiGender').value;
+    
+    const phoneMom = document.getElementById('qiPhoneMom').value.trim();
+    const phoneDad = document.getElementById('qiPhoneDad').value.trim();
+    const phoneOwn = document.getElementById('qiPhoneOwn').value.trim();
+
+    // Validations
+    if (!nameCn) return alert('⚠️ Name (Chinese) is required.');
+    if (!dob) return alert('⚠️ Date of Birth is required.');
+    if (!grade) return alert('⚠️ Grade is required.');
+    if (!school) return alert('⚠️ School is required.');
+    if (!phoneMom && !phoneDad && !phoneOwn) return alert('⚠️ At least one Contact Number is required.');
+
+    const container = document.getElementById('qiSubjectsContainer');
+    const rows = container.querySelectorAll('.qi-subject-row');
+    
+    if (rows.length === 0) return alert('⚠️ Please add at least one subject.');
+
+    const subjects = [];
+    const diagnosticTests = [];
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    for (const row of rows) {
+        const subject = row.querySelector('.qi-subject-select').value;
+        const scheduleDT = row.querySelector('.qi-schedule-dt').checked;
+        const dtDate = row.querySelector('.qi-dt-date').value;
+
+        if (!subject) return alert('⚠️ Please select a subject for all rows.');
+        if (scheduleDT && !dtDate) return alert(`⚠️ Please select a DT date for ${subject}.`);
+
+        // Construct Subject Object matching student-form.js expectations for 'inquiry'
+        subjects.push({
+            name: subject,
+            startLevel: '',
+            startWS: 0,
+            inquiryDate: todayStr,
+            currentLevel: '',
+            enrolDate: '',
+            status: 'inquiry', // Crucial: Sets status to inquiry
+            timeslots: [],
+            progress: [],
+            pencilSkill: null,
+            pauseFromMonth: '', pauseFromYear: '', pauseToMonth: '', pauseToYear: '', pauseReason: '',
+            dropMonth: '', dropYear: '', dropReason: '',
+            pendingRequest: null,
+            worksheetType: 'Paper'
+        });
+
+        if (scheduleDT && dtDate) {
+            diagnosticTests.push({
+                subject: subject,
+                date: dtDate,
+                test: '',
+                score: '',
+                time: '',
+                suggestedStart: '',
+                actualStart: '',
+                dtNote: ''
+            });
+        }
+    }
+
+    // Construct Final Student Data Object
+    const studentData = {
+        gender: gender,
+        studentNumber: '',
+        nickname: '',
+        namePinyin: namePinyin,
+        nameCn: nameCn,
+        grade: grade,
+        school: school,
+        address: '',
+        nationality: '',
+        email: '',
+        birthday: dob,
+        parentOrientation: 'No',
+        poDate: '',
+        poReason: 'Pending Inquiry',
+        phone: { mom: phoneMom, dad: phoneDad, own: phoneOwn },
+        qrCode: '',
+        kcNo: '',
+        subjects: subjects,
+        diagnosticTests: diagnosticTests,
+        achievementTests: [],
+        assignedTeachers: {},
+        updatedAt: new Date().toISOString()
+    };
+
+    const saveBtn = document.getElementById('qiSaveBtn');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+
+    try {
+        // Push to Firebase
+        const newStudentRef = push(ref(db, `centers/${centerId}/students`), studentData);
+        const newStudentId = newStudentRef.key;
+
+        // Update local DT map so the calendar reflects the new DT immediately
+        diagnosticTests.forEach(dt => {
+            if (!dtDataMap[dt.date]) dtDataMap[dt.date] = [];
+            dtDataMap[dt.date].push({
+                id: newStudentId,
+                studentData: studentData,
+                dtData: dt
+            });
+        });
+
+        renderDualCalendar(); // Refresh calendar UI
+        
+        document.getElementById('quickInquiryModal').classList.add('hidden');
+        alert('✅ Student Inquiry added successfully!');
+        
+    } catch (err) {
+        console.error('Error saving quick inquiry:', err);
+        alert('❌ Failed to save inquiry. Please try again.');
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '💾 Save Inquiry';
     }
 }

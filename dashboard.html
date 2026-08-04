@@ -207,6 +207,9 @@
                 <span class="fab-icon">👤</span>
                 <span>Add New Student</span>
             </button>
+            <button id="fabAddInquiry" class="fab-menu-item">
+                <span class="fab-icon">🔍</span> Add New Inquiry
+            </button>
             <button class="fab-menu-item" id="fabSearchStudent">
                 <span class="fab-icon">🔍</span>
                 <span>Search Student</span>
@@ -334,6 +337,76 @@
             <span class="close-modal" id="closeDtModal">&times;</span>
             <h2 id="dtModalDateTitle" style="margin-bottom: 1rem;">Diagnostic Tests</h2>
             <div id="dtStudentList" class="po-student-list"></div>
+        </div>
+    </div>
+
+    <!-- ========================================= -->
+    <!-- 🔍 QUICK INQUIRY MODAL -->
+    <!-- ========================================= -->
+    <div id="quickInquiryModal" class="modal-overlay hidden">
+        <div class="modal-content" style="max-width: 650px;">
+            <span class="close-modal" id="closeQuickInquiryModal">&times;</span>
+            <h2 style="color: var(--primary-dark); margin-bottom: 1.5rem;">🔍 Add New Student Inquiry</h2>
+            
+            <form id="quickInquiryForm">
+                <div class="qi-form-grid">
+                    <div>
+                        <label>Name (Chinese) *</label>
+                        <input type="text" id="qiNameCn" required>
+                    </div>
+                    <div>
+                        <label>Name (Pinyin)</label>
+                        <input type="text" id="qiNamePinyin">
+                    </div>
+                    <div>
+                        <label>Date of Birth *</label>
+                        <input type="date" id="qiDOB" required>
+                    </div>
+                    <div>
+                        <label>Grade *</label>
+                        <select id="qiGrade" required>
+                            <option value="">Select Grade</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>School *</label>
+                        <input type="text" id="qiSchool" required>
+                    </div>
+                    <div>
+                        <label>Gender</label>
+                        <select id="qiGender">
+                            <option value="">Select</option>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                        </select>
+                    </div>
+                </div>
+
+                <h3 style="font-size: 1rem; margin: 1.5rem 0 0.5rem; color: var(--text);">📞 Contact Information *</h3>
+                <div class="qi-form-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+                    <div>
+                        <label>Mom</label>
+                        <input type="tel" id="qiPhoneMom">
+                    </div>
+                    <div>
+                        <label>Dad</label>
+                        <input type="tel" id="qiPhoneDad">
+                    </div>
+                    <div>
+                        <label>Student</label>
+                        <input type="tel" id="qiPhoneOwn">
+                    </div>
+                </div>
+
+                <h3 style="font-size: 1rem; margin: 1.5rem 0 0.5rem; color: var(--text);">📚 Subjects & Diagnostic Test (DT)</h3>
+                <div id="qiSubjectsContainer" style="margin-bottom: 1rem;"></div>
+                <button type="button" id="qiAddSubjectBtn" class="secondary" style="width: 100%; margin-bottom: 1.5rem;">+ Add Subject</button>
+
+                <div class="qi-actions">
+                    <button type="button" id="qiCancelBtn" class="secondary">Cancel</button>
+                    <button type="submit" id="qiSaveBtn" class="primary">💾 Save Inquiry</button>
+                </div>
+            </form>
         </div>
     </div>
 
