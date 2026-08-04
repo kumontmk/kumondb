@@ -291,27 +291,26 @@ header a:hover, header button:hover {
   cursor: default;
   position: relative;
   transition: background 0.2s;
-  min-height: 50px; /* Slightly taller to fit the indicator */
+  min-height: 50px;
   display: flex;
-  flex-direction: column; /* Stack date number and indicator */
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   font-size: 0.9rem;
   line-height: 1.2;
 }
 
-/* NEW: Style for the DT abbreviation indicators */
 .dt-indicator {
   font-size: 0.65rem;
   font-weight: 700;
-  color: #e65100; /* Matches the orange DT theme */
+  color: #e65100;
   margin-top: 2px;
   white-space: nowrap;
   letter-spacing: 0.5px;
   text-transform: uppercase;
 }
 
-/* 🔵 Parent Orientation (PO) Styles */
+/*  Parent Orientation (PO) Styles */
 .calendar-day.has-po {
   background: #e3f2fd;
   color: #1565c0;
@@ -375,7 +374,6 @@ header a:hover, header button:hover {
   border-radius: 50%;
 }
 
-/* Handle overlap gracefully */
 .calendar-day.has-po.has-public-holiday {
   border-color: #c62828;
 }
@@ -744,7 +742,7 @@ header a:hover, header button:hover {
 }
 
 /* =========================================
-   📝 SCHEDULE DT MODAL SPECIFIC STYLES
+    SCHEDULE DT MODAL SPECIFIC STYLES
    ========================================= */
 .schedule-dt-modal-content {
   max-width: 500px;
@@ -823,7 +821,6 @@ header a:hover, header button:hover {
   font-weight: 600;
 }
 
-/* Search dropdown inside the modal */
 .dt-existing-form .search-dropdown {
   position: absolute;
   top: 100%;
@@ -852,7 +849,6 @@ header a:hover, header button:hover {
   background: #f8fafc;
 }
 
-/* Add Another Subject Button */
 .add-dt-row-btn {
   width: 100%;
   margin-bottom: 1rem;
@@ -871,7 +867,6 @@ header a:hover, header button:hover {
   border-color: #94a3b8;
 }
 
-/* Dynamic Row Styling */
 .dt-subject-row {
   display: flex;
   gap: 0.75rem;
@@ -930,7 +925,6 @@ header a:hover, header button:hover {
   color: white;
 }
 
-/* DT Action Buttons (Cancel / Reschedule) */
 .dt-action-btn {
   background: none;
   border: 1px solid #e2e8f0;
@@ -1096,8 +1090,8 @@ header a:hover, header button:hover {
 }
 
 /* =========================================
-🏷️ HOLIDAY NAME INDICATOR (Auto-Shrink)
-========================================= */
+   🏷️ HOLIDAY NAME INDICATOR (Auto-Shrink)
+   ========================================= */
 .holiday-name {
     font-size: 0.6rem;
     font-weight: 600;
@@ -1119,7 +1113,6 @@ header a:hover, header button:hover {
     color: #c62828;
 }
 
-/* Ensure the cell can stack day number + indicators */
 .calendar-day {
     padding: 0.25rem;
     min-height: 50px;
@@ -1132,8 +1125,8 @@ header a:hover, header button:hover {
 }
 
 /* =========================================
-🔍 QUICK INQUIRY MODAL STYLES
-========================================= */
+   🔍 QUICK INQUIRY MODAL STYLES
+   ========================================= */
 .qi-form-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1169,7 +1162,6 @@ header a:hover, header button:hover {
     margin-bottom: 0.4rem;
 }
 
-/* Subject Row — matches .dt-subject-row style */
 .qi-subject-row {
     display: flex;
     gap: 0.75rem;
@@ -1207,31 +1199,45 @@ header a:hover, header button:hover {
     box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.25);
 }
 
-/* Checkbox alignment fix */
+/* =========================================
+   ✅ CHECKBOX STYLES (Quick Inquiry)
+   ========================================= */
 .qi-row-group.checkbox-group {
     flex: 0 0 auto;
     display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    padding-bottom: 0.1rem;
+    align-items: flex-end; /* Aligns with the bottom of the inputs */
+    padding-bottom: 0;
+    min-width: 140px;
 }
 
-.qi-row-group.checkbox-group label {
-    display: flex;
+/* Override the modal's global label display:block */
+.qi-row-group.checkbox-group .checkbox-label {
+    display: flex !important;
     align-items: center;
     gap: 0.5rem;
     cursor: pointer;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     font-weight: 600;
-    margin-bottom: 0;
+    margin: 0;
     white-space: nowrap;
+    padding: 0.6rem 0; /* Matches input padding for visual alignment */
+    color: var(--text);
 }
 
+/* Style the native checkbox */
 .qi-row-group.checkbox-group input[type="checkbox"] {
     width: 18px;
     height: 18px;
     cursor: pointer;
-    accent-color: var(--primary-dark);
+    accent-color: var(--primary-dark); /* Makes the checkmark blue */
+    margin: 0;
+    flex-shrink: 0;
+    outline: none;
+}
+
+.qi-row-group.checkbox-group input[type="checkbox"]:focus {
+    box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.25);
+    border-radius: 2px;
 }
 
 .qi-dt-date-wrapper {
@@ -1240,9 +1246,15 @@ header a:hover, header button:hover {
 
 .qi-dt-date-wrapper.visible {
     display: block;
+    animation: fadeIn 0.3s ease;
 }
 
-/* Remove button — matches .remove-dt-row-btn */
+.qi-dt-date-wrapper input[type="date"]:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.25);
+}
+
 .remove-qi-row-btn {
     flex: 0 0 40px;
     height: 40px;
@@ -1265,7 +1277,6 @@ header a:hover, header button:hover {
     color: white;
 }
 
-/* + Add Subject button — matches .add-dt-row-btn */
 #qiAddSubjectBtn {
     width: 100%;
     margin-bottom: 1.5rem;
@@ -1285,7 +1296,6 @@ header a:hover, header button:hover {
     border-color: #94a3b8;
 }
 
-/* Bottom action buttons — use existing .primary / .secondary classes */
 .qi-actions {
     display: flex;
     gap: 1rem;
@@ -1346,6 +1356,11 @@ header a:hover, header button:hover {
         flex: 1 1 100%;
     }
     .qi-row-group.checkbox-group {
-        flex: 1 1 auto;
+        flex: 1 1 100%;
+        min-width: 100%;
+        align-items: flex-start;
+    }
+    .qi-row-group.checkbox-group label {
+        padding: 0.6rem 0;
     }
 }

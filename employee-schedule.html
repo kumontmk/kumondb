@@ -191,12 +191,21 @@
                 <legend>📝 Notes</legend>
                 <textarea id="scheduleNotes" rows="2" placeholder="Optional notes..."></textarea>
             </fieldset>
-            <div class="pattern-option">
-                <label>
-                    <input type="checkbox" id="saveAsPattern">
-                    Save as recurring pattern for every <strong id="patternDayName">Monday</strong>
-                </label>
-            </div>
+                <div class="pattern-calendar-container">
+                    <div class="pattern-calendar-header">
+                        <button type="button" id="patternCalPrevBtn" class="cal-nav-btn">‹</button>
+                        <span id="patternCalendarMonth" class="cal-month-label">Month Year</span>
+                        <button type="button" id="patternCalNextBtn" class="cal-nav-btn">›</button>
+                    </div>
+                    <div id="patternCalendarGrid" class="pattern-calendar-grid">
+                        <!-- Calendar days will be injected here by JS -->
+                    </div>
+                    <div class="pattern-calendar-legend">
+                        <span class="legend-item"><span class="legend-box holiday"></span> Holiday</span>
+                        <span class="legend-item"><span class="legend-box closed"></span> Closed</span>
+                        <span class="legend-item"><span class="legend-box disabled"></span> Past Date</span>
+                    </div>
+                </div>
         </div>
         <div class="modal-footer">
             <button class="btn-danger" id="clearDayBtn">Clear Day</button>

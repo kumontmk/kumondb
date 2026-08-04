@@ -814,3 +814,173 @@ EMPLOYEE VIEW TOOLBAR FIXES
   #tab-employee .employee-selector label { margin-bottom: 0; }
   #tab-employee .employee-selector select { width: auto; min-width: 280px; }
 }
+
+/* =========================================
+MULTI-DAY PATTERN SELECTOR
+========================================= */
+.pattern-days-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+    margin-top: 0.25rem;
+}
+.pattern-day-label {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--text);
+    user-select: none;
+}
+.pattern-day-label input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--primary-dark);
+}
+.pattern-day-label:hover {
+    color: var(--primary-dark);
+}
+
+/* =========================================
+PATTERN CALENDAR STYLES
+========================================= */
+.pattern-calendar-container {
+    margin-top: 1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 1rem;
+    background: #f8fafc;
+}
+.pattern-calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+.cal-nav-btn {
+    background: var(--primary);
+    color: white;
+    border: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1.2rem;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+}
+.cal-nav-btn:hover { background: var(--primary-dark); }
+.cal-month-label {
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--primary-dark);
+}
+.pattern-calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+}
+.calendar-day-header {
+    text-align: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-light);
+    padding: 4px 0;
+}
+.calendar-day {
+    position: relative;
+    aspect-ratio: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+}
+.calendar-day.empty {
+    background: transparent;
+    border: none;
+    cursor: default;
+}
+.calendar-day:hover:not(.disabled):not(.empty) {
+    border-color: var(--primary-dark);
+    background: #e8f4fd;
+}
+.calendar-day.checked {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary-dark);
+}
+.calendar-day.checked:hover {
+    background: var(--primary-dark);
+}
+.calendar-day.disabled {
+    background: #f1f5f9;
+    color: #cbd5e1;
+    cursor: not-allowed;
+    text-decoration: line-through;
+}
+.calendar-day.holiday {
+    border-color: #e74c3c;
+    background: #fef2f2;
+    color: #b91c1c;
+}
+.calendar-day.holiday.checked {
+    background: #e74c3c;
+    color: white;
+}
+.calendar-day.closed {
+    border-color: #95a5a6;
+    background: #f8f9fa;
+    color: #7f8c8d;
+}
+.calendar-day.closed.checked {
+    background: #95a5a6;
+    color: white;
+}
+.calendar-day input[type="checkbox"] {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 12px;
+    height: 12px;
+    cursor: pointer;
+    accent-color: var(--primary-dark);
+}
+.calendar-day.disabled input[type="checkbox"] {
+    cursor: not-allowed;
+}
+.pattern-calendar-legend {
+    display: flex;
+    gap: 1rem;
+    margin-top: 0.75rem;
+    font-size: 0.75rem;
+    color: var(--text-light);
+    flex-wrap: wrap;
+}
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.legend-box {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    border: 1px solid #ccc;
+}
+.legend-box.holiday { background: #fef2f2; border-color: #e74c3c; }
+.legend-box.closed { background: #f8f9fa; border-color: #95a5a6; }
+.legend-box.disabled { background: #f1f5f9; border-color: #cbd5e1; }

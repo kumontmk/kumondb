@@ -1525,6 +1525,7 @@ function addQISubjectRow() {
         return `<option value="${s}" ${isUsed ? 'disabled' : ''}>${s}${isUsed ? ' (Added)' : ''}</option>`;
     }).join('');
 
+    // ✅ UPDATED HTML STRUCTURE
     row.innerHTML = `
         <div class="qi-row-group" style="flex: 2;">
             <label>Subject *</label>
@@ -1534,9 +1535,9 @@ function addQISubjectRow() {
             </select>
         </div>
         <div class="qi-row-group checkbox-group">
-            <label>
+            <label class="checkbox-label">
                 <input type="checkbox" class="qi-schedule-dt">
-                Schedule DT?
+                <span>Schedule DT?</span>
             </label>
         </div>
         <div class="qi-row-group qi-dt-date-wrapper" style="flex: 1.5;">
@@ -1546,6 +1547,7 @@ function addQISubjectRow() {
         <button type="button" class="remove-qi-row-btn" title="Remove">×</button>
     `;
 
+    // The rest of the event listeners remain exactly the same
     const dtCheckbox = row.querySelector('.qi-schedule-dt');
     const dtDateWrapper = row.querySelector('.qi-dt-date-wrapper');
     const dtDateInput = row.querySelector('.qi-dt-date');

@@ -64,6 +64,9 @@ let selectedSubjectFilter = 'all';
 let centerGroupBySubject = false; 
 let isSaving = false; // ✅ Added to prevent double-clicks
 
+let selectedPatternDates = new Set(); // Tracks checked dates across month navigation
+let calendarViewDate = new Date();    // Tracks which month the calendar is showing
+
 // ============================================
 // INITIALIZATION
 // ============================================
@@ -1190,6 +1193,116 @@ function setupModal() {
     document.getElementById('scheduleModal')?.addEventListener('click', (e) => {
         if (e.target.id === 'scheduleModal') closeModal();
     });
+
+    // 🆕 Calendar Navigation & Selection Listeners
+    document.getElementById('patternCalPrevBtn')?.addEventListener('click', () => {
+        calendarViewDate.setMonth(calendarViewDate.getMonth() - 1);
+        renderPatternCalendar();
+    });
+    document.getElementById('patternCalNextBtn')?.addEventListener('click', () => {
+        calendarViewDate.setMonth(calendarViewDate.getMonth() + 1);
+        renderPatternCalendar();
+    });
+    
+    // Handle checkbox changes in the calendar grid
+    document.getElementById('patternCalendarGrid')?.addEventListener('change', (e) => {
+        if (e.target.classList.contains('pattern-date-cb')) {
+            const dateStr = e.target.value;
+            const dayCell = e.target.closest('.calendar-day');
+            if (e.target.checked) {
+                selectedPatternDates.add(dateStr);
+                dayCell.classList.add('checked');
+            } else {
+                selectedPatternDates.delete(dateStr);
+                dayCell.classList.remove('checked');
+            }
+        }
+    });
+}
+
+// 🆕 Function to render the calendar grid
+function renderPatternCalendar() {
+    const container = document.getElementById('patternCalendarGrid');
+    const monthLabel = document.getElementById('patternCalendarMonth');
+    if (!container || !monthLabel) return;
+
+    const year = calendarViewDate.getFullYear();
+    const month = calendarViewDate.getMonth();
+    monthLabel.textContent = `${MONTH_NAMES[month]} ${year}`;
+
+    container.innerHTML = ''; 
+
+    // 1. Add Day Headers (Sun, Mon, etc.)
+    DAY_SHORT.forEach(day => {
+        const header = document.createElement('div');
+        header.className = 'calendar-day-header';
+        header.textContent = day;
+        container.appendChild(header);
+    });
+
+    // 2. Calculate Days
+    const firstDayOfMonth = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // 3. Empty cells for days before the 1st
+    for (let i = 0; i < firstDayOfMonth; i++) {
+        const empty = document.createElement('div');
+        empty.className = 'calendar-day empty';
+        container.appendChild(empty);
+    }
+
+    // 4. Days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateObj = new Date(year, month, day);
+        const dateStr = formatDateStr(dateObj);
+        const dow = dateObj.getDay();
+
+        const cell = document.createElement('label');
+        cell.className = 'calendar-day';
+        if (selectedPatternDates.has(dateStr)) cell.classList.add('checked');
+
+        // Check if past
+        if (dateObj < today) {
+            cell.classList.add('disabled');
+        }
+
+        // Check if holiday
+        const holidayInfo = getHolidayForDate(dateStr);
+        if (holidayInfo && !holidayInfo.muc) {
+            cell.classList.add('holiday');
+            cell.title = holidayInfo.name || 'Holiday';
+        }
+
+        // Check if closed (based on selected centers in modal)
+        const shiftCenters = Array.from(document.querySelectorAll('.shift-center')).map(s => s.value).filter(v => v);
+        let isClosed = false;
+        if (shiftCenters.length > 0) {
+            isClosed = shiftCenters.some(c => isCenterClosedOnDay(c, dow));
+        } else if (editingSourceCenter) {
+            isClosed = isCenterClosedOnDay(editingSourceCenter, dow);
+        }
+        if (isClosed) {
+            cell.classList.add('closed');
+            cell.title = 'Center Closed';
+        }
+
+        // Checkbox
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'pattern-date-cb';
+        checkbox.value = dateStr;
+        checkbox.checked = selectedPatternDates.has(dateStr);
+
+        if (cell.classList.contains('disabled')) {
+            checkbox.disabled = true;
+        }
+
+        cell.appendChild(checkbox);
+        cell.appendChild(document.createTextNode(day));
+        container.appendChild(cell);
+    }
 }
 
 function populateCenterDropdown(selectEl, selectedValue = '') {
@@ -1265,21 +1378,25 @@ function openEditModal(empId, dateStr) {
         alert('You do not have permission to edit schedules.');
         return;
     }
+    
     editingEmpId = empId;
     editingDate = dateStr;
     const emp = employees[empId];
     const dateObj = parseDate(dateStr);
     const dow = dateObj.getDay();
+    
     document.getElementById('modalTitle').textContent = `Edit Schedule`;
     document.getElementById('modalDateInfo').innerHTML = `
         <strong>${emp?.englishName || 'Unknown'}</strong> — 
         ${DAY_NAMES[dow]}, ${dateObj.getDate()} ${MONTH_NAMES[dateObj.getMonth()]} ${dateObj.getFullYear()}
     `;
-    document.getElementById('patternDayName').textContent = DAY_NAMES[dow];
+    
     document.getElementById('shiftsContainer').innerHTML = '';
     shiftCounter = 0;
+    
     const sched = mergedSchedules[empId]?.[dateStr];
     editingSourceCenter = sched?._sourceCenter || null;
+    
     if (sched) {
         const shifts = sched._shifts || extractShifts(sched);
         if (shifts.length > 0) {
@@ -1306,7 +1423,12 @@ function openEditModal(empId, dateStr) {
             document.getElementById('scheduleNotes').value = '';
         }
     }
-    document.getElementById('saveAsPattern').checked = false;
+    
+    // 🆕 Initialize Calendar State (Replaces old pattern-day-cb logic)
+    calendarViewDate = new Date(dateObj.getFullYear(), dateObj.getMonth(), 1);
+    selectedPatternDates = new Set([editingDate]); // Pre-check the current day
+    renderPatternCalendar();
+    
     checkModalWarnings(empId, dateStr);
     document.getElementById('scheduleModal').classList.remove('hidden');
 }
@@ -1457,17 +1579,50 @@ async function saveSchedule() {
             await set(ref(db, `schedules/${targetCenter}/${editingEmpId}/${editingDate}`), data);
         }
 
-        // Handle recurring pattern
-        if (document.getElementById('saveAsPattern').checked) {
-            const dateObj = parseDate(editingDate);
-            const dow = dateObj.getDay();
-            const templateData = { status, shifts, notes };
-            if (shifts.length > 0 || status !== 'scheduled') {
-                await set(ref(db, `scheduleTemplates/${editingEmpId}/${dow}`), templateData);
+    // 🆕 Handle Calendar Pattern (Copy now + Save for future)
+    const checkedDates = Array.from(selectedPatternDates);
+    
+    if (checkedDates.length > 0) {
+        const hasContent = shifts.length > 0 || status !== 'scheduled';
+        const templateData = { status, shifts, notes };
+        
+        // Determine target center for copying
+        let targetCenter = null;
+        const workShifts = shifts.filter(s => s.type === 'work' && s.center);
+        if (workShifts.length > 0) targetCenter = workShifts[0].center;
+        if (!targetCenter) targetCenter = editingSourceCenter || (allCenters.length > 0 ? allCenters[0].id : null);
+
+        for (const dateStr of checkedDates) {
+            if (dateStr === editingDate) continue; // Skip the main date, it's already saved above
+
+            // 1. Copy immediately to this specific date
+            if (hasContent && targetCenter) {
+                const schedData = {
+                    status, shifts, notes,
+                    isFromPattern: true,
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: currentUser.uid
+                };
+                await set(ref(db, `schedules/${targetCenter}/${editingEmpId}/${dateStr}`), schedData);
+            } else if (!hasContent) {
+                // If clearing, save empty to all centers
+                for (const center of allCenters) {
+                    await set(ref(db, `schedules/${center.id}/${editingEmpId}/${dateStr}`), { 
+                        status: 'scheduled', shifts: [], notes: '', 
+                        updatedAt: new Date().toISOString(), updatedBy: currentUser.uid 
+                    });
+                }
+            }
+
+            // 2. Save as a recurring pattern for the day of the week
+            const patternDow = parseDate(dateStr).getDay();
+            if (hasContent) {
+                await set(ref(db, `scheduleTemplates/${editingEmpId}/${patternDow}`), templateData);
             } else {
-                await remove(ref(db, `scheduleTemplates/${editingEmpId}/${dow}`));
+                await remove(ref(db, `scheduleTemplates/${editingEmpId}/${patternDow}`));
             }
         }
+    }
 
         await loadAllSchedules();
         await loadAllTemplates();
@@ -1507,11 +1662,22 @@ async function clearDay() {
             await set(ref(db, `schedules/${center.id}/${editingEmpId}/${editingDate}`), emptyData);
         }
         
-        // ✅ FIX: Also clear the template for this day of week if "Save as Pattern" is checked
-        if (document.getElementById('saveAsPattern').checked) {
-            const dateObj = parseDate(editingDate);
-            const dow = dateObj.getDay();
-            await remove(ref(db, `scheduleTemplates/${editingEmpId}/${dow}`));
+        // 🆕 Clear all checked dates in the calendar
+        const checkedDates = Array.from(selectedPatternDates);
+        const datesToClear = checkedDates.length > 0 ? checkedDates : [editingDate];
+        
+        for (const dateStr of datesToClear) {
+            const emptyData = {
+                status: 'scheduled', shifts: [], notes: '',
+                updatedAt: new Date().toISOString(), updatedBy: currentUser.uid
+            };
+            // Clear from all centers
+            for (const center of allCenters) {
+                await set(ref(db, `schedules/${center.id}/${editingEmpId}/${dateStr}`), emptyData);
+            }
+            // Clear the template for that day of the week
+            const patternDow = parseDate(dateStr).getDay();
+            await remove(ref(db, `scheduleTemplates/${editingEmpId}/${patternDow}`));
         }
         
         await loadAllSchedules();
@@ -1790,68 +1956,113 @@ function renderCenterHeader(dates) {
     });
 }
 
-function groupEmployeesBySubject(empList) {
+function isMainKumonCenter(centerId) {
+    const center = allCenters.find(c => c.id === centerId);
+    const name = (center?.name || centerId || '').toLowerCase();
+
+    return name.includes('mei keng') ||
+           name.includes('tap siac') ||
+           name.includes('pac tat') ||
+           name.includes('champs');
+}
+
+function groupEmployeesBySubject(empList, centerId = selectedCenterForView) {
     const subjectGroups = {};
     const subjectOrder = ['English Teacher', 'Math Teacher', 'Chinese Teacher'];
+
+    // If you also want Manager / Master Admin treated as Admin here,
+    // change this to: ['Master Admin', 'Manager', 'Admin']
     const adminRoles = ['Admin'];
+
     const otherTeachers = [];
     const addedEmpIds = new Set();
-    
+
+    const hideTutorialTeachers = isMainKumonCenter(centerId);
+
     empList.forEach(emp => {
-        const positions = getEmpPositions(emp);
-        let matchedSubject = false;
-        
-        // 1. Check for Admin roles FIRST
+        const positions = getEmpPositions(emp)
+            .map(p => (p || '').trim())
+            .filter(Boolean);
+
+        const hasMainSubject = subjectOrder.some(subj => positions.includes(subj));
         const hasAdminRole = positions.some(p => adminRoles.includes(p));
+        const hasTutorialTeacher = positions.includes('Tutorial Teacher');
+
+        // For Mei Keng, Tap Siac, Pac Tat and Champs:
+        // hide employees whose only relevant role is Tutorial Teacher.
+        if (hideTutorialTeachers && hasTutorialTeacher && !hasMainSubject && !hasAdminRole) {
+            addedEmpIds.add(emp.uid);
+            return;
+        }
+
+        let matchedSubject = false;
+
+        // 1. Add employee to every applicable main subject group.
+        for (const subj of subjectOrder) {
+            if (positions.includes(subj)) {
+                if (!subjectGroups[subj]) subjectGroups[subj] = [];
+                subjectGroups[subj].push(emp);
+
+                addedEmpIds.add(emp.uid);
+                matchedSubject = true;
+            }
+        }
+
+        // 2. Also add employee to Admins if applicable.
+        // This should not stop them from appearing in subject groups.
         if (hasAdminRole) {
             if (!subjectGroups['Admins']) subjectGroups['Admins'] = [];
             subjectGroups['Admins'].push(emp);
+
             addedEmpIds.add(emp.uid);
             matchedSubject = true;
         }
-        
-        // 2. Check for teaching subjects
-        if (!matchedSubject) {
-            for (const subj of subjectOrder) {
-                if (positions.includes(subj)) {
-                    if (!subjectGroups[subj]) subjectGroups[subj] = [];
-                    subjectGroups[subj].push(emp);
-                    matchedSubject = true;
-                    addedEmpIds.add(emp.uid);
-                    
-                    // ✅ FIX: Removed the 'break;' statement here!
-                    // Now the loop will continue checking the rest of the subjects,
-                    // allowing an employee to be added to multiple subject groups.
-                }
-            }
-        }
-        
-        // 3. If not admin and not a main subject, put in 'Other' (This catches Tutorial Teachers now)
+
+        // 3. Put remaining employees into Other.
+        // But for the main Kumon centers, do not put Tutorial-only teachers into Other.
         if (!matchedSubject && !addedEmpIds.has(emp.uid)) {
-            otherTeachers.push(emp);
-            addedEmpIds.add(emp.uid);
+            const shouldHideTutorial =
+                hideTutorialTeachers &&
+                hasTutorialTeacher &&
+                !hasMainSubject &&
+                !hasAdminRole;
+
+            if (!shouldHideTutorial) {
+                otherTeachers.push(emp);
+                addedEmpIds.add(emp.uid);
+            }
         }
     });
 
     const groupsToShow = [];
-    
-    // Add standard subjects
+
+    // Add standard subjects only.
+    // Tutorial Teacher is intentionally not included here.
     subjectOrder.forEach(subj => {
         if (subjectGroups[subj] && subjectGroups[subj].length > 0) {
-            groupsToShow.push({ subject: subj, teachers: subjectGroups[subj] });
+            groupsToShow.push({
+                subject: subj,
+                teachers: subjectGroups[subj]
+            });
         }
     });
-    
-    // Add Admins group
+
+    // Add Admins group.
     if (subjectGroups['Admins'] && subjectGroups['Admins'].length > 0) {
-        groupsToShow.push({ subject: 'Admins', teachers: subjectGroups['Admins'] });
+        groupsToShow.push({
+            subject: 'Admins',
+            teachers: subjectGroups['Admins']
+        });
     }
-    
-    // Add Other group
+
+    // Add Other group.
     if (otherTeachers.length > 0) {
-        groupsToShow.push({ subject: 'Other', teachers: otherTeachers });
+        groupsToShow.push({
+            subject: 'Other',
+            teachers: otherTeachers
+        });
     }
-    
+
     return groupsToShow;
 }
 
@@ -2088,7 +2299,8 @@ function renderCenterBody(dates) {
     dates.forEach(d => countedEmpIdsByDate[d] = new Set());
 
     if (centerGroupBySubject) {
-        const groups = groupEmployeesBySubject(employeesWithShifts);
+        const groups = groupEmployeesBySubject(employeesWithShifts, selectedCenterForView);
+
         groups.forEach(group => {
             const config = SUBJECT_CONFIG[group.subject] || { label: group.subject, icon: '👤', cls: 'other-divider', color: '#8e44ad' };
             const divRow = document.createElement('tr');
@@ -2242,7 +2454,7 @@ function generateCenterPrintHTML() {
     dates.forEach(d => countedEmpIdsByDate[d] = new Set());
 
     if (centerGroupBySubject) {
-        const groups = groupEmployeesBySubject(employeesWithShifts);
+        const groups = groupEmployeesBySubject(employeesWithShifts, selectedCenterForView);
         groups.forEach(group => {
             const config = SUBJECT_CONFIG[group.subject] || { label: group.subject, cls: 'other', icon: '' };
             const dividerCls = SUBJECT_CONFIG[group.subject]?.cls || 'other';
