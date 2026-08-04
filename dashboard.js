@@ -547,6 +547,7 @@ function renderDualCalendar() {
 
   renderMonthGrid(currentYear, currentMonth, 'calendarCurrent', today);
   renderMonthGrid(nextYear, nextMonth, 'calendarNext', today);
+  autoShrinkHolidayNames();
 }
 
 function getClosedDaysForCenter(name) {
@@ -556,6 +557,19 @@ function getClosedDaysForCenter(name) {
     if (lowerName.includes('champs')) return [0];
     if (lowerName.includes('tap siac')) return [2];
     return [];
+}
+
+// ✅ NEW: Auto-shrink holiday names to fit inside the calendar cell
+function autoShrinkHolidayNames() {
+    document.querySelectorAll('.holiday-name').forEach(el => {
+        let fontSize = 0.6; // Starting size in rem
+        el.style.fontSize = fontSize + 'rem';
+        // Shrink until it fits or hits minimum size
+        while (el.scrollWidth > el.clientWidth && fontSize > 0.35) {
+            fontSize -= 0.05;
+            el.style.fontSize = fontSize + 'rem';
+        }
+    });
 }
 
 function renderMonthGrid(year, month, containerId, todayDate) {
@@ -597,6 +611,15 @@ function renderMonthGrid(year, month, containerId, todayDate) {
     if (event) {
       if (event.type === 'public') cell.classList.add('has-public-holiday');
       if (event.type === 'center') cell.classList.add('has-center-holiday');
+      
+      // ✅ NEW: Display holiday name inside the cell
+      if (event.name) {
+          const nameEl = document.createElement('div');
+          nameEl.className = 'holiday-name';
+          nameEl.textContent = event.name;
+          nameEl.title = event.name; // Full name on hover
+          cell.appendChild(nameEl);
+      }
     }
 
     if (poDataMap[dateStr] && poDataMap[dateStr].length > 0) {

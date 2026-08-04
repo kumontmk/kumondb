@@ -1,8 +1,8 @@
-import { auth, db, logout } from './auth.js'; 
+import { auth, db, logout } from './auth.js';
 import { ref, get, update } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-const REQUIRED_PERMISSION = 'newStudentList'; 
+const REQUIRED_PERMISSION = 'newStudentList';
 const centerId = sessionStorage.getItem('selectedCenter');
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -10,7 +10,7 @@ let allStudentsData = [];
 let viewMode = 'year';
 let activeTabMonth = null;
 let activeTabYear = null;
-let currentDtContext = null; 
+let currentDtContext = null;
 
 // 1. Auth & Permission Check
 onAuthStateChanged(auth, async (user) => {
@@ -60,6 +60,7 @@ function initApp() {
         filterYear.innerHTML += `<option value="${y}">${y}</option>`;
         rangeStartYearSel.innerHTML += `<option value="${y}">${y}</option>`;
     }
+
     MONTH_NAMES.forEach((m, i) => {
         const monthVal = String(i + 1).padStart(2, '0');
         filterMonth.innerHTML += `<option value="${monthVal}">${m}</option>`;
@@ -69,7 +70,7 @@ function initApp() {
     const now = new Date();
     filterMonth.value = String(now.getMonth() + 1).padStart(2, '0');
     filterYear.value = currentYear;
-    
+
     let currentMonth = now.getMonth() + 1; 
     rangeStartMonthSel.value = String(currentMonth).padStart(2, '0');
     rangeStartYearSel.value = currentYear;
@@ -102,7 +103,7 @@ function initApp() {
             tab.textContent = `${MONTH_NAMES[month - 1]} ${year}`;
             tab.dataset.month = String(month).padStart(2, '0');
             tab.dataset.year = year;
-            
+
             tab.addEventListener('click', () => {
                 document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
                 tab.classList.add('active');
@@ -150,17 +151,16 @@ function initApp() {
     async function loadData() {
         if (!centerId) {
             document.getElementById('page-loader')?.classList.add('hidden');
-            tbody.innerHTML = '<tr><td colspan="20" style="text-align:center; padding:2rem; color:#dc3545;">No center selected. Please go back to the Dashboard and select a center.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="22" style="text-align:center; padding:2rem; color:#dc3545;">No center selected. Please go back to the Dashboard and select a center.</td></tr>';
             return;
         }
-
         try {
             const snap = await get(ref(db, `centers/${centerId}/students`));
             if (snap.exists()) {
                 allStudentsData = Object.entries(snap.val()).map(([id, data]) => ({ id, ...data }));
                 renderTable();
             } else {
-                tbody.innerHTML = '<tr><td colspan="20" style="text-align:center; padding:2rem;">No students found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="22" style="text-align:center; padding:2rem;">No students found.</td></tr>';
             }
         } catch (err) {
             console.error("Error loading students:", err);
@@ -175,7 +175,6 @@ function initApp() {
             const subjects = Array.isArray(student.subjects) ? student.subjects : Object.values(student.subjects || {});
             subjects.forEach((sub, index) => {
                 if (!sub.enrolDate) return;
-                
                 const date = new Date(sub.enrolDate);
                 const month = String(date.getMonth() + 1).padStart(2, '0');
                 const year = date.getFullYear().toString();
@@ -190,7 +189,7 @@ function initApp() {
                     const startDate = new Date(startYear, startMonth - 1);
                     const endDate = new Date(startDate);
                     endDate.setMonth(endDate.getMonth() + 11);
-                    
+
                     if (entryDate >= startDate && entryDate <= endDate) {
                         if (!activeTabMonth || (month === activeTabMonth && year === activeTabYear)) {
                             match = true;
@@ -225,22 +224,19 @@ function initApp() {
     function getDisplayName(student) {
         const cn = student.nameCn?.trim();
         if (cn && cn !== '-') return cn;
-        
         const pinyin = student.namePinyin?.trim(); 
         if (pinyin && pinyin !== '-') return pinyin;
-        
         const nick = student.nickname?.trim();
         if (nick && nick !== '-') return nick;
-        
         return '-';
     }
 
     function renderTable() {
         const entries = getFilteredEntries();
         tbody.innerHTML = '';
-        
+
         if (entries.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="20" style="text-align:center; padding:2rem;">No new students found for the selected period.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="22" style="text-align:center; padding:2rem;">No new students found for the selected period.</td></tr>';
             return;
         }
 
@@ -248,6 +244,10 @@ function initApp() {
             const { student, subject, subjectIndex } = entry;
             const sub = subject;
             
+            // Enrolled Status Logic
+            const enrolledVal = sub.enrolled || 'No';
+            const rowClass = enrolledVal === 'Yes' ? 'row-enrolled-yes' : 'row-enrolled-no';
+
             // Show subject name inside the DT button
             let dtDisplay = `<button class="dt-cell-btn" data-student="${student.id}" data-subidx="${subjectIndex}">Select DT<br><small>${sub.name || ''}</small></button>`;
             if (sub.selectedDT) {
@@ -259,6 +259,8 @@ function initApp() {
             }
 
             const tr = document.createElement('tr');
+            tr.className = rowClass; // Apply row highlight class
+            
             tr.innerHTML = `
                 <td>${idx + 1}</td>
                 <td>${getDisplayName(student)}</td>
@@ -267,6 +269,13 @@ function initApp() {
                         <option value="" ${!sub.refCode ? 'selected' : ''}>-</option>
                         <option value="IT" ${sub.refCode === 'IT' ? 'selected' : ''}>IT</option>
                         <option value="EO" ${sub.refCode === 'EO' ? 'selected' : ''}>EO</option>
+                    </select>
+                </td>
+                <!-- NEW ENROLLED COLUMN -->
+                <td>
+                    <select class="inline-save" data-field="enrolled" data-sid="${student.id}" data-subidx="${subjectIndex}">
+                        <option value="No" ${enrolledVal === 'No' ? 'selected' : ''}>No</option>
+                        <option value="Yes" ${enrolledVal === 'Yes' ? 'selected' : ''}>Yes</option>
                     </select>
                 </td>
                 <td>${getPhone(student)}</td>
@@ -310,13 +319,22 @@ function initApp() {
         });
     }
 
-    // Inline Save Logic
+    // Inline Save Logic & Dynamic Row Highlighting
     tbody.addEventListener('change', async (e) => {
         if (e.target.classList.contains('inline-save')) {
             await saveField(e.target);
+            
+            // Dynamically update row color when 'enrolled' dropdown changes
+            if (e.target.dataset.field === 'enrolled') {
+                const row = e.target.closest('tr');
+                if (row) {
+                    row.classList.remove('row-enrolled-yes', 'row-enrolled-no');
+                    row.classList.add(e.target.value === 'Yes' ? 'row-enrolled-yes' : 'row-enrolled-no');
+                }
+            }
         }
     });
-    
+
     tbody.addEventListener('blur', async (e) => {
         if (e.target.classList.contains('inline-save') && e.target.tagName === 'INPUT') {
             await saveField(e.target);
@@ -333,19 +351,20 @@ function initApp() {
             const studentRef = ref(db, `centers/${centerId}/students/${studentId}`);
             const snap = await get(studentRef);
             if (!snap.exists()) return;
-            
+
             const studentData = snap.val();
             let subjects = Array.isArray(studentData.subjects) ? studentData.subjects : Object.values(studentData.subjects || {});
-            
+
             if (subjects[subjectIndex]) {
                 subjects[subjectIndex][field] = value;
                 subjects[subjectIndex].updatedAt = new Date().toISOString();
                 studentData.subjects = subjects;
+
                 await update(studentRef, { subjects: studentData.subjects, updatedAt: new Date().toISOString() });
-                
+
                 const localStudent = allStudentsData.find(s => s.id === studentId);
                 if (localStudent) localStudent.subjects = subjects;
-                
+
                 el.style.backgroundColor = '#dcfce7';
                 setTimeout(() => el.style.backgroundColor = '', 500);
             }
@@ -374,13 +393,11 @@ function initApp() {
         const student = allStudentsData.find(s => s.id === currentDtContext.studentId);
         if (!student) return;
 
-        // Get Subject and Student Details for the Header
         let subjects = Array.isArray(student.subjects) ? student.subjects : Object.values(student.subjects || {});
         const currentSubject = subjects[currentDtContext.subjectIndex];
         const subjectName = currentSubject?.name || 'Unknown Subject';
         const studentName = getDisplayName(student);
-        
-        // Update Modal Title and Hint
+
         const modalTitle = document.getElementById('dtModalTitle');
         if (modalTitle) modalTitle.textContent = `Select DT for: ${subjectName}`;
         
@@ -389,7 +406,7 @@ function initApp() {
 
         dtModalBody.innerHTML = '';
         const dts = student.diagnosticTests || [];
-        
+
         if (dts.length === 0) {
             dtModalBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:1rem;">No Diagnostic Tests recorded for this student.</td></tr>';
         } else {
@@ -399,9 +416,7 @@ function initApp() {
                                    student.subjects[currentDtContext.subjectIndex]?.selectedDT?.test === dt.test;
                 if (isSelected) tr.classList.add('selected');
 
-                // ✅ FIX: Read the subject directly from the DT object saved by the Student Form
                 const dtSubjectName = dt.subject || '-';
-
                 tr.innerHTML = `
                     <td>${dt.date || '-'}</td>
                     <td>${dt.test || '-'}</td>
@@ -420,15 +435,15 @@ function initApp() {
     async function selectDt(dt) {
         if (!currentDtContext) return;
         const { studentId, subjectIndex } = currentDtContext;
-        
+
         try {
             const studentRef = ref(db, `centers/${centerId}/students/${studentId}`);
             const snap = await get(studentRef);
             if (!snap.exists()) return;
-            
+
             const studentData = snap.val();
             let subjects = Array.isArray(studentData.subjects) ? studentData.subjects : Object.values(studentData.subjects || {});
-            
+
             if (subjects[subjectIndex]) {
                 subjects[subjectIndex].selectedDT = {
                     date: dt.date,
@@ -438,11 +453,12 @@ function initApp() {
                     startLvl: dt.suggestedStart || dt.actualStart
                 };
                 studentData.subjects = subjects;
+
                 await update(studentRef, { subjects: studentData.subjects, updatedAt: new Date().toISOString() });
-                
+
                 const localStudent = allStudentsData.find(s => s.id === studentId);
                 if (localStudent) localStudent.subjects = subjects;
-                
+
                 closeDtModal();
                 renderTable();
             }

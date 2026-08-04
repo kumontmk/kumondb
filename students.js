@@ -310,7 +310,7 @@ async function initializePage(isAdmin = false) {
                         allRows.push({
                             ...student, id,
                             subjectName: sub.name || '-',
-                            level: sub.startLevel || '-',
+                            level: sub.currentLevel || sub.startLevel || '-', // 👈 Updated to show current level
                             enrolDate: sub.enrolDate || '-',
                             subjectStatus: sub.status || overallStatus,
                             overallStatus, 
