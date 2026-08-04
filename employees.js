@@ -1576,16 +1576,28 @@ function initApp() {
       const filteredIncomplete = incompleteRecords.filter(rec => !verificationKeys.has(`${rec.empId}_${rec.date}_${rec.time}`));
 
       const allRecords = [
-        ...filteredIncomplete.map(r => ({ ...r, isVerification: false, status: 'Incomplete' })),
-        ...verificationList.map(v => ({ ...v, isVerification: true, status: v.status }))
+        ...filteredIncomplete.map(r => ({ ...r, isVerification: false, status: 'incomplete' })),
+        ...verificationList.map(v => ({
+          ...v,
+          isVerification: true,
+          status: String(v.status || '').toLowerCase()
+        }))
       ];
 
-      // FIX: Changed 'Pending' and 'Denied' to lowercase to match actual database values
       allRecords.sort((a, b) => {
-        const statusOrder = { 'pending': 0, 'denied': 1, 'Incomplete': 2 };
-        const orderDiff = (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99);
-        if (orderDiff !== 0) return orderDiff;
-        return b.date.localeCompare(a.date) || (a.name || a.empName || '').localeCompare(b.name || b.empName || '');
+        const statusOrder = {
+          pending: 0,
+          denied: 1,
+          incomplete: 2
+        };
+
+        const aOrder = statusOrder[a.status] ?? 99;
+        const bOrder = statusOrder[b.status] ?? 99;
+
+        if (aOrder !== bOrder) return aOrder - bOrder;
+
+        return b.date.localeCompare(a.date) ||
+          (a.name || a.empName || '').localeCompare(b.name || b.empName || '');
       });
 
       tbody.innerHTML = '';

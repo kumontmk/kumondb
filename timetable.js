@@ -119,6 +119,74 @@ function initializeTimetable() {
     };
     const DAY_ABBR = ['MON', 'TUES', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
+    // ============================================
+    // 🛡️ PERMANENT FIX: ROBUST NORMALIZATION HELPERS
+    // ============================================
+    const DAY_NUMBER_TO_NAME = {
+        0: 'Sunday', 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday',
+        4: 'Thursday', 5: 'Friday', 6: 'Saturday', 7: 'Sunday'
+    };
+
+    const DAY_ALIASES = {
+        monday: 'Monday', mon: 'Monday',
+        tuesday: 'Tuesday', tue: 'Tuesday', tues: 'Tuesday',
+        wednesday: 'Wednesday', wed: 'Wednesday', weds: 'Wednesday',
+        thursday: 'Thursday', thu: 'Thursday', thur: 'Thursday', thurs: 'Thursday',
+        friday: 'Friday', fri: 'Friday',
+        saturday: 'Saturday', sat: 'Saturday',
+        sunday: 'Sunday', sun: 'Sunday',
+        '周一': 'Monday', '星期一': 'Monday', '礼拜一': 'Monday',
+        '周二': 'Tuesday', '星期二': 'Tuesday', '礼拜二': 'Tuesday',
+        '周三': 'Wednesday', '星期三': 'Wednesday', '礼拜三': 'Wednesday',
+        '周四': 'Thursday', '星期四': 'Thursday', '礼拜四': 'Thursday',
+        '周五': 'Friday', '星期五': 'Friday', '礼拜五': 'Friday',
+        '周六': 'Saturday', '星期六': 'Saturday', '礼拜六': 'Saturday',
+        '周日': 'Sunday', '星期日': 'Sunday', '周天': 'Sunday', '星期天': 'Sunday', '礼拜天': 'Sunday', '礼拜日': 'Sunday'
+    };
+
+    function normalizeWeekday(raw) {
+        if (raw === null || raw === undefined || raw === '') return null;
+        if (typeof raw === 'number') return DAY_NUMBER_TO_NAME[raw] || null;
+        const original = String(raw).trim().toLowerCase();
+        if (DAY_ALIASES[original]) return DAY_ALIASES[original];
+        const cleaned = original.replace(/[^\p{L}\p{N}]+/gu, '');
+        if (!cleaned) return null;
+        if (/^\d+$/.test(cleaned)) return DAY_NUMBER_TO_NAME[Number(cleaned)] || null;
+        return DAY_ALIASES[cleaned] || DAY_ALIASES[cleaned.slice(0, 3)] || null;
+    }
+
+    function normalizeTime(raw) {
+        if (raw === null || raw === undefined || raw === '') return '';
+        let value = String(raw).trim();
+        if (/^\d{4}$/.test(value)) value = `${value.slice(0, 2)}:${value.slice(2)}`;
+        if (/^\d{3}$/.test(value)) value = `0${value.slice(0, 1)}:${value.slice(1)}`;
+        const match = value.match(/^(\d{1,2}):([0-5]?\d)$/);
+        if (!match) return '';
+        const h = Number(match[1]);
+        const m = Number(match[2]);
+        if (h < 0 || h > 23 || m < 0 || m > 59) return '';
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+
+    function getTsDay(ts) {
+        return normalizeWeekday(DAY_MAP?.[ts?.day] ?? ts?.day);
+    }
+
+    function getTsTime(ts) {
+        return normalizeTime(ts?.time);
+    }
+
+    function warnInvalidTimeslot(context, centerSnap, centerData, s, sub, ts, extra = {}) {
+        console.warn(`[Timetable:${context}] Skipping invalid timeslot`, {
+            center: centerSnap?.key,
+            centerName: centerData?.name,
+            student: s?.nameCn || s?.name || s?.id,
+            subject: sub?.name,
+            timeslot: ts,
+            ...extra
+        });
+    }
+
     // 🆕 NEW: Robustly checks if a subject should be visible on a specific date
     function isSubjectActiveOnDate(sub, targetDate) {
         if (!sub || !targetDate) return false;
@@ -298,7 +366,7 @@ function initializeTimetable() {
     }
 
     function getNextDayNum(tsList, currentDay) {
-        const days = [...new Set(tsList.map(ts => DAY_MAP[ts.day] || ts.day))];
+        const days = [...new Set(tsList.map(ts => getTsDay(ts)).filter(Boolean))];
         if (days.length <= 1) return '';
         const currentIdx = DAY_ORDER.indexOf(currentDay);
         const dayNums = days.map(d => DAY_TO_NUM[d] || 0).filter(n => n > 0);
@@ -314,9 +382,13 @@ function initializeTimetable() {
         subjects.forEach(sub => {
             if (!isSubjectActiveOnDate(sub, targetDate) || !sub.timeslots) return;
             const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
-            const dayTs = tsList.filter(ts => (DAY_MAP[ts.day] || ts.day) === currentDay);
+            
+            const dayTs = tsList
+                .map(ts => ({ ts, day: getTsDay(ts), time: getTsTime(ts) }))
+                .filter(item => item.day === currentDay && item.time);
+
             if (dayTs.length > 0) {
-                const earliestTime = dayTs.reduce((min, ts) => ts.time < min ? ts.time : min, '23:59');
+                const earliestTime = dayTs.reduce((min, item) => item.time < min ? item.time : min, '23:59');
                 const group = getSubjectGroup(sub.name);
                 let letter = '';
                 const lowerName = sub.name.toLowerCase().trim();
@@ -402,105 +474,133 @@ function initializeTimetable() {
         if (timetableUnsub) { timetableUnsub(); timetableUnsub = null; }
 
         const cb = (snap) => {
-            cachedStudentsSnap = snap;
-            timetableBody.innerHTML = '';
-            const day = daySelect.value;
+            try {
+                cachedStudentsSnap = snap;
+                timetableBody.innerHTML = '';
+                const day = daySelect.value;
 
-            const headerDateEl = document.querySelector('#dayViewHeaderRow .header-date');
-            const headerDayEl = document.querySelector('#dayViewHeaderRow .header-day');
-            
-            // ✅ UPDATED: Extract targetDate for evaluation
-            const info = getDayViewHeaderInfo(day);
-            const targetDate = info.targetDate;
-            
-            if (headerDateEl && headerDayEl) {
-                headerDateEl.textContent = info.dateStr;
-                headerDayEl.textContent = info.dayStr;
-            }
+                const headerDateEl = document.querySelector('#dayViewHeaderRow .header-date');
+                const headerDayEl = document.querySelector('#dayViewHeaderRow .header-day');
+                
+                // ✅ UPDATED: Extract targetDate for evaluation
+                const info = getDayViewHeaderInfo(day);
+                const targetDate = info.targetDate;
+                
+                if (headerDateEl && headerDayEl) {
+                    headerDateEl.textContent = info.dateStr;
+                    headerDayEl.textContent = info.dayStr;
+                }
 
-            const timeSlots = getTimeSlots(day);
-            const schedule = {};
-            timeSlots.forEach(t => schedule[t] = {
-                mathLow: [], mathHigh: [], english: [], chinese: []
-            });
+                const timeSlots = getTimeSlots(day);
+                const schedule = {};
+                timeSlots.forEach(t => schedule[t] = {
+                    mathLow: [], mathHigh: [], english: [], chinese: []
+                });
 
-            // ✅ UPDATED: Loop through all centers
-            snap.forEach(centerSnap => {
-                const centerData = centerSnap.val();
-                if (!centerData?.students) return;
+                // ✅ UPDATED: Loop through all centers
+                snap.forEach(centerSnap => {
+                    const centerData = centerSnap.val();
+                    if (!centerData?.students) return;
 
-                Object.values(centerData.students).forEach(s => {
-                    if (!s?.subjects) return;
-                    const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
-                    subjects.forEach(sub => {
-                        // ✅ CRITICAL FIX: Use isSubjectActiveOnDate instead of sub.status !== 'current'
-                        if (!isSubjectActiveOnDate(sub, targetDate) || !sub.timeslots) return;
-                        
-                        const group = getSubjectGroup(sub.name);
-                        if (!group) return;
-                        const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
-                        tsList.forEach(ts => {
-                            // ✅ CRITICAL FILTER: Only include if timeslot is for THIS center
-                            const tsCenter = ts.center || centerSnap.key; // Fallback for backward compatibility
-                            if (tsCenter !== centerId) return;
+                    Object.values(centerData.students).forEach(s => {
+                        if (!s?.subjects) return;
+                        const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
+                        subjects.forEach(sub => {
+                            // ✅ CRITICAL FIX: Use isSubjectActiveOnDate instead of sub.status !== 'current'
+                            if (!isSubjectActiveOnDate(sub, targetDate) || !sub.timeslots) return;
+                            
+                            const group = getSubjectGroup(sub.name);
+                            if (!group) return;
+                            const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
+                            tsList.forEach(ts => {
+                                if (!ts) return;
+                                // ✅ CRITICAL FILTER: Only include if timeslot is for THIS center
+                                const tsCenter = ts.center || centerSnap.key; // Fallback for backward compatibility
+                                if (tsCenter !== centerId) return;
 
-                            const tsDay = DAY_MAP[ts.day] || ts.day;
-                            if (tsDay === day && schedule[ts.time]) {
-                                const studentObj = buildStudentObj(s, sub, tsDay, tsList, targetDate);
-                                if (!studentObj) return;
-                                if (group === 'Math') {
-                                    if (isMathHighLevel(studentObj.level)) {
-                                        schedule[ts.time].mathHigh.push(studentObj);
-                                    } else {
-                                        schedule[ts.time].mathLow.push(studentObj);
-                                    }
-                                } else if (group === 'English') {
-                                    schedule[ts.time].english.push(studentObj);
-                                } else if (group === 'Chinese') {
-                                    schedule[ts.time].chinese.push(studentObj);
+                                const tsDay = getTsDay(ts);
+                                const time = getTsTime(ts);
+
+                                if (!tsDay || !time) {
+                                    warnInvalidTimeslot('Day View', centerSnap, centerData, s, sub, ts);
+                                    return;
                                 }
-                            }
+
+                                if (tsDay === day && schedule[time]) {
+                                    const studentObj = buildStudentObj(s, sub, tsDay, tsList, targetDate);
+                                    if (!studentObj) return;
+                                    if (group === 'Math') {
+                                        if (isMathHighLevel(studentObj.level)) {
+                                            schedule[time].mathHigh.push(studentObj);
+                                        } else {
+                                            schedule[time].mathLow.push(studentObj);
+                                        }
+                                    } else if (group === 'English') {
+                                        schedule[time].english.push(studentObj);
+                                    } else if (group === 'Chinese') {
+                                        schedule[time].chinese.push(studentObj);
+                                    }
+                                }
+                            });
                         });
                     });
                 });
-            });
 
-            Object.values(schedule).forEach(slot => {
-                Object.values(slot).forEach(arr => arr.sort((a, b) => a.grade.localeCompare(b.grade)));
-            });
+                Object.values(schedule).forEach(slot => {
+                    Object.values(slot).forEach(arr => arr.sort((a, b) => a.grade.localeCompare(b.grade)));
+                });
 
-            timeSlots.forEach(time => {
-                const s = schedule[time];
-                const maxRows = Math.max(s.mathLow.length, s.mathHigh.length, s.english.length, s.chinese.length);
-                const rowCount = maxRows === 0 ? 2 : maxRows;
-                for (let i = 0; i < rowCount; i++) {
-                    const row = document.createElement('tr');
-                    if (i === 0) {
-                        const timeCell = document.createElement('td');
-                        timeCell.textContent = time;
-                        timeCell.className = 'time-cell';
-                        timeCell.rowSpan = rowCount;
-                        row.appendChild(timeCell);
-                    }
-                    const addSubjectCells = (arr) => {
-                        if (arr[i]) {
-                            row.appendChild(createCell(arr[i].grade));
-                            row.appendChild(createCell(arr[i].name, false, arr[i].worksheetType === 'Kumon Connect'));
-                            row.appendChild(createCell(arr[i].level));
-                        } else {
-                            row.appendChild(createCell('', true));
-                            row.appendChild(createCell('', true));
-                            row.appendChild(createCell('', true));
+                timeSlots.forEach(time => {
+                    const s = schedule[time];
+                    const maxRows = Math.max(s.mathLow.length, s.mathHigh.length, s.english.length, s.chinese.length);
+                    const rowCount = maxRows === 0 ? 2 : maxRows;
+                    const isEmptyTimeSlot = maxRows === 0;
+
+                    for (let i = 0; i < rowCount; i++) {
+                        const row = document.createElement('tr');
+
+                        if (isEmptyTimeSlot) {
+                            row.classList.add('empty-time-row');
                         }
-                    };
-                    addSubjectCells(s.mathLow);
-                    addSubjectCells(s.mathHigh);
-                    addSubjectCells(s.english);
-                    addSubjectCells(s.chinese);
-                    timetableBody.appendChild(row);
+                        if (i === 0) {
+                            const timeCell = document.createElement('td');
+                            timeCell.textContent = time;
+                            timeCell.className = 'time-cell';
+                            timeCell.rowSpan = rowCount;
+                            row.appendChild(timeCell);
+                        }
+                        const addSubjectCells = (arr) => {
+                            if (arr[i]) {
+                                row.appendChild(createCell(arr[i].grade));
+                                row.appendChild(createCell(arr[i].name, false, arr[i].worksheetType === 'Kumon Connect'));
+                                row.appendChild(createCell(arr[i].level));
+                            } else {
+                                row.appendChild(createCell('', true));
+                                row.appendChild(createCell('', true));
+                                row.appendChild(createCell('', true));
+                            }
+                        };
+                        addSubjectCells(s.mathLow);
+                        addSubjectCells(s.mathHigh);
+                        addSubjectCells(s.english);
+                        addSubjectCells(s.chinese);
+                        timetableBody.appendChild(row);
+                    }
+                });
+            } catch (err) {
+                console.error('[Day View] Rendering failed:', err);
+                if (timetableBody) {
+                    timetableBody.innerHTML = `
+                        <tr>
+                            <td colspan="13" class="week-empty-msg">
+                                Failed to load day timetable. Check console for invalid timeslot data.
+                            </td>
+                        </tr>
+                    `;
                 }
-            });
-            hideLoader();
+            } finally {
+                hideLoader();
+            }
         };
 
         function createCell(content, isEmpty = false, isKC = false) {
@@ -526,15 +626,33 @@ function initializeTimetable() {
         if (!weekBody || !weekDateRow || !weekDayRow) return;
 
         showLoader();
+
+        function renderWeekViewSafely(snap) {
+            try {
+                renderWeekView(snap);
+            } catch (err) {
+                console.error('[Week View] Rendering failed:', err);
+                if (weekBody) {
+                    weekBody.innerHTML = `
+                        <tr>
+                            <td colspan="8" class="week-empty-msg">
+                                Failed to load week timetable. Check console for invalid timeslot data.
+                            </td>
+                        </tr>
+                    `;
+                }
+            } finally {
+                hideLoader();
+            }
+        }
+
         if (cachedStudentsSnap) {
-            renderWeekView(cachedStudentsSnap);
-            hideLoader();
+            renderWeekViewSafely(cachedStudentsSnap);
         } else {
             if (weekTimetableUnsub) { weekTimetableUnsub(); weekTimetableUnsub = null; }
             const cb = (snap) => {
                 cachedStudentsSnap = snap;
-                renderWeekView(snap);
-                hideLoader();
+                renderWeekViewSafely(snap);
             };
             onValue(centersRef, cb);
             weekTimetableUnsub = () => off(centersRef, 'value', cb);
@@ -585,15 +703,31 @@ function initializeTimetable() {
                         
                         const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
                         tsList.forEach(ts => {
+                            if (!ts) return;
                             // ✅ CRITICAL FILTER: Only include if timeslot is for THIS center
                             const tsCenter = ts.center || centerSnap.key;
                             if (tsCenter !== centerId) return;
 
-                            const tsDay = DAY_MAP[ts.day] || ts.day;
-                            const time = ts.time;
-                            
-                            // ✅ CRITICAL FIX: Evaluate if subject is active on this specific week day
+                            const tsDay = getTsDay(ts);
+                            const time = getTsTime(ts);
+
+                            if (!tsDay || !time) {
+                                warnInvalidTimeslot('Week View', centerSnap, centerData, s, sub, ts, { reason: 'Missing or invalid day/time' });
+                                return;
+                            }
+
                             const dayIdx = days.indexOf(tsDay);
+
+                            if (dayIdx === -1 || !weekDates[dayIdx]?.fullDate) {
+                                warnInvalidTimeslot('Week View', centerSnap, centerData, s, sub, ts, { reason: 'Weekday not recognized', tsDay });
+                                return;
+                            }
+
+                            if (!schedule[time] || !schedule[time][tsDay]) {
+                                warnInvalidTimeslot('Week View', centerSnap, centerData, s, sub, ts, { reason: 'Time is outside the week timetable grid', time, tsDay });
+                                return;
+                            }
+
                             const targetDate = weekDates[dayIdx].fullDate;
                             if (!isSubjectActiveOnDate(sub, targetDate)) return;
 
@@ -688,104 +822,125 @@ function initializeTimetable() {
         showLoader();
 
         const render = (snap) => {
-            champBody.innerHTML = '';
-            const day = champDaySelect.value;
-            
-            // ✅ UPDATED: Extract targetDate for evaluation
-            const info = getDayViewHeaderInfo(day);
-            const targetDate = info.targetDate;
-            
-            const timeSlots = getTimeSlots(day);
+            try {
+                champBody.innerHTML = '';
+                const day = champDaySelect.value;
+                
+                // ✅ UPDATED: Extract targetDate for evaluation
+                const info = getDayViewHeaderInfo(day);
+                const targetDate = info.targetDate;
+                
+                const timeSlots = getTimeSlots(day);
 
-            const schedule = {};
-            timeSlots.forEach(t => {
-                schedule[t] = {
-                    math6A2A: [], mathAF: [], mathGI: [], mathJO: [],
-                    engK: [], engP1: [],
-                    chinese: []
-                };
-            });
+                const schedule = {};
+                timeSlots.forEach(t => {
+                    schedule[t] = {
+                        math6A2A: [], mathAF: [], mathGI: [], mathJO: [],
+                        engK: [], engP1: [],
+                        chinese: []
+                    };
+                });
 
-            // ✅ UPDATED: Loop through all centers
-            snap.forEach(centerSnap => {
-                const centerData = centerSnap.val();
-                if (!centerData?.students) return;
+                // ✅ UPDATED: Loop through all centers
+                snap.forEach(centerSnap => {
+                    const centerData = centerSnap.val();
+                    if (!centerData?.students) return;
 
-                Object.values(centerData.students).forEach(s => {
-                    if (!s?.subjects) return;
-                    const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
+                    Object.values(centerData.students).forEach(s => {
+                        if (!s?.subjects) return;
+                        const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
 
-                    subjects.forEach(sub => {
-                        // ✅ CRITICAL FIX: Use isSubjectActiveOnDate instead of sub.status !== 'current'
-                        if (!isSubjectActiveOnDate(sub, targetDate) || !sub.timeslots) return;
-                        
-                        const group = getSubjectGroup(sub.name);
-                        if (!group) return;
+                        subjects.forEach(sub => {
+                            // ✅ CRITICAL FIX: Use isSubjectActiveOnDate instead of sub.status !== 'current'
+                            if (!isSubjectActiveOnDate(sub, targetDate) || !sub.timeslots) return;
+                            
+                            const group = getSubjectGroup(sub.name);
+                            if (!group) return;
 
-                        const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
-                        tsList.forEach(ts => {
-                            // ✅ CRITICAL FILTER: Only include if timeslot is for THIS center
-                            const tsCenter = ts.center || centerSnap.key;
-                            if (tsCenter !== centerId) return;
+                            const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
+                            tsList.forEach(ts => {
+                                if (!ts) return;
+                                // ✅ CRITICAL FILTER: Only include if timeslot is for THIS center
+                                const tsCenter = ts.center || centerSnap.key;
+                                if (tsCenter !== centerId) return;
 
-                            const tsDay = DAY_MAP[ts.day] || ts.day;
-                            if (tsDay !== day || !schedule[ts.time]) return;
+                                const tsDay = getTsDay(ts);
+                                const time = getTsTime(ts);
 
-                            const studentObj = buildStudentObj(s, sub, tsDay, tsList, targetDate);
-                            if (!studentObj) return;
+                                if (!tsDay || !time) {
+                                    warnInvalidTimeslot('Champ View', centerSnap, centerData, s, sub, ts);
+                                    return;
+                                }
 
-                            if (group === 'Math') {
-                                const bucket = getMathChampGroup(studentObj.level);
-                                if (bucket) schedule[ts.time][bucket].push(studentObj);
-                            } else if (group === 'English') {
-                                const bucket = getEnglishChampGroup(s.grade);
-                                if (bucket) schedule[ts.time][bucket].push(studentObj);
-                            } else if (group === 'Chinese') {
-                                schedule[ts.time].chinese.push(studentObj);
-                            }
+                                if (tsDay !== day || !schedule[time]) return;
+
+                                const studentObj = buildStudentObj(s, sub, tsDay, tsList, targetDate);
+                                if (!studentObj) return;
+
+                                if (group === 'Math') {
+                                    const bucket = getMathChampGroup(studentObj.level);
+                                    if (bucket) schedule[time][bucket].push(studentObj);
+                                } else if (group === 'English') {
+                                    const bucket = getEnglishChampGroup(s.grade);
+                                    if (bucket) schedule[time][bucket].push(studentObj);
+                                } else if (group === 'Chinese') {
+                                    schedule[time].chinese.push(studentObj);
+                                }
+                            });
                         });
                     });
                 });
-            });
 
-            const BUCKETS = ['math6A2A', 'mathAF', 'mathGI', 'mathJO', 'engK', 'engP1', 'chinese'];
-            Object.values(schedule).forEach(slot => {
-                BUCKETS.forEach(b => slot[b].sort((a, b) => a.grade.localeCompare(b.grade)));
-            });
+                const BUCKETS = ['math6A2A', 'mathAF', 'mathGI', 'mathJO', 'engK', 'engP1', 'chinese'];
+                Object.values(schedule).forEach(slot => {
+                    BUCKETS.forEach(b => slot[b].sort((a, b) => a.grade.localeCompare(b.grade)));
+                });
 
-            timeSlots.forEach(time => {
-                const s = schedule[time];
-                const maxRows = Math.max(...BUCKETS.map(b => s[b].length));
-                const rowCount = maxRows === 0 ? 2 : maxRows;
+                timeSlots.forEach(time => {
+                    const s = schedule[time];
+                    const maxRows = Math.max(...BUCKETS.map(b => s[b].length));
+                    const rowCount = maxRows === 0 ? 2 : maxRows;
 
-                for (let i = 0; i < rowCount; i++) {
-                    const row = document.createElement('tr');
-                    if (i === 0) {
-                        const timeCell = document.createElement('td');
-                        timeCell.textContent = time;
-                        timeCell.className = 'time-cell';
-                        timeCell.rowSpan = rowCount;
-                        row.appendChild(timeCell);
-                    }
-
-                    const addSubjectCells = (arr) => {
-                        if (arr[i]) {
-                            row.appendChild(createChampCell(arr[i].grade));
-                            row.appendChild(createChampCell(arr[i].name, false, arr[i].worksheetType === 'Kumon Connect'));
-                            row.appendChild(createChampCell(arr[i].level));
-                        } else {
-                            row.appendChild(createChampCell('', true));
-                            row.appendChild(createChampCell('', true));
-                            row.appendChild(createChampCell('', true));
+                    for (let i = 0; i < rowCount; i++) {
+                        const row = document.createElement('tr');
+                        if (i === 0) {
+                            const timeCell = document.createElement('td');
+                            timeCell.textContent = time;
+                            timeCell.className = 'time-cell';
+                            timeCell.rowSpan = rowCount;
+                            row.appendChild(timeCell);
                         }
-                    };
 
-                    BUCKETS.forEach(b => addSubjectCells(s[b]));
-                    champBody.appendChild(row);
+                        const addSubjectCells = (arr) => {
+                            if (arr[i]) {
+                                row.appendChild(createChampCell(arr[i].grade));
+                                row.appendChild(createChampCell(arr[i].name, false, arr[i].worksheetType === 'Kumon Connect'));
+                                row.appendChild(createChampCell(arr[i].level));
+                            } else {
+                                row.appendChild(createChampCell('', true));
+                                row.appendChild(createChampCell('', true));
+                                row.appendChild(createChampCell('', true));
+                            }
+                        };
+
+                        BUCKETS.forEach(b => addSubjectCells(s[b]));
+                        champBody.appendChild(row);
+                    }
+                });
+            } catch (err) {
+                console.error('[Champ View] Rendering failed:', err);
+                if (champBody) {
+                    champBody.innerHTML = `
+                        <tr>
+                            <td colspan="22" class="week-empty-msg">
+                                Failed to load Champ Format timetable. Check console for invalid timeslot data.
+                            </td>
+                        </tr>
+                    `;
                 }
-            });
-
-            hideLoader();
+            } finally {
+                hideLoader();
+            }
         };
 
         function createChampCell(content, isEmpty = false, isKC = false) {

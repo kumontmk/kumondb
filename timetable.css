@@ -290,6 +290,13 @@ td.kc-cell {
      -webkit-print-color-adjust: exact; 
      print-color-adjust: exact; }
 
+    #timetableTable tr.empty-time-row td {
+    height: 18pt !important;
+    min-height: 18pt !important;
+    line-height: 18pt !important;
+    padding: 0 3px !important;
+    }
+
     /* Week view print */
     #weekTimetableTable { width: 100% !important; border: 2px solid #333; font-size: 8pt; table-layout: fixed; }
     #weekTimetableTable th, #weekTimetableTable td { border: 1px solid #333 !important; padding: 2px 2px !important; line-height: 1.1 !important; color: #000 !important; }

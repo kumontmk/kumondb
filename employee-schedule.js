@@ -24,11 +24,40 @@ const CENTER_CLOSED_DAYS = {
 };
 
 const SUBJECT_CONFIG = {
-    'English Teacher': { label: 'English Teachers', icon: '📖', cls: 'english-divider', color: '#2980b9' },
-    'Math Teacher':    { label: 'Math Teachers',    icon: '🔢', cls: 'math-divider',    color: '#27ae60' },
-    'Chinese Teacher': { label: 'Chinese Teachers',  icon: '🀄', cls: 'chinese-divider', color: '#e67e22' },
-    'Tutorial Teacher': { label: 'Tutorial Teachers', icon: '📚', cls: 'tutorial-divider', color: '#8e44ad' },
-    'Admins': { label: 'Admins', icon: '👑', cls: 'admin-divider', color: '#2c3e50' },
+    'English Teacher': {
+        label: 'English Teachers',
+        icon: '📖',
+        cls: 'english-divider',
+        color: '#e67e22'
+    },
+
+    'Math Teacher': {
+        label: 'Math Teachers',
+        icon: '🔢',
+        cls: 'math-divider',
+        color: '#1abc9c'
+    },
+
+    'Chinese Teacher': {
+        label: 'Chinese Teachers',
+        icon: '🀄',
+        cls: 'chinese-divider',
+        color: '#7cb342'
+    },
+
+    'Tutorial Teacher': {
+        label: 'Tutorial Teachers',
+        icon: '📚',
+        cls: 'tutorial-divider',
+        color: '#8e44ad'
+    },
+
+    'Admins': {
+        label: 'Admins',
+        icon: '👤',
+        cls: 'admin-divider',
+        color: '#2c3e50'
+    },
 };
 
 // 🆕 Helper to handle both new (array) and old (string) position data
@@ -1084,10 +1113,20 @@ function printSubjectSchedule() {
     dates.forEach(d => countedEmpIdsByDate[d] = new Set());
 
     groupsToShow.forEach(group => {
-        const config = SUBJECT_CONFIG[group.subject] || { label: group.subject, cls: 'other', icon: '' };
-        const dividerCls = SUBJECT_CONFIG[group.subject]?.cls || 'other';
+        const config = SUBJECT_CONFIG[group.subject] || {
+            label: group.subject,
+            icon: '👤',
+            color: '#8e44ad'
+        };
+
+        const dividerCls = getPrintDividerClass(group.subject);
+        const dividerBg = config.color || '#8e44ad';
+
         html += `<tr class="print-subject-divider ${dividerCls}">
-            <td colspan="${dates.length + 1}">${config.icon} ${config.label} (${group.teachers.length})</td>
+            <td colspan="${dates.length + 1}"
+                style="background:${dividerBg} !important; color:#ffffff !important; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important;">
+                ${config.icon} ${config.label} (${group.teachers.length})
+            </td>
         </tr>`;
 
         group.teachers.forEach(emp => {
@@ -2456,10 +2495,20 @@ function generateCenterPrintHTML() {
     if (centerGroupBySubject) {
         const groups = groupEmployeesBySubject(employeesWithShifts, selectedCenterForView);
         groups.forEach(group => {
-            const config = SUBJECT_CONFIG[group.subject] || { label: group.subject, cls: 'other', icon: '' };
-            const dividerCls = SUBJECT_CONFIG[group.subject]?.cls || 'other';
+            const config = SUBJECT_CONFIG[group.subject] || {
+                label: group.subject,
+                icon: '👤',
+                color: '#8e44ad'
+            };
+
+            const dividerCls = getPrintDividerClass(group.subject);
+            const dividerBg = config.color || '#8e44ad';
+
             html += `<tr class="print-subject-divider ${dividerCls}">
-                <td colspan="${dates.length + 1}">${config.icon} ${config.label} (${group.teachers.length})</td>
+                <td colspan="${dates.length + 1}"
+                    style="background:${dividerBg} !important; color:#ffffff !important; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important;">
+                    ${config.icon} ${config.label} (${group.teachers.length})
+                </td>
             </tr>`;
             group.teachers.forEach(emp => {
                 html += getCenterPrintRowHtml(emp, dates, selectedCenterForView, centerCalEvents, closedDays, today, dailyCounts, countedEmpIdsByDate);
@@ -2554,11 +2603,39 @@ async function exportCenterAsJpeg() {
             #printArea .print-shift { font-size: 10pt; line-height: 1.4; }
             #printArea .print-shift .time { font-size: 11pt; font-weight: 700; }
             #printArea .print-status { font-weight: 700; font-size: 9pt; }
-            #printArea tr.print-subject-divider td { font-weight: 700; font-size: 10pt; color: white; padding: 6px; }
-            #printArea tr.print-subject-divider.english td { background: #2980b9 !important; }
-            #printArea tr.print-subject-divider.math td { background: #27ae60 !important; }
-            #printArea tr.print-subject-divider.chinese td { background: #e67e22 !important; }
-            #printArea tr.print-subject-divider.other td { background: #8e44ad !important; }
+
+            #printArea tr.print-subject-divider td {
+                font-weight: 700;
+                font-size: 10pt;
+                color: #ffffff !important;
+                padding: 6px;
+                background: #8e44ad !important;
+            }
+
+            #printArea tr.print-subject-divider.english td {
+                background: #e67e22 !important;
+            }
+
+            #printArea tr.print-subject-divider.math td {
+                background: #1abc9c !important;
+            }
+
+            #printArea tr.print-subject-divider.chinese td {
+                background: #7cb342 !important;
+            }
+
+            #printArea tr.print-subject-divider.tutorial td {
+                background: #8e44ad !important;
+            }
+
+            #printArea tr.print-subject-divider.admin td {
+                background: #2c3e50 !important;
+            }
+
+            #printArea tr.print-subject-divider.other td {
+                background: #8e44ad !important;
+            }
+
             #printArea tr.summary-row td { background: #eaf2f8 !important; font-weight: 700; text-align: center; }
             #printArea .print-header h1 { font-size: 18pt; color: #1a5276; margin: 0 0 5px 0; font-family: Arial, sans-serif; }
             #printArea .print-header .print-subtitle { font-size: 11pt; color: #555; margin: 0; }
@@ -2715,6 +2792,19 @@ function formatMin(m) {
     const h = Math.floor(m / 60);
     const min = m % 60;
     return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+}
+
+function getPrintDividerClass(subject) {
+    const map = {
+        'English Teacher': 'english',
+        'Math Teacher': 'math',
+        'Chinese Teacher': 'chinese',
+        'Tutorial Teacher': 'tutorial',
+        'Admins': 'admin',
+        'Other': 'other'
+    };
+
+    return map[subject] || 'other';
 }
 
 document.getElementById('logoutBtn')?.addEventListener('click', logout);

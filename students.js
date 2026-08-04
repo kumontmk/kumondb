@@ -691,40 +691,90 @@ async function initializePage(isAdmin = false) {
     async function exportNamesOnlyGrid() {
         const loader = document.getElementById('page-loader');
         loader?.classList.remove('hidden');
+
         try {
             const snapshot = await get(studentsRef);
+
             if (!snapshot.exists()) {
                 alert("No students found to export.");
                 return;
             }
 
+            // ==========================================
+            // ✅ HELPERS TO ENSURE ONLY CURRENT STUDENTS
+            // ==========================================
+            const normalizeStatus = (value) => {
+                return String(value || '').trim().toLowerCase();
+            };
+
+            const getSubjectsArray = (subjects) => {
+                if (!subjects) return [];
+
+                // If already an array, use it
+                if (Array.isArray(subjects)) return subjects;
+
+                // If Firebase stored it as an object, convert to array
+                if (typeof subjects === 'object') {
+                    return Object.values(subjects);
+                }
+
+                return [];
+            };
+
+            const isCurrentStudentOnly = (student) => {
+                const subjects = getSubjectsArray(student.subjects);
+
+                // If student has subjects, decide from subject statuses
+                if (subjects.length > 0) {
+                    const statuses = subjects.map(sub => normalizeStatus(sub?.status));
+
+                    // If any subject is explicitly current, treat student as current
+                    if (statuses.some(status => status === 'current')) {
+                        return true;
+                    }
+
+                    // If any subject is inquiry/pause/drop and no subject is current, exclude
+                    const nonCurrentStatuses = [
+                        'inquiry',
+                        'pause',
+                        'paused',
+                        'drop',
+                        'dropped',
+                        'inactive',
+                        'withdrawn'
+                    ];
+
+                    if (statuses.some(status => nonCurrentStatuses.includes(status))) {
+                        return false;
+                    }
+
+                    // If subject statuses are missing/unrecognized, fall back to overallStatus
+                    return normalizeStatus(student.overallStatus) === 'current';
+                }
+
+                // If no subjects exist, rely only on overallStatus
+                return normalizeStatus(student.overallStatus) === 'current';
+            };
+
             const uniqueNames = new Set();
+
             snapshot.forEach(child => {
                 const s = child.val();
-                
-                let overallStatus = s.overallStatus;
-                if (s.subjects && Array.isArray(s.subjects) && s.subjects.length > 0) {
-                    // ✅ FIXED: Changed 'student.subjects' to 's.subjects'
-                    const hasCurrent = s.subjects.some(sub => sub.status === 'current');
-                    const hasInquiry = s.subjects.some(sub => sub.status === 'inquiry');
-                    const hasPause = s.subjects.some(sub => sub.status === 'pause');
 
-                    if (hasCurrent) overallStatus = 'Current';
-                    else if (hasInquiry) overallStatus = 'Inquiry';
-                    else if (hasPause) overallStatus = 'Pause';
-                    else overallStatus = 'Drop';
+                // ✅ Only allow current students
+                if (!isCurrentStudentOnly(s)) {
+                    return;
                 }
-                
-                if (overallStatus === 'Current') {
-                    const name = (s.nameCn || s.namePinyin || 'Unknown').trim();
-                    if (name && name !== 'Unknown') {
-                        uniqueNames.add(name);
-                    }
+
+                const name = String(s.nameCn || s.namePinyin || 'Unknown').trim();
+
+                if (name && name.toLowerCase() !== 'unknown') {
+                    uniqueNames.add(name);
                 }
             });
 
             const names = Array.from(uniqueNames).sort((a, b) => {
-                return a.localeCompare(b, 'zh-Hans'); 
+                return a.localeCompare(b, 'zh-Hans');
             });
 
             if (names.length === 0) {
@@ -734,14 +784,16 @@ async function initializePage(isAdmin = false) {
 
             const rows = 16;
             const cols = Math.ceil(names.length / rows);
-            const aoa = []; 
-            
+            const aoa = [];
+
             for (let r = 0; r < rows; r++) {
                 const rowData = [];
+
                 for (let c = 0; c < cols; c++) {
                     const index = (c * rows) + r;
                     rowData.push(index < names.length ? names[index] : '');
                 }
+
                 aoa.push(rowData);
             }
 
@@ -749,6 +801,7 @@ async function initializePage(isAdmin = false) {
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Current Names");
             XLSX.writeFile(wb, `Kumon_Current_Names_Grid_${new Date().toISOString().split('T')[0]}.xlsx`);
+
         } catch (err) {
             console.error("❌ Export failed: ", err);
             alert("Failed to export names.");
