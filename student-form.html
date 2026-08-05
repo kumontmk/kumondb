@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Student Form - Kumon DB</title>
+  <title data-i18n="studentForm.documentTitle">Student Form - Kumon DB</title>
   <link rel="stylesheet" href="student-form.css">
 </head>
 <body>
@@ -12,9 +12,9 @@
   <!-- ✅ ACCESS DENIED SCREEN -->
   <div id="accessDenied" class="access-denied hidden">
     <div class="access-denied-content">
-      <h2>🔐 Access Restricted</h2>
-      <p>You do not have permission to view Student Management.</p>
-      <button id="backToStudentsBtn" class="primary" style="margin-top:1rem">← Back to Students</button>
+      <h2 data-i18n="studentForm.accessRestricted">🔐 Access Restricted</h2>
+      <p data-i18n="studentForm.accessDeniedMsg">You do not have permission to view Student Management.</p>
+      <button id="backToStudentsBtn" class="primary" style="margin-top:1rem" data-i18n="studentForm.backToStudents">← Back to Students</button>
     </div>
   </div>
 
@@ -22,22 +22,22 @@
   <div id="mainContent" class="hidden">
     <header>
       <nav>
-        <a href="students.html" id="backToStudents">← Students</a>
+        <a href="students.html" id="backToStudents" data-i18n="studentForm.backToStudentsList">← Students</a>
       </nav>
-      <h2 id="formTitle">✏️ Add Student</h2>
+      <h2 id="formTitle" data-i18n="studentForm.addStudent">✏️ Add Student</h2>
     </header>
 
     <!-- Search and Navigation -->
     <div id="student-nav-bar" class="nav-bar-container">
-      <button id="prevStudentBtn" class="nav-btn" title="Previous Student (←)">◀ Prev</button>
+      <button id="prevStudentBtn" class="nav-btn" title="Previous Student (←)" data-i18n="studentForm.prev">◀ Prev</button>
       <div class="search-container">
         <div class="search-input-wrapper">
-          <input type="text" id="studentSearchInput" placeholder="Search name, ID..." autocomplete="off" />
+          <input type="text" id="studentSearchInput" data-i18n-placeholder="studentForm.searchPlaceholder" placeholder="Search name, ID..." autocomplete="off" />
           <ul id="searchDropdown" class="search-dropdown hidden"></ul>
         </div>
         <span id="studentPositionIndicator" class="position-indicator">0 / 0</span>
       </div>
-      <button id="nextStudentBtn" class="nav-btn" title="Next Student (→)">Next ▶</button>
+      <button id="nextStudentBtn" class="nav-btn" title="Next Student (→)" data-i18n="studentForm.next">Next ▶</button>
     </div>
 
     <main class="form-container">
@@ -45,39 +45,39 @@
         <!-- 1. Basic Information -->
         <section class="general-info">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                <h2 style="margin: 0; color: var(--primary-dark);">📝 Basic Information</h2>
+                <h2 style="margin: 0; color: var(--primary-dark);" data-i18n="studentForm.basicInfoTitle">📝 Basic Information</h2>
                 <!-- Schedule DT Button placed on the far right -->
-                <button type="button" id="scheduleDTBtn" class="nav-btn" style="background: #FF8C00; padding: 0.6rem 1.2rem; font-size: 0.95rem; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                <button type="button" id="scheduleDTBtn" class="nav-btn" style="background: #FF8C00; padding: 0.6rem 1.2rem; font-size: 0.95rem; box-shadow: 0 2px 5px rgba(0,0,0,0.1);" data-i18n="studentForm.scheduleDTBtn">
                     📅 Schedule DT
                 </button>
             </div>
           <div class="form-grid">
-            <div><label>Student Number</label><input type="text" id="studentNumber"></div>
-            <div><label>KC No.</label><input type="text" id="kcNo" placeholder="Starts with 185.."></div>
-            <div><label>Nickname</label><input type="text" id="nickname"></div>
-            <div><label>Chinese Name (Alphabet)</label><input type="text" id="namePinyin" placeholder="e.g. Zhang San"></div>
-            <div><label>Full Name (Chinese)</label><input type="text" id="nameCn" required></div>
+            <div><label data-i18n="studentForm.studentNumber">Student Number</label><input type="text" id="studentNumber"></div>
+            <div><label data-i18n="studentForm.kcNo">KC No.</label><input type="text" id="kcNo" data-i18n-placeholder="studentForm.kcNoPlaceholder" placeholder="Starts with 185.."></div>
+            <div><label data-i18n="studentForm.nickname">Nickname</label><input type="text" id="nickname"></div>
+            <div><label data-i18n="studentForm.namePinyin">Chinese Name (Alphabet)</label><input type="text" id="namePinyin" data-i18n-placeholder="studentForm.namePinyinPlaceholder" placeholder="e.g. Zhang San"></div>
+            <div><label data-i18n="studentForm.nameCn">Full Name (Chinese)</label><input type="text" id="nameCn" required></div>
             
             <div>
-              <label>Grade</label>
+              <label data-i18n="studentForm.grade">Grade</label>
               <div class="select-wrapper">
                 <select id="grade" required>
-                  <option value="">Select Grade</option>
+                  <option value="" data-i18n="studentForm.selectGrade">Select Grade</option>
                   <option value="K0">K0</option><option value="K1">K1</option><option value="K2">K2</option><option value="K3">K3</option>
                   <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option>
                   <option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option>
                   <option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option>
                   <option value="13">13</option>
                 </select>
-                <input type="text" id="gradeOther" class="other-input" placeholder="Enter Grade">
+                <input type="text" id="gradeOther" class="other-input" data-i18n-placeholder="studentForm.enterGrade" placeholder="Enter Grade">
               </div>
             </div>
 
             <div>
-              <label>School</label>
+              <label data-i18n="studentForm.school">School</label>
               <div class="select-wrapper">
                 <select id="school" required>
-                  <option value="">Select School</option>
+                  <option value="" data-i18n="studentForm.selectSchool">Select School</option>
                   <option value="聯國SON">聯國 SON</option><option value="培華PUI WA">培華 PUI WA</option>
                   <option value="培道幼稚園POOI TO">培道幼稚園 POOI TO</option>
                   <option value="婦聯小白兔托兒所Creche da Associacao Geral">婦聯小白兔托兒所 Creche</option>
@@ -111,81 +111,81 @@
                   <option value="勞工子弟學校The Workers' Children">勞工子弟學校 The Workers'</option>
                   <option value="澳門慈幼中學IS">澳門慈幼中學 IS</option>
                   <option value="聖公會蔡高中學Sheng Kung Hui Perpetual">聖公會蔡高中學 Sheng Kung Hui</option>
-                  <option value="Other">Other...</option>
+                  <option value="Other" data-i18n="studentForm.other">Other...</option>
                 </select>
-                <input type="text" id="schoolOther" class="other-input" placeholder="Enter School Name">
+                <input type="text" id="schoolOther" class="other-input" data-i18n-placeholder="studentForm.enterSchool" placeholder="Enter School Name">
               </div>
             </div>
 
-            <div><label>Birthday</label><input type="date" id="birthday"></div>
-            <div><label>Age (Auto)</label><input type="text" id="ageDisplay" readonly></div>
+            <div><label data-i18n="studentForm.birthday">Birthday</label><input type="date" id="birthday"></div>
+            <div><label data-i18n="studentForm.age">Age (Auto)</label><input type="text" id="ageDisplay" readonly></div>
             
             <div>
-              <label>Nationality</label>
+              <label data-i18n="studentForm.nationality">Nationality</label>
               <div class="select-wrapper">
                 <select id="nationality" required>
-                  <option value="">Select Nationality</option>
+                  <option value="" data-i18n="studentForm.selectNationality">Select Nationality</option>
                   <option value="Chinese 中國籍">Chinese 中國籍</option><option value="Portuguese 葡萄牙籍">Portuguese 葡萄牙籍</option>
                   <option value="British 英國籍">British 英國籍</option><option value="USA 美國籍">USA 美國籍</option>
                   <option value="Canadian 加拿大籍">Canadian 加拿大籍</option><option value="French 法國籍">French 法國籍</option>
                   <option value="Japanese 日本籍">Japanese 日本籍</option><option value="Korean 韓國籍">Korean 韓國籍</option>
                   <option value="Philippines 菲律賓籍">Philippines 菲律賓籍</option><option value="Irish 愛爾蘭籍">Irish 愛爾蘭籍</option>
                   <option value="Taiwan 台灣籍">Taiwan 台灣籍</option><option value="Brazil 巴西籍">Brazil 巴西籍</option>
-                  <option value="Other">Other...</option>
+                  <option value="Other" data-i18n="studentForm.other">Other...</option>
                 </select>
-                <input type="text" id="nationalityOther" class="other-input" placeholder="Enter Nationality">
+                <input type="text" id="nationalityOther" class="other-input" data-i18n-placeholder="studentForm.enterNationality" placeholder="Enter Nationality">
               </div>
             </div>
 
             <div>
-              <label>Gender</label>
+              <label data-i18n="studentForm.gender">Gender</label>
               <select id="gender">
-                <option value="">Select Gender</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Other">Other</option>
+                <option value="" data-i18n="studentForm.selectGender">Select Gender</option>
+                <option value="Male" data-i18n="studentForm.male">Male</option>
+                <option value="Female" data-i18n="studentForm.female">Female</option>
+                <option value="Other" data-i18n="studentForm.other">Other</option>
               </select>
             </div>
 
             <div class="po-layout-wrapper">
               <div class="po-main-row">
                 <div class="po-field">
-                  <label>Overall Status (Auto)</label>
+                  <label data-i18n="studentForm.overallStatus">Overall Status (Auto)</label>
                   <input type="text" id="overallStatus" value="Current" readonly>
                 </div>
                 <div class="po-field">
-                  <label>Parent Orientation *</label>
+                  <label data-i18n="studentForm.parentOrientation">Parent Orientation *</label>
                   <select id="parentOrientation" required>
-                    <option value="">Select Yes/No *</option>
-                    <option value="Yes">Yes</option>
-                    <option value="No">No</option>
+                    <option value="" data-i18n="studentForm.selectYesNo">Select Yes/No *</option>
+                    <option value="Yes" data-i18n="studentForm.yes">Yes</option>
+                    <option value="No" data-i18n="studentForm.no">No</option>
                   </select>
                 </div>
                 <div id="poDateWrapper" class="po-field po-date-field other-input">
-                  <label>Orientation Date</label>
+                  <label data-i18n="studentForm.orientationDate">Orientation Date</label>
                   <input type="date" id="poDate">
                 </div>
               </div>
               <div id="poReasonWrapper" class="po-field po-reason-field other-input">
-                <label>Reason for No Orientation</label>
-                <input type="text" id="poReason" placeholder="Example: Parent refused, student transferred, parents busy, need weekend, no response, etc.">
+                <label data-i18n="studentForm.reasonNoPO">Reason for No Orientation</label>
+                <input type="text" id="poReason" data-i18n-placeholder="studentForm.poReasonPlaceholder" placeholder="Example: Parent refused, student transferred, parents busy, need weekend, no response, etc.">
               </div>
             </div>
 
             <div style="grid-column: 1 / -1; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e2e8f0;">
-              <label style="font-weight: 600; color: #2c3e50; margin-bottom: 0.5rem; display: block;">📊 Current Level(s)</label>
+              <label style="font-weight: 600; color: #2c3e50; margin-bottom: 0.5rem; display: block;" data-i18n="studentForm.currentLevels">📊 Current Level(s)</label>
               <div id="currentLevelsSummary" class="form-grid" style="margin: 0;">
-                <p class="hint" style="grid-column: 1 / -1; margin: 0;">Add subjects below to view their current levels.</p>
+                <p class="hint" style="grid-column: 1 / -1; margin: 0;" data-i18n="studentForm.currentLevelsHint">Add subjects below to view their current levels.</p>
               </div>
             </div>
         </section>
 
         <!-- 2. QR Code -->
         <div style="margin: 1rem 0;">
-          <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: #2c3e50; font-size: 0.95rem;">📷 Student QR Code</label>
+          <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: #2c3e50; font-size: 0.95rem;" data-i18n="studentForm.qrCodeTitle">📷 Student QR Code</label>
           <div style="display: flex; gap: 0.5rem; align-items: center;">
-            <button type="button" id="startScannerBtn" class="secondary" style="flex-shrink: 0; padding: 0 1rem; height: 40px; border: 1px solid #d1d5db; border-radius: 6px; background: #f8f9fa; color: #374151; cursor: pointer; font-size: 0.9rem; font-weight: 500; white-space: nowrap;">📷 Scan QR</button>
-            <input type="text" id="qrCodeInput" placeholder="Or paste QR code manually..." style="flex: 1; padding: 0 0.75rem; height: 40px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.95rem; box-sizing: border-box; background: #fff;">
+            <button type="button" id="startScannerBtn" class="secondary" style="flex-shrink: 0; padding: 0 1rem; height: 40px; border: 1px solid #d1d5db; border-radius: 6px; background: #f8f9fa; color: #374151; cursor: pointer; font-size: 0.9rem; font-weight: 500; white-space: nowrap;" data-i18n="studentForm.scanQR">📷 Scan QR</button>
+            <input type="text" id="qrCodeInput" data-i18n-placeholder="studentForm.pasteQR" placeholder="Or paste QR code manually..." style="flex: 1; padding: 0 0.75rem; height: 40px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.95rem; box-sizing: border-box; background: #fff;">
           </div>
         </div>
 
@@ -196,65 +196,65 @@
         <div id="qrModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.65); z-index: 10000; justify-content: center; align-items: center; backdrop-filter: blur(2px);">
           <div style="background: #fff; padding: 1.5rem; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.25); text-align: center; max-width: 380px; width: 90%; position: relative; box-sizing: border-box;">
             <button id="closeQrModal" style="position: absolute; top: 12px; right: 14px; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #888; line-height: 1; padding: 0;">&times;</button>
-            <h3 style="margin: 0 0 1rem; color: #222; font-size: 1.2rem;">📷 Scan QR Code</h3>
+            <h3 style="margin: 0 0 1rem; color: #222; font-size: 1.2rem;" data-i18n="studentForm.scanQRTitle">📷 Scan QR Code</h3>
             <div id="qr-reader" style="width: 100%; max-width: 300px; height: 300px; margin: 0 auto; background: #111; border-radius: 8px; overflow: hidden;"></div>
-            <div id="qr-status" style="margin: 0.75rem 0 0; color: #555; font-size: 0.9rem; min-height: 1.3rem;">Point camera at QR code...</div>
+            <div id="qr-status" style="margin: 0.75rem 0 0; color: #555; font-size: 0.9rem; min-height: 1.3rem;" data-i18n="studentForm.pointCamera">Point camera at QR code...</div>
           </div>
         </div>
 
         <div class="tabs">
-          <button type="button" class="tab-btn active" data-tab="contact">📞 Contact Info</button>
-          <button type="button" class="tab-btn" data-tab="subjects">📚 Subjects (Max 3)</button>
-          <button type="button" class="tab-btn" data-tab="schedule">📅 Schedule</button>
-          <button type="button" class="tab-btn" data-tab="dt-at">📝 DT & AT</button>
+          <button type="button" class="tab-btn active" data-tab="contact" data-i18n="studentForm.contactInfo">📞 Contact Info</button>
+          <button type="button" class="tab-btn" data-tab="subjects" data-i18n="studentForm.subjectsTitle">📚 Subjects (Max 3)</button>
+          <button type="button" class="tab-btn" data-tab="schedule" data-i18n="studentForm.scheduleTab">📅 Schedule</button>
+          <button type="button" class="tab-btn" data-tab="dt-at" data-i18n="studentForm.dtAtTab">📝 DT & AT</button>
         </div>
 
         <!-- 4. Tab Content: Contact -->
         <div id="tab-contact" class="tab-content active">
           <div class="form-grid">
-            <div><label>Email</label><input type="email" id="email"></div>
-            <div><label>Phone (Mom)</label><input type="tel" id="phoneMom"></div>
-            <div><label>Phone (Dad)</label><input type="tel" id="phoneDad"></div>
-            <div><label>Phone (Student)</label><input type="tel" id="phoneOwn"></div>
-            <div style="grid-column: 1 / -1;"><label>Address</label><textarea id="address" rows="2"></textarea></div>
+            <div><label data-i18n="studentForm.email">Email</label><input type="email" id="email"></div>
+            <div><label data-i18n="studentForm.phoneMom">Phone (Mom)</label><input type="tel" id="phoneMom"></div>
+            <div><label data-i18n="studentForm.phoneDad">Phone (Dad)</label><input type="tel" id="phoneDad"></div>
+            <div><label data-i18n="studentForm.phoneOwn">Phone (Student)</label><input type="tel" id="phoneOwn"></div>
+            <div style="grid-column: 1 / -1;"><label data-i18n="studentForm.address">Address</label><textarea id="address" rows="2"></textarea></div>
           </div>
         </div>
 
         <!-- 5. Tab Content: Subjects -->
         <div id="tab-subjects" class="tab-content">
-          <p class="hint">⚠️ English ERP & EFL cannot be together unless one is Dropped. Max 6 timeslots per subject.</p>
+          <p class="hint" data-i18n="studentForm.subjectsHint">⚠️ English ERP & EFL cannot be together unless one is Dropped. Max 6 timeslots per subject.</p>
           <div id="subjectsContainer"></div>
-          <button type="button" id="addSubjectBtn" class="secondary" style="margin-top:0.5rem;">+ Add Subject</button>
+          <button type="button" id="addSubjectBtn" class="secondary" style="margin-top:0.5rem;" data-i18n="studentForm.addSubject">+ Add Subject</button>
         </div>
 
         <!-- 6. Tab Content: Schedule -->
         <div id="tab-schedule" class="tab-content">
-          <p class="hint">📅 Schedule auto-generates from subject timeslots. Dropped subjects are hidden.</p>
+          <p class="hint" data-i18n="studentForm.scheduleHint">📅 Schedule auto-generates from subject timeslots. Dropped subjects are hidden.</p>
           <table class="schedule-table" id="scheduleTable">
             <thead>
               <tr id="scheduleHeader"></tr>
             </thead>
             <tbody id="scheduleBody">
-              <tr><td colspan="7" style="text-align:center; padding:1.5rem; color:#666;">Add subjects & timeslots to view schedule</td></tr>
+              <tr><td colspan="7" style="text-align:center; padding:1.5rem; color:#666;" data-i18n="studentForm.addSubjectsToView">Add subjects & timeslots to view schedule</td></tr>
             </tbody>
           </table>
         </div>
 
         <!-- ✅ NEW TAB CONTENT: DT & AT -->
         <div id="tab-dt-at" class="tab-content">
-          <h3 style="margin-bottom: 1rem; color: var(--primary-dark);">Diagnostic Tests (DT) - Manual Entry</h3>
+          <h3 style="margin-bottom: 1rem; color: var(--primary-dark);" data-i18n="studentForm.dtTitle">Diagnostic Tests (DT) - Manual Entry</h3>
           <div class="table-wrapper" style="overflow-x: auto; margin-bottom: 1.5rem;">
             <table class="schedule-table" id="dtTable" style="min-width: 900px;">
               <thead>
                 <tr>
-                  <th>Subject *</th>
-                  <th>Diagnostic Date *</th>
-                  <th>Test Name/Level *</th>
-                  <th>Score *</th>
-                  <th>Time (mins) *</th>
-                  <th>Suggested Start</th>
-                  <th>Actual Start</th>
-                  <th>Action</th>
+                  <th data-i18n="studentForm.subject">Subject *</th>
+                  <th data-i18n="studentForm.dtDate">Diagnostic Date *</th>
+                  <th data-i18n="studentForm.testName">Test Name/Level *</th>
+                  <th data-i18n="studentForm.score">Score *</th>
+                  <th data-i18n="studentForm.timeMins">Time (mins) *</th>
+                  <th data-i18n="studentForm.suggestedStart">Suggested Start</th>
+                  <th data-i18n="studentForm.actualStart">Actual Start</th>
+                  <th data-i18n="studentForm.action">Action</th>
                 </tr>
               </thead>
               <tbody id="dtTableBody">
@@ -262,24 +262,24 @@
               </tbody>
             </table>
           </div>
-          <button type="button" class="secondary" id="addDTBtn" style="padding: 0.5rem 1rem; font-size: 0.9rem;">+ Add Diagnostic Test</button>
+          <button type="button" class="secondary" id="addDTBtn" style="padding: 0.5rem 1rem; font-size: 0.9rem;" data-i18n="studentForm.addDT">+ Add Diagnostic Test</button>
 
           <!-- ✅ ACHIEVEMENT TESTS (AT) SECTION (Restructured to match DT) -->
           <div style="margin-top: 2rem;">
-              <h3 style="font-size:1.1rem; color: var(--primary-dark); margin-bottom:0.5rem;">Achievement Tests (AT)</h3>
-              <p class="hint" style="margin-bottom:0.75rem;">Auto-filled from monthly reports. You can also add manual entries below.</p>
+              <h3 style="font-size:1.1rem; color: var(--primary-dark); margin-bottom:0.5rem;" data-i18n="studentForm.atTitle">Achievement Tests (AT)</h3>
+              <p class="hint" style="margin-bottom:0.75rem;" data-i18n="studentForm.atHint">Auto-filled from monthly reports. You can also add manual entries below.</p>
               <div style="overflow-x: auto; margin-bottom: 1rem;">
                   <table id="atTable" class="schedule-table" style="min-width:600px;">
                       <thead>
                           <tr>
-                              <th>Subject *</th>
-                              <th>AT Level *</th>
-                              <th>Date *</th>
-                              <th>Score *</th>
-                              <th>Time (mins) *</th>
-                              <th>Group</th>
-                              <th>Source</th>
-                              <th>Action</th>
+                              <th data-i18n="studentForm.subject">Subject *</th>
+                              <th data-i18n="studentForm.atLevel">AT Level *</th>
+                              <th data-i18n="studentForm.date">Date *</th>
+                              <th data-i18n="studentForm.score">Score *</th>
+                              <th data-i18n="studentForm.timeMins">Time (mins) *</th>
+                              <th data-i18n="studentForm.group">Group</th>
+                              <th data-i18n="studentForm.source">Source</th>
+                              <th data-i18n="studentForm.action">Action</th>
                           </tr>
                       </thead>
                       <tbody id="atTableBody">
@@ -288,19 +288,19 @@
                   </table>
               </div>
               <!-- Button placed BELOW the table with proper margin-top, matching DT layout -->
-              <button type="button" id="addATBtn" class="secondary" style="margin-top: 0.5rem; padding: 0.5rem 1rem; font-size: 0.9rem; width: auto;">+ Add Achievement Test</button>
+              <button type="button" id="addATBtn" class="secondary" style="margin-top: 0.5rem; padding: 0.5rem 1rem; font-size: 0.9rem; width: auto;" data-i18n="studentForm.addAT">+ Add Achievement Test</button>
           </div>
         </div> <!-- ✅ CLOSE #tab-dt-at HERE -->
 
         <!-- ✅ ACTIONS (MOVED OUTSIDE ALL TABS) -->
         <div class="form-actions">
           <div style="display:flex; gap:0.75rem;">
-            <button type="submit" id="saveBtn" class="primary">💾 Save Student</button>
-            <button type="button" id="cancelBtn" class="secondary">Cancel</button>
+            <button type="submit" id="saveBtn" class="primary" data-i18n="studentForm.saveStudent">💾 Save Student</button>
+            <button type="button" id="cancelBtn" class="secondary" data-i18n="studentForm.cancel">Cancel</button>
           </div>
           <div style="display:flex; gap:0.75rem; margin-left:auto;">
-            <button type="button" id="transferBtn" class="secondary" style="display:none;">🔄 Transfer</button>
-            <button type="button" id="deleteBtn" class="danger" style="display:none;">🗑️ Delete</button>
+            <button type="button" id="transferBtn" class="secondary" style="display:none;" data-i18n="studentForm.transfer">🔄 Transfer</button>
+            <button type="button" id="deleteBtn" class="danger" style="display:none;" data-i18n="studentForm.delete">🗑️ Delete</button>
           </div>
         </div>
       </form>
@@ -310,19 +310,19 @@
     <div id="transferModal" class="modal hidden">
       <div class="modal-content">
         <span id="closeTransferModal" style="position:absolute;top:10px;right:15px;font-size:1.8rem;cursor:pointer;color:var(--text-light);">×</span>
-        <h3>🔄 Transfer Student</h3>
-        <p style="margin:0.5rem 0; color:var(--text-light);">Select target center:</p>
+        <h3 data-i18n="studentForm.transferStudent">🔄 Transfer Student</h3>
+        <p style="margin:0.5rem 0; color:var(--text-light);" data-i18n="studentForm.selectTargetCenter">Select target center:</p>
         <select id="targetCenterSelect" style="width:100%; padding:0.75rem; border:1px solid #ddd; border-radius:8px; margin-top:0.5rem;"></select>
-        <button id="confirmTransferBtn" class="primary" style="margin-top:1rem; width:100%;">Confirm Transfer</button>
+        <button id="confirmTransferBtn" class="primary" style="margin-top:1rem; width:100%;" data-i18n="studentForm.confirmTransfer">Confirm Transfer</button>
       </div>
     </div>
 
     <!-- ✅ Validation Error Modal -->
     <div id="errorModal" class="modal hidden">
       <div class="modal-content" style="max-width:400px; text-align:center;">
-        <h3 style="color:#dc3545; margin-bottom:0.5rem; font-size: 2rem;">ERROR</h3>
+        <h3 style="color:#dc3545; margin-bottom:0.5rem; font-size: 2rem;" data-i18n="studentForm.error">ERROR</h3>
         <p id="errorMessage" style="margin-bottom:1.5rem; line-height:1.5;"></p>
-        <button id="closeErrorBtn" class="primary" type="button">OK</button>
+        <button id="closeErrorBtn" class="primary" type="button" data-i18n="studentForm.ok">OK</button>
       </div>
     </div>
     
@@ -331,13 +331,13 @@
         <div class="modal-content duplicate-modal-content">
             <span id="closeDuplicateModal" style="position:absolute; top:10px; right:15px; font-size:1.8rem; cursor:pointer; color:var(--text-light);">&times;</span>
             <div style="font-size:2.5rem; margin-bottom:0.5rem;">⚠️</div>
-            <h2 style="color:#d97706; margin-bottom:0.5rem; font-size:1.2rem;">Similar Student Found</h2>
-            <p style="color:var(--text-light); font-size:0.9rem; margin-bottom:1.25rem;">
+            <h2 style="color:#d97706; margin-bottom:0.5rem; font-size:1.2rem;" data-i18n="studentForm.similarStudent">Similar Student Found</h2>
+            <p style="color:var(--text-light); font-size:0.9rem; margin-bottom:1.25rem;" data-i18n="studentForm.similarStudentMsg">
                 A student with a matching name already exists in the system.
             </p>
             <div id="duplicateStudentList" class="duplicate-student-list"></div>
             <div style="margin-top:1.25rem; display:flex; gap:0.75rem; justify-content:center; flex-wrap:wrap;">
-                <button type="button" id="addAnywayBtn" class="secondary" style="min-width:130px;">➕ Add Anyway</button>
+                <button type="button" id="addAnywayBtn" class="secondary" style="min-width:130px;" data-i18n="studentForm.addAnyway">➕ Add Anyway</button>
             </div>
         </div>
     </div>
@@ -346,44 +346,44 @@
     <div id="dropPauseRequestModal" class="modal hidden" style="z-index:10001;">
         <div class="modal-content" style="max-width: 500px; text-align:left;">
             <span class="close-modal-btn" id="closeDropPauseModal" style="position:absolute; top:10px; right:15px; font-size:1.8rem; cursor:pointer; color:#666;">&times;</span>
-            <h3 style="margin-bottom:1rem; color:var(--primary-dark);">🗓️ Drop / Pause Request</h3>
-            <p style="font-size:0.9rem; color:#666; margin-bottom:1rem;">Schedule a future drop or pause. The status will automatically update when the requested month arrives.</p>
+            <h3 style="margin-bottom:1rem; color:var(--primary-dark);" data-i18n="studentForm.dropPauseRequest">🗓️ Drop / Pause Request</h3>
+            <p style="font-size:0.9rem; color:#666; margin-bottom:1rem;" data-i18n="studentForm.dropPauseHint">Schedule a future drop or pause. The status will automatically update when the requested month arrives.</p>
             
             <div class="form-grid" style="grid-template-columns: 1fr;">
                 <div>
-                    <label>Request Type *</label>
+                    <label data-i18n="studentForm.requestType">Request Type *</label>
                     <select id="prType" style="width:100%; padding:0.75rem; border:1px solid #ddd; border-radius:8px;">
-                        <option value="pause">Pause</option>
-                        <option value="drop">Drop</option>
+                        <option value="pause" data-i18n="studentForm.pause">Pause</option>
+                        <option value="drop" data-i18n="studentForm.drop">Drop</option>
                     </select>
                 </div>
 
                 <div id="prPauseFields">
                     <div style="margin-bottom: 1rem;">
-                        <label>Pause From *</label>
+                        <label data-i18n="studentForm.pauseFrom">Pause From *</label>
                         <input type="month" id="prPauseFromMonthYear" class="pr-month-year-input">
                     </div>
                     <div>
-                        <label>Pause To *</label>
+                        <label data-i18n="studentForm.pauseTo">Pause To *</label>
                         <input type="month" id="prPauseToMonthYear" class="pr-month-year-input">
                     </div>
                 </div>
                 <div id="prDropFields">
                     <div>
-                        <label>Drop Month *</label>
+                        <label data-i18n="studentForm.dropMonth">Drop Month *</label>
                         <input type="month" id="prDropMonthYear" class="pr-month-year-input">
                     </div>
                 </div>
 
                 <div>
-                    <label>Reason *</label>
-                    <input type="text" id="prReason" placeholder="e.g., Family traveling, Financial..." style="width:100%; padding:0.75rem; border:1px solid #ddd; border-radius:8px;">
+                    <label data-i18n="studentForm.reason">Reason *</label>
+                    <input type="text" id="prReason" data-i18n-placeholder="studentForm.reasonPlaceholder" placeholder="e.g., Family traveling, Financial..." style="width:100%; padding:0.75rem; border:1px solid #ddd; border-radius:8px;">
                 </div>
             </div>
 
             <div style="display:flex; gap:1rem; margin-top:1.5rem; justify-content:flex-end;">
-                <button type="button" class="secondary" id="cancelDropPauseBtn">Cancel</button>
-                <button type="button" class="primary" id="saveDropPauseBtn">Save Request</button>
+                <button type="button" class="secondary" id="cancelDropPauseBtn" data-i18n="studentForm.cancel">Cancel</button>
+                <button type="button" class="primary" id="saveDropPauseBtn" data-i18n="studentForm.saveRequest">Save Request</button>
             </div>
         </div>
     </div>
@@ -394,19 +394,20 @@
     <div id="scheduleDTModal" class="modal hidden">
         <div class="modal-content" style="max-width: 500px; text-align: left;">
             <span id="closeScheduleDTModal" style="position:absolute; top:10px; right:15px; font-size:1.8rem; cursor:pointer; color: var(--text-light);">&times;</span>
-            <h2 style="color: var(--primary-dark); margin-bottom: 0.5rem; text-align: center;">📅 Schedule Diagnostic Test</h2>
-            <p class="hint" style="margin-bottom: 1rem; text-align: center;">Select subjects and dates to pre-populate the DT table. You can fill in the test results later.</p>
+            <h2 style="color: var(--primary-dark); margin-bottom: 0.5rem; text-align: center;" data-i18n="studentForm.scheduleDTModalTitle">📅 Schedule Diagnostic Test</h2>
+            <p class="hint" style="margin-bottom: 1rem; text-align: center;" data-i18n="studentForm.scheduleDTModalHint">Select subjects and dates to pre-populate the DT table. You can fill in the test results later.</p>
             
             <div id="scheduleDTList" style="margin: 1rem 0; display: flex; flex-direction: column; gap: 0.75rem; max-height: 40vh; overflow-y: auto;">
                 <!-- Dynamic rows will be injected here -->
             </div>
             
-            <button type="button" id="addDTSubjectBtn" class="secondary" style="width: 100%; margin-bottom: 1rem; background: #e2e8f0; color: var(--text);">+ Add Another Subject</button>
-            <button type="button" id="saveScheduleDTBtn" class="primary" style="width: 100%;">Save to DT Table</button>
+            <button type="button" id="addDTSubjectBtn" class="secondary" style="width: 100%; margin-bottom: 1rem; background: #e2e8f0; color: var(--text);" data-i18n="studentForm.addAnotherSubject">+ Add Another Subject</button>
+            <button type="button" id="saveScheduleDTBtn" class="primary" style="width: 100%;" data-i18n="studentForm.saveToDT">Save to DT Table</button>
         </div>
     </div>
 
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script type="module" src="student-form-i18n.js"></script>
     <script type="module" src="student-form.js"></script>
   </body>
 </html>

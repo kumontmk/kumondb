@@ -1,6 +1,12 @@
+// student-form.js
+import './student-form-i18n.js';
+import { i18nReady, t, currentLanguage } from './i18n-core.js';
 import { auth, db, logout } from './auth.js';
 import { ref, push, set, get, remove, update } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+// Wait for i18n to be ready before running anything
+await i18nReady.catch(() => {});
 
 const REQUIRED_PERMISSION = 'editStudent';
 
@@ -47,7 +53,7 @@ onAuthStateChanged(auth, async (user) => {
             document.getElementById('page-loader')?.classList.add('hidden');
 
             document.getElementById('backToStudentsBtn')?.addEventListener('click', () => {
-                navigateBack(); ; 
+                navigateBack();
             });
         }
     } catch (err) {
@@ -78,8 +84,6 @@ function initApp() {
         const now = new Date();
         const currentYear = now.getFullYear();
         
-        // August is month 7 (0-indexed). Trigger if month is > 7 (Sept-Dec) 
-        // OR if it's August (7) and the date is >= 15.
         const isAug15OrLater = (now.getMonth() > 7) || (now.getMonth() === 7 && now.getDate() >= 15);
         const academicYear = isAug15OrLater ? currentYear : currentYear - 1;
 
@@ -112,14 +116,12 @@ function initApp() {
                 
                 if (triggerYear && triggerMonth) {
                     if (triggerYear < currentYear || (triggerYear === currentYear && triggerMonth <= currentMonth)) {
-                        // If it was a resume request being fulfilled:
                         if (sub.resumeRequest && !sub.resumeRequest.processed) {
                             sub.status = 'current';
-                            sub.resumed = true; // ✅ NEW: Mark as resumed, preserving history
+                            sub.resumed = true;
                             sub.resumedAt = new Date().toISOString();
                             delete sub.resumeRequest;
                         } else {
-                            // Normal pending drop/pause execution
                             sub.status = pr.type;
                             if (pr.type === 'drop') { sub.dropMonth = pr.dropMonth; sub.dropYear = pr.dropYear; sub.dropReason = pr.reason; } 
                             else { sub.pauseFromMonth = pr.pauseFromMonth; sub.pauseFromYear = pr.pauseFromYear; sub.pauseToMonth = pr.pauseToMonth; sub.pauseToYear = pr.pauseToYear; sub.pauseReason = pr.reason; }
@@ -136,7 +138,6 @@ function initApp() {
         return changed;
     }
 
-    // ✅ NEW: Process Resume Requests
     function processResumeRequests(studentData) {
         if (!studentData.subjects) return false;
         const subjects = Array.isArray(studentData.subjects) ? studentData.subjects : Object.values(studentData.subjects);
@@ -152,18 +153,9 @@ function initApp() {
                     if (parseInt(returnYear) < parseInt(currentYear) || 
                         (parseInt(returnYear) === parseInt(currentYear) && parseInt(returnMonth) <= parseInt(currentMonth))) {
                         
-                        // ✅ 1. Change status back to current
                         sub.status = 'current';
-                        
-                        // ✅ 2. Add flags for Drop Book to recognize this as a historical resumed entry
                         sub.resumed = true; 
                         sub.resumedAt = now.toISOString();
-                        
-                        // ❌ 3. DO NOT delete the drop/pause fields! 
-                        // We keep them so the Drop Book can show the original drop/pause month and reason.
-                        // (Remove the delete sub.dropMonth, dropYear, dropReason lines)
-                        
-                        // ✅ 4. Clear the resume request since it has been fulfilled
                         delete sub.resumeRequest;
                         changed = true;
                     }
@@ -183,12 +175,10 @@ function initApp() {
     const studentId = urlParams.get('id');
     const isEdit = !!studentId;
     const formTitleEl = document.getElementById('formTitle');
-    if (formTitleEl) formTitleEl.textContent = isEdit ? '✏️ Edit Student' : '➕ Add Student';
+    if (formTitleEl) formTitleEl.textContent = isEdit ? '✏️ Edit Student' : t('studentForm.addStudent');
 
-    // ✅ NEW: Read returnUrl parameter, default to students.html if not provided
     const returnUrl = urlParams.get('returnUrl') || 'students.html';
 
-    // ✅ NEW: Helper function to handle all navigation back
     function navigateBack() {
         window.location.href = returnUrl;
     }
@@ -257,7 +247,7 @@ function initApp() {
         if (currentListIndex === -1) {
             if (prevBtn) prevBtn.disabled = true;
             if (nextBtn) nextBtn.disabled = true;
-            if (indicator) indicator.textContent = 'Not in list';
+            if (indicator) indicator.textContent = t('studentForm.notInList');
             return;
         }
         
@@ -306,7 +296,7 @@ function initApp() {
         activeDropdownIndex = -1;
 
         if (matches.length === 0) {
-            searchDropdown.innerHTML = '<li class="no-results">No students found</li>';
+            searchDropdown.innerHTML = `<li class="no-results">${t('studentForm.noStudentsFound')}</li>`;
         } else {
             matches.slice(0, 50).forEach(s => { 
                 const li = document.createElement('li');
@@ -490,7 +480,7 @@ function initApp() {
     }
 
     function getWSDropdownOptions(currentValue = '') {
-        let opts = '<option value="">Select WS</option>';
+        let opts = `<option value="">${t('studentForm.selectWS')}</option>`;
         const currentStr = String(currentValue);
         for (let i = 1; i <= 191; i += 10) {
             const val = i.toString();
@@ -541,7 +531,7 @@ function initApp() {
         let age = today.getFullYear() - birth.getFullYear();
         const m = today.getMonth() - birth.getMonth();
         if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
-        ageEl.value = age >= 0 ? `${age} yr` : '';
+        ageEl.value = age >= 0 ? `${age}${t('studentForm.yr')}` : '';
     }
 
     document.getElementById('birthday')?.addEventListener('input', updateAgeDisplay);
@@ -570,8 +560,8 @@ function initApp() {
         entries.forEach(entry => {
             const status = entry.querySelector('.status')?.value;
             if (status === 'inquiry') return;
-            const subjectName = entry.querySelector('.subject-name')?.value || 'Unknown';
-            const currentLevel = entry.querySelector('.current-level-display')?.value || 'Not Set';
+            const subjectName = entry.querySelector('.subject-name')?.value || t('studentForm.unknown');
+            const currentLevel = entry.querySelector('.current-level-display')?.value || t('studentForm.notSet');
             hasSubjects = true;
             let pillStyle = '';
             let colorClass = 'subj-Math';
@@ -591,7 +581,7 @@ function initApp() {
                 </div>
             </div>`;
         });
-        summaryContainer.innerHTML = hasSubjects ? html : '<p class="hint" style="grid-column: 1 / -1; margin:0;">Add subjects to view their current levels.</p>';
+        summaryContainer.innerHTML = hasSubjects ? html : `<p class="hint" style="grid-column: 1 / -1; margin:0;">${t('studentForm.currentLevelsHint')}</p>`;
     }
 
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -630,7 +620,7 @@ function initApp() {
                 const day = row.querySelector('.ts-day')?.value;
                 const h = row.querySelector('.ts-hour')?.value;
                 const m = row.querySelector('.ts-min')?.value;
-                const center = row.querySelector('.ts-center')?.value; // ✅ NEW
+                const center = row.querySelector('.ts-center')?.value;
                 if (day && h && m) schedule[day].push({ name, time: `${h}:${m}`, color: SUBJECT_COLORS[name], center });
             });
         });
@@ -640,7 +630,6 @@ function initApp() {
             schedule[day].sort((a,b) => a.time.localeCompare(b.time)).forEach(slot => {
                 const pill = document.createElement('span');
                 pill.className = `slot-pill ${slot.color}`;
-                // ✅ NEW: Append center abbreviation to the pill
                 const centerName = allCenters.find(c => c.id === slot.center)?.name || '';
                 const centerAbbr = centerName ? ` (${centerName.substring(0, 2).toUpperCase()})` : '';
                 pill.textContent = `${slot.name.substring(0,3)} ${slot.time}${centerAbbr}`;
@@ -662,7 +651,7 @@ function initApp() {
         scanBtn.addEventListener('click', async () => {
             if (scannerActive) { await stopScanner(); return; }
             qrModal.style.display = 'flex';
-            qrStatus.textContent = 'Initializing camera...';
+            qrStatus.textContent = t('studentForm.initCamera');
             try {
                 if (!html5QrCode) html5QrCode = new Html5Qrcode("qr-reader");
                 await html5QrCode.start(
@@ -670,16 +659,16 @@ function initApp() {
                     { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
                     (decodedText) => {
                         if (qrInput) qrInput.value = decodedText;
-                        qrStatus.innerHTML = `<span style="color:#28a745;">✅ Scanned: <strong>${decodedText}</strong></span>`;
+                        qrStatus.innerHTML = `<span style="color:#28a745;">${t('studentForm.scanned')}<strong>${decodedText}</strong></span>`;
                         stopScanner();
                     },
                     () => {}
                 );
-                qrStatus.textContent = 'Point camera at QR code...';
+                qrStatus.textContent = t('studentForm.pointCamera');
                 scannerActive = true;
-                scanBtn.textContent = '⏹ Stop';
+                scanBtn.textContent = t('studentForm.stop');
             } catch (err) {
-                qrStatus.innerHTML = `<span style="color:#dc3545;">❌ Camera error: ${err.message}</span>`;
+                qrStatus.innerHTML = `<span style="color:#dc3545;">${t('studentForm.cameraError')}${err.message}</span>`;
                 qrModal.style.display = 'none';
                 scannerActive = false;
             }
@@ -689,8 +678,8 @@ function initApp() {
             if (html5QrCode && scannerActive) { try { await html5QrCode.stop(); } catch(e) {} }
             scannerActive = false;
             qrModal.style.display = 'none';
-            scanBtn.textContent = '📷 Scan QR';
-            qrStatus.textContent = 'Point camera at QR code...';
+            scanBtn.textContent = t('studentForm.scanQR');
+            qrStatus.textContent = t('studentForm.pointCamera');
         }
         closeQrModal?.addEventListener('click', stopScanner);
         qrModal?.addEventListener('click', (e) => { if (e.target === qrModal) stopScanner(); });
@@ -711,7 +700,7 @@ function initApp() {
             levels.push('II', 'III', 'J', 'K', 'L');
         }
 
-        let optionsHTML = '<option value="">Select Level</option>';
+        let optionsHTML = `<option value="">${t('studentForm.selectLevel')}</option>`;
         levels.forEach(lvl => { 
             optionsHTML += `<option value="${lvl}" ${lvl === currentValue ? 'selected' : ''}>${lvl}</option>`; 
         });
@@ -913,7 +902,6 @@ function initApp() {
             const timeslots = [];
             if (status !== 'inquiry' && status !== 'pause' && status !== 'drop') {
                 entry.querySelectorAll('.timeslots-list .timeslot-row').forEach(row => {
-                    // ✅ NEW: Include center in timeslot data
                     const centerEl = row.querySelector('.ts-center');
                     const dayEl = row.querySelector('.ts-day');
                     const hourEl = row.querySelector('.ts-hour');
@@ -1078,12 +1066,12 @@ function initApp() {
         const currentValue = subjectSelect.value;
         const entry = subjectSelect.closest('.subject-entry');
         const usedSubjects = getUsedSubjects(entry);
-        let optionsHTML = '<option value="">Select Subject *</option>';
+        let optionsHTML = `<option value="">${t('studentForm.selectSubjectOption')}</option>`;
         SUBJECTS.forEach(s => {
             const isSelected = s === currentValue;
             const isUsed = usedSubjects.has(s) && !isSelected;
             const disabled = isUsed ? 'disabled' : '';
-            const hint = isUsed ? ' (Added)' : '';
+            const hint = isUsed ? t('studentForm.addedHint') : '';
             optionsHTML += `<option value="${s}" ${isSelected ? 'selected' : ''} ${disabled}>${s}${hint}</option>`;
         });
         subjectSelect.innerHTML = optionsHTML;
@@ -1097,7 +1085,7 @@ function initApp() {
     }
 
     function addSubjectField(data = {}) {
-        if (subjectCount >= 4) return showError('Maximum 4 subjects allowed.');
+        if (subjectCount >= 4) return showError(t('studentForm.maxSubjects'));
         const container = document.getElementById('subjectsContainer');
         if (!container) return;
         
@@ -1143,11 +1131,11 @@ function initApp() {
              <div>
                  <label>Select Subject *</label>
                  <select class="subject-name" required>
-                     <option value="">Select Subject *</option>
+                     <option value="">${t('studentForm.selectSubjectOption')}</option>
                     ${SUBJECTS.map(s => {
                         const isSelected = data.name === s;
                         const isUsed = usedSubjects.has(s) && !isSelected;
-                        return `<option value="${s}" ${isSelected ? 'selected' : ''} ${isUsed ? 'disabled' : ''}>${s}${isUsed ? ' (Added)' : ''}</option>`;
+                        return `<option value="${s}" ${isSelected ? 'selected' : ''} ${isUsed ? 'disabled' : ''}>${s}${isUsed ? t('studentForm.addedHint') : ''}</option>`;
                     }).join('')}
                  </select>
              </div>
@@ -1165,18 +1153,18 @@ function initApp() {
              </div>
              <input type="hidden" class="current-level-db" value="${data.currentLevel || ''}">
              <div class="fld-current-level-readonly" style="display:block;">
-                 <label>Current Level <span style="color:#999; font-weight:400;">(From Database)</span></label>
-                 <input type="text" class="current-level-display" readonly value="${data.currentLevel || 'Not Set'}" style="background:#f1f5f9; color:#64748b; cursor:not-allowed;">
+                 <label>${t('studentForm.currentLevelLabel')}</label>
+                 <input type="text" class="current-level-display" readonly value="${data.currentLevel || t('studentForm.notSet')}" style="background:#f1f5f9; color:#64748b; cursor:not-allowed;">
              </div>
              <div class="fld-enrol-date" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'};">
-                 <label>Enrol Date *</label>
+                 <label>${t('studentForm.enrolDate')}</label>
                  <input type="date" class="enrol-date" value="${data.enrolDate || ''}">
              </div>
              <div class="fld-worksheet-type">
-                 <label>Worksheet Type</label>
+                 <label>${t('studentForm.worksheetType')}</label>
                  <select class="worksheet-type">
-                     <option value="Paper" ${data.worksheetType === 'Paper' || !data.worksheetType ? 'selected' : ''}>Paper</option>
-                     <option value="Kumon Connect" ${data.worksheetType === 'Kumon Connect' ? 'selected' : ''}>Kumon Connect</option>
+                     <option value="Paper" ${data.worksheetType === 'Paper' || !data.worksheetType ? 'selected' : ''}>${t('studentForm.paper')}</option>
+                     <option value="Kumon Connect" ${data.worksheetType === 'Kumon Connect' ? 'selected' : ''}>${t('studentForm.kumonConnect')}</option>
                  </select>
              </div>
          </div>
@@ -1194,15 +1182,15 @@ function initApp() {
          <input type="hidden" class="pr-drop-month-year" value="${data.pendingRequest?.cancelled ? '' : ((data.pendingRequest?.dropYear && data.pendingRequest?.dropMonth) ? `${data.pendingRequest.dropYear}-${String(data.pendingRequest.dropMonth).padStart(2, '0')}` : '')}">
          <input type="hidden" class="pr-reason" value="${data.pendingRequest?.cancelled ? '' : (data.pendingRequest?.reason || '')}">
          <button type="button" class="add-pr-btn secondary" style="position:absolute; bottom:1rem; right:1rem; background:#fff3cd; color:#856404; border:1px solid #ffeeba; width:auto; padding:0.4rem 0.8rem; font-size:0.85rem; z-index:10;">🗓️ Drop/Pause Request</button>
-         <button type="button" class="add-pencil-btn secondary" style="margin:0.25rem 0 0.75rem; padding:0.3rem 0.7rem; font-size:0.85rem; width:auto; background:#e8f0fe; color:#667eea; border:1px solid #667eea;">➕ Add Pencil Skill</button>
+         <button type="button" class="add-pencil-btn secondary" style="margin:0.25rem 0 0.75rem; padding:0.3rem 0.7rem; font-size:0.85rem; width:auto; background:#e8f0fe; color:#667eea; border:1px solid #667eea;">${t('studentForm.addPencilSkill')}</button>
          <div class="pencil-skill-entry" style="display:none; margin-top:0.5rem; margin-bottom:1rem; padding:0.75rem; background:#e8f0fe; border-radius:8px; border-left:4px solid #667eea;">
              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-                 <h4 style="font-size:0.9rem; margin:0; color:#333;">Pencil Skill</h4>
+                 <h4 style="font-size:0.9rem; margin:0; color:#333;">${t('studentForm.pencilSkillTitle')}</h4>
                  <button type="button" class="remove-pencil-btn" style="background:none; border:none; cursor:pointer; color:#dc3545; font-size:1.2rem; padding:0; line-height:1;">×</button>
              </div>
              <div class="form-grid">
-                 <div> <label>Pencil Level</label> <select class="pencil-level"> <option value="">Select Level</option>${['ZI','ZII'].map(l => `<option value="${l}" ${data.pencilSkill?.level === l ? 'selected' : ''}>${l}</option>`).join('')}</select> </div>
-                 <div> <label>Pencil Start WS</label> <select class="pencil-ws">${getWSDropdownOptions(data.pencilSkill?.ws)}</select> </div>
+                 <div> <label>${t('studentForm.pencilLevel')}</label> <select class="pencil-level"> <option value="">${t('studentForm.selectLevel')}</option>${['ZI','ZII'].map(l => `<option value="${l}" ${data.pencilSkill?.level === l ? 'selected' : ''}>${l}</option>`).join('')}</select> </div>
+                 <div> <label>${t('studentForm.pencilStartWS')}</label> <select class="pencil-ws">${getWSDropdownOptions(data.pencilSkill?.ws)}</select> </div>
              </div>
          </div>
          <div class="fld-pause-reason pause-drop-reason-field" style="display:${data.status === 'pause' ? 'block' : 'none'};">
@@ -1215,12 +1203,12 @@ function initApp() {
          </div>
       <div class="timeslots-container" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'}; margin-bottom:1rem;">
          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-             <h4 style="font-size:0.9rem; margin:0;">Timeslots (Max 6)</h4>
-             <button type="button" class="add-timeslot-btn secondary" style="margin:0; padding:0.3rem 0.8rem; font-size:0.8rem; width:auto;">+ Add Timeslot</button>
+             <h4 style="font-size:0.9rem; margin:0;">${t('studentForm.timeslotsTitle')}</h4>
+             <button type="button" class="add-timeslot-btn secondary" style="margin:0; padding:0.3rem 0.8rem; font-size:0.8rem; width:auto;">${t('studentForm.addTimeslot')}</button>
          </div>
          <div class="timeslots-list"></div>
      </div>
-     <button type="button" class="remove-subject" style="background:#dc3545; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; margin-top:1.5rem;">Remove Subject</button>`;  
+     <button type="button" class="remove-subject" style="background:#dc3545; color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; margin-top:1.5rem;">${t('studentForm.removeSubject')}</button>`;  
      
         const timeslotsList = div.querySelector('.timeslots-list');
         
@@ -1242,7 +1230,7 @@ function initApp() {
         if (addPencilBtn) {
             addPencilBtn.onclick = () => {
                 const anyVisible = Array.from(document.querySelectorAll('.pencil-skill-entry')).some(el => el.style.display !== 'none');
-                if (anyVisible) return showError('⚠️ Only one Pencil Skill can be added per student.');
+                if (anyVisible) return showError(t('studentForm.onePencilSkill'));
                 pencilEntry.style.display = 'block';  
                 addPencilBtn.style.display = 'inline-block';
                 const pencilLevel = pencilEntry.querySelector('.pencil-level');
@@ -1318,7 +1306,7 @@ function initApp() {
         if (statusSelect) {
             statusSelect.addEventListener('change', () => {
                 if (statusSelect.value !== 'drop' && getActiveSubjectCount(div) >= 3) {
-                    showError('⚠️ Maximum 3 active subjects allowed. Please drop another subject first.');
+                    showError(t('studentForm.maxActiveSubjects'));
                     statusSelect.value = 'drop';
                 }
                 applySubjectUI(div);
@@ -1343,18 +1331,18 @@ function initApp() {
             const otherStatusEl = otherEntry?.querySelector('.status');
             const otherStatus = otherStatusEl?.value;
             if (s.value === selected && otherStatus !== 'drop' && currentStatus !== 'drop') {
-                showError(`⚠️ ${selected} is already added. Please choose a different subject or drop the existing one.`);
+                showError(`${selected}${t('studentForm.subjectAlreadyAdded')}`);
                 currentSelect.value = ''; return;
             }
             if (['English ERP', 'English EFL'].includes(selected) && ['English ERP', 'English EFL'].includes(s.value)) {
                 if (otherStatus !== 'drop' && currentStatus !== 'drop') {
-                    showError('English ERP & EFL cannot be together unless one is Dropped.');
+                    showError(t('studentForm.erpEflConflict'));
                     currentSelect.value = ''; return;
                 }
             }
             if (selected.includes('Chinese') && s.value.includes('Chinese')) {
                 if (otherStatus !== 'drop' && currentStatus !== 'drop') {
-                    showError('Please select only one type of Chinese (Traditional or Simplified).');
+                    showError(t('studentForm.chineseConflict'));
                     currentSelect.value = ''; return;
                 }
             }
@@ -1393,11 +1381,10 @@ function initApp() {
     }
 
     function addTimeslotField(timeslotsList, data = {}) {
-        if (!timeslotsList || timeslotsList.children.length >= 6) return showError('Maximum 6 timeslots per subject');
+        if (!timeslotsList || timeslotsList.children.length >= 6) return showError(t('studentForm.maxTimeslots'));
         let h = '01', m = '00', day = data.day || 'Monday';
         if (data.time) { const p = data.time.split(':'); if(p.length===2) { h = p[0]; m = p[1]; } }
 
-        // ✅ NEW: Generate center options, defaulting to the student's primary center
         const centerOptions = allCenters.map(c => 
             `<option value="${c.id}" ${(data.center || centerId) === c.id ? 'selected' : ''}>${c.name}</option>`
         ).join('');
@@ -1406,16 +1393,15 @@ function initApp() {
         row.className = 'timeslot-row';
         row.innerHTML = `
             <div> 
-                <label>Center</label> 
+                <label>${t('studentForm.center')}</label> 
                 <select class="ts-center" required>
                     ${centerOptions}
                 </select> 
             </div>
-            <div> <label>Day</label> <select class="ts-day" required>${DAYS.map(d => `<option value="${d}" ${data.day === d ? 'selected' : ''}>${d}</option>`).join('')}</select> </div>
-            <div> <label>Time (24h)</label> <div class="time-input-group"> <select class="ts-hour" required>${getHourOptions(h, day)}</select> <span class="time-separator">:</span> <select class="ts-min" required>${getMinuteOptions(m)}</select> </div> </div>
+            <div> <label>${t('studentForm.day')}</label> <select class="ts-day" required>${DAYS.map(d => `<option value="${d}" ${data.day === d ? 'selected' : ''}>${d}</option>`).join('')}</select> </div>
+            <div> <label>${t('studentForm.time')}</label> <div class="time-input-group"> <select class="ts-hour" required>${getHourOptions(h, day)}</select> <span class="time-separator">:</span> <select class="ts-min" required>${getMinuteOptions(m)}</select> </div> </div>
             <div class="remove-timeslot-wrapper"> <button type="button" class="remove-ts-btn" title="Remove">×</button> </div>`;
         
-        // ✅ FIXED: Syntax error resolved (properly declared minSel)
         const daySel = row.querySelector('.ts-day');
         const hourSel = row.querySelector('.ts-hour');
         const minSel = row.querySelector('.ts-min');
@@ -1423,7 +1409,7 @@ function initApp() {
         const checkConflict = () => {
             if (!daySel?.value || !hourSel?.value || !minSel?.value) return;
             const conflict = isTimeslotGloballyUsed(daySel.value, hourSel.value, minSel.value, row);
-            if (conflict) showError(`⚠️ Timeslot conflict: ${daySel.value} ${hourSel.value}:${minSel.value} booked for ${conflict}.`);
+            if (conflict) showError(`${t('studentForm.timeslotConflict')}${daySel.value} ${hourSel.value}:${minSel.value} booked for ${conflict}.`);
         };
         if (daySel) daySel.addEventListener('change', e => {
             if (hourSel) hourSel.innerHTML = getHourOptions(hourSel.value, e.target.value);
@@ -1437,8 +1423,8 @@ function initApp() {
     }
 
     document.getElementById('addSubjectBtn')?.addEventListener('click', () => {
-        if (subjectCount >= 4) return showError('Maximum 4 subjects allowed in the system.');
-        if (getActiveSubjectCount() >= 3) return showError('⚠️ Maximum 3 active subjects allowed. Please drop an existing subject before adding a new one.');
+        if (subjectCount >= 4) return showError(t('studentForm.maxSubjects'));
+        if (getActiveSubjectCount() >= 3) return showError(t('studentForm.maxActiveSubjects'));
         addSubjectField();
     });
 
@@ -1447,7 +1433,7 @@ function initApp() {
         if (!tbody) return;
         const tr = document.createElement('tr');  
         tr.innerHTML = `
-         <td> <select class="dt-subject" required style="width:100%; padding:0.5rem;"> <option value="">Select Subject</option>${SUBJECTS.map(s => `<option value="${s}" ${data.subject === s ? 'selected' : ''}>${s}</option>`).join('')}</select> </td>
+         <td> <select class="dt-subject" required style="width:100%; padding:0.5rem;"> <option value="">${t('studentForm.selectSubjectOption')}</option>${SUBJECTS.map(s => `<option value="${s}" ${data.subject === s ? 'selected' : ''}>${s}</option>`).join('')}</select> </td>
          <td> <input type="date" class="dt-date" value="${data.date || ''}" required style="width:100%; padding:0.5rem;"> </td>
          <td> <input type="text" class="dt-test" placeholder="e.g., K1/K2" value="${data.test || ''}" required style="width:100%; padding:0.5rem;"> </td>
          <td> <input type="text" class="dt-score" placeholder="e.g., 85/100" value="${data.score || ''}" required style="width:100%; padding:0.5rem;"> </td>
@@ -1463,7 +1449,6 @@ function initApp() {
         const tbody = document.getElementById('atTableBody');
         if (!tbody) return;
 
-            // ✅ FIX: Remove the "No data" placeholder if it exists
         const placeholderRow = tbody.querySelector('tr td[colspan="8"]');
         if (placeholderRow) {
             placeholderRow.closest('tr').remove();
@@ -1477,8 +1462,8 @@ function initApp() {
         tr.innerHTML = `
             <td>
                 ${isManual ? `<select class="at-subject" required style="width:100%; padding:0.5rem;">
-                    <option value="">Select Subject</option>${subjectOptions}
-                </select>` : `<span>${data.subject || 'Unknown'}</span>`}
+                    <option value="">${t('studentForm.selectSubjectOption')}</option>${subjectOptions}
+                </select>` : `<span>${data.subject || t('studentForm.unknown')}</span>`}
             </td>
             <td>
                 ${isManual ? `<input type="text" class="at-level" placeholder="e.g., 7A" value="${data.level || ''}" required style="width:100%; padding:0.5rem;">` : `<span>${data.level || '-'}</span>`}
@@ -1495,7 +1480,7 @@ function initApp() {
             <td>
                 ${isManual ? `<input type="text" class="at-group" placeholder="e.g., A" value="${data.group || ''}" style="width:100%; padding:0.5rem;">` : `<span>${data.group || '-'}</span>`}
             </td>
-            <td><span style="font-size:0.8rem; color:${isManual ? '#FF8C00' : '#008B8B'}; font-weight:600;">${isManual ? 'Manual' : 'Auto'}</span></td>
+            <td><span style="font-size:0.8rem; color:${isManual ? '#FF8C00' : '#008B8B'}; font-weight:600;">${isManual ? t('studentForm.manual') : t('studentForm.auto')}</span></td>
             <td style="text-align:center;">
                 ${isManual ? `<button type="button" class="remove-at-btn danger" style="padding:0.4rem 0.8rem;">🗑️</button>` : `-`}
             </td>`;
@@ -1513,7 +1498,6 @@ function initApp() {
         
         let hasData = false;
 
-        // 1. Render Auto-filled ATs (from monthly reports)
         if (currentStudentData && currentStudentData.subjects) {
             const subjects = Array.isArray(currentStudentData.subjects) ? currentStudentData.subjects : Object.values(currentStudentData.subjects || {});
             subjects.forEach(sub => {
@@ -1525,29 +1509,28 @@ function initApp() {
                         if (test && (test.date || test.level || test.score || test.time || test.group)) {
                             hasData = true;
                             addATRow({
-                                subject: sub.name || 'Unknown',
+                                subject: sub.name || t('studentForm.unknown'),
                                 level: test.level,
                                 date: test.date,
                                 score: test.score,
                                 time: test.time,
                                 group: test.group
-                            }, false); // false = Auto-filled
+                            }, false);
                         }
                     });
                 });
             });
         }
 
-        // 2. Render Manual ATs
         if (currentStudentData && Array.isArray(currentStudentData.achievementTests)) {
             currentStudentData.achievementTests.forEach(at => {
                 hasData = true;
-                addATRow(at, true); // true = Manual
+                addATRow(at, true);
             });
         }
 
         if (!hasData) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:#999; padding:1rem;">No Achievement Tests recorded yet. Update monthly reports or add manually.</td></tr>';
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#999; padding:1rem;">${t('studentForm.noAT')}</td></tr>`;
         }
     }
 
@@ -1557,7 +1540,7 @@ function initApp() {
     async function loadStudentData() {
         try {
             if (!centerId || !studentId) {
-                showError('Missing center or student ID');
+                showError(t('studentForm.missingId'));
                 hideLoader();  
                 return;
             }
@@ -1568,19 +1551,19 @@ function initApp() {
                 if (processPendingRequests(s)) {
                     s.updatedAt = new Date().toISOString();
                     await update(ref(db, `centers/${centerId}/students/${studentId}`), s);
-                    console.log("⏳ Pending Drop/Pause requests auto-executed and saved.");
+                    console.log(t('studentForm.pendingExecuted'));
                 }
 
                 if (processResumeRequests(s)) {
                     s.updatedAt = new Date().toISOString();
                     await update(ref(db, `centers/${centerId}/students/${studentId}`), s);
-                    console.log("🔄 Resume requests auto-executed and saved.");
+                    console.log(t('studentForm.resumeExecuted'));
                 }
                 
                 currentStudentData = s;
                 if (checkAugustGradeUpdate(s)) {
                     await set(ref(db, `centers/${centerId}/students/${studentId}`), s);
-                    console.log(`🍂 Grade auto-updated for August 15th: ${s.grade}`);
+                    console.log(`${t('studentForm.gradeUpdated')}${s.grade}`);
                 }
                 
                 const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
@@ -1649,12 +1632,12 @@ function initApp() {
                 renderTeachersTab(); 
                 originalFormData = collectFormData();
             } else {
-                showError('Student not found in database.');
-                        setTimeout(() => navigateBack(), 1500);
+                showError(t('studentForm.studentNotFound'));
+                setTimeout(() => navigateBack(), 1500);
             }
         } catch (err) {
             console.error('Load Error:', err);
-            showError('Error loading student: ' + err.message);
+            showError(`${t('studentForm.loadError')}${err.message}`);
         } finally {
             hideLoader();
         }
@@ -1664,14 +1647,14 @@ function initApp() {
     if(isEdit && deleteBtn) {
         deleteBtn.style.display = '';
         deleteBtn.onclick = async () => {
-            if(confirm('Permanently delete this student?')) {
+            if(confirm(t('studentForm.confirmDelete'))) {
                 try {
                     showLoader();
                     await remove(ref(db, `centers/${centerId}/students/${studentId}`));
-                    alert('Deleted!');
-                        navigateBack();
+                    alert(t('studentForm.deleted'));
+                    navigateBack();
                 } catch(err) {
-                    showError('Error: '+err.message);
+                    showError(`${t('studentForm.error')}: ${err.message}`);
                 } finally {
                     hideLoader();
                 }
@@ -1686,7 +1669,7 @@ function initApp() {
         transferBtn.style.display = '';
         transferBtn.onclick = async () => {
             transferModal.classList.remove('hidden');
-            targetCenterSelect.innerHTML = '<option value="">Loading centers...</option>';
+            targetCenterSelect.innerHTML = `<option value="">${t('studentForm.loadingCenters')}</option>`;
             try {
                 const snap = await get(ref(db, 'centers'));
                 if (snap.exists()) {
@@ -1694,10 +1677,10 @@ function initApp() {
                     Object.keys(snap.val()).forEach(k => {
                         if(k !== centerId) opts += `<option value="${k}">${snap.val()[k].name || k}</option>`;
                     });
-                    targetCenterSelect.innerHTML = opts || '<option value="">No centers available</option>';
+                    targetCenterSelect.innerHTML = opts || `<option value="">${t('studentForm.noCenters')}</option>`;
                 }
             } catch {
-                targetCenterSelect.innerHTML = '<option value="">Error loading</option>';
+                targetCenterSelect.innerHTML = `<option value="">${t('studentForm.errorLoading')}</option>`;
             }
         };
     }
@@ -1705,8 +1688,8 @@ function initApp() {
     document.getElementById('closeTransferModal')?.addEventListener('click', () => transferModal.classList.add('hidden'));
     document.getElementById('confirmTransferBtn')?.addEventListener('click', async () => {
         const targetId = targetCenterSelect?.value;
-        if (!targetId || targetId === centerId) return showError('Please select a valid target center.');
-        if (!confirm(`Transfer student to ${targetId.replace(/kumon-/g,'').replace(/-/g,' ').toUpperCase()}?`)) return;
+        if (!targetId || targetId === centerId) return showError(t('studentForm.noCenter'));
+        if (!confirm(`${t('studentForm.confirmTransferMsg')}${targetId.replace(/kumon-/g,'').replace(/-/g,' ').toUpperCase()}?`)) return;
         transferModal.classList.add('hidden');
         showLoader();
         try {
@@ -1718,10 +1701,10 @@ function initApp() {
             data.transferredAt = new Date().toISOString();
             await push(ref(db, `centers/${targetId}/students`), data);
             await remove(sourceRef);
-            alert('✅ Transferred!');
-                        navigateBack();
+            alert(t('studentForm.transferred'));
+            navigateBack();
         } catch(err) {
-            showError('Transfer failed: ' + err.message);
+            showError(`${t('studentForm.transferFailed')}${err.message}`);
         } finally {
             hideLoader();
         }
@@ -1729,7 +1712,7 @@ function initApp() {
 
     document.getElementById('studentForm')?.addEventListener('submit', async (e) => {
         e.preventDefault();
-        if (!centerId) return showError('Error: No center selected.');
+        if (!centerId) return showError(t('studentForm.noCenter'));
         if (html5QrCode && scannerActive) await html5QrCode.stop();
         
         const contactChecks = [
@@ -1740,24 +1723,24 @@ function initApp() {
             const el = document.getElementById(check.id);
             const otherEl = document.getElementById(check.id + 'Other');
             const val = el?.value === 'Other' ? otherEl?.value?.trim() : el?.value?.trim();
-            if (!val) return showError(`⚠️ "${check.label}" is required.`);
+            if (!val) return showError(`${t('studentForm.fieldRequired')}${check.label}${t('studentForm.fieldRequiredEnd')}`);
         }
         
         const phoneMom = document.getElementById('phoneMom')?.value?.trim();
         const phoneDad = document.getElementById('phoneDad')?.value?.trim();
         const phoneOwn = document.getElementById('phoneOwn')?.value?.trim();
-        if (!phoneMom && !phoneDad && !phoneOwn) return showError('⚠️ At least one Phone Number is required.');
+        if (!phoneMom && !phoneDad && !phoneOwn) return showError(t('studentForm.phoneRequired'));
         
         const poSelect = document.getElementById('parentOrientation');
         const poVal = poSelect?.value;
-        if (!poVal) return showError('⚠️ "Parent Orientation" is required.');
+        if (!poVal) return showError(t('studentForm.poRequired'));
         if (poVal === 'Yes') {
             const poDateEl = document.getElementById('poDate');
-            if (poDateEl && !poDateEl.value) return showError('⚠️ Please select a Parent Orientation date.');
+            if (poDateEl && !poDateEl.value) return showError(t('studentForm.poDateRequired'));
         }
         if (poVal === 'No') {
             const poReasonEl = document.getElementById('poReason');
-            if (poReasonEl && !poReasonEl.value?.trim()) return showError('⚠️ Please provide a reason for no Parent Orientation.');
+            if (poReasonEl && !poReasonEl.value?.trim()) return showError(t('studentForm.poReasonRequired'));
         }
 
         let hasKCSubject = false;
@@ -1769,18 +1752,18 @@ function initApp() {
         }
         const globalKcNo = document.getElementById('kcNo')?.value?.trim();
         if (hasKCSubject && !globalKcNo) {
-            return showError('⚠️ KC No. is required at the top level when a subject uses Kumon Connect.');
+            return showError(t('studentForm.kcNoRequiredTop'));
         }
 
         const pencilCount = Array.from(document.querySelectorAll('.pencil-skill-entry')).filter(el => el.style.display !== 'none').length;
-        if (pencilCount > 1) return showError('⚠️ Only one Pencil Skill can be added per student.');
+        if (pencilCount > 1) return showError(t('studentForm.onePencilSkill'));
         
         let activeSubjectsCount = 0;
         for (const entry of document.querySelectorAll('.subject-entry')) {
             if (entry.querySelector('.status')?.value !== 'drop') activeSubjectsCount++;
         }
         if (activeSubjectsCount > 3) {
-            return showError('⚠️ You can only have a maximum of 3 active subjects. Please ensure at least one subject is dropped.');
+            return showError(t('studentForm.max3Active'));
         }
 
         let subIdx = 1;
@@ -1790,8 +1773,8 @@ function initApp() {
                 if (status === 'drop') {
                     const dropMY = entry.querySelector('.drop-month-year');
                     const dropReason = entry.querySelector('.drop-reason');
-                    if (!dropMY?.value) return showError(`⚠️ Subject #${subIdx}: Drop month is required.`);
-                    if (!dropReason?.value?.trim()) return showError(`⚠️ Subject #${subIdx}: Reason for Drop is required.`);
+                    if (!dropMY?.value) return showError(`${t('studentForm.dropMonthRequired')}${subIdx}${t('studentForm.dropMonthRequiredEnd')}`);
+                    if (!dropReason?.value?.trim()) return showError(`${t('studentForm.dropMonthRequired')}${subIdx}${t('studentForm.dropReasonRequired')}`);
                 }
                 subIdx++;
                 continue;
@@ -1803,35 +1786,35 @@ function initApp() {
             const enrolDate = entry.querySelector('.enrol-date');
             const inquiryDate = entry.querySelector('.inquiry-date');
             
-            if (!subject?.value) return showError(`⚠️ Subject #${subIdx}: Please select a Subject.`);
+            if (!subject?.value) return showError(`${t('studentForm.dropMonthRequired')}${subIdx}${t('studentForm.subjectRequired')}`);
 
             if (status === 'pause') {
                 const pauseFromMY = entry.querySelector('.pause-from-month-year');
                 const pauseToMY = entry.querySelector('.pause-to-month-year');
                 const pauseReason = entry.querySelector('.pause-reason');
-                if (!pauseFromMY?.value) return showError(`⚠️ Subject #${subIdx}: Pause From month is required.`);
-                if (!pauseToMY?.value) return showError(`⚠️ Subject #${subIdx}: Pause To month is required.`);
-                if (!pauseReason?.value?.trim()) return showError(`⚠️ Subject #${subIdx}: Reason for Pause is required.`);
+                if (!pauseFromMY?.value) return showError(`${t('studentForm.dropMonthRequired')}${subIdx}${t('studentForm.pauseFromRequired')}`);
+                if (!pauseToMY?.value) return showError(`${t('studentForm.dropMonthRequired')}${subIdx}${t('studentForm.pauseToRequired')}`);
+                if (!pauseReason?.value?.trim()) return showError(`${t('studentForm.dropMonthRequired')}${subIdx}${t('studentForm.pauseReasonRequired')}`);
             }
 
             if (status === 'drop') {
                 const dropMY = entry.querySelector('.drop-month-year');
                 const dropReason = entry.querySelector('.drop-reason');
-                if (!dropMY?.value) return showError(`⚠️ Subject #${subIdx}: Drop month is required.`);
-                if (!dropReason?.value?.trim()) return showError(`⚠️ Subject #${subIdx}: Reason for Drop is required.`);
+                if (!dropMY?.value) return showError(`${t('studentForm.dropMonthRequired')}${subIdx}${t('studentForm.dropMonthRequiredEnd')}`);
+                if (!dropReason?.value?.trim()) return showError(`${t('studentForm.dropMonthRequired')}${subIdx}${t('studentForm.dropReasonRequired')}`);
             }
 
             if (status === 'inquiry') {
-                if (!inquiryDate?.value) return showError(`⚠️ Subject #${subIdx}: Inquiry Date is required.`);
+                if (!inquiryDate?.value) return showError(`${t('studentForm.dropMonthRequired')}${subIdx}${t('studentForm.inquiryDateRequired')}`);
             } else if (status === 'current') {
-                if (!enrolDate?.value) return showError(`⚠️ Subject #${subIdx}: Enrol Date is required.`);
-                if (entry.querySelectorAll('.timeslots-list .timeslot-row').length === 0) return showError(`⚠️ Subject #${subIdx}: Add at least one timeslot.`);
-                if (!startLevel?.value) return showError(`⚠️ Subject #${subIdx}: Please select a Start Level.`);
-                if (!startWS?.value) return showError(`⚠️ Subject #${subIdx}: Please select a Start WS #.`);
+                if (!enrolDate?.value) return showError(`${t('studentForm.dropMonthRequired')}${subIdx}${t('studentForm.enrolDateRequired')}`);
+                if (entry.querySelectorAll('.timeslots-list .timeslot-row').length === 0) return showError(`${t('studentForm.dropMonthRequired')}${subIdx}${t('studentForm.addTimeslotRequired')}`);
+                if (!startLevel?.value) return showError(`${t('studentForm.dropMonthRequired')}${subIdx}${t('studentForm.startLevelRequired')}`);
+                if (!startWS?.value) return showError(`${t('studentForm.dropMonthRequired')}${subIdx}${t('studentForm.startWSRequired')}`);
             }
             subIdx++;
         }
-        if (subIdx === 1) return showError('⚠️ Please add at least one subject.');
+        if (subIdx === 1) return showError(t('studentForm.addSubjectRequired'));
         
         let dtIdx = 1;
         for (const row of document.querySelectorAll('#dtTableBody tr')) {
@@ -1842,14 +1825,12 @@ function initApp() {
             const time = row.querySelector('.dt-time')?.value;
             
             if (subject || date || test || score || time) {
-                if (!subject) return showError(`⚠️ DT #${dtIdx}: Subject is required.`);
-                if (!date) return showError(`⚠️ DT #${dtIdx}: Diagnostic Date is required.`);
+                if (!subject) return showError(`${t('studentForm.dtSubjectRequired')}${dtIdx}${t('studentForm.dtSubjectRequiredEnd')}`);
+                if (!date) return showError(`${t('studentForm.dtSubjectRequired')}${dtIdx}${t('studentForm.dtDateRequired')}`);
                 
-                // ✅ UPDATED: Allow blank test details for "Scheduled" DTs. 
-                // But if they start filling them, require all details.
                 const hasTestDetail = test || score || time;
                 if (hasTestDetail && (!test || !score || !time)) {
-                    return showError(`⚠️ DT #${dtIdx}: Please complete the Test Name, Score, and Time, or leave them blank if the test is scheduled but not yet taken.`);
+                    return showError(`${t('studentForm.dtSubjectRequired')}${dtIdx}${t('studentForm.dtDetailsRequired')}`);
                 }
             }
             dtIdx++;
@@ -1863,13 +1844,12 @@ function initApp() {
             const score = row.querySelector('.at-score')?.value;
             const time = row.querySelector('.at-time')?.value;
             
-            // Only validate if the user started filling out the row
             if (subject || level || date || score || time) {
-                if (!subject) return showError(`⚠️ AT #${atIdx}: Subject is required.`);
-                if (!level) return showError(`⚠️ AT #${atIdx}: AT Level is required.`);
-                if (!date) return showError(`⚠️ AT #${atIdx}: Date is required.`);
-                if (!score) return showError(`⚠️ AT #${atIdx}: Score is required.`);
-                if (!time) return showError(`⚠️ AT #${atIdx}: Time is required.`);
+                if (!subject) return showError(`${t('studentForm.atSubjectRequired')}${atIdx}${t('studentForm.atSubjectRequiredEnd')}`);
+                if (!level) return showError(`${t('studentForm.atSubjectRequired')}${atIdx}${t('studentForm.atLevelRequired')}`);
+                if (!date) return showError(`${t('studentForm.atSubjectRequired')}${atIdx}${t('studentForm.atDateRequired')}`);
+                if (!score) return showError(`${t('studentForm.atSubjectRequired')}${atIdx}${t('studentForm.atScoreRequired')}`);
+                if (!time) return showError(`${t('studentForm.atSubjectRequired')}${atIdx}${t('studentForm.atTimeRequired')}`);
             }
             atIdx++;
         }
@@ -1879,13 +1859,13 @@ function initApp() {
         for (const entry of document.querySelectorAll('.subject-entry')) {
             if (entry.querySelector('.status')?.value === 'drop') continue;
             if (entry.querySelector('.status')?.value === 'pause') continue;
-            const subjectName = entry.querySelector('.subject-name')?.value || 'Unknown';
+            const subjectName = entry.querySelector('.subject-name')?.value || t('studentForm.unknown');
             entry.querySelectorAll('.timeslots-list .timeslot-row').forEach(row => {
                 const day = row.querySelector('.ts-day')?.value, hour = row.querySelector('.ts-hour')?.value, min = row.querySelector('.ts-min')?.value;
                 if (day && hour && min) {
                     const key = `${day}-${hour}:${min}`;
                     if (globalTimeslots.has(key)) {
-                        showError(`⚠️ Timeslot conflict: ${subjectName} & ${globalTimeslots.get(key)} on ${day} at ${hour}:${min}`);
+                        showError(`${t('studentForm.globalTimeslotConflict')}${subjectName} & ${globalTimeslots.get(key)} on ${day} at ${hour}:${min}`);
                         hasConflict = true;
                     } else {
                         globalTimeslots.set(key, subjectName);
@@ -1897,9 +1877,9 @@ function initApp() {
         
         const currentFormData = collectFormData();
         for (const sub of currentFormData.subjects) {
-            if (sub.pencilSkill && !sub.pencilSkill.ws) return showError('⚠️ Please select a Pencil Start WS.');
+            if (sub.pencilSkill && !sub.pencilSkill.ws) return showError(t('studentForm.pencilWSRequired'));
         }
-        if (isEdit && JSON.stringify(currentFormData) === JSON.stringify(originalFormData)) return showError('ℹ️ No changes made.');
+        if (isEdit && JSON.stringify(currentFormData) === JSON.stringify(originalFormData)) return showError(t('studentForm.noChanges'));
         
         const studentData = { ...currentFormData, updatedAt: new Date().toISOString() };
         if (isEdit) {
@@ -1925,26 +1905,26 @@ function initApp() {
             showLoader();
             if (isEdit) await set(ref(db, `centers/${centerId}/students/${studentId}`), studentData);
             else await push(ref(db, `centers/${centerId}/students`), studentData);
-            alert(isEdit ? '✅ Updated!' : '✅ Added!');
-                navigateBack();
+            alert(isEdit ? t('studentForm.updated') : t('studentForm.added'));
+            navigateBack();
         } catch (err) {
-            showError('Error saving: ' + err.message);
+            showError(`${t('studentForm.saveError')}${err.message}`);
         } finally {
             hideLoader();
         }
     });
 
-        document.getElementById('cancelBtn')?.addEventListener('click', () => { if (confirm('Discard changes?')) navigateBack(); });    
+    document.getElementById('cancelBtn')?.addEventListener('click', () => { if (confirm(t('studentForm.discardChanges'))) navigateBack(); });    
 
-        document.getElementById('backToStudents')?.addEventListener('click', (e) => {
-            e.preventDefault();
-            if (!originalFormData) { navigateBack(); return; }
-            if (JSON.stringify(collectFormData()) !== JSON.stringify(originalFormData)) {
-                if (confirm('You have unsaved changes. Are you sure you want to leave?')) navigateBack();
-            } else {
-                navigateBack();
-            }
-        });
+    document.getElementById('backToStudents')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (!originalFormData) { navigateBack(); return; }
+        if (JSON.stringify(collectFormData()) !== JSON.stringify(originalFormData)) {
+            if (confirm(t('studentForm.unsavedChanges'))) navigateBack();
+        } else {
+            navigateBack();
+        }
+    });
 
     function initParentOrientation() {
         const poSelect = document.getElementById('parentOrientation');
@@ -1999,7 +1979,7 @@ function initApp() {
         if (!activePREntry) return;
         const type = prTypeSelect.value;
         const reason = document.getElementById('prReason').value.trim();
-        if (!reason) return showError('⚠️ Reason is required.');
+        if (!reason) return showError(t('studentForm.prReasonRequired'));
         
         activePREntry.querySelector('.pr-cancelled').value = 'false'; 
         activePREntry.querySelector('.pr-type').value = type;
@@ -2008,13 +1988,13 @@ function initApp() {
         if (type === 'pause') {
             const fm = document.getElementById('prPauseFromMonthYear').value;
             const tm = document.getElementById('prPauseToMonthYear').value;
-            if (!fm || !tm) return showError('⚠️ Please select Pause From and To dates.');
+            if (!fm || !tm) return showError(t('studentForm.prPauseDatesRequired'));
             activePREntry.querySelector('.pr-pause-from-month-year').value = fm;
             activePREntry.querySelector('.pr-pause-to-month-year').value = tm;
             activePREntry.querySelector('.pr-drop-month-year').value = '';
         } else {
             const dm = document.getElementById('prDropMonthYear').value;
-            if (!dm) return showError('⚠️ Please select Drop Month.');
+            if (!dm) return showError(t('studentForm.prDropMonthRequired'));
             activePREntry.querySelector('.pr-drop-month-year').value = dm;
             activePREntry.querySelector('.pr-pause-from-month-year').value = '';
             activePREntry.querySelector('.pr-pause-to-month-year').value = '';
@@ -2029,7 +2009,6 @@ function initApp() {
     const scheduleDTBtn = document.getElementById('scheduleDTBtn');
     if (scheduleDTBtn) {
         scheduleDTBtn.addEventListener('click', () => {
-            // 1. Validate required basic info before opening modal
             const nameCn = document.getElementById('nameCn')?.value?.trim();
             const phoneMom = document.getElementById('phoneMom')?.value?.trim();
             const phoneDad = document.getElementById('phoneDad')?.value?.trim();
@@ -2044,11 +2023,11 @@ function initApp() {
             const schoolOther = document.getElementById('schoolOther');
             const school = schoolSelect?.value === 'Other' ? schoolOther?.value?.trim() : schoolSelect?.value?.trim();
 
-            if (!nameCn) return showError('⚠️ Full Name (Chinese) is required to schedule a DT.');
-            if (!phoneMom && !phoneDad && !phoneOwn) return showError('⚠️ At least one Phone Number is required.');
-            if (!birthday) return showError('⚠️ Birthday is required.');
-            if (!grade) return showError('⚠️ Grade is required.');
-            if (!school) return showError('⚠️ School is required.');
+            if (!nameCn) return showError(t('studentForm.dtNameRequired'));
+            if (!phoneMom && !phoneDad && !phoneOwn) return showError(t('studentForm.dtPhoneRequired'));
+            if (!birthday) return showError(t('studentForm.dtBirthdayRequired'));
+            if (!grade) return showError(t('studentForm.dtGradeRequired'));
+            if (!school) return showError(t('studentForm.dtSchoolRequired'));
 
             openScheduleDTModal();
         });
@@ -2058,7 +2037,7 @@ function initApp() {
         const modal = document.getElementById('scheduleDTModal');
         const list = document.getElementById('scheduleDTList');
         list.innerHTML = '';
-        addScheduleDTRow(); // Start with one empty row
+        addScheduleDTRow();
         modal.classList.remove('hidden');
         modal.style.display = 'flex';
     }
@@ -2075,7 +2054,7 @@ function initApp() {
         row.style.cssText = 'display: flex; gap: 0.5rem; align-items: center;';
         row.innerHTML = `
             <select class="schedule-dt-subject" required style="flex: 1; padding: 0.5rem; border: 1px solid #ddd; border-radius: var(--radius);">
-                <option value="">Select Subject</option>
+                <option value="">${t('studentForm.selectSubjectOption')}</option>
                 ${SUBJECTS.map(s => `<option value="${s}">${s}</option>`).join('')}
             </select>
             <input type="date" class="schedule-dt-date" required style="flex: 1; padding: 0.5rem; border: 1px solid #ddd; border-radius: var(--radius);">
@@ -2083,7 +2062,7 @@ function initApp() {
         `;
         row.querySelector('.remove-schedule-dt-btn').onclick = () => {
             row.remove();
-            if (list.children.length === 0) addScheduleDTRow(); // Keep at least one row
+            if (list.children.length === 0) addScheduleDTRow();
         };
         list.appendChild(row);
     }
@@ -2100,10 +2079,9 @@ function initApp() {
             const date = row.querySelector('.schedule-dt-date')?.value;
             
             if (subject || date) {
-                if (!subject) errorMsg = `⚠️ Row ${index + 1}: Please select a Subject.`;
-                else if (!date) errorMsg = `⚠️ Row ${index + 1}: Please select a Diagnostic Date.`;
+                if (!subject) errorMsg = `${t('studentForm.rowSubjectRequired')}${index + 1}: Please select a Subject.`;
+                else if (!date) errorMsg = `${t('studentForm.rowSubjectRequired')}${index + 1}${t('studentForm.rowDateRequired')}`;
                 else {
-                    // Pre-populate the main DT table (leaving test details blank)
                     addDTRow({ subject: subject, date: date });
                     hasData = true;
                 }
@@ -2111,11 +2089,10 @@ function initApp() {
         });
         
         if (errorMsg) return showError(errorMsg);
-        if (!hasData) return showError('⚠️ Please add at least one subject and date.');
+        if (!hasData) return showError(t('studentForm.addSubjectRequired'));
         
         closeScheduleDTModal();
         
-        // Automatically switch to the DT & AT tab so the user sees the result
         const dtTabBtn = document.querySelector('.tab-btn[data-tab="dt-at"]');
         if (dtTabBtn) dtTabBtn.click();
     });
@@ -2137,7 +2114,7 @@ function initApp() {
     };
 
     let allTeachersCache = [];
-    let allCenters = []; // ✅ NEW: Declare allCenters array
+    let allCenters = [];
 
     async function fetchCenters() {
         try {
@@ -2245,7 +2222,7 @@ function initApp() {
                 ? activeSubjects.map(s =>
                     `<span class="subj-pill ${getSubjectColorClass(s.name)}">${s.name} <small>(${s.status})</small></span>`
                 ).join('')
-                : '<span style="color:#999; font-size:0.8rem;">No active subjects</span>';
+                : `<span style="color:#999; font-size:0.8rem;">${t('studentForm.noActiveSubjects')}</span>`;
 
             card.innerHTML = `
                 <div class="duplicate-student-info">
@@ -2294,7 +2271,7 @@ function initApp() {
             if (snap.exists()) {
                 allTeachersCache = Object.entries(snap.val()).map(([uid, data]) => ({
                     uid,
-                    name: data.englishName || data.chineseName || 'Unknown',
+                    name: data.englishName || data.chineseName || t('studentForm.unknown'),
                     positions: data.positions || (data.position ? [data.position] : []),
                     isDisabled: data.isDisabled
                 })).filter(t => !t.isDisabled); 
@@ -2312,7 +2289,7 @@ function initApp() {
             btn.className = 'tab-btn';
             btn.dataset.tab = 'teachers';
             btn.id = 'tab-teachers-btn';
-            btn.textContent = '👩‍ Teachers';
+            btn.textContent = t('studentForm.teachersTab');
             tabsContainer.appendChild(btn);
 
             btn.addEventListener('click', (e) => {
@@ -2330,8 +2307,8 @@ function initApp() {
             contentDiv.id = 'tab-teachers';
             contentDiv.className = 'tab-content';
             contentDiv.innerHTML = `
-                <h3 style="color: var(--primary-dark); margin-bottom: 1rem;">Assign Teachers</h3>
-                <p class="hint" style="margin-bottom: 1rem;">Tick the boxes to assign teachers to this student based on their enrolled subjects.</p>
+                <h3 style="color: var(--primary-dark); margin-bottom: 1rem;">${t('studentForm.assignTeachers')}</h3>
+                <p class="hint" style="margin-bottom: 1rem;">${t('studentForm.assignTeachersHint')}</p>
                 <div id="teachers-list-container" style="display: flex; flex-direction: column; gap: 1.5rem;"></div>
             `;
             
@@ -2360,7 +2337,7 @@ function initApp() {
         });
 
         if (currentSubjects.size === 0) {
-            container.innerHTML = '<p class="hint">Add subjects in the "Subjects" tab to assign teachers.</p>';
+            container.innerHTML = `<p class="hint">${t('studentForm.addSubjectsForTeachers')}</p>`;
             return;
         }
 
@@ -2376,7 +2353,7 @@ function initApp() {
             section.innerHTML = `<h4>${subj}</h4>`;
 
             if (teachersForSubj.length === 0) {
-                section.innerHTML += '<p class="hint" style="margin:0;">No active teachers found for this subject.</p>';
+                section.innerHTML += `<p class="hint" style="margin:0;">${t('studentForm.noTeachers')}</p>`;
             } else {
                 const grid = document.createElement('div');
                 grid.className = 'teacher-grid';
@@ -2413,7 +2390,6 @@ function initApp() {
 
     setupTeachersTab();
     
-    // ✅ FIXED: Cleaned up duplicate initialization blocks
     Promise.all([fetchTeachers(), fetchCenters()]).then(() => {
         if (isEdit) loadStudentData(); 
         else { 
