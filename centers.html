@@ -7,51 +7,53 @@
   <link rel="stylesheet" href="centers.css">
 </head>
 <body>
-  <div id="page-loader"><div class="spinner"></div></div>
-  
+
   <header>
     <h1>🏢 Centers</h1>
     <nav>
-      <span id="userEmail"></span>  
-      <button id="logoutBtn">Logout</button>
+      <span id="userEmail"></span>
     </nav>
   </header>
 
   <main class="dashboard">
     <h2>Select Your Center</h2>
-    <div id="centerGrid" class="center-grid">
-      <div class="center-card">
-        <div class="card-icon">⏳</div>
-        <h3>Loading centers...</h3>
-      </div>
-    </div>
-    
-    <h2 style="margin-top: 3rem;">Center Administration</h2>
+
+    <div id="centerGrid" class="center-grid"></div>
+
+    <h2 style="margin-top: 2.5rem;">Center Administration</h2>
+
     <div class="center-grid">
       <a href="employees.html" class="center-card">
         <div class="card-icon">👤</div>
         <h3>Employee Management</h3>
         <p>Add/edit staff, QR codes & timeclock records</p>
       </a>
+
       <a href="center-management.html" class="center-card">
-          <div class="card-icon">💼</div>
-          <h3>Center Management</h3>
-          <p>Add/edit centers, GPS coordinates, and register NFC tags</p>
+        <div class="card-icon">💼</div>
+        <h3>Center Management</h3>
+        <p>Add/edit centers, GPS coordinates, and register NFC tags</p>
       </a>
+
       <a href="timecard.html" class="center-card">
         <div class="card-icon">⏱️</div>
         <h3>Employee Timecard</h3>
         <p>QR scanning, geolocation verification & CSV export</p>
       </a>
+
       <a href="employee-schedule.html" class="center-card">
-          <div class="card-icon">📅</div>
-          <h3>Employee Schedule</h3>
-          <p>See weekly shifts</p>
+        <div class="card-icon">📅</div>
+        <h3>Employee Schedule</h3>
+        <p>See weekly shifts</p>
       </a>
     </div>
   </main>
 
-  <!-- ✅ ADDED SCRIPT TAG TO LOAD THE NEW JS FILE -->
+  <div id="page-loader">
+    <div class="spinner"></div>
+    <p>⏳ Loading centers...</p>
+  </div>
+
   <script type="module" src="centers.js"></script>
 </body>
 </html>
