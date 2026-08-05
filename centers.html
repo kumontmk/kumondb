@@ -3,57 +3,78 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Select Center - Kumon DB</title>
+
+  <title data-i18n="centers.documentTitle">Select Center - Kumon DB</title>
+
   <link rel="stylesheet" href="centers.css">
 </head>
 <body>
 
   <header>
-    <h1>🏢 Centers</h1>
+    <h1 data-i18n="centers.headerTitle">🏢 Centers</h1>
     <nav>
       <span id="userEmail"></span>
+      <select
+        id="languageSwitch"
+        class="language-switch"
+        data-i18n-title="common.language"
+        title="Language"
+        aria-label="Language"
+      >
+        <option value="en">English</option>
+        <option value="zh-TW">繁體中文</option>
+      </select>
     </nav>
   </header>
 
   <main class="dashboard">
-    <h2>Select Your Center</h2>
+    <h2 data-i18n="centers.selectYourCenter">Select Your Center</h2>
 
     <div id="centerGrid" class="center-grid"></div>
 
-    <h2 style="margin-top: 2.5rem;">Center Administration</h2>
+    <h2 style="margin-top: 2.5rem;" data-i18n="admin.centerAdministration">
+      Center Administration
+    </h2>
 
     <div class="center-grid">
       <a href="employees.html" class="center-card">
         <div class="card-icon">👤</div>
-        <h3>Employee Management</h3>
-        <p>Add/edit staff, QR codes & timeclock records</p>
+        <h3 data-i18n="admin.employeeManagement">Employee Management</h3>
+        <p data-i18n="admin.employeeManagementDesc">
+          Add/edit staff, QR codes & timeclock records
+        </p>
       </a>
 
       <a href="center-management.html" class="center-card">
         <div class="card-icon">💼</div>
-        <h3>Center Management</h3>
-        <p>Add/edit centers, GPS coordinates, and register NFC tags</p>
+        <h3 data-i18n="admin.centerManagement">Center Management</h3>
+        <p data-i18n="admin.centerManagementDesc">
+          Add/edit centers, GPS coordinates, and register NFC tags
+        </p>
       </a>
 
       <a href="timecard.html" class="center-card">
         <div class="card-icon">⏱️</div>
-        <h3>Employee Timecard</h3>
-        <p>QR scanning, geolocation verification & CSV export</p>
+        <h3 data-i18n="admin.employeeTimecard">Employee Timecard</h3>
+        <p data-i18n="admin.employeeTimecardDesc">
+          QR scanning, geolocation verification & CSV export
+        </p>
       </a>
 
       <a href="employee-schedule.html" class="center-card">
         <div class="card-icon">📅</div>
-        <h3>Employee Schedule</h3>
-        <p>See weekly shifts</p>
+        <h3 data-i18n="admin.employeeSchedule">Employee Schedule</h3>
+        <p data-i18n="admin.employeeScheduleDesc">See weekly shifts</p>
       </a>
     </div>
   </main>
 
   <div id="page-loader">
     <div class="spinner"></div>
-    <p>⏳ Loading centers...</p>
+    <p data-i18n="centers.loading">⏳ Loading centers...</p>
   </div>
 
+  <script type="module" src="centers-i18n.js"></script>
   <script type="module" src="centers.js"></script>
 </body>
 </html>

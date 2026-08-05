@@ -1,415 +1,399 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - Kumon DB</title>
-    <link rel="stylesheet" href="dashboard.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title data-i18n="dashboard.documentTitle">Dashboard - Kumon DB</title>
+  <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
-    <header>
-        <h1><a href="centers.html" style="color: white; text-decoration: none; margin-right: 1rem;">← Centers</a>  <span id="title-center-name"></span>Dashboard</h1>
-        <nav>
-            <span id="userInfo" class="user-info">Loading...</span>
-        </nav>
-    </header>
 
-    <div id="page-loader">
-        <div class="spinner"></div>
+  <div id="page-loader">
+    <div class="spinner"></div>
+    <p data-i18n="common.loading"> Loading...</p>
+  </div>
+
+  <header>
+    <h1> 
+      <a href="centers.html" data-i18n="dashboard.backToCenters">← Centers</a>
+      <span id="title-center-name"></span> <span data-i18n="dashboard.headerTitle">Dashboard</span>
+    </h1>
+    <nav>
+      <span id="userInfo" class="user-info"></span>
+    </nav>
+  </header>
+
+  <main class="dashboard">
+
+    <!-- ==========================================
+         CALENDAR SECTION
+    =========================================== -->
+    <section class="calendar-section">
+      <div class="calendar-header-main">
+        <h3>📅 <span id="calendar-center-name"></span> <span data-i18n="dashboard.centerCalendar">Center Calendar</span></h3>
+          <p class="calendar-hint">
+            <span style="color: #1565c0; font-weight: 600;" data-i18n="dashboard.hintBlue">● Blue = Parent Orientation</span> |
+            <span style="color: #2e7d32; font-weight: 600;" data-i18n="dashboard.hintGreen">● Green = Center Holiday</span> |
+            <span style="color: #c62828; font-weight: 600;" data-i18n="dashboard.hintRed">● Red = Public Holiday</span> |
+            <span style="color: #e65100; font-weight: 600;" data-i18n="dashboard.hintOrange">● Orange = Diagnostic Test</span>
+          </p>
+      </div>
+      <div class="calendar-wrapper">
+        <div class="calendar-month">
+          <h4 id="currentMonthTitle">Current Month</h4>
+          <div id="calendarCurrent" class="calendar-grid"></div>
+        </div>
+        <div class="calendar-month">
+          <h4 id="nextMonthTitle">Next Month</h4>
+          <div id="calendarNext" class="calendar-grid"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         GREETING + FEATURE CARDS
+    =========================================== -->
+    <div class="dashboard-header">
+      <h2>📋 <span id="dashboard-user-name">there</span><span data-i18n="dashboard.greetingSuffix">, what would you like to do?</span></h2>
+      <p id="current-date"></p>
+      <p data-i18n="dashboard.subtitle">Select a feature below to manage your center's operations and track student progress.</p>
     </div>
 
-    <main class="dashboard">
-        <!-- Calendar Section -->
-        <section class="calendar-section">
-            <div class="calendar-header-main">
-                <h3>📅 <span id="calendar-center-name">Center</span> Calendar</h3>
-                <p class="calendar-hint">
-                    <span style="color: #1565c0;">●</span> Blue = Parent Orientation &nbsp;|&nbsp; 
-                    <span style="color: #2e7d32;">●</span> Green = Center Holiday &nbsp;|&nbsp; 
-                    <span style="color: #c62828;">●</span> Red = Public Holiday &nbsp;|&nbsp;
-                    <span style="color: #e65100;">●</span> Orange = Diagnostic Test
-                </p>
-            </div>
-            <div class="calendar-wrapper">
-                <div class="calendar-month">
-                    <h4 id="currentMonthTitle">Current Month</h4>
-                    <div id="calendarCurrent" class="calendar-grid"></div>
-                </div>
-                <div class="calendar-month">
-                    <h4 id="nextMonthTitle">Next Month</h4>
-                    <div id="calendarNext" class="calendar-grid"></div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Dashboard Cards Section -->
-        <section class="dashboard-header">
-            <!-- UPDATED: Changed ID to dashboard-user-name and updated text -->
-            <h2>📋 <span id="dashboard-user-name">there</span>, what would you like to do?</h2>
-            <p>Select a feature below to manage your center's operations and track student progress.</p>
-        </section>
-
-        <div class="center-grid">
-            <a href="students.html" id="card-studentManagement" class="center-card" style="display: none;">
-                <div class="card-icon">👥</div>
-                <h3>Student Management</h3>
-                <p>Add, edit, search students & track progress</p>
-            </a>
-
-            <a href="new-student-list.html" id="card-newStudentList" class="center-card" style="display: none;">
-                <div class="card-icon">📋</div>
-                <h3>New Student List</h3>
-                <p>View new enrolments by month</p>
-            </a>
-
-            <a href="timetable.html" id="card-timetable" class="center-card" style="display: none;">
-                <div class="card-icon">🗓️</div>
-                <h3>Timetable</h3>
-                <p>View & print weekly class schedules</p>
-            </a>
-            <a href="reports.html" id="card-monthlyReports" class="center-card" style="display: none;">
-                <div class="card-icon">📊</div>
-                <h3>Monthly Reports</h3>
-                <p>Generate, edit & save monthly progress reports</p>
-            </a>
-            <a href="graphs.html" id="card-progressCharts" class="center-card" style="display: none;">
-                <div class="card-icon">📈</div>
-                <h3>Progress Charts</h3>
-                <p>Analytics, progress tracking & charts</p>
-            </a>
-            <a href="attendance.html" id="card-attendance" class="center-card" style="display: none;">
-                <div class="card-icon">✅</div>
-                <h3>Attendance</h3>
-                <p>Scan QR, track check-ins, view late students & daily reports</p>
-            </a>
-            <a href="follow-ups.html" id="card-followUps" class="center-card" style="display: none;">
-                <div class="card-icon">📌</div>
-                <h3>Follow Ups</h3>
-                <p>Manage pending parent orientations & student inquiries</p>
-            </a>
-            <a href="calendar.html" class="center-card">
-                <div class="card-icon">📅</div>
-                <h3>Manage Calendar</h3>
-                <p>View and manage the center's calendar events</p>
-            </a>
-            <a href="bulletin.html" id="card-bulletin" class="center-card" style="display: none;">
-                <div class="card-icon">📜</div>
-                <h3>Centre Bulletin</h3>
-                <p>Generate and download monthly centre bulletins</p>
-            </a>
-            <a href="dropbook.html" id="card-dropBook" class="center-card" style="display: none;">
-                <div class="card-icon">📉</div>
-                <h3>Drop Book</h3>
-                <p>Manage student drops and pauses</p>
-            </a>
-            <a href="notes.html" id="card-notes" class="center-card">
-                <div class="card-icon">📝</div>
-                <h3>My Notes</h3>
-                <p>Personal notes & reminders</p>
-            </a>
-            <a href="label-editor.html" class="center-card" id="card-labelEditor" style="display:none;">
-                <div class="card-icon">🏷️</div>
-                <h3>Label Editor</h3>
-                <p>Generate & print student labels (A4, 24-up)</p>
-            </a>
-        </div>
-        <!-- =========================================
-            NEW: HELPFUL LINKS SECTION
-        ========================================= -->
-        <div class="dashboard-header" style="margin-top: 3rem;">
-        <h2>🛟 Helpful Links</h2>
-        <p>Quick access to essential Kumon tools and resources.</p>
-        </div>
-        <div class="center-grid">
-        <a href="https://kcn.ksis.kumon.com/kcn/#/login/home" target="_blank" rel="noopener noreferrer" class="center-card">
-            <div class="card-icon">🌏</div>
-            <h3>Student KSIS</h3>
-            <p>Access the Kumon Student Information System</p>
-        </a>
-        
-        <a href="https://class-navi.digital.kumon.com/mo/index.html" target="_blank" rel="noopener noreferrer" class="center-card">
-            <div class="card-icon">🌏</div>
-            <h3>Class Navi</h3>
-            <p>Navigate class schedules and digital materials</p>
-        </a>
-        
-        <a href="https://kumonapp.com.hk/admin/login" target="_blank" rel="noopener noreferrer" class="center-card">
-            <div class="card-icon">🌏</div>
-            <h3>Kumon App Control Panel</h3>
-            <p>Admin login for the Kumon App</p>
-        </a>
-        
-        <a href="https://kumontmk.github.io/kumonrrl/" target="_blank" rel="noopener noreferrer" class="center-card">
-            <div class="card-icon">🌏</div>
-            <h3>Kumon Library</h3>
-            <p>Browse reading resources and materials</p>
-        </a>
-        
-        <a href="https://cdn21.posify.me/posify-custom-adaptor/9.3.01.2501.0625/index.html?p=b2b-procurement-registration&local=ZH_HK" target="_blank" rel="noopener noreferrer" class="center-card">
-            <div class="card-icon">🌏</div>
-            <h3>Order Form</h3>
-            <p>Browse reading resources and materials</p>
-        </a>
-
-        <!-- Hidden by default, shown via JS if center is Mei Keng -->
-        <a href="https://docs.google.com/spreadsheets/d/1o9F3Um1uyNAAX1SpmMJV68LaGE68Uy6fPZJv6ymweCc/edit?gid=167379829#gid=167379829" target="_blank" rel="noopener noreferrer" class="center-card" id="link-mk-progress" style="display: none;">
-            <div class="card-icon">🌏</div>
-            <h3>MK Student Progress Report</h3>
-            <p>Track student progress reports for Mei Keng</p>
-        </a>
-        </div>
-    </main>
-
-    <!-- Parent Orientation Modal -->
-    <div id="poModal" class="modal-overlay hidden">
-        <div class="modal-content">
-            <span class="close-modal" id="closePoModal">&times;</span>
-            <h3 id="modalDateTitle">Parent Orientations</h3>
-            <div id="poStudentList" class="po-student-list"></div>
-        </div>
+    <div class="center-grid">
+      <a href="students.html" id="card-studentManagement" class="center-card">
+        <div class="card-icon">👥</div>
+        <h3 data-i18n="dashboard.cards.studentManagement">Student Management</h3>
+        <p data-i18n="dashboard.cards.studentManagementDesc">Add, edit, search students & track progress</p>
+      </a>
+      <a href="new-student-list.html" id="card-newStudentList" class="center-card">
+        <div class="card-icon">📋</div>
+        <h3 data-i18n="dashboard.cards.newStudentList">New Student List</h3>
+        <p data-i18n="dashboard.cards.newStudentListDesc">View new enrolments by month</p>
+      </a>
+      <a href="timetable.html" id="card-timetable" class="center-card">
+        <div class="card-icon">🗓️</div>
+        <h3 data-i18n="dashboard.cards.timetable">Timetable</h3>
+        <p data-i18n="dashboard.cards.timetableDesc">View & print weekly class schedules</p>
+      </a>
+      <a href="reports.html" id="card-monthlyReports" class="center-card">
+        <div class="card-icon">📊</div>
+        <h3 data-i18n="dashboard.cards.monthlyReports">Monthly Reports</h3>
+        <p data-i18n="dashboard.cards.monthlyReportsDesc">Generate, edit & save monthly progress reports</p>
+      </a>
+      <a href="graphs.html" id="card-progressCharts" class="center-card">
+        <div class="card-icon">📈</div>
+        <h3 data-i18n="dashboard.cards.progressCharts">Progress Charts</h3>
+        <p data-i18n="dashboard.cards.progressChartsDesc">Analytics, progress tracking & charts</p>
+      </a>
+      <a href="attendance.html" id="card-attendance" class="center-card">
+        <div class="card-icon">✅</div>
+        <h3 data-i18n="dashboard.cards.attendance">Attendance</h3>
+        <p data-i18n="dashboard.cards.attendanceDesc">Scan QR, track check-ins, view late students & daily reports</p>
+      </a>
+      <a href="follow-ups.html" id="card-followUps" class="center-card">
+        <div class="card-icon">📌</div>
+        <h3 data-i18n="dashboard.cards.followUps">Follow Ups</h3>
+        <p data-i18n="dashboard.cards.followUpsDesc">Manage pending parent orientations & student inquiries</p>
+      </a>
+      <a href="calendar.html" id="card-manageCalendar" class="center-card">
+        <div class="card-icon">📅</div>
+        <h3 data-i18n="dashboard.cards.manageCalendar">Manage Calendar</h3>
+        <p data-i18n="dashboard.cards.manageCalendarDesc">View and manage the center's calendar events</p>
+      </a>
+      <a href="bulletin.html" id="card-bulletin" class="center-card">
+        <div class="card-icon">📜</div>
+        <h3 data-i18n="dashboard.cards.bulletin">Centre Bulletin</h3>
+        <p data-i18n="dashboard.cards.bulletinDesc">Generate and download monthly centre bulletins</p>
+      </a>
+      <a href="dropbook.html" id="card-dropBook" class="center-card">
+        <div class="card-icon">📉</div>
+        <h3 data-i18n="dashboard.cards.dropBook">Drop Book</h3>
+        <p data-i18n="dashboard.cards.dropBookDesc">Manage student drops and pauses</p>
+      </a>
+      <a href="notes.html" id="card-myNotes" class="center-card">
+        <div class="card-icon">📝</div>
+        <h3 data-i18n="dashboard.cards.myNotes">My Notes</h3>
+        <p data-i18n="dashboard.cards.myNotesDesc">Personal notes & reminders</p>
+      </a>
+      <a href="label-editor.html" id="card-labelEditor" class="center-card">
+        <div class="card-icon">🏷️</div>
+        <h3 data-i18n="dashboard.cards.labelEditor">Label Editor</h3>
+        <p data-i18n="dashboard.cards.labelEditorDesc">Generate & print student labels (A4, 24-up)</p>
+      </a>
     </div>
 
-    <!-- Edit Calendar Modal -->
-    <div id="editCalendarModal" class="modal-overlay hidden">
-        <div class="modal-content">
-            <span class="close-modal" id="closeEditCalendarModal">&times;</span>
-            <h3 id="editCalendarDateTitle">Edit Date</h3>
-            <form id="editCalendarForm" style="margin-top: 1rem;">
-                <div style="margin-bottom: 1rem;">
-                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Event Type:</label>
-                    <label style="margin-right: 1rem;"><input type="radio" name="eventType" value="none" checked> None (Regular Day)</label>
-                    <label style="margin-right: 1rem;"><input type="radio" name="eventType" value="center"> 🟢 Center Holiday</label>
-                    <label><input type="radio" name="eventType" value="public"> 🔴 Public Holiday</label>
-                </div>
-                <div style="margin-bottom: 1rem;">
-                    <label for="calendarNote" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Note (Optional):</label>
-                    <textarea id="calendarNote" class="po-note-area" placeholder="Add details about this holiday..."></textarea>
-                </div>
-                <div style="display: flex; gap: 1rem;">
-                    <button type="submit" class="save-note-btn">💾 Save Changes</button>
-                    <button type="button" id="clearCalendarBtn" class="save-note-btn" style="background: #dc3545;">🗑️ Clear Event</button>
-                </div>
-            </form>
-        </div>
+    <!-- ==========================================
+         HELPFUL LINKS
+    =========================================== -->
+    <div class="dashboard-header" style="margin-top: 2rem;">
+      <h2 data-i18n="dashboard.links.title">🛟 Helpful Links</h2>
+      <p data-i18n="dashboard.links.subtitle">Quick access to essential Kumon tools and resources.</p>
     </div>
 
-    <!-- =========================================
-     FAB BLUR OVERLAY
-     ========================================= -->
-    <div class="fab-overlay hidden" id="fabOverlay"></div>
-
-    <!-- =========================================
-     FLOATING ACTION BUTTON (FAB)
-     ========================================= -->
-        <div class="fab-container">
-        <div class="fab-menu hidden" id="fabMenu">
-            <button id="fabAddInquiry" class="fab-menu-item">
-                <span class="fab-icon">📋❓</span> Add New Inquiry
-            </button>
-            <button class="fab-menu-item" id="fabAddStudent">
-                <span class="fab-icon">➕👤</span>
-                <span>Add New Student</span>
-            </button>
-            <button class="fab-menu-item" id="fabSearchStudent">
-                <span class="fab-icon">🔍</span>
-                <span>Search Student</span>
-            </button>
-            <button id="fabScheduleDT" class="fab-menu-item">
-                <span class="fab-icon">📝</span>
-                <span>Schedule Diagnostic Test</span>
-            </button>
-            <button class="fab-menu-item" id="fabSchedulePO">
-                <span class="fab-icon">👨‍👩‍👧</span>
-                <span>Schedule Parent Orientation</span>
-            </button>
-        </div>
-        <button class="fab-btn" id="fabBtn">
-            <span class="fab-icon-plus">+</span>
-        </button>
-        </div>
-
-    <!-- =========================================
-        SCHEDULE PO MODAL
-    ========================================= -->
-    <div id="schedulePOModal" class="modal-overlay hidden">
-    <div class="modal-content" style="max-width: 500px;">
-        <span class="close-modal" id="closeSchedulePOModal">&times;</span>
-        <h2 style="margin-bottom: 1.5rem; color: var(--primary-dark);">📅 Schedule Parent Orientation</h2>
-        
-        <div style="margin-bottom: 1rem;">
-        <label style="display:block; font-weight:600; margin-bottom:0.4rem; font-size:0.9rem;">Search Student</label>
-        <div style="position: relative;">
-            <input type="text" id="poStudentSearch" placeholder="Type name, pinyin, or student number..." style="width:100%; padding:0.6rem; border:1px solid #cbd5e1; border-radius:6px; font-size:0.95rem;">
-            <ul id="poStudentListDropdown" style="position:absolute; top:100%; left:0; right:0; background:white; border:1px solid #cbd5e1; border-radius:6px; max-height:400px; overflow-y:auto; z-index:10; margin-top:4px; list-style:none; padding:0; display:none; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></ul>        </div>
-        <div id="selectedPOStudentInfo" style="margin-top:0.5rem; padding:0.6rem; background:#e8f5e9; border-radius:6px; display:none; font-size:0.9rem; color:#2e7d32; font-weight:500;"></div>
-        <input type="hidden" id="selectedPOStudentId">
-        </div>
-
-        <div style="margin-bottom: 1rem;">
-        <label style="display:block; font-weight:600; margin-bottom:0.4rem; font-size:0.9rem;">PO Date *</label>
-        <input type="date" id="poDateInput" required style="width:100%; padding:0.6rem; border:1px solid #cbd5e1; border-radius:6px; font-size:0.95rem;">
-        </div>
-
-        <div style="margin-bottom: 1.5rem;">
-        <label style="display:block; font-weight:600; margin-bottom:0.4rem; font-size:0.9rem;">Notes (Optional)</label>
-        <textarea id="poNotesInput" rows="3" placeholder="Add any notes about the orientation..." 
-                    style="width:100%; padding:0.6rem; border:1px solid #cbd5e1; border-radius:6px; font-size:0.95rem; resize:vertical;"></textarea>
-        </div>
-
-        <button id="saveSchedulePOBtn" class="save-note-btn" style="width: 100%; padding: 0.75rem; font-size: 1rem;">💾 Schedule PO</button>
-        </div>
+    <div class="center-grid">
+      <a href="#" class="center-card">
+        <div class="card-icon">🌏</div>
+        <h3 data-i18n="dashboard.links.ksis">Student KSIS</h3>
+        <p data-i18n="dashboard.links.ksisDesc">Access the Kumon Student Information System</p>
+      </a>
+      <a href="#" class="center-card">
+        <div class="card-icon">🌏</div>
+        <h3 data-i18n="dashboard.links.classNavi">Class Navi</h3>
+        <p data-i18n="dashboard.links.classNaviDesc">Navigate class schedules and digital materials</p>
+      </a>
+      <a href="#" class="center-card">
+        <div class="card-icon">🌏</div>
+        <h3 data-i18n="dashboard.links.appControl">Kumon App Control Panel</h3>
+        <p data-i18n="dashboard.links.appControlDesc">Admin login for the Kumon App</p>
+      </a>
+      <a href="#" class="center-card">
+        <div class="card-icon">🌏</div>
+        <h3 data-i18n="dashboard.links.library">Kumon Library</h3>
+        <p data-i18n="dashboard.links.libraryDesc">Browse reading resources and materials</p>
+      </a>
+      <a href="#" class="center-card">
+        <div class="card-icon">🌏</div>
+        <h3 data-i18n="dashboard.links.orderForm">Order Form</h3>
+        <p data-i18n="dashboard.links.orderFormDesc">Browse reading resources and materials</p>
+      </a>
+      <a href="#" id="link-mk-progress" class="center-card" style="display: none;">
+        <div class="card-icon">🌏</div>
+        <h3 data-i18n="dashboard.links.mkProgress">MK Student Progress Report</h3>
+        <p data-i18n="dashboard.links.mkProgressDesc">Track student progress reports for Mei Keng</p>
+      </a>
     </div>
+  </main>
 
-
-    <!-- =========================================
-        SEARCH STUDENT MODAL
-        ========================================= -->
-    <div id="searchStudentModal" class="modal-overlay hidden">
-    <!-- ✅ Added min-height: 600px and max-height: 90vh to make it taller -->
-        <div class="modal-content" style="max-width: 700px; min-height: 600px; max-height: 90vh;"> 
-            <span class="close-modal" id="closeSearchStudentModal">&times;</span>
-            <h2 style="margin-bottom: 1.5rem; color: var(--primary-dark);">🔍 Search Student</h2>
-            
-            <div style="margin-bottom: 1rem;">
-            <label style="display:block; font-weight:600; margin-bottom:0.4rem; font-size:0.9rem;">Search Student</label>
-            <div style="position: relative;">
-                <input type="text" id="searchStudentInput" placeholder="Type name, pinyin, student number, or phone..." 
-                    style="width:100%; padding:0.6rem; border:1px solid #cbd5e1; border-radius:6px; font-size:0.95rem;">
-                
-                <!-- ✅ Increased max-height from 500px to 600px to use the extra modal height -->
-                <ul id="searchStudentDropdown" style="position:absolute; top:100%; left:0; right:0; background:white; border:1px solid #cbd5e1; border-radius:6px; max-height:500px; overflow-y:auto; z-index:10; margin-top:4px; list-style:none; padding:0; display:none; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></ul>
-            </div>
-            <div id="selectedSearchStudentInfo" style="margin-top:0.5rem; padding:0.6rem; background:#e8f5e9; border-radius:6px; display:none; font-size:0.9rem; color:#2e7d32; font-weight:500;"></div>
-            <input type="hidden" id="selectedSearchStudentId">
-            </div>
-
-            <button id="openStudentFormBtn" class="save-note-btn" style="width: 100%; padding: 0.75rem; font-size: 1rem; background: var(--primary-dark);" disabled>📄 Open Student Form</button>
-        </div>
+  <!-- ==========================================
+       PO MODAL
+  =========================================== -->
+  <div id="poModal" class="modal-overlay hidden">
+    <div class="modal-content">
+      <span id="closePoModal" class="close-modal">&times;</span>
+      <h3 id="modalDateTitle" data-i18n="dashboard.poModalTitle">Parent Orientations</h3>
+      <div id="poStudentList" class="po-student-list"></div>
     </div>
+  </div>
 
-
-    <!-- ========================================= -->
-    <!-- 📝 SCHEDULE DT MODAL (FAB ACTION)         -->
-    <!-- ========================================= -->
-    <div id="scheduleDTModalDash" class="modal-overlay hidden">
-        <div class="modal-content schedule-dt-modal-content">
-            <span class="close-modal" id="closeScheduleDTModalDash">&times;</span>
-            <h2 style="margin-bottom: 0.5rem;">📝 Schedule Diagnostic Test</h2>
-            <p class="hint" style="margin-bottom: 1.5rem;">Is this for a new or existing student?</p>
-            
-            <div class="dt-choice-buttons">
-                <button id="dtNewStudentBtn" class="primary">➕ New Student</button>
-                <button id="dtExistingStudentBtn" class="secondary">🔍 Existing Student</button>
-            </div>
-            
-            <div id="dtExistingForm" class="dt-existing-form" style="display: none;">
-                <div class="form-group">
-                    <label for="dtStudentSearch">Search Student *</label>
-                    <div style="position: relative;">
-                        <input type="text" id="dtStudentSearch" placeholder="Search by name or number...">
-                        <ul id="dtStudentListDropdown" class="search-dropdown" style="display: none;"></ul>
-                    </div>
-                    <!-- Hardcoded display: none ensures it's hidden on open -->
-                    <div id="selectedDTStudentInfo" class="selected-info" style="display: none;">
-                        ✅ Selected: <span id="selectedDTStudentName"></span>
-                    </div>
-                    <input type="hidden" id="selectedDTStudentId">
-                </div>
-                
-                <!-- Dynamic Subject/Date Rows Container -->
-                <div id="dtSubjectsContainer" style="margin-bottom: 1rem;">
-                    <!-- Rows will be injected here by JS -->
-                </div>
-                
-                <!-- Clean class instead of messy inline styles -->
-                <button type="button" id="addDTSubjectRowBtn" class="add-dt-row-btn">+ Add Another Subject</button>
-                
-                <button id="saveScheduleDTBtnDash" class="primary full-width">💾 Schedule DT(s)</button>
-            </div>
+  <!-- ==========================================
+       EDIT CALENDAR MODAL
+  =========================================== -->
+  <div id="editCalendarModal" class="modal-overlay hidden">
+    <div class="modal-content">
+      <span id="closeEditCalendarModal" class="close-modal">&times;</span>
+      <h3 id="editCalendarDateTitle" data-i18n="dashboard.editDateTitle">Edit Date</h3>
+      <form id="editCalendarForm">
+        <label data-i18n="dashboard.eventType">Event Type:</label>
+        <div style="display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1rem;">
+          <label style="display:flex; align-items:center; gap:0.4rem;">
+            <input type="radio" name="eventType" value="none" checked>
+            <span data-i18n="dashboard.eventNone">None (Regular Day)</span>
+          </label>
+          <label style="display:flex; align-items:center; gap:0.4rem;">
+            <input type="radio" name="eventType" value="center">
+            <span data-i18n="dashboard.eventCenter">🟢 Center Holiday</span>
+          </label>
+          <label style="display:flex; align-items:center; gap:0.4rem;">
+            <input type="radio" name="eventType" value="public">
+            <span data-i18n="dashboard.eventPublic">🔴 Public Holiday</span>
+          </label>
         </div>
-    </div>
-
-    <!-- ========================================= -->
-    <!-- 🟠 DT DETAILS MODAL (CALENDAR CLICK)      -->
-    <!-- ========================================= -->
-    <div id="dtModal" class="modal-overlay hidden">
-        <div class="modal-content" style="max-width: 800px;">
-            <span class="close-modal" id="closeDtModal">&times;</span>
-            <h2 id="dtModalDateTitle" style="margin-bottom: 1rem;">Diagnostic Tests</h2>
-            <div id="dtStudentList" class="po-student-list"></div>
+        <label for="calendarNote" data-i18n="dashboard.noteOptional">Note (Optional):</label>
+        <textarea id="calendarNote" class="po-note-area"></textarea>
+        <div class="modal-actions" style="display:flex; gap:1rem; justify-content:flex-end; margin-top:1rem;">
+          <button type="submit" class="primary" data-i18n="common.saveChanges">💾 Save Changes</button>
+          <button type="button" id="clearCalendarBtn" class="secondary" data-i18n="dashboard.clearEvent">🗑️ Clear Event</button>
         </div>
+      </form>
     </div>
+  </div>
 
-    <!-- ========================================= -->
-    <!-- 🔍 QUICK INQUIRY MODAL -->
-    <!-- ========================================= -->
-    <div id="quickInquiryModal" class="modal-overlay hidden">
-        <div class="modal-content" style="max-width: 650px;">
-            <span class="close-modal" id="closeQuickInquiryModal">&times;</span>
-            <h2 style="color: var(--primary-dark); margin-bottom: 1.5rem;">🔍 Add New Student Inquiry</h2>
-            
-            <form id="quickInquiryForm">
-                <div class="qi-form-grid">
-                    <div>
-                        <label>Name (in Chinese/English) *</label>
-                        <input type="text" id="qiNameCn" required>
-                    </div>
-                    <div>
-                        <label>Name (拼音)</label>
-                        <input type="text" id="qiNamePinyin">
-                    </div>
-                    <div>
-                        <label>Date of Birth *</label>
-                        <input type="date" id="qiDOB" required>
-                    </div>
-                    <div>
-                        <label>Grade *</label>
-                        <select id="qiGrade" required>
-                            <option value="">Select Grade</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label>School *</label>
-                        <input type="text" id="qiSchool" required>
-                    </div>
-                    <div>
-                        <label>Gender</label>
-                        <select id="qiGender">
-                            <option value="">Select</option>
-                            <option value="Male">Male</option>
-                            <option value="Female">Female</option>
-                        </select>
-                    </div>
-                </div>
+  <!-- ==========================================
+       DT MODAL (calendar click)
+  =========================================== -->
+  <div id="dtModal" class="modal-overlay hidden">
+    <div class="modal-content">
+      <span id="closeDtModal" class="close-modal">&times;</span>
+      <h3 id="dtModalDateTitle">Diagnostic Tests</h3>
+      <div id="dtStudentList" class="po-student-list"></div>
+    </div>
+  </div>
 
-                <h3 style="font-size: 1rem; margin: 1.5rem 0 0.5rem; color: var(--text);">📞 Contact Information *</h3>
-                <div class="qi-form-grid" style="grid-template-columns: 1fr 1fr 1fr;">
-                    <div>
-                        <label>Mom</label>
-                        <input type="tel" id="qiPhoneMom">
-                    </div>
-                    <div>
-                        <label>Dad</label>
-                        <input type="tel" id="qiPhoneDad">
-                    </div>
-                    <div>
-                        <label>Student</label>
-                        <input type="tel" id="qiPhoneOwn">
-                    </div>
-                </div>
-
-                <h3 style="font-size: 1rem; margin: 1.5rem 0 0.5rem; color: var(--text);">📚 Subjects & Diagnostic Test (DT)</h3>
-                <div id="qiSubjectsContainer" style="margin-bottom: 1rem;"></div>
-                <button type="button" id="qiAddSubjectBtn" class="secondary" style="width: 100%; margin-bottom: 1.5rem;">+ Add Subject</button>
-
-                <div class="qi-actions">
-                    <button type="button" id="qiCancelBtn" class="secondary">Cancel</button>
-                    <button type="submit" id="qiSaveBtn" class="primary">💾 Save Inquiry</button>
-                </div>
-            </form>
+  <!-- ==========================================
+       SEARCH STUDENT MODAL
+  =========================================== -->
+  <div id="searchStudentModal" class="modal-overlay hidden">
+    <div class="modal-content schedule-dt-modal-content">
+      <span id="closeSearchStudentModal" class="close-modal">&times;</span>
+      <h3 data-i18n="dashboard.searchStudent.title">🔍 Search Student</h3>
+      <div class="dt-existing-form">
+        <div class="form-group" style="position:relative;">
+          <input type="text" id="searchStudentInput" data-i18n-placeholder="dashboard.searchStudent.placeholder" placeholder="Search Student">
+          <ul id="searchStudentDropdown" class="search-dropdown" style="display:none;"></ul>
         </div>
+        <div id="selectedSearchStudentInfo" class="selected-info" style="display:none;"></div>
+        <input type="hidden" id="selectedSearchStudentId">
+        <button id="openStudentFormBtn" class="primary full-width" disabled data-i18n="dashboard.searchStudent.openForm">📄 Open Student Form</button>
+      </div>
     </div>
+  </div>
 
-    <script type="module" src="dashboard.js"></script>
+  <!-- ==========================================
+       SCHEDULE PO MODAL
+  =========================================== -->
+  <div id="schedulePOModal" class="modal-overlay hidden">
+    <div class="modal-content schedule-dt-modal-content">
+      <span id="closeSchedulePOModal" class="close-modal">&times;</span>
+      <h3 data-i18n="dashboard.schedulePO.title">📅 Schedule Parent Orientation</h3>
+      <div class="dt-existing-form">
+        <div class="form-group" style="position:relative;">
+          <label data-i18n="dashboard.schedulePO.searchLabel">Search Student</label>
+          <input type="text" id="poStudentSearch" data-i18n-placeholder="dashboard.schedulePO.searchPlaceholder" placeholder="Search Student">
+          <ul id="poStudentListDropdown" class="search-dropdown" style="display:none;"></ul>
+          <div id="selectedPOStudentInfo" class="selected-info" style="display:none;"></div>
+          <input type="hidden" id="selectedPOStudentId">
+        </div>
+        <div class="form-group">
+          <label data-i18n="dashboard.schedulePO.poDate">PO Date *</label>
+          <input type="date" id="poDateInput">
+        </div>
+        <div class="form-group">
+          <label data-i18n="dashboard.schedulePO.notes">Notes (Optional)</label>
+          <textarea id="poNotesInput" class="po-note-area"></textarea>
+        </div>
+        <button id="saveSchedulePOBtn" class="primary full-width" data-i18n="dashboard.schedulePO.saveBtn">💾 Schedule PO</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       SCHEDULE DT MODAL (FAB)
+  =========================================== -->
+  <div id="scheduleDTModalDash" class="modal-overlay hidden">
+    <div class="modal-content schedule-dt-modal-content">
+      <span id="closeScheduleDTModalDash" class="close-modal">&times;</span>
+      <h3 data-i18n="dashboard.scheduleDT.title">📝 Schedule Diagnostic Test</h3>
+      <p data-i18n="dashboard.scheduleDT.question">Is this for a new or existing student?</p>
+      <div class="dt-choice-buttons">
+        <button id="dtNewStudentBtn" class="primary" data-i18n="dashboard.scheduleDT.newStudent">➕ New Student</button>
+        <button id="dtExistingStudentBtn" class="secondary" data-i18n="dashboard.scheduleDT.existingStudent">🔍 Existing Student</button>
+      </div>
+      <div id="dtExistingForm" class="dt-existing-form" style="display:none;">
+        <div class="form-group" style="position:relative;">
+          <label data-i18n="dashboard.scheduleDT.searchLabel">Search Student *</label>
+          <input type="text" id="dtStudentSearch">
+          <ul id="dtStudentListDropdown" class="search-dropdown" style="display:none;"></ul>
+          <div id="selectedDTStudentInfo" class="selected-info" style="display:none;">
+            <span data-i18n="dashboard.selectedLabel">✅ Selected:</span>
+            <span id="selectedDTStudentName"></span>
+          </div>
+          <input type="hidden" id="selectedDTStudentId">
+        </div>
+        <div id="dtSubjectsContainer"></div>
+        <button id="addDTSubjectRowBtn" class="add-dt-row-btn" type="button" data-i18n="dashboard.scheduleDT.addAnother">+ Add Another Subject</button>
+        <button id="saveScheduleDTBtnDash" class="primary full-width" data-i18n="dashboard.scheduleDT.saveBtn">💾 Schedule DT(s)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       QUICK INQUIRY MODAL
+  =========================================== -->
+  <div id="quickInquiryModal" class="modal-overlay hidden">
+    <div class="modal-content">
+      <span id="closeQuickInquiryModal" class="close-modal">&times;</span>
+      <h3 data-i18n="dashboard.inquiry.title">🔍 Add New Student Inquiry</h3>
+      <form id="quickInquiryForm">
+        <div class="qi-form-grid">
+          <div>
+            <label for="qiNameCn" data-i18n="dashboard.inquiry.nameCn">Name (in Chinese/English) *</label>
+            <input type="text" id="qiNameCn">
+          </div>
+          <div>
+            <label for="qiNamePinyin" data-i18n="dashboard.inquiry.namePinyin">Name (拼音)</label>
+            <input type="text" id="qiNamePinyin">
+          </div>
+          <div>
+            <label for="qiDOB" data-i18n="dashboard.inquiry.dob">Date of Birth *</label>
+            <input type="date" id="qiDOB">
+          </div>
+          <div>
+            <label for="qiGrade" data-i18n="dashboard.inquiry.grade">Grade *</label>
+            <select id="qiGrade"></select>
+          </div>
+          <div>
+            <label for="qiSchool" data-i18n="dashboard.inquiry.school">School *</label>
+            <input type="text" id="qiSchool">
+          </div>
+          <div>
+            <label for="qiGender" data-i18n="dashboard.inquiry.gender">Gender</label>
+            <select id="qiGender">
+              <option value="" data-i18n="dashboard.inquiry.select">Select</option>
+              <option value="Male" data-i18n="dashboard.inquiry.male">Male</option>
+              <option value="Female" data-i18n="dashboard.inquiry.female">Female</option>
+            </select>
+          </div>
+        </div>
+
+        <label data-i18n="dashboard.inquiry.contactTitle">📞 Contact Information *</label>
+        <div class="qi-form-grid">
+          <div>
+            <label for="qiPhoneMom" data-i18n="dashboard.inquiry.mom">Mom</label>
+            <input type="tel" id="qiPhoneMom">
+          </div>
+          <div>
+            <label for="qiPhoneDad" data-i18n="dashboard.inquiry.dad">Dad</label>
+            <input type="tel" id="qiPhoneDad">
+          </div>
+          <div>
+            <label for="qiPhoneOwn" data-i18n="dashboard.inquiry.student">Student</label>
+            <input type="tel" id="qiPhoneOwn">
+          </div>
+        </div>
+
+        <label data-i18n="dashboard.inquiry.subjectsTitle">📚 Subjects & Diagnostic Test (DT)</label>
+        <div id="qiSubjectsContainer"></div>
+        <button type="button" id="qiAddSubjectBtn" data-i18n="dashboard.inquiry.addSubject">+ Add Subject</button>
+
+        <div class="qi-actions">
+          <button type="button" id="qiCancelBtn" class="secondary" data-i18n="common.cancel">Cancel</button>
+          <button type="submit" id="qiSaveBtn" class="primary" data-i18n="dashboard.inquiry.saveBtn">💾 Save Inquiry</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       FLOATING ACTION BUTTON
+  =========================================== -->
+  <div id="fabOverlay" class="fab-overlay hidden"></div>
+  <div class="fab-container">
+    <div id="fabMenu" class="fab-menu hidden">
+      <button id="fabAddInquiry" class="fab-menu-item">
+        <span class="fab-icon">📋</span>
+        <span data-i18n="dashboard.fab.addInquiry">Add New Inquiry</span>
+      </button>
+      <button id="fabAddStudent" class="fab-menu-item">
+        <span class="fab-icon">➕</span>
+        <span data-i18n="dashboard.fab.addStudent">Add New Student</span>
+      </button>
+      <button id="fabSearchStudent" class="fab-menu-item">
+        <span class="fab-icon">🔍</span>
+        <span data-i18n="dashboard.fab.searchStudent">Search Student</span>
+      </button>
+      <button id="fabScheduleDT" class="fab-menu-item">
+        <span class="fab-icon">📝</span>
+        <span data-i18n="dashboard.fab.scheduleDT">Schedule Diagnostic Test</span>
+      </button>
+      <button id="fabSchedulePO" class="fab-menu-item">
+        <span class="fab-icon">👨‍👩‍👧</span>
+        <span data-i18n="dashboard.fab.schedulePO">Schedule Parent Orientation</span>
+      </button>
+    </div>
+    <button id="fabBtn" class="fab-btn"><span class="fab-icon-plus">+</span></button>
+  </div>
+
+  <script type="module" src="dashboard-i18n.js"></script>
+  <script type="module" src="dashboard.js"></script>
 </body>
 </html>

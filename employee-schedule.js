@@ -12,6 +12,8 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
 const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
+
+
 // ✅ Center closed days (0=Sun, 6=Sat). Added T11 and AO.
 const CENTER_CLOSED_DAYS = {
     'mei keng': [0],
@@ -65,6 +67,23 @@ function getEmpPositions(emp) {
     if (Array.isArray(emp.positions)) return emp.positions;
     if (emp.position) return [emp.position];
     return [];
+}
+
+// ============================================
+// ✅ FIX: Patterns must NEVER apply to past dates
+// ============================================
+function isPastDate(dateStr) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return parseDate(dateStr) < today;
+}
+
+function getTemplateForDate(empId, dateStr) {
+    const dow = parseDate(dateStr).getDay();
+    const tmpl = templates[empId]?.[dow];
+    if (!tmpl) return null;
+    if (isPastDate(dateStr)) return null; // ✅ past days keep their real history
+    return tmpl;
 }
 
 // ============================================
@@ -502,7 +521,7 @@ function renderAdminBody(dates) {
             const td = document.createElement('td');
             td.className = 'schedule-cell';
             const sched = mergedSchedules[emp.uid]?.[dateStr];
-            const tmpl = templates[emp.uid]?.[parseDate(dateStr).getDay()];
+            const tmpl = getTemplateForDate(emp.uid, dateStr);
             if (sched) {
                 renderMergedScheduleCell(td, sched, emp.uid, dateStr);
             } else if (tmpl) {
@@ -734,8 +753,7 @@ function renderEmployeeBody(dates, empId) {
         const td = document.createElement('td');
         td.className = 'schedule-cell';
         const sched = mergedSchedules[empId]?.[dateStr];
-        const tmpl = templates[empId]?.[parseDate(dateStr).getDay()];
-        
+        const tmpl = getTemplateForDate(empId, dateStr);        
         if (sched) {
             hasAnySchedule = true;
             renderMergedScheduleCell(td, sched, empId, dateStr);
@@ -771,8 +789,7 @@ function renderEmployeeBody(dates, empId) {
             const dateObj = parseDate(dateStr);
             const dow = dateObj.getDay();
             const sched = mergedSchedules[empId]?.[dateStr];
-            const tmpl = templates[empId]?.[dow];
-            
+            const tmpl = getTemplateForDate(empId, dateStr);            
             const item = document.createElement('div');
             item.className = 'mobile-schedule-item';
             
@@ -976,8 +993,8 @@ function renderSubjectBody(dates) {
                 const td = document.createElement('td');
                 td.className = 'schedule-cell';
                 const sched = mergedSchedules[emp.uid]?.[dateStr];
-                const tmpl = templates[emp.uid]?.[parseDate(dateStr).getDay()];
-                
+                const tmpl = getTemplateForDate(emp.uid, dateStr);           
+
                 if (sched) {
                     renderMergedScheduleCell(td, sched, emp.uid, dateStr);
                     const shifts = sched._shifts || extractShifts(sched);
@@ -1141,7 +1158,7 @@ function printSubjectSchedule() {
 
             dates.forEach(dateStr => {
                 const sched = mergedSchedules[emp.uid]?.[dateStr];
-                const tmpl = templates[emp.uid]?.[parseDate(dateStr).getDay()];
+                const tmpl = getTemplateForDate(emp.uid, dateStr);                
                 let shifts = [];
                 let status = 'scheduled';
                 let notes = '';
@@ -1446,7 +1463,7 @@ function openEditModal(empId, dateStr) {
         document.getElementById('scheduleStatus').value = sched.status || 'scheduled';
         document.getElementById('scheduleNotes').value = sched.notes || '';
     } else {
-        const tmpl = templates[empId]?.[dow];
+        const tmpl = getTemplateForDate(empId, dateStr);
         if (tmpl) {
             const tmplShifts = tmpl._shifts || extractShifts(tmpl);
             if (tmplShifts.length > 0) {
@@ -1465,7 +1482,11 @@ function openEditModal(empId, dateStr) {
     
     // 🆕 Initialize Calendar State (Replaces old pattern-day-cb logic)
     calendarViewDate = new Date(dateObj.getFullYear(), dateObj.getMonth(), 1);
-    selectedPatternDates = new Set([editingDate]); // Pre-check the current day
+    // ✅ FIX: no pre-selection. The day being edited is saved anyway;
+    // pre-selecting it caused every save to silently rewrite the weekly pattern.
+    selectedPatternDates = new Set();
+    const patternCb = document.getElementById('saveAsPatternCb');
+    if (patternCb) patternCb.checked = false;
     renderPatternCalendar();
     
     checkModalWarnings(empId, dateStr);
@@ -1547,22 +1568,16 @@ async function saveSchedule() {
         const notes = document.getElementById('scheduleNotes').value.trim();
         const shiftItems = document.querySelectorAll('#shiftsContainer .shift-item');
         const shifts = [];
-
-        // ✅ Only collect shifts that have valid start and end times
         shiftItems.forEach(item => {
             const type = item.querySelector('.shift-type').value;
             const start = item.querySelector('.shift-start').value;
             const end = item.querySelector('.shift-end').value;
             const center = type === 'work' ? item.querySelector('.shift-center').value : null;
-            if (start && end && start !== '' && end !== '') {
-                shifts.push({ type, start, end, center });
-            }
+            if (start && end) shifts.push({ type, start, end, center });
         });
 
         const data = {
-            status,
-            shifts,
-            notes,
+            status, shifts, notes,
             updatedAt: new Date().toISOString(),
             updatedBy: currentUser.uid
         };
@@ -1576,21 +1591,21 @@ async function saveSchedule() {
             return;
         }
 
-        // ✅ FIX 1: If saving an empty schedule (no valid shifts), clear it from ALL centers 
-        // to prevent the merge bug where old shifts from other centers persist.
+        // ✅ Track what we write so we can sync local state afterward
+        let localRecord = null;
+        const localCopies = []; // { dateStr, record }
+
         if (shifts.length === 0 && status === 'scheduled') {
+            data.cleared = true;
             for (const center of allCenters) {
                 await set(ref(db, `schedules/${center.id}/${editingEmpId}/${editingDate}`), data);
             }
+            localRecord = { ...data, _sourceCenter: allCenters[0]?.id || null };
         } else {
             let targetCenter = null;
             const workShifts = shifts.filter(s => s.type === 'work' && s.center);
-            if (workShifts.length > 0) {
-                targetCenter = workShifts[0].center;
-            }
-            if (!targetCenter) {
-                targetCenter = editingSourceCenter;
-            }
+            if (workShifts.length > 0) targetCenter = workShifts[0].center;
+            if (!targetCenter) targetCenter = editingSourceCenter;
             if (!targetCenter) {
                 if (allCenters.length > 0) {
                     targetCenter = allCenters[0].id;
@@ -1602,7 +1617,13 @@ async function saveSchedule() {
                 }
             }
 
-            const overlapError = await checkOverlaps(editingEmpId, editingDate, data, targetCenter);
+            // ✅ FIX: skip the center we're writing to AND the record we're about to replace,
+            // so the shift you just X-ed can't trigger a false "Time overlap".
+            const skipCenters = [targetCenter];
+            if (editingSourceCenter && editingSourceCenter !== targetCenter) {
+                skipCenters.push(editingSourceCenter);
+            }
+            const overlapError = await checkOverlaps(editingEmpId, editingDate, data, skipCenters);
             if (overlapError) {
                 document.getElementById('modalWarnings').innerHTML =
                     `<div class="error-box">❌ ${overlapError}</div>`;
@@ -1611,60 +1632,94 @@ async function saveSchedule() {
                 return;
             }
 
-            // Remove old schedule first if source center is different
-            if (editingSourceCenter && editingSourceCenter !== targetCenter) {
-                await remove(ref(db, `schedules/${editingSourceCenter}/${editingEmpId}/${editingDate}`));
+            // Remove stale records from ALL centers that previously held this day
+            const existingSched = mergedSchedules[editingEmpId]?.[editingDate];
+            const sourceCenters = new Set();
+            if (existingSched) {
+                (existingSched._sourceCenters || []).forEach(c => sourceCenters.add(c));
+                if (existingSched._sourceCenter) sourceCenters.add(existingSched._sourceCenter);
             }
-            await set(ref(db, `schedules/${targetCenter}/${editingEmpId}/${editingDate}`), data);
-        }
-
-    // 🆕 Handle Calendar Pattern (Copy now + Save for future)
-    const checkedDates = Array.from(selectedPatternDates);
-    
-    if (checkedDates.length > 0) {
-        const hasContent = shifts.length > 0 || status !== 'scheduled';
-        const templateData = { status, shifts, notes };
-        
-        // Determine target center for copying
-        let targetCenter = null;
-        const workShifts = shifts.filter(s => s.type === 'work' && s.center);
-        if (workShifts.length > 0) targetCenter = workShifts[0].center;
-        if (!targetCenter) targetCenter = editingSourceCenter || (allCenters.length > 0 ? allCenters[0].id : null);
-
-        for (const dateStr of checkedDates) {
-            if (dateStr === editingDate) continue; // Skip the main date, it's already saved above
-
-            // 1. Copy immediately to this specific date
-            if (hasContent && targetCenter) {
-                const schedData = {
-                    status, shifts, notes,
-                    isFromPattern: true,
-                    updatedAt: new Date().toISOString(),
-                    updatedBy: currentUser.uid
-                };
-                await set(ref(db, `schedules/${targetCenter}/${editingEmpId}/${dateStr}`), schedData);
-            } else if (!hasContent) {
-                // If clearing, save empty to all centers
-                for (const center of allCenters) {
-                    await set(ref(db, `schedules/${center.id}/${editingEmpId}/${dateStr}`), { 
-                        status: 'scheduled', shifts: [], notes: '', 
-                        updatedAt: new Date().toISOString(), updatedBy: currentUser.uid 
-                    });
+            for (const c of sourceCenters) {
+                if (c !== targetCenter) {
+                    await remove(ref(db, `schedules/${c}/${editingEmpId}/${editingDate}`));
                 }
             }
 
-            // 2. Save as a recurring pattern for the day of the week
-            const patternDow = parseDate(dateStr).getDay();
-            if (hasContent) {
-                await set(ref(db, `scheduleTemplates/${editingEmpId}/${patternDow}`), templateData);
-            } else {
-                await remove(ref(db, `scheduleTemplates/${editingEmpId}/${patternDow}`));
+            await set(ref(db, `schedules/${targetCenter}/${editingEmpId}/${editingDate}`), data);
+            localRecord = { ...data, _sourceCenter: targetCenter };
+        }
+
+        // ✅ One-off copies to checked dates (any date, past included)
+        const checkedDates = Array.from(selectedPatternDates).filter(d => d !== editingDate);
+        if (checkedDates.length > 0) {
+            const hasContent = shifts.length > 0 || status !== 'scheduled';
+            let copyCenter = null;
+            const copyWorkShifts = shifts.filter(s => s.type === 'work' && s.center);
+            if (copyWorkShifts.length > 0) copyCenter = copyWorkShifts[0].center;
+            if (!copyCenter) copyCenter = editingSourceCenter || (allCenters.length > 0 ? allCenters[0].id : null);
+
+            for (const dateStr of checkedDates) {
+                if (hasContent && copyCenter) {
+                    const copyData = {
+                        status, shifts, notes,
+                        isFromPattern: true,
+                        updatedAt: new Date().toISOString(),
+                        updatedBy: currentUser.uid
+                    };
+                    await set(ref(db, `schedules/${copyCenter}/${editingEmpId}/${dateStr}`), copyData);
+                    localCopies.push({ dateStr, record: { ...copyData, _sourceCenter: copyCenter } });
+                } else {
+                    const emptyCopy = {
+                        status: 'scheduled', shifts: [], notes: '', cleared: true,
+                        updatedAt: new Date().toISOString(), updatedBy: currentUser.uid
+                    };
+                    for (const center of allCenters) {
+                        await set(ref(db, `schedules/${center.id}/${editingEmpId}/${dateStr}`), emptyCopy);
+                    }
+                    localCopies.push({ dateStr, record: { ...emptyCopy, _sourceCenter: allCenters[0]?.id || null } });
+                }
             }
         }
-    }
 
-        await loadAllSchedules();
-        await loadAllTemplates();
+        // ✅ Recurring pattern only when explicitly requested
+        let savedPattern = null; // { dow, data } or { dow, delete: true }
+        if (document.getElementById('saveAsPatternCb')?.checked === true) {
+            const dow = parseDate(editingDate).getDay();
+            const hasContent = shifts.length > 0 || status !== 'scheduled';
+            if (hasContent) {
+                const patternData = { status, shifts, notes };
+                await set(ref(db, `scheduleTemplates/${editingEmpId}/${dow}`), patternData);
+                savedPattern = { dow, data: patternData };
+            } else {
+                await remove(ref(db, `scheduleTemplates/${editingEmpId}/${dow}`));
+                savedPattern = { dow, delete: true };
+            }
+        }
+
+        // ============================================
+        // ✅ FIX: Sync local state so the grid updates instantly.
+        // The UI no longer depends on the immediate re-fetch, which can
+        // return a stale snapshot right after a write.
+        // ============================================
+        try { await loadAllSchedules(); } catch (e) { console.warn('Reload schedules failed, using local data:', e); }
+        try { await loadAllTemplates(); } catch (e) { console.warn('Reload templates failed, using local data:', e); }
+
+        // Re-inject exactly what we just wrote (overrides any stale read)
+        if (!mergedSchedules[editingEmpId]) mergedSchedules[editingEmpId] = {};
+        mergedSchedules[editingEmpId][editingDate] = localRecord;
+        localCopies.forEach(({ dateStr, record }) => {
+            mergedSchedules[editingEmpId][dateStr] = record;
+        });
+
+        if (savedPattern) {
+            if (!templates[editingEmpId]) templates[editingEmpId] = {};
+            if (savedPattern.delete) {
+                delete templates[editingEmpId][savedPattern.dow];
+            } else {
+                templates[editingEmpId][savedPattern.dow] = savedPattern.data;
+            }
+        }
+
         closeModal();
         renderAdminView();
         renderEmployeeView();
@@ -1677,48 +1732,33 @@ async function saveSchedule() {
         isSaving = false;
         updateModalLoadingState(false);
     }
-}
+}   
 
 
 async function clearDay() {
     if (isSaving || !editingEmpId || !editingDate) return;
     if (!confirm('Clear the schedule for this day across ALL centers?')) return;
-    
     isSaving = true;
     updateModalLoadingState(true);
-    
     try {
-        const emptyData = {
-            status: 'scheduled',
-            shifts: [],
-            notes: '',
-            updatedAt: new Date().toISOString(),
-            updatedBy: currentUser.uid
-        };
-        
-        // ✅ FIX: Save an empty schedule to all centers to override any templates
-        for (const center of allCenters) {
-            await set(ref(db, `schedules/${center.id}/${editingEmpId}/${editingDate}`), emptyData);
-        }
-        
-        // 🆕 Clear all checked dates in the calendar
-        const checkedDates = Array.from(selectedPatternDates);
-        const datesToClear = checkedDates.length > 0 ? checkedDates : [editingDate];
-        
+        // ✅ editing date + explicitly checked future dates only (deduped)
+        const datesToClear = [editingDate, ...Array.from(selectedPatternDates)]
+            .filter((d, i, arr) => arr.indexOf(d) === i)
+            .filter(d => d === editingDate || !isPastDate(d));
+
         for (const dateStr of datesToClear) {
             const emptyData = {
                 status: 'scheduled', shifts: [], notes: '',
-                updatedAt: new Date().toISOString(), updatedBy: currentUser.uid
+                cleared: true, // ✅ intentional empty — patterns must not refill it
+                updatedAt: new Date().toISOString(),
+                updatedBy: currentUser.uid
             };
-            // Clear from all centers
             for (const center of allCenters) {
                 await set(ref(db, `schedules/${center.id}/${editingEmpId}/${dateStr}`), emptyData);
             }
-            // Clear the template for that day of the week
-            const patternDow = parseDate(dateStr).getDay();
-            await remove(ref(db, `scheduleTemplates/${editingEmpId}/${patternDow}`));
+            // ❌ REMOVED: template deletion. Clearing one day must NOT erase
+            //    the recurring pattern for that weekday.
         }
-        
         await loadAllSchedules();
         await loadAllTemplates();
         closeModal();
@@ -1773,23 +1813,31 @@ function validateSchedule(data, dateStr) {
     return errors;
 }
 
-async function checkOverlaps(empId, dateStr, newData, currentCenter) {
+async function checkOverlaps(empId, dateStr, newData, skipCenters = []) {
     if (newData.status !== 'scheduled') return null;
+
     const newShifts = newData.shifts
         .filter(s => s.type === 'work')
         .map(s => ({ start: timeToMin(s.start), end: timeToMin(s.end) }))
         .filter(s => s.start !== null && s.end !== null);
+
     if (newShifts.length === 0) return null;
+
     for (const center of allCenters) {
-        if (center.id === currentCenter) continue;
+        // ✅ FIX: skip every center being replaced/overwritten by this save
+        if (skipCenters.includes(center.id)) continue;
+
         const schedSnap = await get(ref(db, `schedules/${center.id}/${empId}/${dateStr}`));
         if (!schedSnap.exists()) continue;
+
         const existingData = schedSnap.val();
         if (existingData.status !== 'scheduled') continue;
+
         const existingShifts = extractShifts({ ...existingData, _sourceCenter: center.id })
             .filter(s => s.type === 'work')
             .map(s => ({ start: timeToMin(s.start), end: timeToMin(s.end) }))
             .filter(s => s.start !== null && s.end !== null);
+
         for (const ns of newShifts) {
             for (const es of existingShifts) {
                 if (ns.start < es.end && ns.end > es.start) {
@@ -1835,6 +1883,8 @@ async function applyPatternsToMonth() {
             for (let day = 1; day <= daysInMonth; day++) {
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const dateObj = new Date(year, month, day);
+                // ✅ FIX: never backfill patterns into the past
+                if (isPastDate(dateStr)) continue;
                 const dow = dateObj.getDay();
 
                 const existingSched = mergedSchedules[empId]?.[dateStr];
@@ -1842,6 +1892,7 @@ async function applyPatternsToMonth() {
                 // ✅ FIX 2: Check if the existing schedule is ACTUALLY empty before skipping it.
                 // This allows the pattern to overwrite days that were previously cleared.
                 if (existingSched) {
+                    if (existingSched.cleared) { skipped++; continue; } // ✅ user-cleared days stay cleared
                     const existingShifts = existingSched._shifts || extractShifts(existingSched);
                     const hasValidExistingShifts = hasValidShifts(existingShifts);
                     const hasSpecialStatus = existingSched.status && existingSched.status !== 'scheduled';
@@ -2127,7 +2178,7 @@ function renderCenterEmployeeRow(emp, dates, tbody, dailyCounts, centerCalEvents
         if (isToday) td.style.outline = '2px solid #27ae60';
         
         const sched = mergedSchedules[emp.uid]?.[dateStr];
-        const tmpl = templates[emp.uid]?.[dow];
+        const tmpl = getTemplateForDate(emp.uid, dateStr);
         let shifts = [];
         let status = 'scheduled';
         let notes = '';
@@ -2215,7 +2266,7 @@ function getCenterPrintRowHtml(emp, dates, selectedCenterForView, centerCalEvent
         else if (isWeekend) cellCls += ' weekend-cell';
         
         const sched = mergedSchedules[emp.uid]?.[dateStr];
-        const tmpl = templates[emp.uid]?.[dow];
+        const tmpl = getTemplateForDate(emp.uid, dateStr);
         let shifts = [];
         let status = 'scheduled';
         let notes = '';
@@ -2291,7 +2342,7 @@ function renderCenterBody(dates) {
             const dateObj = parseDate(dateStr);
             const dow = dateObj.getDay();
             const sched = mergedSchedules[emp.uid]?.[dateStr];
-            const tmpl = templates[emp.uid]?.[dow];
+            const tmpl = getTemplateForDate(emp.uid, dateStr);
             let currentShifts = [];
             let currentStatus = 'scheduled';
             let sourceCenter = null;
@@ -2444,7 +2495,7 @@ function generateCenterPrintHTML() {
             const dateObj = parseDate(dateStr);
             const dow = dateObj.getDay();
             const sched = mergedSchedules[emp.uid]?.[dateStr];
-            const tmpl = templates[emp.uid]?.[dow];
+            const tmpl = getTemplateForDate(emp.uid, dateStr);
             let currentShifts = [];
             let currentStatus = 'scheduled';
             let sourceCenter = null;

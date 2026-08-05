@@ -98,11 +98,16 @@ header a:hover, header button:hover { background: rgba(255,255,255,0.3); }
 
 /* Table Styles */
 table {
-    width: 100%;
-    min-width: 1900px; /* Increased slightly to fit new column */
-    border-collapse: collapse;
-    font-size: 0.85rem;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
 }
+
+/* Only the main student list needs the wide min-width */
+.table-wrapper table {
+  min-width: 1900px;
+}
+
 th, td {
     padding: 0.5rem;
     text-align: left;
@@ -189,35 +194,46 @@ td input[type="date"] { width: 130px; }
 
 /* Modal */
 .modal {
-    position: fixed;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    background: rgba(0,0,0,0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
 }
+
 .modal-content {
-    background: var(--white);
-    padding: 2rem;
-    border-radius: var(--radius);
-    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-    width: 90%;
-    position: relative;
+  background: var(--white);
+  padding: 2rem;
+  border-radius: var(--radius);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  width: 90%;
+  max-width: 850px;
+  max-height: 85vh;
+  overflow: auto;
+  position: relative;
 }
+
 .close-modal {
-    position: absolute;
-    top: 10px; right: 15px;
-    font-size: 2rem;
-    cursor: pointer;
-    color: var(--text-light);
-    line-height: 1;
+  position: absolute;
+  top: 10px; right: 15px;
+  font-size: 2rem;
+  cursor: pointer;
+  color: var(--text-light);
+  line-height: 1;
 }
 .close-modal:hover { color: #dc3545; }
+
 .hint { font-size: 0.85rem; color: var(--text-light); margin-bottom: 1rem; }
 
 /* DT Modal Table */
+#dtModalTable {
+  min-width: 0;      /* cancels the 1900px rule from the main grid */
+  width: 100%;
+}
+#dtModalTable th { position: static; }
 #dtModalTable tbody tr { cursor: pointer; transition: background 0.2s; }
 #dtModalTable tbody tr:hover { background: #e0f2fe; }
 #dtModalTable tbody tr.selected { background: #bbf7d0; font-weight: 600; }

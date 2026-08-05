@@ -1,0 +1,63 @@
+export default {
+  centers: {
+    documentTitle: "Select Center - Kumon DB",
+    headerTitle: "🏢 Centers",
+    selectYourCenter: "Select Your Center",
+    loading: "⏳ Loading centers...",
+    noCenters: "No centers found in database. Please contact admin.",
+    cardDescription: "Manage students, reports, and daily operations",
+    noAccessTitle: "No Centers Assigned",
+    noAccessBody: "You do not have permission to access any centers. Please contact the administrator to update your permissions.",
+    errorLoading: "Error loading centers. Please refresh."
+  },
+  admin: {
+    centerAdministration: "Center Administration",
+    employeeManagement: "Employee Management",
+    employeeManagementDesc: "Add/edit staff, QR codes & timeclock records",
+    centerManagement: "Center Management",
+    centerManagementDesc: "Add/edit centers, GPS coordinates, and register NFC tags",
+    employeeTimecard: "Employee Timecard",
+    employeeTimecardDesc: "QR scanning, geolocation verification & CSV export",
+    employeeSchedule: "Employee Schedule",
+    employeeScheduleDesc: "See weekly shifts"
+  },
+  missing: {
+    title: "⚠️ Missing Clock-Out Records",
+    intro: "You have incomplete timecard records from previous days. Please provide the missing times for manager approval.",
+    clockIn: "Clock-In",
+    missing: "Missing",
+    clockOut: "Clock-Out",
+    proposedClockOut: "Proposed Clock-Out Time:",
+    remindLater: "Remind Me Later",
+    submitForReview: "Submit for Review",
+    submitting: "Submitting...",
+    submittedSuccess: "✅ Submitted successfully! Your manager will review the records.",
+    submitFailed: "Failed to submit. Please try again.",
+    fillAllMissing: "Please fill in all missing times.",
+    outAfterIn: "⚠️ Proposed clock-out time must be AFTER the clock-in time."
+  },
+  pending: {
+    title: "⏳ Pending Clock-Out Approvals",
+    intro: "Employees have submitted proposed clock-out times. Review and approve or deny them below.",
+    approvalLabel: "pending approval(s)",
+    hint: "Select rows to approve/deny multiple requests.",
+    employee: "Employee",
+    date: "Date",
+    center: "Center",
+    clockIn: "Clock In",
+    proposedOut: "Proposed Out",
+    requested: "Requested",
+    actions: "Actions",
+    denySelected: "Deny Selected",
+    approveSelected: "Approve Selected",
+    approve: "✅ Approve",
+    deny: "❌ Deny",
+    noPending: "✅ No pending approvals.",
+    confirmApproveSelected: "Are you sure you want to approve {{count}} selected request(s)?",
+    confirmDenySelected: "Are you sure you want to deny {{count}} selected request(s)?",
+    confirmApproveSingle: "Approve this proposed clock-out?",
+    confirmDenySingle: "Deny this proposed clock-out? The employee can submit again.",
+    approveFailed: "Failed to approve this request.",
+    denyFailed: "Failed to deny this request."
+  }
+};

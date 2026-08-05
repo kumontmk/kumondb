@@ -1,0 +1,63 @@
+export default {
+  centers: {
+    documentTitle: "選擇中心 - KUMON 資料庫",
+    headerTitle: "🏢 中心",
+    selectYourCenter: "選擇您的中心",
+    loading: "⏳ 載入中心中...",
+    noCenters: "資料庫中沒有中心，請聯絡管理員。",
+    cardDescription: "管理學生、報表與日常運作",
+    noAccessTitle: "未指派任何中心",
+    noAccessBody: "您沒有權限存取任何中心。請聯絡管理員更新您的權限。",
+    errorLoading: "載入中心時發生錯誤，請重新整理。"
+  },
+  admin: {
+    centerAdministration: "中心行政",
+    employeeManagement: "員工管理",
+    employeeManagementDesc: "新增／編輯員工、QR code 與打卡紀錄",
+    centerManagement: "中心管理",
+    centerManagementDesc: "新增／編輯中心、GPS 座標與註冊 NFC 標籤",
+    employeeTimecard: "員工打卡表",
+    employeeTimecardDesc: "QR code 掃描、地理位置驗證與 CSV 匯出",
+    employeeSchedule: "員工排班",
+    employeeScheduleDesc: "檢視每週班次"
+  },
+  missing: {
+    title: "⚠️ 缺少打卡下班紀錄",
+    intro: "您有先前日期的不完整打卡紀錄。請提供缺少的時間，以供主管審核。",
+    clockIn: "上班打卡",
+    missing: "缺少",
+    clockOut: "下班打卡",
+    proposedClockOut: "建議下班時間：",
+    remindLater: "稍後提醒我",
+    submitForReview: "提交審核",
+    submitting: "提交中...",
+    submittedSuccess: "✅ 已成功提交！您的主管將會審核紀錄。",
+    submitFailed: "提交失敗，請再試一次。",
+    fillAllMissing: "請填寫所有缺少的時間。",
+    outAfterIn: "⚠️ 建議下班時間必須晚於上班打卡時間。"
+  },
+  pending: {
+    title: "⏳ 待審核下班打卡",
+    intro: "員工已提交建議下班時間。請在下方審核或拒絕。",
+    approvalLabel: "項待審核申請",
+    hint: "選取多筆申請以批次核准或拒絕。",
+    employee: "員工",
+    date: "日期",
+    center: "中心",
+    clockIn: "上班打卡",
+    proposedOut: "建議下班",
+    requested: "申請時間",
+    actions: "操作",
+    denySelected: "拒絕選取",
+    approveSelected: "核准選取",
+    approve: "✅ 核准",
+    deny: "❌ 拒絕",
+    noPending: "✅ 沒有待審核申請。",
+    confirmApproveSelected: "確定要核准 {{count}} 項選取的申請嗎？",
+    confirmDenySelected: "確定要拒絕 {{count}} 項選取的申請嗎？",
+    confirmApproveSingle: "核准此建議下班打卡？",
+    confirmDenySingle: "拒絕此建議下班打卡？員工可以再次提交。",
+    approveFailed: "核准此申請失敗。",
+    denyFailed: "拒絕此申請失敗。"
+  }
+};
