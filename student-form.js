@@ -553,48 +553,63 @@ function initApp() {
         });
     });
 
-    function renderSchedule() {
-        const thead = document.getElementById('scheduleHeader');
-        const tbody = document.getElementById('scheduleBody');
-        if (!thead || !tbody) return;
-        thead.innerHTML = '';
-        DAYS.forEach(day => {
-            const th = document.createElement('th');
-            th.textContent = day.substring(0, 3);
-            thead.appendChild(th);
+function renderSchedule() {
+    const thead = document.getElementById('scheduleHeader');
+    const tbody = document.getElementById('scheduleBody');
+    if (!thead || !tbody) return;
+    
+    thead.innerHTML = '';
+    
+    // ✅ FIX: Map English days to translation keys
+    const dayTranslations = {
+        'Monday': t('studentForm.days.mon'),
+        'Tuesday': t('studentForm.days.tue'),
+        'Wednesday': t('studentForm.days.wed'),
+        'Thursday': t('studentForm.days.thu'),
+        'Friday': t('studentForm.days.fri'),
+        'Saturday': t('studentForm.days.sat'),
+        'Sunday': t('studentForm.days.sun')
+    };
+
+    DAYS.forEach(day => {
+        const th = document.createElement('th');
+        // ✅ FIX: Use the translation dictionary instead of substring
+        th.textContent = dayTranslations[day] || day.substring(0, 3); 
+        thead.appendChild(th);
+    });
+    
+    tbody.innerHTML = '';
+    const schedule = DAYS.reduce((acc, d) => ({...acc, [d]: []}), {});
+    document.querySelectorAll('.subject-entry').forEach(entry => {
+        const nameEl = entry.querySelector('.subject-name');
+        const statusEl = entry.querySelector('.status');
+        const name = nameEl?.value;
+        const status = statusEl?.value;
+        if (!name || status === 'drop' || status === 'pause' || status === 'inquiry') return;
+        entry.querySelectorAll('.timeslot-row').forEach(row => {
+            const day = row.querySelector('.ts-day')?.value;
+            const h = row.querySelector('.ts-hour')?.value;
+            const m = row.querySelector('.ts-min')?.value;
+            const center = row.querySelector('.ts-center')?.value;
+            if (day && h && m) schedule[day].push({ name, time: `${h}:${m}`, color: SUBJECT_COLORS[name], center });
         });
-        tbody.innerHTML = '';
-        const schedule = DAYS.reduce((acc, d) => ({...acc, [d]: []}), {});
-        document.querySelectorAll('.subject-entry').forEach(entry => {
-            const nameEl = entry.querySelector('.subject-name');
-            const statusEl = entry.querySelector('.status');
-            const name = nameEl?.value;
-            const status = statusEl?.value;
-            if (!name || status === 'drop' || status === 'pause' || status === 'inquiry') return;
-            entry.querySelectorAll('.timeslot-row').forEach(row => {
-                const day = row.querySelector('.ts-day')?.value;
-                const h = row.querySelector('.ts-hour')?.value;
-                const m = row.querySelector('.ts-min')?.value;
-                const center = row.querySelector('.ts-center')?.value;
-                if (day && h && m) schedule[day].push({ name, time: `${h}:${m}`, color: SUBJECT_COLORS[name], center });
-            });
+    });
+    const tr = document.createElement('tr');
+    DAYS.forEach(day => {
+        const td = document.createElement('td');
+        schedule[day].sort((a,b) => a.time.localeCompare(b.time)).forEach(slot => {
+            const pill = document.createElement('span');
+            pill.className = `slot-pill ${slot.color}`;
+            const centerName = allCenters.find(c => c.id === slot.center)?.name || '';
+            const centerAbbr = centerName ? ` (${centerName.substring(0, 2).toUpperCase()})` : '';
+            pill.textContent = `${slot.name.substring(0,3)} ${slot.time}${centerAbbr}`;
+            td.appendChild(pill);
         });
-        const tr = document.createElement('tr');
-        DAYS.forEach(day => {
-            const td = document.createElement('td');
-            schedule[day].sort((a,b) => a.time.localeCompare(b.time)).forEach(slot => {
-                const pill = document.createElement('span');
-                pill.className = `slot-pill ${slot.color}`;
-                const centerName = allCenters.find(c => c.id === slot.center)?.name || '';
-                const centerAbbr = centerName ? ` (${centerName.substring(0, 2).toUpperCase()})` : '';
-                pill.textContent = `${slot.name.substring(0,3)} ${slot.time}${centerAbbr}`;
-                td.appendChild(pill);
-            });
-            if (schedule[day].length === 0) td.innerHTML = '<span style="color:#999;">-</span>';
-            tr.appendChild(td);
-        });
-        tbody.appendChild(tr);
-    }
+        if (schedule[day].length === 0) td.innerHTML = '<span style="color:#999;">-</span>';
+        tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+}
 
     const scanBtn = document.getElementById('startScannerBtn');
     const qrModal = document.getElementById('qrModal');
