@@ -3,86 +3,94 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Timecard - Kumon DB</title>
+  <title data-i18n="timecard.title">Timecard - Kumon DB</title>
   <link rel="stylesheet" href="timecard.css">
 </head>
 <body>
   <header>
     <nav>
-      <a href="centers.html">← Centers</a>
+      <a href="centers.html" data-i18n="timecard.backToCenters">← Centers</a>
     </nav>
-    <h2>⏱️ Employee Timecard</h2>
+    <nav>
+          <h2 data-i18n="timecard.employeeTimecard">⏱️ Employee Timecard</h2>
+    </nav>
   </header>
 
-  <main class="container">
+  <div class="container">
     <div class="attendance-controls">
       <div class="control-group">
-        <label class="control-label" for="datePicker">Date</label>
+        <label class="control-label" data-i18n="timecard.date">Date</label>
         <input type="date" id="datePicker" class="day-select">
       </div>
 
-      <div class="control-group search-group">
-        <label class="control-label" for="searchInput">Search</label>
+      <div class="search-group">
+        <label class="control-label" data-i18n="timecard.search">Search</label>
         <div class="search-wrapper">
-          <input type="text" id="searchInput" placeholder="Name...">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="searchInput" data-i18n-placeholder="timecard.searchPlaceholder" placeholder="Search by name...">
         </div>
       </div>
 
       <div class="control-group">
-        <label class="control-label" for="positionFilter">Position</label>
+        <label class="control-label" data-i18n="timecard.position">Position</label>
         <select id="positionFilter">
-          <option value="">All Positions</option>
-          <option value="English Teacher">English Teacher</option>
-          <option value="Math Teacher">Math Teacher</option>
-          <option value="Chinese Teacher">Chinese Teacher</option>
-          <option value="Admin">Admin</option>
-          <option value="Manager">Manager</option>
+          <option value="" data-i18n="timecard.allPositions">All Positions</option>
+          <option value="English Teacher" data-i18n="timecard.englishTeacher">English Teacher</option>
+          <option value="Math Teacher" data-i18n="timecard.mathTeacher">Math Teacher</option>
+          <option value="Chinese Teacher" data-i18n="timecard.chineseTeacher">Chinese Teacher</option>
+          <option value="Admin" data-i18n="timecard.admin">Admin</option>
+          <option value="Manager" data-i18n="timecard.manager">Manager</option>
         </select>
       </div>
 
-      <button id="startScanBtn" class="scan-btn">📷 Start QR Scan</button>
-      <button id="startNfcBtn" class="nfc-btn">📡 Tap NFC to Clock In/Out</button>
-      <button id="exportCsvBtn" class="export-csv-btn">📥 Export CSV</button>
-      
-      <!-- ✅ NEW: Manual QR Entry -->
       <div class="manual-qr-group">
-        <input type="text" id="manualQrInput" class="day-select" placeholder="Or type QR code..." autocomplete="off">
-        <button id="manualQrBtn" class="scan-btn">🔍 Submit</button>
+        <label class="control-label" data-i18n="timecard.manualQr">Manual QR</label>
+        <input type="text" id="manualQrInput" data-i18n-placeholder="timecard.enterQrCode" placeholder="Enter QR Code...">
+        <button id="manualQrBtn" class="scan-btn" style="background: #6c757d; padding: 0.7rem 1rem;" data-i18n="timecard.submit">Submit</button>
       </div>
+
+      <button id="startScanBtn" class="scan-btn" data-i18n="timecard.startQRScan">📷 Start QR Scan</button>
+      <button id="startNfcBtn" class="nfc-btn" data-i18n="timecard.tapNFC">📡 Tap NFC to Clock In/Out</button>
     </div>
 
+    <!-- DESKTOP + MANAGER-MOBILE: Table -->
     <div class="table-wrapper">
       <table>
         <thead>
           <tr>
-            <th>Chinese Name</th>
-            <th>English Name</th>
-            <th>Position</th>
-            <th>Time</th>
-            <th>Center</th>
-            <th>Status</th>
+            <th data-i18n="timecard.chineseName">Chinese Name</th>
+            <th data-i18n="timecard.englishName">English Name</th>
+            <th data-i18n="timecard.position">Position</th>
+            <th data-i18n="timecard.time">Time</th>
+            <th data-i18n="timecard.center">Center</th>
+            <th data-i18n="timecard.status">Status</th>
           </tr>
         </thead>
         <tbody id="timecardBody">
-          <tr><td colspan="6" class="empty-state">Select a date to view attendance</td></tr>
+          <tr>
+            <td colspan="6" class="empty-state" data-i18n="timecard.selectDate">Select a date to view attendance</td>
+          </tr>
         </tbody>
       </table>
     </div>
-  </main>
 
-  <!-- Scan Modal -->
+    <!-- EMPLOYEE-MOBILE ONLY: Cards (hidden by CSS otherwise) -->
+    <div id="mobileTimecardCards"></div>
+  </div>
+
+  <!-- QR Scan Modal -->
   <div id="scanModal" class="modal hidden">
     <div class="modal-content">
-      <button id="closeScan" class="close-btn">&times;</button>
-      <h3>📷 Scan Employee QR</h3>
-      <p>Position QR in the frame</p>
+      <button class="close-btn" id="closeScan">&times;</button>
+      <h3 data-i18n="timecard.scanEmployeeQR">📷 Scan Employee QR</h3>
       <div id="reader"></div>
-      <button id="stopScanBtn" class="scan-btn" style="margin-top: 1rem;">Stop Scanner</button>
+      <p data-i18n="timecard.positionQRFrame">Position QR in the frame</p>
+      <button id="stopScanBtn" class="secondary" data-i18n="timecard.stopScanner">Stop Scanner</button>
     </div>
   </div>
 
-  <!-- Script -->
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script type="module" src="timecard-i18n.js"></script>
   <script type="module" src="timecard.js"></script>
 </body>
 </html>
