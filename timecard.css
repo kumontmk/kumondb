@@ -668,50 +668,47 @@ th {
 }
 
 /* =========================================
-📅 DATE PICKER OVERLAP FIX
+📅 DATE PICKER OVERFLOW FIX (word-based dates)
 ========================================= */
 
-/* Let the date input shrink/fit inside its column instead of spilling over */
-input[type="date"].day-select {
-    width: 100%;
+/* 1. No control may ever exceed the card width */
+.attendance-controls,
+.attendance-controls > * {
     max-width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
 }
 
-/* Give the date column enough breathing room on wide screens */
-.attendance-controls .control-group {
-    min-width: 200px;
+/* 2. Allow the groups to shrink below their content width */
+.attendance-controls .control-group,
+.attendance-controls .search-group,
+.manual-qr-group {
+    min-width: 0 !important;
 }
 
-/* Keep the webkit calendar icon from sitting on top of the value */
-input[type="date"]::-webkit-calendar-picker-indicator {
-    margin-left: 0.4rem;
-    cursor: pointer;
+/* 3. Force the date input to respect its container */
+input[type="date"].day-select {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    font-size: 0.95rem;          /* slightly smaller so "6 Aug 2026" fits */
+    padding: 0.7rem 0.6rem;
 }
 
-/* On medium screens (tablets / small laptops) stack the controls
-   so the native picker always gets a full row and never overlaps */
+/* 4. Clip long word-based dates INSIDE the field (leave room for the icon) */
+input[type="date"]::-webkit-datetime-edit {
+    display: inline-block;
+    max-width: calc(100% - 1.6em);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+}
+
+/* 5. On narrow screens, give the date its own full-width row */
 @media (max-width: 1024px) {
-    .attendance-controls {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 1rem;
-    }
-
-    .attendance-controls .control-group,
-    .attendance-controls .search-group,
-    .manual-qr-group {
+    .attendance-controls .control-group:has(input[type="date"]) {
+        flex: 1 1 100%;
         width: 100%;
-        min-width: 0;
-        flex: none;
-    }
-
-    .scan-btn,
-    .nfc-btn,
-    .export-csv-btn {
-        width: 100%;
-        justify-content: center;
     }
 }
 
