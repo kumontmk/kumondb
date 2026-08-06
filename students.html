@@ -1,223 +1,202 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Students - Kumon DB</title>
-    <link rel="stylesheet" href="students.css">
-    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title data-i18n="students.title">Students - Kumon DB</title>
+  <link rel="stylesheet" href="students.css">
 </head>
 <body>
-    <!-- 🔐 ACCESS DENIED OVERLAY -->
-    <div id="accessDenied" class="access-denied hidden">
-        <div class="access-denied-content">
-            <h2>🔐 Access Restricted</h2>
-            <p>You do not have permission to view Student Management.</p>
-            <button id="backToDashboardBtn" class="primary" style="margin-top:1rem">← Back to Dashboard</button>
+  <div id="page-loader"><div class="spinner"></div></div>
+
+  <!-- 🔐 ACCESS DENIED -->
+  <div id="accessDenied" class="access-denied hidden">
+    <div class="access-denied-content">
+      <h2 data-i18n="students.accessRestricted">🔐 Access Restricted</h2>
+      <p data-i18n="students.accessDeniedMsg">You do not have permission to view Student Management.</p>
+      <button id="backToDashboardBtn" class="primary" data-i18n="students.backToDashboard">← Back to Dashboard</button>
+    </div>
+  </div>
+
+  <div id="mainContent" class="hidden">
+    <header>
+      <nav>
+        <a href="dashboard.html" data-i18n="students.backToDashboardLink">← Dashboard</a>
+      </nav>
+      <nav>
+        <h1 data-i18n="students.studentManagement">👥 Student Management</h1>
+      </nav>
+    </header>
+
+    <div class="students-page">
+      <div class="controls">
+        <input type="text" id="searchInput" data-i18n-placeholder="students.searchPlaceholder" placeholder="Search name, ID, grade, school, subject...">
+        <div class="action-buttons">
+          <button id="addStudentBtn" class="primary" data-i18n="students.addStudent">+ Add Student</button>
+          <button id="importBtn" class="secondary" data-i18n="students.importExcel">📥 Import Excel</button>
+          <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display:none;">
+          <button id="exportBtn" class="secondary" data-i18n="students.exportExcel">📤 Export Excel</button>
+          <button id="deleteAllBtn" class="danger hidden" data-i18n="students.deleteAll">🗑️ Delete All</button>
         </div>
-    </div>
+      </div>
 
-    <div id="page-loader" class="hidden">
-        <div class="spinner"></div>
-    </div>
-
-    <!-- ✅ MAIN CONTENT WRAPPER (Hidden by default until authorized) -->
-    <div id="mainContent" class="hidden">
-        
-        <header>
-            <nav>
-                <a href="dashboard.html">← Dashboard</a>
-            </nav>
-            <h2>👥 Student Management</h2>
-        </header>
-
-        <main class="students-page">
-            <div class="controls">
-                <input type="text" id="searchInput" placeholder="🔍 Search by name, ID, or school..." />
-                <button id="addStudentBtn" class="primary">+ Add Student</button>
-                <button id="importBtn" class="secondary">📥 Import Excel</button>
-                <button id="exportBtn" class="secondary">📤 Export Excel</button>
-                <input type="file" id="excelFileInput" accept=".xlsx, .xls" style="display:none;">
-                <button id="deleteAllBtn" class="danger hidden" style="background:#dc3545; color:white; margin-left: 10px;">🗑️ Delete All</button>
-            </div>
-
-            <!-- 📊 Import Progress Modal -->
-            <div id="importProgressModal" class="modal hidden">
-                <div class="modal-content">
-                    <span id="closeImportModal" style="cursor:pointer;">&times;</span>
-                    <h2>📊 Importing Students...</h2>
-                    <p id="importStatus" style="margin: 1rem 0;">Reading file...</p>
-                    <progress id="importProgressBar" value="0" max="100" style="width:100%; height: 20px;"></progress>
-                    <p class="hint">⏳ Please wait. Do not close this window.</p>
-                </div>
-            </div>
-
-            <!-- SheetJS Library for XLSX Parsing -->
-            <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-
-            <div class="sort-panel">
-                <!-- ✅ Status Filter (Defaults to Current, added Pause) -->
-                <div class="sort-group">
-                    <label>📋 Status:</label>
-                        <select id="filter-status">
-                            <option value="all">All Statuses</option>
-                            <option value="current" selected>Current</option>
-                            <option value="inquiry">Inquiry</option> 
-                            <option value="pause">Pause</option>
-                            <option value="drop">Drop</option>
-                        </select>   
-                </div>
-                <div class="sort-group">
-                    <label>📚 Filter Subject:</label>
-                    <select id="filter-subject">
-                        <option value="">All Subjects</option>
-                        <option value="Math">Math</option>
-                        <option value="English ERP">English ERP</option>
-                        <option value="English EFL">English EFL</option>
-                        <option value="Chinese (Trad)">Chinese (Trad)</option>
-                        <option value="Chinese (Simp)">Chinese (Simp)</option>
-                    </select>
-                </div>
-                <div class="sort-group">
-                    <label>Primary:</label>
-                    <select id="sort1-field">
-                        <option value="">None</option>
-                        <option value="subjectName">Subject</option>
-                        <option value="studentNumber">Student ID</option>
-                        <option value="namePinyin">Chinese Name (Alphabet)</option>
-                        <option value="nameCn">Chinese Name</option>
-                        <option value="rawDob">DOB</option>
-                        <option value="grade">Grade</option>
-                        <option value="level">Level</option>
-                        <option value="rawEnrolDate">Enrol Date</option>
-                        <option value="nickname">Nickname</option>
-                    </select>
-                    <select id="sort1-dir"><option value="asc">↑</option><option value="desc">↓</option></select>
-                </div>
-                <div class="sort-group">
-                    <label>Secondary:</label>
-                    <select id="sort2-field">
-                        <option value="">None</option>
-                        <option value="subjectName">Subject</option>
-                        <option value="studentNumber">Student ID</option>
-                        <option value="namePinyin">Chinese Name (Alphabet)</option>
-                        <option value="nameCn">Chinese Name</option>
-                        <option value="rawDob">DOB</option>
-                        <option value="grade">Grade</option>
-                        <option value="level">Level</option>
-                        <option value="rawEnrolDate">Enrol Date</option>
-                        <option value="nickname">Nickname</option>
-                    </select>
-                    <select id="sort2-dir"><option value="asc">↑</option><option value="desc">↓</option></select>
-                </div>
-                <button id="clearSortBtn" class="secondary">Reset</button>
-            </div>
-
-            <div class="table-wrapper">
-                <table>
-                    <thead>
-                    <tr>
-                        <th>Subject</th>
-                        <th>Student ID</th>
-                        <th>Chinese Name (Alphabet)</th>
-                        <th>Chinese Name</th>
-                        <th>DOB</th>
-                        <th>Grade</th>
-                        <th>Level</th>
-                        <th>Enrol Date</th>
-                        <th>Actions</th>
-                    </tr>
-                    </thead>
-                    <tbody id="studentList">
-                    <tr><td colspan="9" class="hint" style="text-align:center;">Loading students...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Pagination Controls -->
-            <div class="pagination-container">
-                <div class="pagination-controls">
-                    <button class="pagination-btn" id="firstPage" title="First Page">⏮</button>
-                    <button class="pagination-btn" id="prevPage" title="Previous Page">◀</button>
-                    <div class="pagination-numbers" id="paginationNumbers"></div>
-                    <button class="pagination-btn" id="nextPage" title="Next Page">▶</button>
-                    <button class="pagination-btn" id="lastPage" title="Last Page">⏭</button>
-                </div>
-                <div class="pagination-info" id="paginationInfo">0 - 0 of 0 items</div>
-            </div>
-        </main>
-
-    </div> <!-- ✅ End of mainContent wrapper -->
-    
-    <!-- Export Options Modal -->
-    <div id="exportModal" class="modal hidden">
-        <div class="modal-content" style="max-width: 500px; text-align: left;">
-            <span id="closeExportModal" style="position: absolute; top: 10px; right: 15px; font-size: 1.5rem; cursor: pointer; color: var(--text-light);">&times;</span>
-            <h2 style="margin-bottom: 1.5rem; text-align: center; color: var(--primary-dark);">Export Options</h2>
-            
-            <div style="display: flex; flex-direction: column; gap: 1rem;">
-            <!-- Option 1: All Students -->
-            <button id="exportAllBtn" class="primary" style="width: 100%;">📊 Export All Students (Full Details)</button>
-            
-            <!-- Option 2: By Subject -->
-            <div style="display: flex; gap: 0.5rem; align-items: center;">
-                <select id="exportSubjectSelect" style="flex: 1; padding: 0.75rem; border: 1px solid #ddd; border-radius: var(--radius);">
-                <option value="">Select Subject...</option>
-                <option value="Math">Math</option>
-                <option value="English EFL">English EFL</option>
-                <option value="English ERP">English ERP</option>
-                <option value="Chinese (Trad)">Chinese (Trad)</option>
-                <option value="Chinese (Simp)">Chinese (Simp)</option>
-                </select>
-                <button id="exportSubjectBtn" class="secondary" style="flex: 1;">Export by Subject</button>
-            </div>
-
-            <!-- Option 3: Names Only (16 per column) -->
-            <button id="exportNamesOnlyBtn" class="secondary" style="width: 100%;">📝 Export Names Only (16 per column)</button>
-
-            <!-- Option 4: By School -->
-            <div style="display: flex; gap: 0.5rem; align-items: center;">
-                <select id="exportSchoolSelect" style="flex: 1; padding: 0.75rem; border: 1px solid #ddd; border-radius: var(--radius);">
-                <option value="">Loading schools...</option>
-                </select>
-                <button id="exportSchoolBtn" class="secondary" style="flex: 1;">Export by School</button>
-            </div>
-
-            <!-- Option 5: By Grade -->
-            <div style="display: flex; gap: 0.5rem; align-items: center;">
-                <select id="exportGradeSelect" style="flex: 1; padding: 0.75rem; border: 1px solid #ddd; border-radius: var(--radius);">
-                <option value="">Loading grades...</option>
-                </select>
-                <button id="exportGradeBtn" class="secondary" style="flex: 1;">Export by Grade</button>
-            </div>
-            
-            <!-- 🆕 NEW: Export by Teacher Section -->
-            <div style="margin:1rem 0; padding:1rem; background:#f8f9fa; border-radius:8px;">
-            <label style="font-weight:600; display:block; margin-bottom:0.5rem;">👩‍🏫 Export by Teacher</label>
-            <select id="exportTeacherSelect" style="margin-bottom:0.5rem;">
-                <option value="">Loading teachers...</option>
-            </select>
-            <button class="secondary" id="exportTeacherBtn" style="width:100%;">Export by Teacher</button>
-            </div>
-            </div>
+      <!-- 🔀 SORT PANEL -->
+      <div class="sort-panel">
+        <div class="sort-group">
+          <label data-i18n="students.statusLabel">📋 Status:</label>
+          <select id="filter-status">
+            <option value="all" data-i18n="students.allStatuses">All Statuses</option>
+            <option value="current" data-i18n="students.current" selected>Current</option>
+            <option value="inquiry" data-i18n="students.inquiry">Inquiry</option>
+            <option value="pause" data-i18n="students.pause">Pause</option>
+            <option value="drop" data-i18n="students.drop">Drop</option>
+          </select>
         </div>
-    </div>
-
-    <!-- Delete All Confirmation Modal -->
-    <div id="deleteAllModal" class="modal hidden">
-        <div class="modal-content">
-            <span id="closeDeleteAllModal" style="position:absolute; top:10px; right:15px; font-size:1.8rem; cursor:pointer; color:var(--text-light);">×</span>
-            <h3 style="color:#dc3545; margin-bottom:1rem;">⚠️ Delete All Students</h3>
-            <p>Are you sure you want to delete <strong>ALL</strong> student records for this center?</p>
-            <p style="color:#dc3545; font-weight:bold; margin-top:0.5rem;">This action cannot be undone!</p>
-            <div style="margin-top:1.5rem; display:flex; gap:1rem; justify-content:center;">
-            <button id="confirmDeleteAllBtn" class="danger">Yes, DELETE ALL</button>
-            <button id="cancelDeleteAllBtn" class="secondary">Cancel</button>
-            </div>
+        <div class="sort-group">
+          <label data-i18n="students.filterSubjectLabel">📚 Filter Subject:</label>
+          <select id="filter-subject">
+            <option value="" data-i18n="students.allSubjects" selected>All Subjects</option>
+            <option value="Math">Math</option>
+            <option value="English ERP">English ERP</option>
+            <option value="English EFL">English EFL</option>
+            <option value="Chinese (Trad)">Chinese (Trad)</option>
+            <option value="Chinese (Simp)">Chinese (Simp)</option>
+          </select>
         </div>
+        <div class="sort-group">
+          <label data-i18n="students.primaryLabel">Primary:</label>
+          <select id="sort1-field">
+            <option value="" data-i18n="students.none">None</option>
+            <option value="subjectName" data-i18n="students.sortSubject">Subject</option>
+            <option value="studentNumber" data-i18n="students.sortStudentId">Student ID</option>
+            <option value="namePinyin" data-i18n="students.sortNameAlpha">Chinese Name (Alphabet)</option>
+            <option value="nameCn" data-i18n="students.sortNameCn">Chinese Name</option>
+            <option value="rawDob" data-i18n="students.sortDob">DOB</option>
+            <option value="grade" data-i18n="students.sortGrade">Grade</option>
+            <option value="level" data-i18n="students.sortLevel">Level</option>
+            <option value="rawEnrolDate" data-i18n="students.sortEnrolDate">Enrol Date</option>
+            <option value="nickname" data-i18n="students.sortNickname">Nickname</option>
+          </select>
+          <select id="sort1-dir"><option value="asc">↑</option><option value="desc">↓</option></select>
+        </div>
+        <div class="sort-group">
+          <label data-i18n="students.secondaryLabel">Secondary:</label>
+          <select id="sort2-field">
+            <option value="" data-i18n="students.none">None</option>
+            <option value="subjectName" data-i18n="students.sortSubject">Subject</option>
+            <option value="studentNumber" data-i18n="students.sortStudentId">Student ID</option>
+            <option value="namePinyin" data-i18n="students.sortNameAlpha">Chinese Name (Alphabet)</option>
+            <option value="nameCn" data-i18n="students.sortNameCn">Chinese Name</option>
+            <option value="rawDob" data-i18n="students.sortDob">DOB</option>
+            <option value="grade" data-i18n="students.sortGrade">Grade</option>
+            <option value="level" data-i18n="students.sortLevel">Level</option>
+            <option value="rawEnrolDate" data-i18n="students.sortEnrolDate">Enrol Date</option>
+            <option value="nickname" data-i18n="students.sortNickname">Nickname</option>
+          </select>
+          <select id="sort2-dir"><option value="asc">↑</option><option value="desc">↓</option></select>
+        </div>
+        <button id="clearSortBtn" class="secondary" data-i18n="students.reset">Reset</button>
+      </div>
+
+      <!-- 📊 TABLE -->
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th data-i18n="students.thSubject">Subject</th>
+              <th data-i18n="students.thStudentId">Student ID</th>
+              <th data-i18n="students.thNameAlpha">Chinese Name (Alphabet)</th>
+              <th data-i18n="students.thNameCn">Chinese Name</th>
+              <th data-i18n="students.thDob">DOB</th>
+              <th data-i18n="students.thGrade">Grade</th>
+              <th data-i18n="students.thLevel">Level</th>
+              <th data-i18n="students.thEnrolDate">Enrol Date</th>
+              <th data-i18n="students.thActions">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="studentList">
+            <tr><td colspan="9" class="hint" data-i18n="students.loadingStudents">Loading students...</td></tr>
+          </tbody>
+        </table>
+        <div class="pagination-container">
+          <div class="pagination-controls">
+            <button id="firstPage" class="pagination-btn">⏮</button>
+            <button id="prevPage" class="pagination-btn">◀</button>
+            <div id="paginationNumbers" class="pagination-numbers"></div>
+            <button id="nextPage" class="pagination-btn">▶</button>
+            <button id="lastPage" class="pagination-btn">⏭</button>
+          </div>
+          <div id="paginationInfo" class="pagination-info">0 - 0 of 0 items</div>
+        </div>
+      </div>
     </div>
-    
-    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-    <script type="module" src="students.js"></script>
+  </div>
+
+  <!-- 📥 IMPORT MODAL -->
+  <div id="importProgressModal" class="modal hidden">
+    <div class="modal-content">
+      <button class="close-modal" id="closeImportModal">&times;</button>
+      <h3 data-i18n="students.importingStudents">📊 Importing Students...</h3>
+      <p id="importStatus" data-i18n="students.readingFile">Reading file...</p>
+      <progress id="importProgressBar" max="100" value="0"></progress>
+      <p data-i18n="students.importWait">⏳ Please wait. Do not close this window.</p>
+    </div>
+  </div>
+
+  <!-- 📤 EXPORT MODAL -->
+  <div id="exportModal" class="modal hidden">
+    <div class="modal-content">
+      <button class="close-modal" id="closeExportModal">&times;</button>
+      <h3 data-i18n="students.exportOptions">Export Options</h3>
+
+      <button id="exportAllBtn" class="primary" data-i18n="students.exportAll">📊 Export All Students (Full Details)</button>
+
+      <div class="modal-actions" style="justify-content:stretch;">
+        <select id="exportSubjectSelect">
+          <option value="" data-i18n="students.selectSubjectPlaceholder">Select Subject...</option>
+          <option value="Math">Math</option>
+          <option value="English EFL">English EFL</option>
+          <option value="English ERP">English ERP</option>
+          <option value="Chinese (Trad)">Chinese (Trad)</option>
+          <option value="Chinese (Simp)">Chinese (Simp)</option>
+        </select>
+        <button id="exportSubjectBtn" class="secondary" data-i18n="students.exportBySubject">Export by Subject</button>
+      </div>
+
+      <button id="exportNamesOnlyBtn" class="secondary" data-i18n="students.exportNamesOnly">📝 Export Names Only (16 per column)</button>
+
+      <div class="modal-actions" style="justify-content:stretch;">
+        <select id="exportSchoolSelect"><option value="" data-i18n="students.loadingSchools">Loading schools...</option></select>
+        <button id="exportSchoolBtn" class="secondary" data-i18n="students.exportBySchool">Export by School</button>
+      </div>
+
+      <div class="modal-actions" style="justify-content:stretch;">
+        <select id="exportGradeSelect"><option value="" data-i18n="students.loadingGrades">Loading grades...</option></select>
+        <button id="exportGradeBtn" class="secondary" data-i18n="students.exportByGrade">Export by Grade</button>
+      </div>
+
+      <div class="modal-actions" style="justify-content:stretch;">
+        <select id="exportTeacherSelect"><option value="" data-i18n="students.loadingTeachers">Loading teachers...</option></select>
+        <button id="exportTeacherBtn" class="secondary" data-i18n="students.exportByTeacher">Export by Teacher</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🗑️ DELETE ALL MODAL -->
+  <div id="deleteAllModal" class="modal hidden">
+    <div class="modal-content">
+      <button class="close-modal" id="closeDeleteAllModal">&times;</button>
+      <h3 data-i18n="students.deleteAllTitle">⚠️ Delete All Students</h3>
+      <p data-i18n="students.deleteAllConfirm1">Are you sure you want to delete ALL student records for this center?</p>
+      <p data-i18n="students.deleteAllConfirm2">This action cannot be undone!</p>
+      <div class="modal-actions">
+        <button id="confirmDeleteAllBtn" class="danger" data-i18n="students.yesDeleteAll">Yes, DELETE ALL</button>
+        <button id="cancelDeleteAllBtn" class="secondary" data-i18n="students.cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="students-i18n.js"></script>
+  <script type="module" src="students.js"></script>
 </body>
 </html>
