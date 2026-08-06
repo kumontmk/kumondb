@@ -129,6 +129,19 @@ function identifyCurrentUser() {
       hasFullAccess = true;
     }
   }
+    console.log("🔒 [Auth Debug] User:", user.email, "| Found in DB:", !!currentEmployeeData, "| Full Access:", hasFullAccess);
+
+    // ✅ Hide search & position filters for normal employees
+    applyControlVisibility();
+  
+}
+
+// ✅ NEW: Hide Search & Position filters for normal employees
+function applyControlVisibility() {
+    const searchGroup = searchInput ? searchInput.closest('.search-group') : null;
+    const posGroup = posFilter ? posFilter.closest('.control-group') : null;
+    if (searchGroup) searchGroup.style.display = hasFullAccess ? '' : 'none';
+    if (posGroup) posGroup.style.display = hasFullAccess ? '' : 'none';
 }
 
 // ✅ ROLE-BASED VIEW MODE (drives the CSS visibility)
