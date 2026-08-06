@@ -630,3 +630,62 @@ button:disabled {
     width: 100%;
   }
 }
+
+/* =========================================
+   HEADER – MOBILE LAYOUT (2 rows)
+   Row 1: Center title (left) | User email (right)
+   Row 2: Language switch (left) | Logout (right)
+   ========================================= */
+@media (max-width: 600px) {
+  header {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+    align-items: center;
+    column-gap: 1rem;
+    row-gap: 0.75rem;
+    padding: 1rem 1.25rem; /* consistent left/right indent */
+  }
+
+  /* Row 1, left: center title */
+  header h1 {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Unwrap nav so its children become grid items */
+  header nav {
+    display: contents;
+  }
+
+  /* Row 1, right: user email */
+  header #userEmail {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: right;
+  }
+
+  /* Row 2, left: language switch */
+  header .language-switch {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: start;
+  }
+
+  /* Row 2, right: logout */
+  header #logoutBtn {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+  }
+}
