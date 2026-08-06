@@ -41,7 +41,7 @@ export default {
     nfcPermissionDenied: "⚠️ NFC permission denied.<br>Please allow NFC access in your browser settings.",
     nfcError: "❌ NFC Error: ",
     waitingForTap: "📡 Waiting for tap...",
-    tapNFCClockIn: "📡 Tap NFC to Clock In/Out",
+    tapNFCClockIn: "📡 Tap NFC to Clock In/Out (Android ONLY)",
     scannerLibraryNotLoaded: "❌ Scanner library not loaded.",
     employeeDatabaseLoading: "⏳ Employee database still loading...",
     readingUploadedImage: "⏳ Reading uploaded image...",

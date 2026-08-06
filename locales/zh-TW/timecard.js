@@ -41,7 +41,7 @@ export default {
     nfcPermissionDenied: "⚠️ NFC 權限被拒絕。<br>請在瀏覽器設定中允許 NFC 存取。",
     nfcError: "❌ NFC 錯誤：",
     waitingForTap: "📡 等待輕觸...",
-    tapNFCClockIn: "📡 輕觸 NFC 打卡",
+    tapNFCClockIn: "📡 輕觸 NFC 打卡 (ANDROID)",
     scannerLibraryNotLoaded: "❌ 掃描器程式庫未載入。",
     employeeDatabaseLoading: "⏳ 員工資料庫仍在載入中...",
     readingUploadedImage: "⏳ 讀取上傳的圖片...",

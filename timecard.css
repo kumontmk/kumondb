@@ -668,6 +668,54 @@ th {
 }
 
 /* =========================================
+📅 DATE PICKER OVERLAP FIX
+========================================= */
+
+/* Let the date input shrink/fit inside its column instead of spilling over */
+input[type="date"].day-select {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+/* Give the date column enough breathing room on wide screens */
+.attendance-controls .control-group {
+    min-width: 200px;
+}
+
+/* Keep the webkit calendar icon from sitting on top of the value */
+input[type="date"]::-webkit-calendar-picker-indicator {
+    margin-left: 0.4rem;
+    cursor: pointer;
+}
+
+/* On medium screens (tablets / small laptops) stack the controls
+   so the native picker always gets a full row and never overlaps */
+@media (max-width: 1024px) {
+    .attendance-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+    }
+
+    .attendance-controls .control-group,
+    .attendance-controls .search-group,
+    .manual-qr-group {
+        width: 100%;
+        min-width: 0;
+        flex: none;
+    }
+
+    .scan-btn,
+    .nfc-btn,
+    .export-csv-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* =========================================
 🌐 TRADITIONAL CHINESE FONT SUPPORT
 ========================================= */
 :lang(zh-TW) body,
