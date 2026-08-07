@@ -672,8 +672,7 @@ function openPOModal(dateStr) {
         : `<span style="color:#999; font-size:0.85rem;">${t('dashboard.noActiveSubjects')}</span>`;
       let dtHtml = '';
       if (student.diagnosticTests && student.diagnosticTests.length > 0) {
-        dtHtml = `
-          <table class="dt-mini-table">
+        dtHtml = `<div class="dt-table-wrapper"><table class="dt-mini-table">
             <thead>
               <tr>
                 <th>${t('dashboard.poTable.date')}</th><th>${t('dashboard.poTable.subject')}</th><th>${t('dashboard.poTable.testAt')}</th><th>${t('dashboard.poTable.score')}</th><th>${t('dashboard.poTable.time')}</th><th>${t('dashboard.poTable.startLvl')}</th><th>${t('dashboard.poTable.startWS')}</th>
@@ -692,8 +691,7 @@ function openPOModal(dateStr) {
                 `;
               }).join('')}
             </tbody>
-          </table>
-        `;
+            </table></div>`;
       } else {
         dtHtml = `<p style="font-size:0.85rem; color:#999; margin-top:0.5rem;">${t('dashboard.noDTRecorded')}</p>`;
       }
@@ -972,6 +970,7 @@ function openDTModal(dateStr) {
         : `<span style="color:#999; font-size:0.85rem;">${t('dashboard.noActiveSubjects')}</span>`;
 
       let dtTableHtml = `
+        <div class="dt-table-wrapper">
         <table class="dt-mini-table">
           <thead><tr>
             <th>${t('dashboard.dtTable.subject')}</th>
@@ -1002,7 +1001,7 @@ function openDTModal(dateStr) {
           </td>
         </tr>`;
       });
-      dtTableHtml += `</tbody></table>`;
+      dtTableHtml += `</tbody></table></div>`;
 
       const firstDt = studentEntries[0].dtData;
       const noteId = `dt-note-${studentId}`;
@@ -1036,22 +1035,54 @@ function openDTModal(dateStr) {
       });
       card.querySelectorAll('.dt-action-btn.reschedule').forEach(btn => {
         btn.onclick = (e) => {
-          const cell = e.target.closest('td');
-          e.target.outerHTML = `<input type="date" class="inline-reschedule-date">`;
-          const cancelBtn = cell.querySelector('.cancel');
-          if(cancelBtn) cancelBtn.style.display = 'none';
-          const dateInput = cell.querySelector('.inline-reschedule-date');
-          dateInput.focus();
-          const saveReschedule = async () => {
-            const newDate = dateInput.value;
-            if (!newDate) { revertUI(); return; }
-            await rescheduleDT(btn.dataset.student, btn.dataset.date, btn.dataset.subject, newDate);
+          e.stopPropagation();
+          const cell = btn.closest('td');
+          if (!cell || cell.querySelector('.inline-reschedule-wrapper')) return; // already editing
+
+          const { student, date: oldDate, subject } = btn.dataset;
+
+          // Hide action buttons while editing (don't destroy them)
+          cell.querySelectorAll('.dt-action-btn').forEach(b => (b.style.display = 'none'));
+
+          const wrapper = document.createElement('div');
+          wrapper.className = 'inline-reschedule-wrapper';
+          wrapper.innerHTML = `
+            <input type="date" class="inline-reschedule-date" value="${oldDate}">
+            <button type="button" class="inline-confirm-btn" title="Confirm">✓</button>
+            <button type="button" class="inline-cancel-btn" title="Cancel">×</button>
+          `;
+          cell.appendChild(wrapper);
+
+          const dateInput  = wrapper.querySelector('.inline-reschedule-date');
+          const confirmBtn = wrapper.querySelector('.inline-confirm-btn');
+          const cancelBtn  = wrapper.querySelector('.inline-cancel-btn');
+
+          const restoreButtons = () => {
+            wrapper.remove();
+            cell.querySelectorAll('.dt-action-btn').forEach(b => (b.style.display = ''));
           };
-          dateInput.onchange = saveReschedule;
-          dateInput.onblur = () => setTimeout(revertUI, 200);
-          function revertUI() {
-            openDTModal(dateStr);
-          }
+
+          // ✅ NOTHING happens until the user explicitly taps ✓
+          confirmBtn.onclick = async (ev) => {
+            ev.stopPropagation();
+            const newDate = dateInput.value;
+            if (!newDate) { alert(t('dashboard.schedulePO.selectDate')); return; }
+            if (newDate === oldDate) { restoreButtons(); return; } // no-op
+            restoreButtons();
+            await rescheduleDT(student, oldDate, subject, newDate);
+          };
+
+          // ❌ Cancel just restores the buttons — no re-render, no picker closing
+          cancelBtn.onclick = (ev) => {
+            ev.stopPropagation();
+            restoreButtons();
+          };
+
+          // Desktop convenience: Enter = confirm, Escape = cancel
+          dateInput.onkeydown = (ev) => {
+            if (ev.key === 'Enter')  { ev.preventDefault(); confirmBtn.click(); }
+            if (ev.key === 'Escape') { ev.stopPropagation(); cancelBtn.click(); }
+          };
         };
       });
     });

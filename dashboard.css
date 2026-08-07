@@ -1397,6 +1397,59 @@ header a:hover, header button:hover {
 }
 
 /* =========================================
+   📱 SCROLLABLE DT TABLES (MOBILE OVERFLOW FIX)
+   ========================================= */
+.dt-table-wrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-top: 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+}
+.dt-table-wrapper .dt-mini-table {
+  margin-top: 0;
+  min-width: 620px; /* forces horizontal scroll on phones instead of blowing out the card */
+}
+.po-detail-item { min-width: 0; }
+
+/* =========================================
+   📅 INLINE RESCHEDULE EDITOR (MOBILE-SAFE)
+   ========================================= */
+.inline-reschedule-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.inline-reschedule-wrapper .inline-reschedule-date {
+  width: 132px;
+  padding: 0.3rem;
+  font-size: 0.85rem;
+  border: 1px solid var(--primary);
+  border-radius: 4px;
+  outline: none;
+  background: #fff;
+}
+.inline-confirm-btn,
+.inline-cancel-btn {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.inline-confirm-btn:hover { background: #dcfce7; border-color: #86efac; color: #16a34a; }
+.inline-cancel-btn:hover  { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
+
+/* =========================================
 🌐 TRADITIONAL CHINESE FONT SUPPORT
 ========================================= */
 :lang(zh-TW) body,

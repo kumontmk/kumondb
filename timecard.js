@@ -34,6 +34,86 @@ let hasFullAccess = false;
 let nfcAbortController = null;
 let authInitialized = false;
 
+// ==========================================
+// 🚀 LOCAL CACHE FOR INSTANT STARTUP
+// ==========================================
+const CACHE_EMP_PREFIX = 'tc_emp_';
+const CACHE_LOGS_PREFIX = 'tc_logs_';
+let isDataReady = false;
+
+function getAuthUid() {
+  // 1) Live Firebase Auth (once restored)
+  if (auth.currentUser?.uid) return auth.currentUser.uid;
+  // 2) Synchronous fallback: session written by auth.js at login
+  try {
+    const stored = sessionStorage.getItem('kumonUser');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed && parsed.uid) return parsed.uid;
+    }
+  } catch (e) { /* ignore */ }
+  return null;
+}
+
+function cacheEmployee(dbKey, data) {
+    const uid = getAuthUid();
+    if (uid) localStorage.setItem(CACHE_EMP_PREFIX + uid, JSON.stringify({ dbKey, data }));
+}
+
+function getCachedEmployee() {
+    const uid = getAuthUid();
+    if (!uid) return null;
+    const raw = localStorage.getItem(CACHE_EMP_PREFIX + uid);
+    return raw ? JSON.parse(raw) : null;
+}
+
+function cacheUserLogs(empId, date, logs) {
+    const uid = getAuthUid();
+    if (uid) localStorage.setItem(CACHE_LOGS_PREFIX + uid + '_' + date, JSON.stringify(logs));
+}
+
+function getCachedUserLogs(date) {
+    const uid = getAuthUid();
+    if (!uid) return null;
+    const raw = localStorage.getItem(CACHE_LOGS_PREFIX + uid + '_' + date);
+    return raw ? JSON.parse(raw) : null;
+}
+
+function hydrateFromCache() {
+  const cached = getCachedEmployee();
+  if (cached && cached.dbKey && cached.data) {
+    currentEmployeeId = cached.dbKey;
+    currentEmployeeData = cached.data;
+
+    // Seed employees map so table/cards can render instantly
+    if (!employees[currentEmployeeId]) employees[currentEmployeeId] = cached.data;
+
+    const getPositions = (emp) => Array.isArray(emp.positions) ? emp.positions : (emp.position ? [emp.position] : []);
+    const userPositions = getPositions(currentEmployeeData).map(p => p.trim().toLowerCase());
+    const isManagerOrAdmin = userPositions.includes('manager') || userPositions.includes('master admin');
+    const centerStr = (currentEmployeeData.center || currentEmployeeData.branch || currentEmployeeData.location || currentEmployeeData.centerName || '').toLowerCase();
+    hasFullAccess = isManagerOrAdmin || centerStr.includes('champs');
+
+    applyControlVisibility();
+    applyViewMode();
+  }
+
+  const date = (datePicker && datePicker.value) ? datePicker.value : new Date().toISOString().split('T')[0];
+  if (currentEmployeeId) {
+    const cachedLogs = getCachedUserLogs(date);
+    if (cachedLogs) currentDayLogs[currentEmployeeId] = { logs: cachedLogs };
+    renderTimecardTable();
+    updateTapButton();
+    setDataReady(); // unlock with the CORRECT cached state
+  }
+}
+
+function setDataReady() {
+    if (isDataReady) return;
+    isDataReady = true;
+    if (tapLogBtn) tapLogBtn.classList.remove('is-loading');
+}
+
 onAuthStateChanged(auth, () => {
   authInitialized = true;
   if (Object.keys(employees).length > 0) {
@@ -68,8 +148,14 @@ const scanModal = document.getElementById('scanModal');
 const closeScanBtn = document.getElementById('closeScan');
 const stopScanBtn = document.getElementById('stopScanBtn');
 
+if (datePicker && !datePicker.value) datePicker.value = new Date().toISOString().split('T')[0];
+hydrateFromCache();
+
 window.addEventListener('DOMContentLoaded', () => {
   if (datePicker) datePicker.value = new Date().toISOString().split('T')[0];
+  
+  hydrateFromCache(); // <--- INSTANT HYDRATION
+  
   loadEmployees();
   loadFirebaseCenters();
   if (datePicker) setupTimecardListener(datePicker.value);
@@ -88,6 +174,7 @@ function loadEmployees() {
     identifyCurrentUser();
     applyViewMode();
     renderTimecardTable();
+    setDataReady(); // <--- ENSURE UNLOCK EVEN IF USER NOT IN DB
   });
 }
 
@@ -123,6 +210,9 @@ function identifyCurrentUser() {
     const centerStr = (currentEmployeeData.center || currentEmployeeData.branch || currentEmployeeData.location || currentEmployeeData.centerName || '').toLowerCase();
     const isChamps = centerStr.includes('champs');
     hasFullAccess = isChamps || isManagerOrAdmin;
+    
+    // 🚀 CACHE IT
+    cacheEmployee(currentEmployeeId, currentEmployeeData);
   }
 
   if (!hasFullAccess && user.email) {
@@ -131,12 +221,12 @@ function identifyCurrentUser() {
       hasFullAccess = true;
     }
   }
-    console.log("🔒 [Auth Debug] User:", user.email, "| Found in DB:", !!currentEmployeeData, "| Full Access:", hasFullAccess);
-
-    // ✅ Hide search & position filters for normal employees
-    applyControlVisibility();
-    updateTapButton();
   
+  console.log("🔒 [Auth Debug] User:", user.email, "| Found in DB:", !!currentEmployeeData, "| Full Access:", hasFullAccess);
+
+  applyControlVisibility();
+  updateTapButton();
+  setDataReady(); // <--- UNLOCK BUTTON
 }
 
 // ✅ NEW: Hide Search & Position filters for normal employees
@@ -159,11 +249,39 @@ function setupTimecardListener(date) {
     timecardUnsubscribe = null;
   }
   currentDayLogs = {};
+  
+  // Re-hydrate logs for the new date
+  if (currentEmployeeId) {
+    const cachedLogs = getCachedUserLogs(date);
+    if (cachedLogs) currentDayLogs[currentEmployeeId] = { logs: cachedLogs };
+  }
+  
   renderTimecardTable();
-  timecardUnsubscribe = onValue(ref(db, `timecards/${date}`), snapshot => {
-    currentDayLogs = snapshot.val() || {};
-    renderTimecardTable();
-  });
+
+  if (hasFullAccess) {
+    // Managers need everyone's data
+    timecardUnsubscribe = onValue(ref(db, `timecards/${date}`), snapshot => {
+      currentDayLogs = snapshot.val() || {};
+      if (currentEmployeeId && currentDayLogs[currentEmployeeId]) {
+        cacheUserLogs(currentEmployeeId, date, currentDayLogs[currentEmployeeId].logs || []);
+      }
+      renderTimecardTable();
+    });
+  } else if (currentEmployeeId) {
+    // 🚀 OPTIMIZED: Normal employees only listen to their own node
+    timecardUnsubscribe = onValue(ref(db, `timecards/${date}/${currentEmployeeId}`), snapshot => {
+      const logs = snapshot.val()?.logs || [];
+      currentDayLogs[currentEmployeeId] = { logs };
+      cacheUserLogs(currentEmployeeId, date, logs);
+      renderTimecardTable();
+    });
+  } else {
+    // Fallback
+    timecardUnsubscribe = onValue(ref(db, `timecards/${date}`), snapshot => {
+      currentDayLogs = snapshot.val() || {};
+      renderTimecardTable();
+    });
+  }
 }
 
 // ==========================================
@@ -329,14 +447,14 @@ if (startNfcBtn) {
           }
         }
         if (!matchedCenterName) {
-          showResultModal(false, t('timecard.unregisteredNFC'));
+          showResultModal(false, t('timecard.unregisteredNfc'));
           return;
         }
         await saveAttendance(currentEmployeeId, matchedCenterName);
       };
       reader.onreadingerror = () => {
         resetNfcButton();
-        showResultModal(false, t('timecard.couldNotReadNFC'));
+        showResultModal(false, t('timecard.couldNotReadNfc'));
       };
       await reader.scan({ signal: nfcAbortController.signal });
       startNfcBtn.textContent = t('timecard.waitingForTap');
@@ -356,7 +474,7 @@ if (startNfcBtn) {
 
 function resetNfcButton() {
   if (startNfcBtn) {
-    startNfcBtn.textContent = t('timecard.tapNFCClockIn');
+    startNfcBtn.textContent = t('timecard.tapNfcClockIn');
     startNfcBtn.disabled = false;
   }
 }
@@ -407,7 +525,7 @@ async function closeScanner() {
   isScanning = false;
   if (scanModal) scanModal.classList.add('hidden');
   if (startScanBtn) {
-    startScanBtn.textContent = t('timecard.startQRScan');
+    startScanBtn.textContent = t('timecard.startQrScan');
     startScanBtn.disabled = false;
   }
 }
@@ -424,7 +542,7 @@ function ensureChoiceModal() {
       <div class="result-text" style="margin-bottom:1.2rem;">${t('timecard.chooseScanMethod')}</div>
       <div style="display:flex; flex-direction:column; gap:0.6rem;">
         <button id="choiceCameraBtn" class="scan-btn" style="justify-content:center; width:100%;">${t('timecard.scanWithCamera')}</button>
-        <button id="choiceUploadBtn" class="scan-btn" style="justify-content:center; width:100%; background:#6c757d;">${t('timecard.uploadQRImage')}</button>
+        <button id="choiceUploadBtn" class="scan-btn" style="justify-content:center; width:100%; background:#6c757d;">${t('timecard.uploadQrImage')}</button>
         <button id="choiceCancelBtn" style="padding:0.5rem; background:transparent; color:#666; border:none; cursor:pointer;">${t('timecard.cancel')}</button>
       </div>
     </div>
@@ -477,18 +595,18 @@ async function handleUploadedQr(file) {
     const scanner = new Html5Qrcode('qrUploadReader', { verbose: false });
     const decodedText = await scanner.scanFile(file, false);
     try { scanner.clear(); } catch (e) { console.warn("Scanner clear warning:", e); }
-    if (!decodedText) throw new Error(t('timecard.noQRInImage'));
+    if (!decodedText) throw new Error(t('timecard.noQrInImage'));
     await handleScanSuccess(decodedText);
   } catch (err) {
     console.error('Upload QR decode failed:', err);
-    showResultModal(false, `${t('timecard.couldNotReadQRImage')}${err.message || err}`);
+    showResultModal(false, `${t('timecard.couldNotReadQrImage')}${err.message || err}`);
   }
 }
 
 async function startCameraScan() {
   if (scanModal) scanModal.classList.remove('hidden');
   if (isScanning) return;
-  if (!window.isSecureContext) { showResultModal(false, t('timecard.cameraRequiresHTTPS')); return; }
+  if (!window.isSecureContext) { showResultModal(false, t('timecard.cameraRequiresHttps')); return; }
   if (typeof Html5Qrcode === 'undefined') { showResultModal(false, t('timecard.scannerLibraryNotLoaded')); return; }
   try {
     html5QrCode = new Html5Qrcode("reader");
@@ -547,7 +665,7 @@ async function handleScanSuccess(decodedText) {
   }
   if (!matchedEmp) {
     await closeScanner();
-    showResultModal(false, `${t('timecard.unknownQRCode')}${scanned}`);
+    showResultModal(false, `${t('timecard.unknownQrCode')}${scanned}`);
     return;
   }
   if (!hasFullAccess && matchedKey !== currentEmployeeId) {
@@ -570,13 +688,13 @@ const submitManualQrBtn = document.getElementById('manualQrBtn');
 if (submitManualQrBtn && manualQrInput) {
   submitManualQrBtn.addEventListener('click', async () => {
     const scanned = manualQrInput.value.trim();
-    if (!scanned) { showResultModal(false, t('timecard.pleaseEnterQR')); return; }
+    if (!scanned) { showResultModal(false, t('timecard.pleaseEnterQr')); return; }
     if (Object.keys(employees).length === 0) { showResultModal(false, t('timecard.employeeDatabaseLoading')); return; }
     let matchedKey = null, matchedEmp = null;
     for (const [firebaseKey, emp] of Object.entries(employees)) {
       if ((emp.qrCode || '').trim() === scanned) { matchedKey = firebaseKey; matchedEmp = emp; break; }
     }
-    if (!matchedEmp) { showResultModal(false, `${t('timecard.unknownQRCode')}${scanned}`); return; }
+    if (!matchedEmp) { showResultModal(false, `${t('timecard.unknownQrCode')}${scanned}`); return; }
     if (!hasFullAccess && matchedKey !== currentEmployeeId) {
       showResultModal(false, t('timecard.clockInYourself'));
       return;
@@ -613,7 +731,7 @@ function updateTapButton() {
 
 if (tapLogBtn) {
   tapLogBtn.addEventListener('click', async () => {
-    if (tapLogBtn.disabled) return;
+    if (tapLogBtn.disabled || tapLogBtn.classList.contains('is-loading')) return;
     // Same trap as NFC: unregistered login cannot clock anyone
     if (!currentEmployeeId || !currentEmployeeData) {
       showResultModal(false, t('timecard.tapLoginRequired'));
@@ -704,6 +822,13 @@ async function saveAttendance(empId, locationName) {
     const newLogs = [...current.logs];
     if (autoOutLog) newLogs.push(autoOutLog);
     newLogs.push({ type: nextType, time: now, location: locationName });
+    
+    // 🚀 OPTIMISTIC LOCAL UPDATE (Fixes double-tap bugs)
+    currentDayLogs[empId] = { logs: newLogs };
+    cacheUserLogs(empId, date, newLogs);
+    renderTimecardTable();
+    updateTapButton();
+
     await update(tcRef, { logs: newLogs });
 
     let msg = nextType === 'in' ? `${t('timecard.inAt')}${locationName}` : `${t('timecard.outAt')}${locationName}`;

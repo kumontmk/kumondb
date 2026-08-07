@@ -724,9 +724,9 @@ input[type="date"]::-webkit-datetime-edit {
 }
 .tap-log-btn {
   --size: 118px;
-  --c1: #22c55e; --c2: #059669;         /* face gradient */
-  --glow: rgba(34,197,94,.45);          /* ambient glow  */
-  --halo: rgba(34,197,94,.35);          /* ping ring     */
+  --c1: #22c55e; --c2: #059669;
+  --glow: rgba(34,197,94,.45);
+  --halo: rgba(34,197,94,.35);
   position: relative;
   width: var(--size);
   height: var(--size);
@@ -744,7 +744,6 @@ input[type="date"]::-webkit-datetime-edit {
   --glow: rgba(239,68,68,.45);
   --halo: rgba(239,68,68,.35);
 }
-/* soft radar-ping "tap me" halo */
 .tap-log-btn::before {
   content: '';
   position: absolute;
@@ -758,7 +757,6 @@ input[type="date"]::-webkit-datetime-edit {
   70%  { box-shadow: 0 0 0 20px transparent; }
   100% { box-shadow: 0 0 0 0 transparent; }
 }
-/* physical face with glass sheen */
 .tap-face {
   position: absolute;
   inset: 0;
@@ -780,7 +778,7 @@ input[type="date"]::-webkit-datetime-edit {
     0 4px 10px rgba(0,0,0,.10);
   transition: box-shadow .25s ease, filter .25s ease;
 }
-.tap-face::before {           /* top glass highlight */
+.tap-face::before {
   content: '';
   position: absolute;
   left: 12%; right: 12%; top: 5%;
@@ -790,7 +788,6 @@ input[type="date"]::-webkit-datetime-edit {
   filter: blur(2px);
   pointer-events: none;
 }
-/* micro-interactions */
 .tap-log-btn:hover:not(:disabled) { transform: translateY(-2px); opacity: 1; }
 .tap-log-btn:active:not(:disabled) { transform: translateY(1px) scale(.96); }
 .tap-log-btn:active:not(:disabled) .tap-face {
@@ -807,7 +804,6 @@ input[type="date"]::-webkit-datetime-edit {
     0 0 0 3px #fff,
     0 0 0 6px var(--c2);
 }
-/* busy / processing */
 .tap-log-btn:disabled { cursor: wait; }
 .tap-log-btn:disabled::before { animation: none; }
 .tap-log-btn:disabled .tap-face {
@@ -815,7 +811,6 @@ input[type="date"]::-webkit-datetime-edit {
   animation: tapBusy 1s ease-in-out infinite;
 }
 @keyframes tapBusy { 0%,100% { opacity: 1; } 50% { opacity: .65; } }
-/* icons + label */
 .tap-icon {
   width: 22px; height: 22px;
   fill: none; stroke: currentColor;
@@ -850,6 +845,28 @@ input[type="date"]::-webkit-datetime-edit {
 @media print {
   .tap-button-wrapper { display: none !important; }
 }
+
+/* =========================================
+   🔄 TAP BUTTON LOADING SPINNER
+   ========================================= */
+.tap-spinner {
+  display: none;
+  width: 48px;
+  height: 48px;
+  border: 5px solid rgba(255,255,255,0.3);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: tapSpin 0.8s linear infinite;
+}
+@keyframes tapSpin { to { transform: rotate(360deg); } }
+.tap-log-btn.is-loading { pointer-events: none; cursor: wait; }
+.tap-log-btn.is-loading .tap-spinner { display: block; }
+.tap-log-btn.is-loading .tap-icon,
+.tap-log-btn.is-loading .tap-log-label { display: none !important; }
+.tap-log-btn.is-loading::before { animation: none !important; }
+
+
+
 
 /* =========================================
 🌐 TRADITIONAL CHINESE FONT SUPPORT
