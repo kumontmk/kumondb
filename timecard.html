@@ -52,7 +52,25 @@
       <button id="startScanBtn" class="scan-btn" data-i18n="timecard.startQRScan">📷 Start QR Scan</button>
       <button id="startNfcBtn" class="nfc-btn" data-i18n="timecard.tapNFC">📡 Tap NFC to Clock In/Out (Android)</button>
     </div>
-
+      <!-- 🔘 TAP TO LOG IN/OUT -->
+      <div class="tap-button-wrapper">
+        <button id="tapLogBtn" class="tap-log-btn tap-in" type="button">
+          <span class="tap-face">
+            <svg class="tap-icon icon-in" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+              <polyline points="10 17 15 12 10 7"/>
+              <line x1="15" y1="12" x2="3" y2="12"/>
+            </svg>
+            <svg class="tap-icon icon-out" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            <span id="tapLogLabel" class="tap-log-label">Log In</span>
+          </span>
+        </button>
+        <div class="tap-button-hint" data-i18n="timecard.tapToLog">Tap to Log In/Out</div>
+      </div>
     <!-- DESKTOP + MANAGER-MOBILE: Table -->
     <div class="table-wrapper">
       <table>

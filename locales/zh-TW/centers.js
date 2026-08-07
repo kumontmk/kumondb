@@ -46,6 +46,7 @@ export default {
     center: "中心",
     clockIn: "上班打卡",
     proposedOut: "建議下班",
+    close: "關閉",   
     requested: "申請時間",
     actions: "操作",
     denySelected: "拒絕選取",

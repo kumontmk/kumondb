@@ -62,6 +62,8 @@ const posFilter = document.getElementById('positionFilter');
 const startScanBtn = document.getElementById('startScanBtn');
 const startNfcBtn = document.getElementById('startNfcBtn');
 const exportCsvBtn = document.getElementById('exportCsvBtn');
+const tapLogBtn = document.getElementById('tapLogBtn');
+const tapLogLabel = document.getElementById('tapLogLabel');
 const scanModal = document.getElementById('scanModal');
 const closeScanBtn = document.getElementById('closeScan');
 const stopScanBtn = document.getElementById('stopScanBtn');
@@ -133,6 +135,7 @@ function identifyCurrentUser() {
 
     // ✅ Hide search & position filters for normal employees
     applyControlVisibility();
+    updateTapButton();
   
 }
 
@@ -170,7 +173,7 @@ function renderTimecardTable() {
   const tbody = document.getElementById('timecardBody');
   const cardContainer = document.getElementById('mobileTimecardCards');
   if (!tbody || !cardContainer) return;
-
+  updateTapButton();
   const filterTxt = searchInput ? searchInput.value.toLowerCase() : '';
   const filterPos = posFilter ? posFilter.value : '';
 
@@ -584,6 +587,53 @@ if (submitManualQrBtn && manualQrInput) {
   });
   manualQrInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') submitManualQrBtn.click(); });
 }
+
+// ==========================================
+// 🔘 TAP TO LOG IN/OUT BUTTON
+// (same pipeline as QR scan minus the QR lookup)
+// ==========================================
+function getNextTapType() {
+  if (!currentEmployeeId) return 'in';
+  const logs = currentDayLogs[currentEmployeeId]?.logs || [];
+  if (logs.length === 0) return 'in';
+  const sorted = [...logs].sort((a, b) => a.time.localeCompare(b.time));
+  return sorted[sorted.length - 1].type === 'in' ? 'out' : 'in';
+}
+
+function updateTapButton() {
+  if (!tapLogBtn) return;
+  const isLogin = getNextTapType() === 'in';
+  tapLogBtn.classList.toggle('tap-in', isLogin);
+  tapLogBtn.classList.toggle('tap-out', !isLogin);
+  if (tapLogLabel) {
+    tapLogLabel.textContent = isLogin ? t('timecard.tapLogIn') : t('timecard.tapLogOut');
+    tapLogBtn.setAttribute('aria-label', tapLogLabel.textContent);
+  }
+}
+
+if (tapLogBtn) {
+  tapLogBtn.addEventListener('click', async () => {
+    if (tapLogBtn.disabled) return;
+    // Same trap as NFC: unregistered login cannot clock anyone
+    if (!currentEmployeeId || !currentEmployeeData) {
+      showResultModal(false, t('timecard.tapLoginRequired'));
+      return;
+    }
+    tapLogBtn.disabled = true; // block double-taps while processing
+    try {
+      // Geofence + save + all error dialogs handled inside,
+      // exactly like the QR scan path (always for self only)
+      await processAttendance(currentEmployeeId, currentEmployeeData);
+    } finally {
+      tapLogBtn.disabled = false;
+      updateTapButton();
+    }
+  });
+}
+
+// Re-translate the label when the language switches (<html lang="..."> changes)
+new MutationObserver(() => updateTapButton())
+  .observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
 
 // ==========================================
 // 📍 GPS & ATTENDANCE SAVING LOGIC

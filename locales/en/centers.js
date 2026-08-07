@@ -45,6 +45,7 @@ export default {
     date: "Date",
     center: "Center",
     clockIn: "Clock In",
+    close: "Close",  
     proposedOut: "Proposed Out",
     requested: "Requested",
     actions: "Actions",
