@@ -167,6 +167,14 @@ function startCentersPage() {
       const userData = userSnap.val();
       const isAdmin = user.email?.toLowerCase() === 'kumonchamps@gmail.com';
 
+      // 🛡️ ROLE CHECK: Show admin-only cards only for managers/admins
+      const isManagerOrAdmin = await isManagerUser(user, userData);
+      if (isManagerOrAdmin) {
+        document.body.classList.add('is-manager-or-admin');
+      }
+
+      const userPermissions = userData.permissions?.centers || {};
+
       // 2) ⚡ Page is interactive NOW — admin cards tappable immediately
       pageLoader?.classList.add('hidden');
 

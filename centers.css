@@ -706,3 +706,13 @@ button:disabled {
   color: var(--primary-dark);
 }
 .centers-loader.hidden { display: none; }
+
+/* =========================================
+   ADMIN-ONLY CARDS (Hidden from normal employees)
+========================================= */
+.admin-only-card {
+  display: none !important; /* Hidden by default */
+}
+body.is-manager-or-admin .admin-only-card {
+  display: flex !important; /* Shown for managers/admins */
+}
