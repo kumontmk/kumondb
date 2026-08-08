@@ -726,7 +726,7 @@ input[type="date"]::-webkit-datetime-edit {
   margin: 0.25rem auto 1.4rem;
 }
 .tap-log-btn {
-  --size: 118px;
+  --size: 230px;
   --c1: #22c55e; --c2: #059669;
   --glow: rgba(34,197,94,.45);
   --halo: rgba(34,197,94,.35);
@@ -735,7 +735,7 @@ input[type="date"]::-webkit-datetime-edit {
   height: var(--size);
   padding: 0;
   border: none;
-  border-radius: 50%;
+  border-radius: 70%;
   background: transparent;
   cursor: pointer;
   user-select: none;
@@ -840,7 +840,7 @@ input[type="date"]::-webkit-datetime-edit {
   opacity: .8;
 }
 @media (max-width: 480px) {
-  .tap-log-btn { --size: 104px; }
+  .tap-log-btn { --size: 200px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .tap-log-btn::before { animation: none; }

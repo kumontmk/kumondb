@@ -70,6 +70,7 @@ export default {
     failedToSave: "❌ Failed to save: ",
     noAttendanceData: "No attendance data loaded for this date.",
     tapToLog: "Tap to Log In/Out (iOS/Android)",
+    tapOR: "OR",
     tapLogIn: "Log In",
     tapLogOut: "Log Out",
     tapLoginRequired: "🚫 You must be logged in as a registered employee to use the tap button.",

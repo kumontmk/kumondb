@@ -70,6 +70,7 @@ export default {
     failedToSave: "❌ 儲存失敗：",
     noAttendanceData: "此日期無載入的出勤資料。",
     tapToLog: "輕觸打卡上／下班 (iOS/Android)",
+    tapOR: "或",
     tapLogIn: "上班打卡",
     tapLogOut: "下班打卡",
     tapLoginRequired: "🚫 您必須以註冊員工身份登入才能使用輕觸打卡按鈕。",
