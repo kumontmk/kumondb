@@ -17,7 +17,7 @@ const CENTERS = [
   { name: "Kumon Champs", lat: 22.202188413699155, lng: 113.54954818278166 },
   { name: "Kumon Tap Siac", lat: 22.19974168219132, lng: 113.54570239996973 }
 ];
-const MAX_DIST_KM = 0.05;
+const MAX_DIST_KM = 0.07; // 70 meters
 
 let employees = {};
 let firebaseCenters = {};
@@ -42,9 +42,7 @@ const CACHE_LOGS_PREFIX = 'tc_logs_';
 let isDataReady = false;
 
 function getAuthUid() {
-  // 1) Live Firebase Auth (once restored)
   if (auth.currentUser?.uid) return auth.currentUser.uid;
-  // 2) Synchronous fallback: session written by auth.js at login
   try {
     const stored = sessionStorage.getItem('kumonUser');
     if (stored) {
@@ -79,13 +77,151 @@ function getCachedUserLogs(date) {
     return raw ? JSON.parse(raw) : null;
 }
 
+// 📅 TODAY-ONLY RULE
+function getTodayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function isTodaySelected() {
+  return !!datePicker && datePicker.value === getTodayStr();
+}
+
+const datePicker = document.getElementById('datePicker');
+const searchInput = document.getElementById('searchInput');
+const posFilter = document.getElementById('positionFilter');
+const startScanBtn = document.getElementById('startScanBtn');
+const startNfcBtn = document.getElementById('startNfcBtn');
+const exportCsvBtn = document.getElementById('exportCsvBtn');
+const tapLogBtn = document.getElementById('tapLogBtn');
+const tapLogLabel = document.getElementById('tapLogLabel');
+const scanModal = document.getElementById('scanModal');
+const closeScanBtn = document.getElementById('closeScan');
+const stopScanBtn = document.getElementById('stopScanBtn');
+const tapHint = document.querySelector('.tap-button-hint');
+
+// ==========================================
+// 🛠️ MASTER ADMIN MODE (kumonchamps ONLY)
+// ==========================================
+let isMasterAdmin = false;
+const adminClockPanel = document.getElementById('adminClockPanel');
+const adminEmpSelect = document.getElementById('adminEmpSelect');
+const adminCenterSelect = document.getElementById('adminCenterSelect');
+const adminStatusLine = document.getElementById('adminStatusLine');
+const adminClockInBtn = document.getElementById('adminClockInBtn');
+const adminClockOutBtn = document.getElementById('adminClockOutBtn');
+
+function applyAdminMode() {
+  const tapWrapper = tapLogBtn ? tapLogBtn.closest('.tap-button-wrapper') : null;
+  if (isMasterAdmin) {
+    if (tapWrapper) tapWrapper.style.display = 'none';   // hide Tap to Log In/Out
+    if (startNfcBtn) startNfcBtn.style.display = 'none'; // hide Tap NFC
+    if (adminClockPanel) adminClockPanel.classList.remove('hidden');
+    populateAdminSelects();
+    updateAdminStatusLine();
+  } else {
+    if (tapWrapper) tapWrapper.style.display = '';
+    if (startNfcBtn) startNfcBtn.style.display = '';
+    if (adminClockPanel) adminClockPanel.classList.add('hidden');
+  }
+}
+
+function populateAdminSelects() {
+  if (!adminEmpSelect) return;
+  const prev = adminEmpSelect.value;
+  adminEmpSelect.innerHTML = '';
+  Object.entries(employees)
+    .sort((a, b) => (a[1].englishName || '').localeCompare(b[1].englishName || ''))
+    .forEach(([id, e]) => {
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = `${e.englishName || '-'}${e.chineseName ? ' (' + e.chineseName + ')' : ''} — ${e.position || ''}`;
+      adminEmpSelect.appendChild(opt);
+    });
+  if (prev && employees[prev]) adminEmpSelect.value = prev;
+
+  if (adminCenterSelect && adminCenterSelect.options.length === 0) {
+    CENTERS.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.name;
+      opt.textContent = c.name;
+      adminCenterSelect.appendChild(opt);
+    });
+  }
+}
+
+function updateAdminStatusLine() {
+  if (!isMasterAdmin) return;
+  const empId = adminEmpSelect ? adminEmpSelect.value : null;
+  const date = datePicker ? datePicker.value : '';
+
+  let lastType = null;
+  if (empId) {
+    const logs = (currentDayLogs[empId] && currentDayLogs[empId].logs) || [];
+    if (logs.length > 0) {
+      const sorted = [...logs].sort((a, b) => a.time.localeCompare(b.time));
+      const last = sorted[sorted.length - 1];
+      lastType = last.type;
+      if (adminStatusLine) {
+        adminStatusLine.textContent = `📅 ${date} — status: ${last.type.toUpperCase()} (last at ${last.time} @ ${last.location || '-'})`;
+      }
+    } else if (adminStatusLine) {
+      adminStatusLine.textContent = `📅 ${date}: no logs — status: OUT`;
+    }
+  } else if (adminStatusLine) {
+    adminStatusLine.textContent = '—';
+  }
+
+  // 🔘 STATUS RULE: IN → block Clock In | OUT/none → block Clock Out
+  const isIn = lastType === 'in';
+  if (adminClockInBtn)  adminClockInBtn.disabled  = isIn;
+  if (adminClockOutBtn) adminClockOutBtn.disabled = !isIn;
+}
+
+async function adminSaveAttendance(empId, locationName, type) {
+  try {
+    const date = datePicker.value;
+    const tcRef = ref(db, `timecards/${date}/${empId}`);
+    const snap = await get(tcRef);
+    const current = snap.val() || { logs: [] };
+    const now = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const newLogs = [...current.logs, { type, time: now, location: locationName, byAdmin: true }];
+
+    currentDayLogs[empId] = { logs: newLogs };
+    renderTimecardTable();
+    updateAdminStatusLine();
+
+    await update(tcRef, { logs: newLogs });
+
+    const empName = employees[empId] ? employees[empId].englishName : empId;
+    showResultModal(true, `✅ ${empName}: ${type.toUpperCase()} @ ${locationName} (${now})`);
+  } catch (err) {
+    console.error('💥 Admin attendance update failed:', err);
+    showResultModal(false, `${t('timecard.failedToSave')}${err.message}`);
+  }
+}
+
+if (adminEmpSelect) adminEmpSelect.addEventListener('change', updateAdminStatusLine);
+if (adminClockInBtn) adminClockInBtn.addEventListener('click', async () => {
+  if (!isMasterAdmin) return;
+  adminClockInBtn.disabled = true;
+  adminClockOutBtn.disabled = true;
+  try { await adminSaveAttendance(adminEmpSelect.value, adminCenterSelect.value, 'in'); }
+  finally { updateAdminStatusLine(); } // restores the CORRECT enabled/disabled state
+});
+if (adminClockOutBtn) adminClockOutBtn.addEventListener('click', async () => {
+  if (!isMasterAdmin) return;
+  adminClockInBtn.disabled = true;
+  adminClockOutBtn.disabled = true;
+  try { await adminSaveAttendance(adminEmpSelect.value, adminCenterSelect.value, 'out'); }
+  finally { updateAdminStatusLine(); }
+});
+
 function hydrateFromCache() {
   const cached = getCachedEmployee();
   if (cached && cached.dbKey && cached.data) {
     currentEmployeeId = cached.dbKey;
     currentEmployeeData = cached.data;
 
-    // Seed employees map so table/cards can render instantly
     if (!employees[currentEmployeeId]) employees[currentEmployeeId] = cached.data;
 
     const getPositions = (emp) => Array.isArray(emp.positions) ? emp.positions : (emp.position ? [emp.position] : []);
@@ -98,13 +234,14 @@ function hydrateFromCache() {
     applyViewMode();
   }
 
-  const date = (datePicker && datePicker.value) ? datePicker.value : new Date().toISOString().split('T')[0];
+  // 🚨 FIX: Use local time instead of UTC to prevent timezone bugs
+  const date = (datePicker && datePicker.value) ? datePicker.value : getTodayStr();
   if (currentEmployeeId) {
     const cachedLogs = getCachedUserLogs(date);
     if (cachedLogs) currentDayLogs[currentEmployeeId] = { logs: cachedLogs };
     renderTimecardTable();
     updateTapButton();
-    setDataReady(); // unlock with the CORRECT cached state
+    setDataReady(); 
   }
 }
 
@@ -136,25 +273,15 @@ function minutesToTime(mins) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-const datePicker = document.getElementById('datePicker');
-const searchInput = document.getElementById('searchInput');
-const posFilter = document.getElementById('positionFilter');
-const startScanBtn = document.getElementById('startScanBtn');
-const startNfcBtn = document.getElementById('startNfcBtn');
-const exportCsvBtn = document.getElementById('exportCsvBtn');
-const tapLogBtn = document.getElementById('tapLogBtn');
-const tapLogLabel = document.getElementById('tapLogLabel');
-const scanModal = document.getElementById('scanModal');
-const closeScanBtn = document.getElementById('closeScan');
-const stopScanBtn = document.getElementById('stopScanBtn');
-
-if (datePicker && !datePicker.value) datePicker.value = new Date().toISOString().split('T')[0];
+// 🚨 FIX: Use local time instead of UTC
+if (datePicker && !datePicker.value) datePicker.value = getTodayStr();
 hydrateFromCache();
 
 window.addEventListener('DOMContentLoaded', () => {
-  if (datePicker) datePicker.value = new Date().toISOString().split('T')[0];
+  // 🚨 FIX: Use local time instead of UTC
+  if (datePicker) datePicker.value = getTodayStr();
   
-  hydrateFromCache(); // <--- INSTANT HYDRATION
+  hydrateFromCache(); 
   
   loadEmployees();
   loadFirebaseCenters();
@@ -174,7 +301,7 @@ function loadEmployees() {
     identifyCurrentUser();
     applyViewMode();
     renderTimecardTable();
-    setDataReady(); // <--- ENSURE UNLOCK EVEN IF USER NOT IN DB
+    setDataReady(); 
   });
 }
 
@@ -211,7 +338,6 @@ function identifyCurrentUser() {
     const isChamps = centerStr.includes('champs');
     hasFullAccess = isChamps || isManagerOrAdmin;
     
-    // 🚀 CACHE IT
     cacheEmployee(currentEmployeeId, currentEmployeeData);
   }
 
@@ -221,15 +347,17 @@ function identifyCurrentUser() {
       hasFullAccess = true;
     }
   }
+
+  isMasterAdmin = (user.email || '').toLowerCase() === 'kumonchamps@gmail.com';
   
   console.log("🔒 [Auth Debug] User:", user.email, "| Found in DB:", !!currentEmployeeData, "| Full Access:", hasFullAccess);
 
   applyControlVisibility();
+  applyAdminMode();
   updateTapButton();
-  setDataReady(); // <--- UNLOCK BUTTON
+  setDataReady(); 
 }
 
-// ✅ NEW: Hide Search & Position filters for normal employees
 function applyControlVisibility() {
     const searchGroup = searchInput ? searchInput.closest('.search-group') : null;
     const posGroup = posFilter ? posFilter.closest('.control-group') : null;
@@ -237,7 +365,6 @@ function applyControlVisibility() {
     if (posGroup) posGroup.style.display = hasFullAccess ? '' : 'none';
 }
 
-// ✅ ROLE-BASED VIEW MODE (drives the CSS visibility)
 function applyViewMode() {
   document.body.classList.toggle('employee-view', !hasFullAccess);
   document.body.classList.toggle('manager-view', hasFullAccess);
@@ -250,7 +377,6 @@ function setupTimecardListener(date) {
   }
   currentDayLogs = {};
   
-  // Re-hydrate logs for the new date
   if (currentEmployeeId) {
     const cachedLogs = getCachedUserLogs(date);
     if (cachedLogs) currentDayLogs[currentEmployeeId] = { logs: cachedLogs };
@@ -259,7 +385,6 @@ function setupTimecardListener(date) {
   renderTimecardTable();
 
   if (hasFullAccess) {
-    // Managers need everyone's data
     timecardUnsubscribe = onValue(ref(db, `timecards/${date}`), snapshot => {
       currentDayLogs = snapshot.val() || {};
       if (currentEmployeeId && currentDayLogs[currentEmployeeId]) {
@@ -268,7 +393,6 @@ function setupTimecardListener(date) {
       renderTimecardTable();
     });
   } else if (currentEmployeeId) {
-    // 🚀 OPTIMIZED: Normal employees only listen to their own node
     timecardUnsubscribe = onValue(ref(db, `timecards/${date}/${currentEmployeeId}`), snapshot => {
       const logs = snapshot.val()?.logs || [];
       currentDayLogs[currentEmployeeId] = { logs };
@@ -276,7 +400,6 @@ function setupTimecardListener(date) {
       renderTimecardTable();
     });
   } else {
-    // Fallback
     timecardUnsubscribe = onValue(ref(db, `timecards/${date}`), snapshot => {
       currentDayLogs = snapshot.val() || {};
       renderTimecardTable();
@@ -284,9 +407,6 @@ function setupTimecardListener(date) {
   }
 }
 
-// ==========================================
-// 📊 RENDER: TABLE (desktop + managers) + CARDS (employee mobile)
-// ==========================================
 function renderTimecardTable() {
   const tbody = document.getElementById('timecardBody');
   const cardContainer = document.getElementById('mobileTimecardCards');
@@ -331,7 +451,6 @@ function renderTimecardTable() {
     });
   });
 
-  // ---- TABLE (desktop + managers) ----
   allLogs.sort((a, b) => b.time.localeCompare(a.time));
   tbody.innerHTML = '';
   cardContainer.innerHTML = '';
@@ -358,7 +477,6 @@ function renderTimecardTable() {
     tbody.appendChild(tr);
   });
 
-  // ---- CARDS (employee mobile): one card per IN/OUT pair ----
   Object.values(employeeData).forEach(({ employee, logs }) => {
     let currentIn = null;
     logs.forEach(log => {
@@ -371,6 +489,7 @@ function renderTimecardTable() {
     });
     if (currentIn) addCard(cardContainer, employee, currentIn, null);
   });
+    updateAdminStatusLine();
 }
 
 function addCard(container, employee, inLog, outLog) {
@@ -410,14 +529,13 @@ function addCard(container, employee, inLog, outLog) {
 if (datePicker) {
   datePicker.addEventListener('change', (e) => {
     setupTimecardListener(e.target.value);
+    updateAdminStatusLine();
   });
 }
+
 if (searchInput) searchInput.addEventListener('input', renderTimecardTable);
 if (posFilter) posFilter.addEventListener('change', renderTimecardTable);
 
-// ==========================================
-// 📡 NFC CLOCK-IN/OUT LOGIC (ANDROID UID READER)
-// ==========================================
 if (startNfcBtn) {
   startNfcBtn.addEventListener('click', async () => {
     if (!('NDEFReader' in window)) {
@@ -479,9 +597,6 @@ function resetNfcButton() {
   }
 }
 
-// ==========================================
-// 🍏 AUTO CLOCK-IN FOR iOS / URL-BASED NFC TAGS
-// ==========================================
 function checkNfcUrlClockIn() {
   const params = new URLSearchParams(window.location.search);
   let centerId = params.get('center');
@@ -511,9 +626,6 @@ function checkNfcUrlClockIn() {
   }
 }
 
-// ==========================================
-// 📷 QR CODE SCANNER LOGIC
-// ==========================================
 async function closeScanner() {
   if (html5QrCode) {
     try {
@@ -706,10 +818,6 @@ if (submitManualQrBtn && manualQrInput) {
   manualQrInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') submitManualQrBtn.click(); });
 }
 
-// ==========================================
-// 🔘 TAP TO LOG IN/OUT BUTTON
-// (same pipeline as QR scan minus the QR lookup)
-// ==========================================
 function getNextTapType() {
   if (!currentEmployeeId) return 'in';
   const logs = currentDayLogs[currentEmployeeId]?.logs || [];
@@ -723,24 +831,38 @@ function updateTapButton() {
   const isLogin = getNextTapType() === 'in';
   tapLogBtn.classList.toggle('tap-in', isLogin);
   tapLogBtn.classList.toggle('tap-out', !isLogin);
+
+  // 📅 TODAY-ONLY RULE: Visual Lock
+  const locked = !isTodaySelected();
+  tapLogBtn.classList.toggle('tap-locked', locked);
+
   if (tapLogLabel) {
     tapLogLabel.textContent = isLogin ? t('timecard.tapLogIn') : t('timecard.tapLogOut');
     tapLogBtn.setAttribute('aria-label', tapLogLabel.textContent);
+  }
+  if (tapHint) {
+    tapHint.textContent = locked
+      ? '📅 Viewing only — return to today to clock in/out'
+      : t('timecard.tapToLog');
   }
 }
 
 if (tapLogBtn) {
   tapLogBtn.addEventListener('click', async () => {
-    if (tapLogBtn.disabled || tapLogBtn.classList.contains('is-loading')) return;
-    // Same trap as NFC: unregistered login cannot clock anyone
+    if (tapLogBtn.disabled || tapLogBtn.classList.contains('is-loading') || tapLogBtn.classList.contains('tap-locked')) return;
+    
+    // 📅 TODAY-ONLY RULE: Hard Guard
+    if (!isTodaySelected()) {
+      showResultModal(false, '📅 Attendance can only be recorded for the current day.');
+      return;
+    }
+
     if (!currentEmployeeId || !currentEmployeeData) {
       showResultModal(false, t('timecard.tapLoginRequired'));
       return;
     }
-    tapLogBtn.disabled = true; // block double-taps while processing
+    tapLogBtn.disabled = true; 
     try {
-      // Geofence + save + all error dialogs handled inside,
-      // exactly like the QR scan path (always for self only)
       await processAttendance(currentEmployeeId, currentEmployeeData);
     } finally {
       tapLogBtn.disabled = false;
@@ -749,13 +871,9 @@ if (tapLogBtn) {
   });
 }
 
-// Re-translate the label when the language switches (<html lang="..."> changes)
 new MutationObserver(() => updateTapButton())
   .observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
 
-// ==========================================
-// 📍 GPS & ATTENDANCE SAVING LOGIC
-// ==========================================
 async function getLocationWithRetry(maxAttempts = 2) {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -796,6 +914,13 @@ async function processAttendance(empId, emp) {
 async function saveAttendance(empId, locationName) {
   try {
     const date = datePicker.value;
+    
+    // 📅 TODAY-ONLY RULE: Hard Guard for QR/NFC/URL paths
+    if (date !== getTodayStr()) {
+      showResultModal(false, '📅 Attendance can only be recorded for the current day.');
+      return;
+    }
+
     const tcRef = ref(db, `timecards/${date}/${empId}`);
     const snap = await get(tcRef);
     const current = snap.val() || { logs: [] };
@@ -823,7 +948,6 @@ async function saveAttendance(empId, locationName) {
     if (autoOutLog) newLogs.push(autoOutLog);
     newLogs.push({ type: nextType, time: now, location: locationName });
     
-    // 🚀 OPTIMISTIC LOCAL UPDATE (Fixes double-tap bugs)
     currentDayLogs[empId] = { logs: newLogs };
     cacheUserLogs(empId, date, newLogs);
     renderTimecardTable();

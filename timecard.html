@@ -4,7 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title data-i18n="timecard.title">Timecard - Kumon DB</title>
-  <link rel="stylesheet" href="timecard.css?v=2">
+  
+  <!-- PWA manifest, favicon, and theme color -->
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+  <meta name="theme-color" content="#87CEEB">
+  
+  <link rel="stylesheet" href="timecard.css?v=3">
 </head>
 <body>
   <header>
@@ -12,7 +18,27 @@
     <nav><h2 data-i18n="timecard.employeeTimecard">⏱️ Employee Timecard</h2></nav>
   </header>
 
+
   <div class="container">
+
+    <!-- 🛠️ MASTER ADMIN PANEL (kumonchamps only) -->
+    <div id="adminClockPanel" class="admin-clock-panel hidden">
+      <div class="acp-title">🛠️ Clock In / Out an Employee</div>
+      <div class="acp-row">
+        <label class="control-label" for="adminEmpSelect">Employee</label>
+        <select id="adminEmpSelect" class="day-select"></select>
+      </div>
+      <div class="acp-row">
+        <label class="control-label" for="adminCenterSelect">Center</label>
+        <select id="adminCenterSelect" class="day-select"></select>
+      </div>
+      <div id="adminStatusLine" class="acp-status">—</div>
+      <div class="acp-actions">
+        <button id="adminClockInBtn" class="acp-btn in" type="button">Clock In</button>
+        <button id="adminClockOutBtn" class="acp-btn out" type="button">Clock Out</button>
+      </div>
+    </div>
+
     <div class="attendance-controls">
       <div class="control-group">
         <label class="control-label" data-i18n="timecard.date">Date</label>

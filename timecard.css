@@ -143,6 +143,8 @@ th {
     justify-content: center; 
     z-index: 1000; 
     backdrop-filter: blur(2px); 
+    -webkit-backdrop-filter: blur(2px); /* Safari 15–17 */
+
 }
 
 .modal-content { 
@@ -576,6 +578,7 @@ th {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;
     z-index: 2000; backdrop-filter: blur(3px); animation: fadeIn 0.2s ease;
+    -webkit-backdrop-filter: blur(3px); /* Safari 15–17 */
 }
 .result-content {
     background: white; padding: 2rem 2.5rem; border-radius: 12px;
@@ -706,7 +709,7 @@ input[type="date"]::-webkit-datetime-edit {
 
 /* 5. On narrow screens, give the date its own full-width row */
 @media (max-width: 1024px) {
-    .attendance-controls .control-group:has(input[type="date"]) {
+    .attendance-controls .control-group:first-child {
         flex: 1 1 100%;
         width: 100%;
     }
@@ -865,8 +868,52 @@ input[type="date"]::-webkit-datetime-edit {
 .tap-log-btn.is-loading .tap-log-label { display: none !important; }
 .tap-log-btn.is-loading::before { animation: none !important; }
 
+/* =========================================
+📅 TAP BUTTON LOCKED (selected date ≠ today)
+========================================= */
+.tap-log-btn.tap-locked { cursor: not-allowed; }
+.tap-log-btn.tap-locked .tap-face {
+  filter: grayscale(0.9) brightness(0.85);
+  animation: none;
+}
+.tap-log-btn.tap-locked::before { animation: none; }
 
 
+/* =========================================
+🛠️ MASTER ADMIN CLOCK PANEL
+========================================= */
+.admin-clock-panel {
+  background: var(--white);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  border: 2px solid var(--primary-dark);
+  padding: 1rem 1.25rem;
+  margin: 0.25rem auto 1.4rem;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.acp-title {
+  font-weight: 800; font-size: .95rem; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--primary-dark); text-align: center;
+}
+.acp-row { display: flex; flex-direction: column; gap: 0.3rem; }
+.acp-status {
+  font-size: .85rem; color: var(--text-light); background: #f1f5f9;
+  border-radius: 6px; padding: 0.5rem 0.75rem; text-align: center; font-weight: 600;
+}
+.acp-actions { display: flex; gap: 0.75rem; }
+.acp-btn {
+  flex: 1; padding: 0.8rem 1rem; border: none; border-radius: var(--radius);
+  font-weight: 800; font-size: .95rem; color: #fff; cursor: pointer; min-height: 48px;
+}
+.acp-btn.in  { background: #059669; }
+.acp-btn.in:hover  { background: #047857; }
+.acp-btn.out { background: #dc2626; }
+.acp-btn.out:hover { background: #b91c1c; }
+.acp-btn:disabled { opacity: .6; cursor: wait; }
+.acp-btn:disabled { opacity: .45; cursor: not-allowed; }
 
 /* =========================================
 🌐 TRADITIONAL CHINESE FONT SUPPORT
