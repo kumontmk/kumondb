@@ -240,7 +240,8 @@ export default {
       sun: "Sun", mon: "Mon", tue: "Tue", wed: "Wed",
       thu: "Thu", fri: "Fri", sat: "Sat"
     },
-    // ... add any other missing labels like:
+    dtTimeslot: "DT Timeslot *",
+    dtTimeslotRequired: "⚠️ Please select a DT timeslot.",
     status: "Status",
     pauseFrom: "Pause From *",
     pauseTo: "Pause To *",

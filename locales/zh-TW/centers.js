@@ -11,7 +11,7 @@ export default {
     errorLoading: "載入中心時發生錯誤，請重新整理。"
   },
   admin: {
-    centerAdministration: "中心行政",
+    centerAdministration: "中心工具",
     employeeManagement: "員工管理",
     employeeManagementDesc: "新增／編輯員工、QR code 與打卡紀錄",
     centerManagement: "中心管理",

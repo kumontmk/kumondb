@@ -271,5 +271,7 @@ export default {
     center: "中心",
     day: "星期",
     time24h: "時間（24小時制）",
+    dtTimeslot: "DT 時段 *",
+    dtTimeslotRequired: "⚠️ 請選擇 DT 時段。",
   }
 };

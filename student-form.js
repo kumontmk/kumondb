@@ -924,6 +924,7 @@ function renderSchedule() {
             diagnosticTests.push({
                 subject: row.querySelector('.dt-subject')?.value || '',
                 date: row.querySelector('.dt-date')?.value || '',
+                DTtimeslot: row.querySelector('.dt-timeslot')?.value || '',
                 test: row.querySelector('.dt-test')?.value || '',
                 score: row.querySelector('.dt-score')?.value || '',
                 time: row.querySelector('.dt-time')?.value || '',
@@ -1358,16 +1359,17 @@ function renderSchedule() {
     function addDTRow(data = {}) {
         const tbody = document.getElementById('dtTableBody');
         if (!tbody) return;
-        const tr = document.createElement('tr');  
+        const tr = document.createElement('tr');
         tr.innerHTML = `
-         <td> <select class="dt-subject" required style="width:100%; padding:0.5rem;"> <option value="">${t('studentForm.selectSubject')}</option>${SUBJECTS.map(s => `<option value="${s}" ${data.subject === s ? 'selected' : ''}>${s}</option>`).join('')}</select> </td>
-         <td> <input type="date" class="dt-date" value="${data.date || ''}" required style="width:100%; padding:0.5rem;"> </td>
-         <td> <input type="text" class="dt-test" placeholder="${t('studentForm.dtTestPlaceholder')}" value="${data.test || ''}" required style="width:100%; padding:0.5rem;"> </td>
-         <td> <input type="text" class="dt-score" placeholder="${t('studentForm.dtScorePlaceholder')}" value="${data.score || ''}" required style="width:100%; padding:0.5rem;"> </td>
-         <td> <input type="number" class="dt-time" placeholder="${t('studentForm.dtTimePlaceholder')}" value="${data.time || ''}" required style="width:100%; padding:0.5rem;"> </td>
-         <td> <input type="text" class="dt-suggested" placeholder="${t('studentForm.dtLevelPlaceholder')}" value="${data.suggestedStart || ''}" style="width:100%; padding:0.5rem;"> </td>
-         <td> <input type="text" class="dt-actual" placeholder="${t('studentForm.dtLevelPlaceholder')}" value="${data.actualStart || ''}" style="width:100%; padding:0.5rem;"> </td>
-         <td style="text-align:center;"> <button type="button" class="remove-dt-btn danger" style="padding:0.4rem 0.8rem;">🗑️</button> </td>`;
+        <td> <select class="dt-subject" required style="width:100%; padding:0.5rem;"> <option value="">${t('studentForm.selectSubject')}</option>${SUBJECTS.map(s => `<option value="${s}" ${data.subject === s ? 'selected' : ''}>${s}</option>`).join('')}</select> </td>
+        <td> <input type="date" class="dt-date" value="${data.date || ''}" required style="width:100%; padding:0.5rem;"> </td>
+        <td> <input type="time" class="dt-timeslot" value="${data.DTtimeslot || ''}" style="width:100%; padding:0.5rem;"> </td>
+        <td> <input type="text" class="dt-test" placeholder="${t('studentForm.dtTestPlaceholder')}" value="${data.test || ''}" required style="width:100%; padding:0.5rem;"> </td>
+        <td> <input type="text" class="dt-score" placeholder="${t('studentForm.dtScorePlaceholder')}" value="${data.score || ''}" required style="width:100%; padding:0.5rem;"> </td>
+        <td> <input type="number" class="dt-time" placeholder="${t('studentForm.dtTimePlaceholder')}" value="${data.time || ''}" required style="width:100%; padding:0.5rem;"> </td>
+        <td> <input type="text" class="dt-suggested" placeholder="${t('studentForm.dtLevelPlaceholder')}" value="${data.suggestedStart || ''}" style="width:100%; padding:0.5rem;"> </td>
+        <td> <input type="text" class="dt-actual" placeholder="${t('studentForm.dtLevelPlaceholder')}" value="${data.actualStart || ''}" style="width:100%; padding:0.5rem;"> </td>
+        <td style="text-align:center;"> <button type="button" class="remove-dt-btn danger" style="padding:0.4rem 0.8rem;">🗑️</button> </td>`;
         tbody.appendChild(tr);
         tr.querySelector('.remove-dt-btn').onclick = () => tr.remove();
     }
@@ -1916,6 +1918,31 @@ function renderSchedule() {
         const modal = document.getElementById('scheduleDTModal');
         const list = document.getElementById('scheduleDTList');
         list.innerHTML = '';
+
+        // Inject or reset global date + timeslot fields
+        let globalFields = document.getElementById('scheduleDTGlobalFields');
+        if (!globalFields) {
+            globalFields = document.createElement('div');
+            globalFields.id = 'scheduleDTGlobalFields';
+            globalFields.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem; padding: 1rem; background: #f8fafc; border-radius: var(--radius); border: 1px solid #e2e8f0;';
+            globalFields.innerHTML = `
+                <div>
+                    <label style="display:block; font-size:0.9rem; font-weight:600; margin-bottom:0.4rem;">${t('studentForm.dtDate')}</label>
+                    <input type="date" id="scheduleDTDateGlobal" style="width:100%; padding:0.6rem; border:1px solid #ddd; border-radius:var(--radius);">
+                </div>
+                <div>
+                    <label style="display:block; font-size:0.9rem; font-weight:600; margin-bottom:0.4rem;">${t('studentForm.dtTimeslot')}</label>
+                    <input type="time" id="scheduleDTTimeslotGlobal" style="width:100%; padding:0.6rem; border:1px solid #ddd; border-radius:var(--radius);">
+                </div>
+            `;
+            list.insertAdjacentElement('beforebegin', globalFields);
+        } else {
+            const dateInput = document.getElementById('scheduleDTDateGlobal');
+            const timeInput = document.getElementById('scheduleDTTimeslotGlobal');
+            if (dateInput) dateInput.value = '';
+            if (timeInput) timeInput.value = '';
+        }
+
         addScheduleDTRow();
         modal.classList.remove('hidden');
         modal.style.display = 'flex';
@@ -1923,6 +1950,10 @@ function renderSchedule() {
 
     function closeScheduleDTModal() {
         const modal = document.getElementById('scheduleDTModal');
+        const dateInput = document.getElementById('scheduleDTDateGlobal');
+        const timeInput = document.getElementById('scheduleDTTimeslotGlobal');
+        if (dateInput) dateInput.value = '';
+        if (timeInput) timeInput.value = '';
         modal.classList.add('hidden');
         modal.style.display = 'none';
     }
@@ -1930,13 +1961,12 @@ function renderSchedule() {
     function addScheduleDTRow() {
         const list = document.getElementById('scheduleDTList');
         const row = document.createElement('div');
-        row.style.cssText = 'display: flex; gap: 0.5rem; align-items: center;';
+        row.style.cssText = 'display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;';
         row.innerHTML = `
             <select class="schedule-dt-subject" required style="flex: 1; padding: 0.5rem; border: 1px solid #ddd; border-radius: var(--radius);">
                 <option value="">${t('studentForm.selectSubject')}</option>
                 ${SUBJECTS.map(s => `<option value="${s}">${s}</option>`).join('')}
             </select>
-            <input type="date" class="schedule-dt-date" required style="flex: 1; padding: 0.5rem; border: 1px solid #ddd; border-radius: var(--radius);">
             <button type="button" class="remove-schedule-dt-btn danger" style="padding: 0.5rem 0.8rem; font-size: 1.2rem; line-height: 1; border-radius: var(--radius);">×</button>
         `;
         row.querySelector('.remove-schedule-dt-btn').onclick = () => {
@@ -1947,28 +1977,40 @@ function renderSchedule() {
     }
 
     document.getElementById('addDTSubjectBtn')?.addEventListener('click', addScheduleDTRow);
-    document.getElementById('saveScheduleDTBtn')?.addEventListener('click', () => {
-        const rows = document.querySelectorAll('#scheduleDTList > div');
-        let hasData = false;
-        let errorMsg = '';
-        rows.forEach((row, index) => {
-            const subject = row.querySelector('.schedule-dt-subject')?.value;
-            const date = row.querySelector('.schedule-dt-date')?.value;
-            if (subject || date) {
-                if (!subject) errorMsg = `${t('studentForm.rowSubjectRequired')}${index + 1}: Please select a Subject.`;
-                else if (!date) errorMsg = `${t('studentForm.rowSubjectRequired')}${index + 1}${t('studentForm.rowDateRequired')}`;
-                else {
-                    addDTRow({ subject: subject, date: date });
-                    hasData = true;
-                }
+document.getElementById('saveScheduleDTBtn')?.addEventListener('click', () => {
+    const globalDate = document.getElementById('scheduleDTDateGlobal')?.value || '';
+    const globalTimeslot = document.getElementById('scheduleDTTimeslotGlobal')?.value || '';
+
+    if (!globalDate) return showError(t('studentForm.dtDateRequired') || '⚠️ Please select a DT date.');
+    if (!globalTimeslot) return showError(t('studentForm.dtTimeslotRequired') || '⚠️ Please select a DT timeslot.');
+
+    const rows = document.querySelectorAll('#scheduleDTList > div');
+    let hasData = false;
+    let errorMsg = '';
+    const seenSubjects = new Set();
+
+    for (let index = 0; index < rows.length; index++) {
+        const row = rows[index];
+        const subject = row.querySelector('.schedule-dt-subject')?.value;
+
+        if (subject) {
+            if (seenSubjects.has(subject)) {
+                errorMsg = `${subject} has already been selected in this form.`;
+                break;
             }
-        });
-        if (errorMsg) return showError(errorMsg);
-        if (!hasData) return showError(t('studentForm.addSubjectRequired'));
-        closeScheduleDTModal();
-        const dtTabBtn = document.querySelector('.tab-btn[data-tab="dt-at"]');
-        if (dtTabBtn) dtTabBtn.click();
-    });
+            seenSubjects.add(subject);
+            addDTRow({ subject, date: globalDate, DTtimeslot: globalTimeslot });
+            hasData = true;
+        }
+    }
+
+    if (errorMsg) return showError(errorMsg);
+    if (!hasData) return showError(t('studentForm.addSubjectRequired'));
+
+    closeScheduleDTModal();
+    const dtTabBtn = document.querySelector('.tab-btn[data-tab="dt-at"]');
+    if (dtTabBtn) dtTabBtn.click();
+});
     document.getElementById('closeScheduleDTModal')?.addEventListener('click', closeScheduleDTModal);
     document.getElementById('scheduleDTModal')?.addEventListener('click', (e) => { if (e.target.id === 'scheduleDTModal') closeScheduleDTModal(); });
 

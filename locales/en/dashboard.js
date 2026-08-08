@@ -11,6 +11,15 @@ export default {
     greetingSuffix: ", what would you like to do?",
     subtitle: "Select a feature below to manage your center's operations and track student progress.",
     welcome: "Welcome, {{name}}",
+    noTime: "No time",
+    selectedLabel: "✅ Selected:",
+
+    dtWarning: {
+      publicHoliday: "{{date}} is a public holiday{{name}}",
+      centerHoliday: "{{date}} is a center holiday{{name}}",
+      closedDay: "{{date}} is a closed day for this center",
+      continueAnyway: "⚠️ The selected date may be a holiday or closed day. Continue anyway?"
+    },
 
     cards: {
       studentManagement: "Student Management",
@@ -56,8 +65,30 @@ export default {
       mkProgressDesc: "Track student progress reports for Mei Keng"
     },
 
-    months: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
-    days: { sun: "Sun", mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat" },
+    months: [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December"
+    ],
+
+    days: {
+      sun: "Sun",
+      mon: "Mon",
+      tue: "Tue",
+      wed: "Wed",
+      thu: "Thu",
+      fri: "Fri",
+      sat: "Sat"
+    },
 
     poModalTitle: "Parent Orientations",
     poOnDate: "Parent Orientations on {{date}}",
@@ -80,8 +111,28 @@ export default {
     phoneDad: "Dad: {{value}}",
     phoneOwn: "Student: {{value}}",
 
-    poTable: { date: "Date", subject: "Subject", testAt: "Test / AT", score: "Score", time: "Time (mins)", startLvl: "Start Lvl", startWS: "Start WS" },
-    dtTable: { subject: "Subject", test: "Test", score: "Score", time: "Time", suggested: "Suggested", actual: "Actual", note: "Note", action: "Action" },
+    poTable: {
+      date: "Date",
+      subject: "Subject",
+      timeslot: "Timeslot",
+      testAt: "Test / AT",
+      score: "Score",
+      time: "Time (mins)",
+      startLvl: "Start Lvl",
+      startWS: "Start WS"
+    },
+
+    dtTable: {
+      subject: "Subject",
+      timeslot: "Timeslot",
+      test: "Test",
+      score: "Score",
+      time: "Time",
+      suggested: "Suggested",
+      actual: "Actual",
+      note: "Note",
+      action: "Action"
+    },
 
     noDTRecorded: "No Diagnostic Tests recorded.",
     instructorNotes: "📝 Instructor Notes for this Student:",
@@ -144,9 +195,14 @@ export default {
       saveBtn: "💾 Schedule DT(s)",
       subjectLabel: "Subject *",
       selectSubject: "Select Subject",
-      dateLabel: "Diagnostic Date *",
-      completeBoth: "⚠️ Please complete both Subject and Date for all added rows, or remove empty rows.",
-      addAtLeastOne: "⚠️ Please add at least one subject and date.",
+      dateLabel: "DT Date *",
+      timeslotLabel: "DT Timeslot *",
+      selectDate: "⚠️ Please select a DT date.",
+      selectTimeslot: "⚠️ Please select a DT timeslot.",
+      completeBoth: "⚠️ Please select a subject for all added rows, or remove empty rows.",
+      addAtLeastOne: "⚠️ Please add at least one subject.",
+      duplicateSubject: "⚠️ {{subject}} has already been selected in this form.",
+      duplicateSubjectDate: "⚠️ {{subject}} on {{date}} already exists for this student.",
       success: "✅ {{count}} Diagnostic Test(s) scheduled successfully!",
       failed: "❌ Failed to schedule DT."
     },
@@ -171,7 +227,9 @@ export default {
       addSubject: "+ Add Subject",
       subjectLabel: "Subject *",
       scheduleDT: "Schedule DT?",
+      scheduleDTGlobal: "Schedule DT for all selected subjects?",
       dtDate: "DT Date *",
+      dtTimeslot: "DT Timeslot *",
       max3: "⚠️ Maximum 3 subjects allowed for inquiry.",
       added: " (Added)",
       nameCnRequired: "⚠️ Name (Chinese) is required.",
@@ -182,6 +240,9 @@ export default {
       addOneSubject: "⚠️ Please add at least one subject.",
       selectSubjectAll: "⚠️ Please select a subject for all rows.",
       selectDTDate: "⚠️ Please select a DT date for {{subject}}.",
+      selectDTDateGlobal: "⚠️ Please select a DT date.",
+      selectDTTimeslot: "⚠️ Please select a DT timeslot.",
+      duplicateSubject: "⚠️ This subject has already been selected.",
       saved: "✅ Student Inquiry added successfully!",
       failed: "❌ Failed to save inquiry. Please try again.",
       saveBtn: "💾 Save Inquiry"

@@ -12,6 +12,14 @@ export default {
     subtitle: "請選擇以下功能以管理您的中心運作並追蹤學生進度。",
     welcome: "歡迎，{{name}}",
     selectedLabel: "✅ 已選擇:",
+    noTime: "無時間",
+
+    dtWarning: {
+      publicHoliday: "{{date}} 是公眾假期{{name}}",
+      centerHoliday: "{{date}} 是中心假期{{name}}",
+      closedDay: "{{date}} 是此中心的休息日",
+      continueAnyway: "⚠️ 所選日期可能是假期或休息日。仍要繼續嗎？"
+    },
 
     cards: {
       studentManagement: "學生管理",
@@ -57,8 +65,30 @@ export default {
       mkProgressDesc: "追蹤 Mei Keng 學生進度報告"
     },
 
-    months: ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"],
-    days: { sun: "週日", mon: "週一", tue: "週二", wed: "週三", thu: "週四", fri: "週五", sat: "週六" },
+    months: [
+      "一月",
+      "二月",
+      "三月",
+      "四月",
+      "五月",
+      "六月",
+      "七月",
+      "八月",
+      "九月",
+      "十月",
+      "十一月",
+      "十二月"
+    ],
+
+    days: {
+      sun: "週日",
+      mon: "週一",
+      tue: "週二",
+      wed: "週三",
+      thu: "週四",
+      fri: "週五",
+      sat: "週六"
+    },
 
     poModalTitle: "家長說明會",
     poOnDate: "{{date}} 的家長說明會",
@@ -81,8 +111,28 @@ export default {
     phoneDad: "爸爸：{{value}}",
     phoneOwn: "學生：{{value}}",
 
-    poTable: { date: "日期", subject: "科目", testAt: "測試 / AT", score: "分數", time: "時間（分鐘）", startLvl: "起始級別", startWS: "起始 WS" },
-    dtTable: { subject: "科目", test: "測試", score: "分數", time: "時間", suggested: "建議", actual: "實際", note: "備註", action: "操作" },
+    poTable: {
+      date: "日期",
+      subject: "科目",
+      timeslot: "時段",
+      testAt: "測試 / AT",
+      score: "分數",
+      time: "時間（分鐘）",
+      startLvl: "起始級別",
+      startWS: "起始 WS"
+    },
+
+    dtTable: {
+      subject: "科目",
+      timeslot: "時段",
+      test: "測試",
+      score: "分數",
+      time: "時間",
+      suggested: "建議",
+      actual: "實際",
+      note: "備註",
+      action: "操作"
+    },
 
     noDTRecorded: "沒有診斷測試紀錄。",
     instructorNotes: "📝 此學生的導師備註：",
@@ -145,9 +195,14 @@ export default {
       saveBtn: "💾 安排 DT",
       subjectLabel: "科目 *",
       selectSubject: "選擇科目",
-      dateLabel: "診斷日期 *",
-      completeBoth: "⚠️ 請完成所有新增列的科目與日期，或移除空白的列。",
-      addAtLeastOne: "⚠️ 請至少新增一個科目與日期。",
+      dateLabel: "DT 日期 *",
+      timeslotLabel: "DT 時段 *",
+      selectDate: "⚠️ 請選擇 DT 日期。",
+      selectTimeslot: "⚠️ 請選擇 DT 時段。",
+      completeBoth: "⚠️ 請為所有新增列選擇科目，或移除空白列。",
+      addAtLeastOne: "⚠️ 請至少新增一個科目。",
+      duplicateSubject: "⚠️ {{subject}} 在此表單中已選擇。",
+      duplicateSubjectDate: "⚠️ 該學生在 {{date}} 已有 {{subject}} 的 DT。",
       success: "✅ 已成功安排 {{count}} 個診斷測試！",
       failed: "❌ 安排 DT 失敗。"
     },
@@ -172,7 +227,9 @@ export default {
       addSubject: "+ 新增科目",
       subjectLabel: "科目 *",
       scheduleDT: "安排 DT？",
+      scheduleDTGlobal: "為所有選擇的科目安排 DT？",
       dtDate: "DT 日期 *",
+      dtTimeslot: "DT 時段 *",
       max3: "⚠️ 諮詢最多可選 3 個科目。",
       added: "（已新增）",
       nameCnRequired: "⚠️ 姓名（中文）為必填。",
@@ -183,6 +240,9 @@ export default {
       addOneSubject: "⚠️ 請至少新增一個科目。",
       selectSubjectAll: "⚠️ 請為所有列選擇科目。",
       selectDTDate: "⚠️ 請為 {{subject}} 選擇 DT 日期。",
+      selectDTDateGlobal: "⚠️ 請選擇 DT 日期。",
+      selectDTTimeslot: "⚠️ 請選擇 DT 時段。",
+      duplicateSubject: "⚠️ 此科目已選擇。",
       saved: "✅ 學生諮詢新增成功！",
       failed: "❌ 儲存諮詢失敗。請再試一次。",
       saveBtn: "💾 儲存諮詢"

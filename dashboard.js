@@ -529,6 +529,126 @@ function autoShrinkHolidayNames() {
   });
 }
 
+// ============================================
+// 🕒 DT TIMESLOT HELPERS
+// ============================================
+function getSubjectAbbr(subject) {
+  if (subject === 'Math') return 'M';
+  if (subject === 'English EFL') return 'L';
+  if (subject === 'English ERP') return 'R';
+  if ((subject || '').includes('Chinese')) return 'C';
+  return subject ? subject.charAt(0).toUpperCase() : '';
+}
+
+function getDTDateWarnings(dateStr) {
+  const warnings = [];
+  if (!dateStr) return warnings;
+
+  const event = calendarEventsMap[dateStr];
+  const nameSuffix = event?.name ? `: ${event.name}` : '';
+
+  if (event?.type === 'public') {
+    warnings.push(t('dashboard.dtWarning.publicHoliday', {
+      date: dateStr,
+      name: nameSuffix
+    }));
+  }
+
+  if (event?.type === 'center') {
+    warnings.push(t('dashboard.dtWarning.centerHoliday', {
+      date: dateStr,
+      name: nameSuffix
+    }));
+  }
+
+  const dateObj = new Date(`${dateStr}T00:00:00`);
+  if (!isNaN(dateObj.getTime())) {
+    const closedDays = getClosedDaysForCenter(centerName);
+    if (closedDays.includes(dateObj.getDay())) {
+      warnings.push(t('dashboard.dtWarning.closedDay', { date: dateStr }));
+    }
+  }
+
+  return warnings;
+}
+
+function confirmDTDateWarnings(dates = []) {
+  const uniqueWarnings = [
+    ...new Set(
+      dates
+        .filter(Boolean)
+        .flatMap(date => getDTDateWarnings(date))
+    )
+  ];
+
+  if (uniqueWarnings.length === 0) return true;
+
+  return confirm(
+    `${t('dashboard.dtWarning.continueAnyway')}\n\n${uniqueWarnings.join('\n')}`
+  );
+}
+
+// ============================================
+// 🕒 GLOBAL DT DATE & TIMESLOT HELPERS
+// ============================================
+function ensureScheduleDTGlobalFields() {
+  const container = document.getElementById('dtSubjectsContainer');
+  if (!container || document.getElementById('dtGlobalFieldsWrapper')) return;
+
+  const wrapper = document.createElement('div');
+  wrapper.id = 'dtGlobalFieldsWrapper';
+  wrapper.innerHTML = `
+    <div class="dt-global-date-group">
+      <label for="dtDateInput" id="dtDateLabel">${t('dashboard.scheduleDT.dateLabel')}</label>
+      <input type="date" id="dtDateInput" required>
+    </div>
+    <div class="dt-global-timeslot-group">
+      <label for="dtTimeslotInput" id="dtTimeslotLabel">${t('dashboard.scheduleDT.timeslotLabel')}</label>
+      <input type="time" id="dtTimeslotInput" required>
+    </div>
+  `;
+  container.insertAdjacentElement('beforebegin', wrapper);
+}
+
+function ensureQIDTGlobalFields() {
+  const container = document.getElementById('qiSubjectsContainer');
+  if (!container || document.getElementById('qiGlobalFieldsWrapper')) return;
+
+  const wrapper = document.createElement('div');
+  wrapper.id = 'qiGlobalFieldsWrapper';
+  wrapper.innerHTML = `
+    <div class="qi-global-dt-group">
+      <label class="checkbox-label">
+        <input type="checkbox" id="qiScheduleDTGlobal">
+        <span id="qiScheduleDTGlobalLabel">${t('dashboard.inquiry.scheduleDTGlobal')}</span>
+      </label>
+    </div>
+    <div class="qi-global-dt-details" id="qiGlobalDtDetails" style="display: none;">
+      <div class="qi-form-grid">
+        <div class="form-group">
+          <label for="qiDTDateGlobal" id="qiDTDateLabel">${t('dashboard.inquiry.dtDate')}</label>
+          <input type="date" id="qiDTDateGlobal">
+        </div>
+        <div class="form-group">
+          <label for="qiDTTimeslotGlobal" id="qiDTTimeslotLabel">${t('dashboard.inquiry.dtTimeslot')}</label>
+          <input type="time" id="qiDTTimeslotGlobal">
+        </div>
+      </div>
+    </div>
+  `;
+  container.insertAdjacentElement('beforebegin', wrapper);
+
+  const checkbox = document.getElementById('qiScheduleDTGlobal');
+  const details = document.getElementById('qiGlobalDtDetails');
+  checkbox.addEventListener('change', () => {
+    details.style.display = checkbox.checked ? 'block' : 'none';
+    if (!checkbox.checked) {
+      document.getElementById('qiDTDateGlobal').value = '';
+      document.getElementById('qiDTTimeslotGlobal').value = '';
+    }
+  });
+}
+
 function renderMonthGrid(year, month, containerId, todayDate) {
   const container = document.getElementById(containerId);
   container.innerHTML = '';
@@ -590,28 +710,54 @@ function renderMonthGrid(year, month, containerId, todayDate) {
       cell.classList.add('closed-day');
     }
     const hasDT = dtDataMap[dateStr] && dtDataMap[dateStr].length > 0;
+
     if (hasDT) {
       cell.classList.add('has-dt');
+
       const dtCounts = {};
+      const dtTimesBySubject = {};
+
       dtDataMap[dateStr].forEach(entry => {
         const subj = entry.dtData.subject || '';
-        let abbr = '';
-        if (subj === 'Math') abbr = 'M';
-        else if (subj === 'English EFL') abbr = 'L';
-        else if (subj === 'English ERP') abbr = 'R';
-        else if (subj.includes('Chinese')) abbr = 'C';
-        if (abbr) {
-          dtCounts[abbr] = (dtCounts[abbr] || 0) + 1;
+        const abbr = getSubjectAbbr(subj);
+
+        if (!abbr) return;
+
+        dtCounts[abbr] = (dtCounts[abbr] || 0) + 1;
+
+        if (!dtTimesBySubject[abbr]) {
+          dtTimesBySubject[abbr] = [];
+        }
+
+        if (entry.dtData.DTtimeslot) {
+          dtTimesBySubject[abbr].push(entry.dtData.DTtimeslot);
         }
       });
+
       const indicators = Object.entries(dtCounts)
         .map(([abbr, count]) => `${abbr} (${count})`)
         .join(' ');
+
       const indicatorEl = document.createElement('div');
       indicatorEl.className = 'dt-indicator';
       indicatorEl.textContent = indicators;
       cell.appendChild(indicatorEl);
-      const dtTooltip = t('dashboard.dtTooltip', { indicators: indicators.replace(/ /g, ', ') });
+
+      const tooltipIndicators = Object.entries(dtCounts)
+        .map(([abbr, count]) => {
+          const uniqueTimes = [...new Set(dtTimesBySubject[abbr] || [])].sort();
+          const timeText = uniqueTimes.length
+            ? uniqueTimes.join(', ')
+            : t('dashboard.noTime');
+
+          return `${abbr} (${count}) ${timeText}`;
+        })
+        .join(', ');
+
+      const dtTooltip = t('dashboard.dtTooltip', {
+        indicators: tooltipIndicators
+      });
+
       cell.title = cell.title ? `${cell.title} | ${dtTooltip}` : dtTooltip;
     }
     container.appendChild(cell);
@@ -670,31 +816,50 @@ function openPOModal(dateStr) {
       const subjectsHtml = student.subjects.length > 0 
         ? student.subjects.map(s => `<span class="po-subject-tag">${s.name} (Current: ${s.currentLevel})</span>`).join('')
         : `<span style="color:#999; font-size:0.85rem;">${t('dashboard.noActiveSubjects')}</span>`;
-      let dtHtml = '';
-      if (student.diagnosticTests && student.diagnosticTests.length > 0) {
-        dtHtml = `<div class="dt-table-wrapper"><table class="dt-mini-table">
-            <thead>
-              <tr>
-                <th>${t('dashboard.poTable.date')}</th><th>${t('dashboard.poTable.subject')}</th><th>${t('dashboard.poTable.testAt')}</th><th>${t('dashboard.poTable.score')}</th><th>${t('dashboard.poTable.time')}</th><th>${t('dashboard.poTable.startLvl')}</th><th>${t('dashboard.poTable.startWS')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${student.diagnosticTests.map(dt => {
-                const subj = student.subjects.find(s => s.name === dt.subject);
-                const startLvl = subj ? subj.startLevel : '-';
-                const startWs = subj ? subj.startWS : '-';
-                return `
+        let dtHtml = '';
+
+        if (student.diagnosticTests && student.diagnosticTests.length > 0) {
+          dtHtml = `
+            <div class="dt-table-wrapper">
+              <table class="dt-mini-table">
+                <thead>
                   <tr>
-                    <td>${dt.date || '-'}</td><td>${dt.subject || '-'}</td><td>${dt.test || '-'}</td>
-                    <td>${dt.score || '-'}</td><td>${dt.time ? dt.time : '-'}</td><td>${startLvl}</td><td>${startWs}</td>
+                    <th>${t('dashboard.poTable.date')}</th>
+                    <th>${t('dashboard.poTable.subject')}</th>
+                    <th>${t('dashboard.poTable.timeslot')}</th>
+                    <th>${t('dashboard.poTable.testAt')}</th>
+                    <th>${t('dashboard.poTable.score')}</th>
+                    <th>${t('dashboard.poTable.time')}</th>
+                    <th>${t('dashboard.poTable.startLvl')}</th>
+                    <th>${t('dashboard.poTable.startWS')}</th>
                   </tr>
-                `;
-              }).join('')}
-            </tbody>
-            </table></div>`;
-      } else {
-        dtHtml = `<p style="font-size:0.85rem; color:#999; margin-top:0.5rem;">${t('dashboard.noDTRecorded')}</p>`;
-      }
+                </thead>
+                <tbody>
+                  ${student.diagnosticTests.map(dt => {
+                    const subj = student.subjects.find(s => s.name === dt.subject);
+                    const startLvl = subj ? subj.startLevel : '-';
+                    const startWs = subj ? subj.startWS : '-';
+
+                    return `
+                      <tr>
+                        <td>${dt.date || '-'}</td>
+                        <td>${dt.subject || '-'}</td>
+                        <td>${dt.DTtimeslot ? dt.DTtimeslot : t('dashboard.noTime')}</td>
+                        <td>${dt.test || '-'}</td>
+                        <td>${dt.score || '-'}</td>
+                        <td>${dt.time ? dt.time : '-'}</td>
+                        <td>${startLvl}</td>
+                        <td>${startWs}</td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          `;
+        } else {
+          dtHtml = `<p style="font-size:0.85rem; color:#999; margin-top:0.5rem;">${t('dashboard.noDTRecorded')}</p>`;
+        }
       card.innerHTML = `
         <h4>
           <span> ${fullNameHtml}</span>
@@ -971,36 +1136,56 @@ function openDTModal(dateStr) {
 
       let dtTableHtml = `
         <div class="dt-table-wrapper">
-        <table class="dt-mini-table">
-          <thead><tr>
-            <th>${t('dashboard.dtTable.subject')}</th>
-            <th>${t('dashboard.dtTable.test')}</th>
-            <th>${t('dashboard.dtTable.score')}</th>
-            <th>${t('dashboard.dtTable.time')}</th>
-            <th>${t('dashboard.dtTable.suggested')}</th>
-            <th>${t('dashboard.dtTable.actual')}</th>
-            <th>${t('dashboard.dtTable.note')}</th>
-            <th>${t('dashboard.dtTable.action')}</th>
-          </tr></thead>
-          <tbody>
+          <table class="dt-mini-table">
+            <thead>
+              <tr>
+                <th>${t('dashboard.dtTable.subject')}</th>
+                <th>${t('dashboard.dtTable.timeslot')}</th>
+                <th>${t('dashboard.dtTable.test')}</th>
+                <th>${t('dashboard.dtTable.score')}</th>
+                <th>${t('dashboard.dtTable.time')}</th>
+                <th>${t('dashboard.dtTable.suggested')}</th>
+                <th>${t('dashboard.dtTable.actual')}</th>
+                <th>${t('dashboard.dtTable.note')}</th>
+                <th>${t('dashboard.dtTable.action')}</th>
+              </tr>
+            </thead>
+            <tbody>
       `;
+
       studentEntries.forEach(entry => {
         const dt = entry.dtData;
-        const safeSubject = (dt.subject || '').replace(/'/g, "\\'"); 
-        dtTableHtml += `<tr>
-          <td>${dt.subject || '-'}</td>
-          <td>${dt.test || '-'}</td>
-          <td>${dt.score || '-'}</td>
-          <td>${dt.time || '-'}</td>
-          <td>${dt.suggestedStart || '-'}</td>
-          <td>${dt.actualStart || '-'}</td>
-          <td>${dt.dtNote || '-'}</td>
-          <td style="white-space: nowrap;">
-            <button class="dt-action-btn cancel" data-student="${studentId}" data-date="${dateStr}" data-subject="${safeSubject}" title="Cancel DT">❌</button>
-            <button class="dt-action-btn reschedule" data-student="${studentId}" data-date="${dateStr}" data-subject="${safeSubject}" title="Reschedule DT">📅</button>
-          </td>
-        </tr>`;
+        const safeSubject = (dt.subject || '').replace(/'/g, "\\'");
+        const safeTime = dt.DTtimeslot || '';
+
+        dtTableHtml += `
+          <tr>
+            <td>${dt.subject || '-'}</td>
+            <td>${dt.DTtimeslot ? dt.DTtimeslot : t('dashboard.noTime')}</td>
+            <td>${dt.test || '-'}</td>
+            <td>${dt.score || '-'}</td>
+            <td>${dt.time || '-'}</td>
+            <td>${dt.suggestedStart || '-'}</td>
+            <td>${dt.actualStart || '-'}</td>
+            <td>${dt.dtNote || '-'}</td>
+            <td style="white-space: nowrap;">
+              <button class="dt-action-btn cancel"
+                data-student="${studentId}"
+                data-date="${dateStr}"
+                data-subject="${safeSubject}"
+                title="Cancel DT">❌</button>
+
+              <button class="dt-action-btn reschedule"
+                data-student="${studentId}"
+                data-date="${dateStr}"
+                data-subject="${safeSubject}"
+                data-time="${safeTime}"
+                title="Reschedule DT">📅</button>
+            </td>
+          </tr>
+        `;
       });
+
       dtTableHtml += `</tbody></table></div>`;
 
       const firstDt = studentEntries[0].dtData;
@@ -1036,52 +1221,87 @@ function openDTModal(dateStr) {
       card.querySelectorAll('.dt-action-btn.reschedule').forEach(btn => {
         btn.onclick = (e) => {
           e.stopPropagation();
+
           const cell = btn.closest('td');
-          if (!cell || cell.querySelector('.inline-reschedule-wrapper')) return; // already editing
+          if (!cell || cell.querySelector('.inline-reschedule-wrapper')) return;
 
           const { student, date: oldDate, subject } = btn.dataset;
+          const oldTime = btn.dataset.time || '';
 
-          // Hide action buttons while editing (don't destroy them)
           cell.querySelectorAll('.dt-action-btn').forEach(b => (b.style.display = 'none'));
 
           const wrapper = document.createElement('div');
           wrapper.className = 'inline-reschedule-wrapper';
           wrapper.innerHTML = `
             <input type="date" class="inline-reschedule-date" value="${oldDate}">
+            <input type="time" class="inline-reschedule-time" value="${oldTime}">
             <button type="button" class="inline-confirm-btn" title="Confirm">✓</button>
             <button type="button" class="inline-cancel-btn" title="Cancel">×</button>
           `;
+
           cell.appendChild(wrapper);
 
-          const dateInput  = wrapper.querySelector('.inline-reschedule-date');
+          const dateInput = wrapper.querySelector('.inline-reschedule-date');
+          const timeInput = wrapper.querySelector('.inline-reschedule-time');
           const confirmBtn = wrapper.querySelector('.inline-confirm-btn');
-          const cancelBtn  = wrapper.querySelector('.inline-cancel-btn');
+          const cancelBtn = wrapper.querySelector('.inline-cancel-btn');
 
           const restoreButtons = () => {
             wrapper.remove();
             cell.querySelectorAll('.dt-action-btn').forEach(b => (b.style.display = ''));
           };
 
-          // ✅ NOTHING happens until the user explicitly taps ✓
           confirmBtn.onclick = async (ev) => {
             ev.stopPropagation();
+
             const newDate = dateInput.value;
-            if (!newDate) { alert(t('dashboard.schedulePO.selectDate')); return; }
-            if (newDate === oldDate) { restoreButtons(); return; } // no-op
+            const newTime = timeInput.value;
+
+            if (!newDate) {
+              alert(t('dashboard.schedulePO.selectDate'));
+              return;
+            }
+
+            if (newDate === oldDate && newTime === oldTime) {
+              restoreButtons();
+              return;
+            }
+
+            if (!confirmDTDateWarnings([newDate])) {
+              return;
+            }
+
             restoreButtons();
-            await rescheduleDT(student, oldDate, subject, newDate);
+            await rescheduleDT(student, oldDate, subject, newDate, newTime);
           };
 
-          // ❌ Cancel just restores the buttons — no re-render, no picker closing
           cancelBtn.onclick = (ev) => {
             ev.stopPropagation();
             restoreButtons();
           };
 
-          // Desktop convenience: Enter = confirm, Escape = cancel
           dateInput.onkeydown = (ev) => {
-            if (ev.key === 'Enter')  { ev.preventDefault(); confirmBtn.click(); }
-            if (ev.key === 'Escape') { ev.stopPropagation(); cancelBtn.click(); }
+            if (ev.key === 'Enter') {
+              ev.preventDefault();
+              confirmBtn.click();
+            }
+
+            if (ev.key === 'Escape') {
+              ev.stopPropagation();
+              cancelBtn.click();
+            }
+          };
+
+          timeInput.onkeydown = (ev) => {
+            if (ev.key === 'Enter') {
+              ev.preventDefault();
+              confirmBtn.click();
+            }
+
+            if (ev.key === 'Escape') {
+              ev.stopPropagation();
+              cancelBtn.click();
+            }
           };
         };
       });
@@ -1113,41 +1333,76 @@ async function cancelDT(studentId, dateStr, subject) {
   }
 }
 
-async function rescheduleDT(studentId, oldDateStr, subject, newDateStr) {
-  if (oldDateStr === newDateStr) {
-    openDTModal(oldDateStr);
-    return;
-  }
+async function rescheduleDT(studentId, oldDateStr, subject, newDateStr, newTimeslot = null) {
   try {
     const snap = await get(ref(db, `centers/${centerId}/students/${studentId}`));
     if (!snap.exists()) return;
+
     const s = snap.val();
+    let updatedDt = null;
+
     if (s.diagnosticTests) {
       const dt = s.diagnosticTests.find(d => d.date === oldDateStr && d.subject === subject);
+
       if (dt) {
-        const exists = s.diagnosticTests.some(d => d.date === newDateStr && d.subject === subject);
-        if (exists) {
+        const existsOnNewDate = s.diagnosticTests.some(
+          d => d !== dt && d.subject === subject && d.date === newDateStr
+        );
+
+        if (existsOnNewDate) {
           alert(t('dashboard.rescheduleDT.exists'));
           openDTModal(oldDateStr);
           return;
         }
+
         dt.date = newDateStr;
-        await update(ref(db, `centers/${centerId}/students/${studentId}`), { diagnosticTests: s.diagnosticTests });
+
+        if (newTimeslot !== null) {
+          dt.DTtimeslot = newTimeslot;
+        }
+
+        updatedDt = dt;
       }
     }
+
+    if (!updatedDt) return;
+
+    await update(ref(db, `centers/${centerId}/students/${studentId}`), {
+      diagnosticTests: s.diagnosticTests
+    });
+
     if (dtDataMap[oldDateStr]) {
-      const entryIndex = dtDataMap[oldDateStr].findIndex(e => e.id === studentId && e.dtData.date === oldDateStr && e.dtData.subject === subject);
+      const entryIndex = dtDataMap[oldDateStr].findIndex(
+        e =>
+          e.id === studentId &&
+          e.dtData.date === oldDateStr &&
+          e.dtData.subject === subject
+      );
+
       if (entryIndex !== -1) {
         const entry = dtDataMap[oldDateStr][entryIndex];
+
         entry.dtData.date = newDateStr;
-        if (!dtDataMap[newDateStr]) dtDataMap[newDateStr] = [];
-        dtDataMap[newDateStr].push(entry);
-        dtDataMap[oldDateStr].splice(entryIndex, 1);
-        if (dtDataMap[oldDateStr].length === 0) delete dtDataMap[oldDateStr];
+
+        if (newTimeslot !== null) {
+          entry.dtData.DTtimeslot = newTimeslot;
+        }
+
+        if (oldDateStr !== newDateStr) {
+          if (!dtDataMap[newDateStr]) dtDataMap[newDateStr] = [];
+
+          dtDataMap[newDateStr].push(entry);
+          dtDataMap[oldDateStr].splice(entryIndex, 1);
+
+          if (dtDataMap[oldDateStr].length === 0) {
+            delete dtDataMap[oldDateStr];
+          }
+        }
       }
     }
+
     renderDualCalendar();
-    openDTModal(newDateStr); 
+    openDTModal(newDateStr);
     alert(t('dashboard.rescheduleDT.success'));
   } catch (err) {
     console.error('Error rescheduling DT:', err);
@@ -1208,6 +1463,23 @@ function openScheduleDTModalDash() {
   selectedInfo.style.display = 'none';
   hiddenId.value = '';
   container.innerHTML = '';
+
+  // Inject global fields and reset them
+  ensureScheduleDTGlobalFields();
+  const dtDateLabel = document.getElementById('dtDateLabel');
+  if (dtDateLabel) {
+    dtDateLabel.textContent = t('dashboard.scheduleDT.dateLabel');
+  }
+  const dtTimeslotLabel = document.getElementById('dtTimeslotLabel');
+  if (dtTimeslotLabel) {
+    dtTimeslotLabel.textContent = t('dashboard.scheduleDT.timeslotLabel');
+  }
+  const dtDateInput = document.getElementById('dtDateInput');
+  const dtTimeslotInput = document.getElementById('dtTimeslotInput');
+
+if (dtDateInput) dtDateInput.value = '';
+if (dtTimeslotInput) dtTimeslotInput.value = '';
+
   addDTSubjectRow(); 
 
   modal.classList.remove('hidden');
@@ -1257,58 +1529,106 @@ function openScheduleDTModalDash() {
     setTimeout(() => { dropdown.style.display = 'none'; }, 200);
   };
 
-  document.getElementById('saveScheduleDTBtnDash').onclick = async () => {
-    const studentId = hiddenId.value;
-    if (!studentId) return alert(t('dashboard.schedulePO.selectStudent'));
-    
-    const rows = container.querySelectorAll('.dt-subject-row');
-    let dtEntries = [];
-    let hasError = false;
-    rows.forEach(row => {
-      const subject = row.querySelector('.dt-row-subject').value;
-      const date = row.querySelector('.dt-row-date').value;
-      if (subject && date) {
-        dtEntries.push({ subject, date });
-      } else if (subject || date) {
-        hasError = true;
-      }
-    });
-    if (hasError) return alert(t('dashboard.scheduleDT.completeBoth'));
-    if (dtEntries.length === 0) return alert(t('dashboard.scheduleDT.addAtLeastOne'));
+document.getElementById('saveScheduleDTBtnDash').onclick = async () => {
+  const studentId = hiddenId.value;
+  if (!studentId) return alert(t('dashboard.schedulePO.selectStudent'));
 
-    const saveBtn = document.getElementById('saveScheduleDTBtnDash');
-    saveBtn.disabled = true; 
-    saveBtn.textContent = t('common.saving');
-    try {
-      const snap = await get(ref(db, `centers/${centerId}/students/${studentId}`));
-      if (!snap.exists()) throw new Error('Student not found.');
-      const s = snap.val();
-      if (!s.diagnosticTests) s.diagnosticTests = [];
-      let addedCount = 0;
-      for (const entry of dtEntries) {
-        const exists = s.diagnosticTests.some(dt => dt.subject === entry.subject && dt.date === entry.date);
-        if (!exists) {
-          const newDT = { subject: entry.subject, date: entry.date, test: '', score: '', time: '', suggestedStart: '', actualStart: '', dtNote: '' };
-          s.diagnosticTests.push(newDT);
-          addedCount++;
-          if (!dtDataMap[entry.date]) dtDataMap[entry.date] = [];
-          dtDataMap[entry.date].push({ id: studentId, studentData: s, dtData: newDT });
-        }
+  const globalDate = document.getElementById('dtDateInput')?.value || '';
+  const globalTimeslot = document.getElementById('dtTimeslotInput')?.value || '';
+
+  if (!globalDate) return alert(t('dashboard.scheduleDT.selectDate'));
+  if (!globalTimeslot) return alert(t('dashboard.scheduleDT.selectTimeslot'));
+
+  const rows = container.querySelectorAll('.dt-subject-row');
+  const dtEntries = [];
+  let hasError = false;
+  let duplicateSubject = null;
+  const seenSubjects = new Set();
+
+  for (const row of rows) {
+    const subject = row.querySelector('.dt-row-subject')?.value || '';
+    if (subject) {
+      if (seenSubjects.has(subject)) {
+        duplicateSubject = subject;
+        break;
       }
-      if (addedCount > 0) {
-        await update(ref(db, `centers/${centerId}/students/${studentId}`), { diagnosticTests: s.diagnosticTests });
-      }
-      renderDualCalendar();
-      modal.classList.add('hidden');
-      alert(t('dashboard.scheduleDT.success', { count: addedCount }));
-    } catch (err) {
-      console.error('Error scheduling DT:', err);
-      alert(t('dashboard.scheduleDT.failed'));
-    } finally {
-      saveBtn.disabled = false; 
-      saveBtn.textContent = t('dashboard.scheduleDT.saveBtn');
+      seenSubjects.add(subject);
+      dtEntries.push({ subject });
+    } else {
+      hasError = true;
     }
-  };
+  }
+
+  if (duplicateSubject) {
+    return alert(t('dashboard.scheduleDT.duplicateSubject', { subject: duplicateSubject }));
+  }
+  if (hasError) return alert(t('dashboard.scheduleDT.completeBoth'));
+  if (dtEntries.length === 0) return alert(t('dashboard.scheduleDT.addAtLeastOne'));
+
+  if (!confirmDTDateWarnings([globalDate])) return;
+
+  const saveBtn = document.getElementById('saveScheduleDTBtnDash');
+
+  try {
+    const snap = await get(ref(db, `centers/${centerId}/students/${studentId}`));
+    if (!snap.exists()) throw new Error('Student not found.');
+
+    const s = snap.val();
+    if (!s.diagnosticTests) s.diagnosticTests = [];
+
+    // Check against existing DB records: block same subject + same date
+    let existingDuplicate = null;
+    for (const entry of dtEntries) {
+      const exists = s.diagnosticTests.some(
+        dt => dt.subject === entry.subject && dt.date === globalDate
+      );
+      if (exists) {
+        existingDuplicate = entry;
+        break;
+      }
+    }
+
+    if (existingDuplicate) {
+      return alert(t('dashboard.scheduleDT.duplicateSubjectDate', { 
+        subject: existingDuplicate.subject, 
+        date: globalDate 
+      }));
+    }
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = t('common.saving');
+
+    let addedCount = 0;
+    for (const entry of dtEntries) {
+      const newDT = {
+        subject: entry.subject,
+        date: globalDate,
+        DTtimeslot: globalTimeslot,
+        test: '', score: '', time: '', suggestedStart: '', actualStart: '', dtNote: ''
+      };
+
+      s.diagnosticTests.push(newDT);
+      addedCount++;
+
+      if (!dtDataMap[globalDate]) dtDataMap[globalDate] = [];
+      dtDataMap[globalDate].push({ id: studentId, studentData: s, dtData: newDT });
+    }
+
+    if (addedCount > 0) {
+      await update(ref(db, `centers/${centerId}/students/${studentId}`), { diagnosticTests: s.diagnosticTests });
+    }
+
+    renderDualCalendar();
+    modal.classList.add('hidden');
+    alert(t('dashboard.scheduleDT.success', { count: addedCount }));
+  } catch (err) {
+    console.error('Error scheduling DT:', err);
+    alert(t('dashboard.scheduleDT.failed'));
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = t('dashboard.scheduleDT.saveBtn');
+  }
+};
 }
 
 function addDTSubjectRow() {
@@ -1316,7 +1636,7 @@ function addDTSubjectRow() {
   const row = document.createElement('div');
   row.className = 'dt-subject-row';
   row.innerHTML = `
-    <div class="dt-row-group">
+    <div class="dt-row-group" style="flex: 1;">
       <label>${t('dashboard.scheduleDT.subjectLabel')}</label>
       <select class="dt-row-subject">
         <option value="">${t('dashboard.scheduleDT.selectSubject')}</option>
@@ -1326,10 +1646,6 @@ function addDTSubjectRow() {
         <option value="English ERP">English ERP</option>
         <option value="English EFL">English EFL</option>
       </select>
-    </div>
-    <div class="dt-row-group">
-      <label>${t('dashboard.scheduleDT.dateLabel')}</label>
-      <input type="date" class="dt-row-date">
     </div>
     <button type="button" class="remove-dt-row-btn" title="Remove">×</button>
   `;
@@ -1417,15 +1733,71 @@ function openQuickInquiryModal() {
   const modal = document.getElementById('quickInquiryModal');
   const form = document.getElementById('quickInquiryForm');
   const container = document.getElementById('qiSubjectsContainer');
+
+  if (!modal || !form || !container) {
+    console.error('Quick Inquiry modal elements not found.');
+    return;
+  }
+
   form.reset();
+
   container.innerHTML = '';
   qiSubjectCount = 0;
 
   const gradeSelect = document.getElementById('qiGrade');
-  gradeSelect.innerHTML = `<option value="">${t('dashboard.inquiry.selectGrade')}</option>` + 
-    GRADES_QI.map(g => `<option value="${g}">${g}</option>`).join('');
-  
-  addQISubjectRow(); 
+  if (gradeSelect) {
+    gradeSelect.innerHTML =
+      `<option value="">${t('dashboard.inquiry.selectGrade')}</option>` +
+      GRADES_QI.map(g => `<option value="${g}">${g}</option>`).join('');
+  }
+
+  // ============================================
+  // 🕒 INJECT GLOBAL DT DATE/TIME FIELDS
+  // ============================================
+  if (typeof ensureQIDTGlobalFields === 'function') {
+    ensureQIDTGlobalFields();
+  }
+
+  // Refresh global DT labels in case language changed
+  const scheduleDTGlobalLabel = document.getElementById('qiScheduleDTGlobalLabel');
+  if (scheduleDTGlobalLabel) {
+    scheduleDTGlobalLabel.textContent = t('dashboard.inquiry.scheduleDTGlobal');
+  }
+
+  const dtDateLabel = document.getElementById('qiDTDateLabel');
+  if (dtDateLabel) {
+    dtDateLabel.textContent = t('dashboard.inquiry.dtDate');
+  }
+
+  const dtTimeslotLabel =
+    document.getElementById('qiDTTimeslotLabel') ||
+    document.querySelector('label[for="qiDTTimeslotGlobal"]') ||
+    document.querySelector('label[for="qiDTTimeslotInput"]');
+
+  if (dtTimeslotLabel) {
+    dtTimeslotLabel.textContent = t('dashboard.inquiry.dtTimeslot');
+  }
+
+  // ============================================
+  // RESET GLOBAL DT FIELDS
+  // ============================================
+  const qiCheckbox = document.getElementById('qiScheduleDTGlobal');
+  const qiDetails = document.getElementById('qiGlobalDtDetails');
+  const qiDate = document.getElementById('qiDTDateGlobal');
+
+  // Supports either new global time ID or previous time ID
+  const qiTime =
+    document.getElementById('qiDTTimeslotGlobal') ||
+    document.getElementById('qiDTTimeslotInput');
+
+  if (qiCheckbox) qiCheckbox.checked = false;
+  if (qiDetails) qiDetails.style.display = 'none';
+  if (qiDate) qiDate.value = '';
+  if (qiTime) qiTime.value = '';
+
+  // Add first subject row after global fields are ready
+  addQISubjectRow();
+
   modal.classList.remove('hidden');
 }
 
@@ -1447,39 +1819,15 @@ function addQISubjectRow() {
   }).join('');
 
   row.innerHTML = `
-    <div class="qi-row-group" style="flex: 2;">
+    <div class="qi-row-group" style="flex: 1;">
       <label>${t('dashboard.scheduleDT.subjectLabel')}</label>
       <select class="qi-subject-select" required>
         <option value="">${t('dashboard.scheduleDT.selectSubject')}</option>
         ${subjectOptions}
       </select>
     </div>
-    <div class="qi-row-group checkbox-group">
-      <label class="checkbox-label">
-        <input type="checkbox" class="qi-schedule-dt">
-        <span>${t('dashboard.inquiry.scheduleDT')}</span>
-      </label>
-    </div>
-    <div class="qi-row-group qi-dt-date-wrapper" style="flex: 1.5;">
-      <label>${t('dashboard.inquiry.dtDate')}</label>
-      <input type="date" class="qi-dt-date">
-    </div>
     <button type="button" class="remove-qi-row-btn" title="Remove">×</button>
   `;
-
-  const dtCheckbox = row.querySelector('.qi-schedule-dt');
-  const dtDateWrapper = row.querySelector('.qi-dt-date-wrapper');
-  const dtDateInput = row.querySelector('.qi-dt-date');
-  dtCheckbox.addEventListener('change', () => {
-    if (dtCheckbox.checked) {
-      dtDateWrapper.classList.add('visible');
-      dtDateInput.required = true;
-    } else {
-      dtDateWrapper.classList.remove('visible');
-      dtDateInput.required = false;
-      dtDateInput.value = '';
-    }
-  });
 
   const removeBtn = row.querySelector('.remove-qi-row-btn');
   removeBtn.addEventListener('click', () => {
@@ -1527,19 +1875,67 @@ async function saveQuickInquiry() {
 
   const container = document.getElementById('qiSubjectsContainer');
   const rows = container.querySelectorAll('.qi-subject-row');
-  if (rows.length === 0) return alert(t('dashboard.inquiry.addOneSubject'));
+
+  if (rows.length === 0) {
+    return alert(t('dashboard.inquiry.addOneSubject'));
+  }
+
+  // ============================================
+  // 🕒 GLOBAL DT DATE & TIMESLOT
+  // ============================================
+  const scheduleDTGlobal = document.getElementById('qiScheduleDTGlobal')?.checked || false;
+
+  const dtDateGlobal =
+    document.getElementById('qiDTDateGlobal')?.value || '';
+
+  // Supports either the new global timeslot ID or your previous timeslot ID
+  const dtTimeslotGlobal =
+    document.getElementById('qiDTTimeslotGlobal')?.value ||
+    document.getElementById('qiDTTimeslotInput')?.value ||
+    '';
+
+  if (scheduleDTGlobal) {
+    if (!dtDateGlobal) {
+      return alert(
+        t('dashboard.inquiry.selectDTDateGlobal') ||
+        '⚠️ Please select a DT date.'
+      );
+    }
+
+    if (!dtTimeslotGlobal) {
+      return alert(
+        t('dashboard.inquiry.selectDTTimeslot') ||
+        '⚠️ Please select a DT timeslot.'
+      );
+    }
+
+    // Warn if DT date is a holiday/closed day, but allow saving
+    if (!confirmDTDateWarnings([dtDateGlobal])) {
+      return;
+    }
+  }
 
   const subjects = [];
   const diagnosticTests = [];
   const todayStr = new Date().toISOString().split('T')[0];
+  const seenSubjects = new Set();
 
   for (const row of rows) {
-    const subject = row.querySelector('.qi-subject-select').value;
-    const scheduleDT = row.querySelector('.qi-schedule-dt').checked;
-    const dtDate = row.querySelector('.qi-dt-date').value;
+    const subject = row.querySelector('.qi-subject-select')?.value || '';
 
-    if (!subject) return alert(t('dashboard.inquiry.selectSubjectAll'));
-    if (scheduleDT && !dtDate) return alert(t('dashboard.inquiry.selectDTDate', { subject }));
+    if (!subject) {
+      return alert(t('dashboard.inquiry.selectSubjectAll'));
+    }
+
+    // Extra safety: prevent duplicate subject rows
+    if (seenSubjects.has(subject)) {
+      return alert(
+        t('dashboard.inquiry.duplicateSubject') ||
+        `⚠️ ${subject} has already been selected.`
+      );
+    }
+
+    seenSubjects.add(subject);
 
     subjects.push({
       name: subject,
@@ -1548,20 +1944,29 @@ async function saveQuickInquiry() {
       inquiryDate: todayStr,
       currentLevel: '',
       enrolDate: '',
-      status: 'inquiry', 
+      status: 'inquiry',
       timeslots: [],
       progress: [],
       pencilSkill: null,
-      pauseFromMonth: '', pauseFromYear: '', pauseToMonth: '', pauseToYear: '', pauseReason: '',
-      dropMonth: '', dropYear: '', dropReason: '',
+      pauseFromMonth: '',
+      pauseFromYear: '',
+      pauseToMonth: '',
+      pauseToYear: '',
+      pauseReason: '',
+      dropMonth: '',
+      dropYear: '',
+      dropReason: '',
       pendingRequest: null,
       worksheetType: 'Paper'
     });
 
-    if (scheduleDT && dtDate) {
+    // If global DT is checked, create one DT per selected subject
+    // using the same global date and timeslot
+    if (scheduleDTGlobal) {
       diagnosticTests.push({
         subject: subject,
-        date: dtDate,
+        date: dtDateGlobal,
+        DTtimeslot: dtTimeslotGlobal,
         test: '',
         score: '',
         time: '',
@@ -1587,7 +1992,11 @@ async function saveQuickInquiry() {
     parentOrientation: 'No',
     poDate: '',
     poReason: 'Pending Inquiry',
-    phone: { mom: phoneMom, dad: phoneDad, own: phoneOwn },
+    phone: {
+      mom: phoneMom,
+      dad: phoneDad,
+      own: phoneOwn
+    },
     qrCode: '',
     kcNo: '',
     subjects: subjects,
@@ -1600,21 +2009,25 @@ async function saveQuickInquiry() {
   const saveBtn = document.getElementById('qiSaveBtn');
   saveBtn.disabled = true;
   saveBtn.textContent = t('common.saving');
+
   try {
     const newStudentRef = push(ref(db, `centers/${centerId}/students`), studentData);
     const newStudentId = newStudentRef.key;
-    
+
     diagnosticTests.forEach(dt => {
       if (!dtDataMap[dt.date]) dtDataMap[dt.date] = [];
+
       dtDataMap[dt.date].push({
         id: newStudentId,
         studentData: studentData,
         dtData: dt
       });
     });
-    
-    renderDualCalendar(); 
-    document.getElementById('quickInquiryModal').classList.add('hidden');
+
+    renderDualCalendar();
+
+    document.getElementById('quickInquiryModal')?.classList.add('hidden');
+
     alert(t('dashboard.inquiry.saved'));
   } catch (err) {
     console.error('Error saving quick inquiry:', err);

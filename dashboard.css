@@ -1214,6 +1214,7 @@ header a:hover, header button:hover {
 /* =========================================
    ✅ CHECKBOX STYLES (Quick Inquiry)
    ========================================= */
+
 .qi-row-group.checkbox-group {
     flex: 0 0 auto;
     display: flex;
@@ -1378,22 +1379,22 @@ header a:hover, header button:hover {
 }
 
 /* =========================================
-   🔍 SEARCH STUDENT MODAL SPECIFIC FIXES
+🔍 SEARCH STUDENT MODAL SPECIFIC FIXES
 ========================================= */
 
-/* 1. Make the Search Student modal box itself taller */
+/* Make the Search Student modal box itself taller */
 #searchStudentModal .modal-content {
-    max-height: 95vh; /* Increased from 85vh to give more vertical space */
-    min-height: 250px; /* Ensures it has a solid base height */
+  max-height: 95vh;
+  min-height: 250px;
 }
 
-/* 2. Make the results dropdown responsive (pushes modal open as you type) */
+/* Make the results dropdown responsive */
 #searchStudentModal .search-dropdown {
-    position: relative; /* Changed from absolute so it expands the modal height dynamically */
-    max-height: 50vh;   /* Shows up to 50% of screen height before adding an internal scrollbar */
-    margin-top: 0.5rem;
-    margin-bottom: 1rem;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.05); /* Softer shadow since it's now inside the flow */
+  position: relative;
+  max-height: 50vh;
+  margin-top: 0.5rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
 }
 
 /* =========================================
@@ -1448,6 +1449,140 @@ header a:hover, header button:hover {
 }
 .inline-confirm-btn:hover { background: #dcfce7; border-color: #86efac; color: #16a34a; }
 .inline-cancel-btn:hover  { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
+
+/* =========================================
+🕒 DT TIMESLOT
+========================================= */
+.dt-global-timeslot-group,
+.qi-global-timeslot-group {
+  margin-bottom: 1rem;
+  text-align: left;
+}
+
+.dt-global-timeslot-group label,
+.qi-global-timeslot-group label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 0.4rem;
+}
+
+.dt-existing-form input[type="time"],
+#quickInquiryModal .modal-content input[type="time"],
+.dt-global-timeslot-group input[type="time"],
+.qi-global-timeslot-group input[type="time"] {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  background: #fff;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.dt-existing-form input[type="time"]:focus,
+#quickInquiryModal .modal-content input[type="time"]:focus,
+.dt-global-timeslot-group input[type="time"]:focus,
+.qi-global-timeslot-group input[type="time"]:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.25);
+}
+
+/* Inline reschedule time */
+.inline-reschedule-wrapper {
+  flex-wrap: wrap;
+}
+
+.inline-reschedule-time {
+  width: 110px;
+  padding: 0.3rem;
+  font-size: 0.85rem;
+  border: 1px solid var(--primary);
+  border-radius: 4px;
+  outline: none;
+  background: #fff;
+}
+
+/* DT tables now have one extra column */
+.dt-table-wrapper .dt-mini-table {
+  min-width: 820px;
+}
+
+@media (max-width: 768px) {
+  .inline-reschedule-time {
+    width: 95px;
+  }
+}
+
+/* =========================================
+🕒 GLOBAL DT DATE & TIMESLOT
+========================================= */
+.dt-global-date-group,
+.dt-global-timeslot-group,
+.qi-global-dt-group {
+  margin-bottom: 1rem;
+  text-align: left;
+}
+
+.dt-global-date-group label,
+.dt-global-timeslot-group label,
+.qi-global-dt-details label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 0.4rem;
+}
+
+.dt-global-date-group input[type="date"],
+.dt-global-timeslot-group input[type="time"],
+.qi-global-dt-details input[type="date"],
+.qi-global-dt-details input[type="time"] {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  background: #fff;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.dt-global-date-group input:focus,
+.dt-global-timeslot-group input:focus,
+.qi-global-dt-details input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.25);
+}
+
+.qi-global-dt-group .checkbox-label {
+  display: flex !important;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 0.5rem;
+}
+
+.qi-global-dt-group input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary-dark);
+  margin: 0;
+}
+
+.qi-global-dt-details {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius);
+  animation: fadeIn 0.3s ease;
+}
 
 /* =========================================
 🌐 TRADITIONAL CHINESE FONT SUPPORT

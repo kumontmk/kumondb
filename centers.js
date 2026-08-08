@@ -23,6 +23,7 @@ import {
 const auth = getAuth();
 
 const centerGrid = document.getElementById('centerGrid');
+const centersLoader = document.getElementById('centersLoader');
 const userEmailEl = document.getElementById('userEmail');
 const pageLoader = document.getElementById('page-loader');
 
@@ -152,112 +153,36 @@ function startCentersPage() {
       window.location.href = 'index.html';
       return;
     }
-
-    if (userEmailEl) {
-      userEmailEl.textContent = user.email;
-    }
-
+    if (userEmailEl) userEmailEl.textContent = user.email;
     document.getElementById('logoutBtn')?.addEventListener('click', logout);
 
     try {
+      // 1) Fast profile check (single read) — keeps existing redirects
       const userSnap = await get(ref(db, `users/${user.uid}`));
-
       if (!userSnap.exists()) {
         console.error("User profile not found");
         window.location.href = 'index.html';
         return;
       }
-
       const userData = userSnap.val();
-
       const isAdmin = user.email?.toLowerCase() === 'kumonchamps@gmail.com';
-      const userPermissions = userData.permissions?.centers || {};
 
-      const centersSnap = await get(ref(db, 'centers'));
-
-      if (!centersSnap.exists()) {
-        centerGrid.innerHTML = `
-          <p style="text-align:center; color:#666; grid-column: 1/-1;">
-            ${escapeHtml(t('centers.noCenters'))}
-          </p>
-        `;
-
-        pageLoader?.classList.add('hidden');
-
-        return;
-      }
-
-      const allCenters = centersSnap.val();
-
-      centerGrid.innerHTML = '';
-
-      let hasVisibleCenters = false;
-
-      const accessibleCenters = [];
-
-      Object.entries(allCenters).forEach(([centerId, centerData]) => {
-        const hasAccess = isAdmin || userPermissions[centerId] === true;
-
-        if (hasAccess) {
-          hasVisibleCenters = true;
-
-          accessibleCenters.push({
-            id: centerId,
-            name: centerData.name || centerId
-          });
-
-          const card = document.createElement('div');
-
-          card.className = 'center-card';
-          card.style.cursor = 'pointer';
-
-          card.innerHTML = `
-            <div class="card-icon">🏢</div>
-            <h3>${escapeHtml(centerData.name || centerId)}</h3>
-            <p>${escapeHtml(t('centers.cardDescription'))}</p>
-          `;
-
-          card.addEventListener('click', () => {
-            sessionStorage.setItem('selectedCenter', centerId);
-            window.location.href = 'dashboard.html';
-          });
-
-          centerGrid.appendChild(card);
-        }
-      });
-
-      if (!hasVisibleCenters) {
-        centerGrid.innerHTML = `
-          <div
-            class="center-card"
-            style="cursor: default; border-left: 4px solid #dc3545; grid-column: 1 / -1;"
-          >
-            <div class="card-icon">🚫</div>
-            <h3>${escapeHtml(t('centers.noAccessTitle'))}</h3>
-            <p>${escapeHtml(t('centers.noAccessBody'))}</p>
-          </div>
-        `;
-      }
-
-      // Determine if this user should see manager pending approvals
-      const isManager = await isManagerUser(user, userData);
-
-      // First check the user's own missing clock-out.
-      // This now returns a promise that resolves when the modal is closed.
-      const missingClockOutResult = await checkMissingClockOuts();
-
+      // 2) ⚡ Page is interactive NOW — admin cards tappable immediately
       pageLoader?.classList.add('hidden');
 
-      // If user is manager/admin, show pending approvals after missing clock-out modal is resolved.
-      if (isManager) {
-        const openPendingApprovals = () => {
-          checkPendingApprovals({
-            isAdmin,
-            accessibleCenters,
-            currentUser: user
-          });
-        };
+      // 3) Centers load independently at the bottom (own spinner)
+      const centersPromise = loadCentersGrid(user, userData, isAdmin);
 
+      // 4) Missing clock-outs (does not need centers)
+      const missingClockOutResult = await checkMissingClockOuts();
+
+      // 5) Manager pending approvals (waits for centers list internally)
+      const isManager = await isManagerUser(user, userData);
+      if (isManager) {
+        const accessibleCenters = await centersPromise;
+        const openPendingApprovals = () => {
+          checkPendingApprovals({ isAdmin, accessibleCenters, currentUser: user });
+        };
         if (missingClockOutResult?.hasMissing && missingClockOutResult.onClose) {
           missingClockOutResult.onClose
             .then(openPendingApprovals)
@@ -267,17 +192,84 @@ function startCentersPage() {
         }
       }
     } catch (error) {
-      console.error("Error loading centers:", error);
-
+      console.error("Error loading centers page:", error);
+      pageLoader?.classList.add('hidden');
+      centersLoader?.classList.add('hidden');
       centerGrid.innerHTML = `
         <p style="text-align:center; color:#dc3545; grid-column: 1/-1;">
           ${escapeHtml(t('centers.errorLoading'))}
         </p>
       `;
-
-      pageLoader?.classList.add('hidden');
     }
   });
+}
+
+/* =========================================
+   CENTERS GRID — independent loader at the bottom
+   ========================================= */
+async function loadCentersGrid(user, userData, isAdmin) {
+  try {
+    const userPermissions = userData.permissions?.centers || {};
+    const centersSnap = await get(ref(db, 'centers'));
+
+    if (!centersSnap.exists()) {
+      centerGrid.innerHTML = `
+        <p style="text-align:center; color:#666; grid-column: 1/-1;">
+          ${escapeHtml(t('centers.noCenters'))}
+        </p>
+      `;
+      centersLoader?.classList.add('hidden');
+      return [];
+    }
+
+    const allCenters = centersSnap.val();
+    centerGrid.innerHTML = '';
+    let hasVisibleCenters = false;
+    const accessibleCenters = [];
+
+    Object.entries(allCenters).forEach(([centerId, centerData]) => {
+      const hasAccess = isAdmin || userPermissions[centerId] === true;
+      if (hasAccess) {
+        hasVisibleCenters = true;
+        accessibleCenters.push({ id: centerId, name: centerData.name || centerId });
+        const card = document.createElement('div');
+        card.className = 'center-card';
+        card.style.cursor = 'pointer';
+        card.innerHTML = `
+          <div class="card-icon">🏢</div>
+          <h3>${escapeHtml(centerData.name || centerId)}</h3>
+          <p>${escapeHtml(t('centers.cardDescription'))}</p>
+        `;
+        card.addEventListener('click', () => {
+          sessionStorage.setItem('selectedCenter', centerId);
+          window.location.href = 'dashboard.html';
+        });
+        centerGrid.appendChild(card);
+      }
+    });
+
+    if (!hasVisibleCenters) {
+      centerGrid.innerHTML = `
+        <div class="center-card" style="cursor: default; border-left: 4px solid #dc3545; grid-column: 1 / -1;">
+          <div class="card-icon">🚫</div>
+          <h3>${escapeHtml(t('centers.noAccessTitle'))}</h3>
+          <p>${escapeHtml(t('centers.noAccessBody'))}</p>
+        </div>
+      `;
+    }
+
+    centersLoader?.classList.add('hidden');
+    return accessibleCenters;
+  } catch (err) {
+    console.error("Error loading centers:", err);
+    centerGrid.innerHTML = `
+      <p style="text-align:center; color:#dc3545; grid-column: 1/-1;">
+        ${escapeHtml(t('centers.errorLoading'))}
+      </p>
+    `;
+    centersLoader?.classList.add('hidden');
+    return [];
+  }
 }
 
 /* =========================================

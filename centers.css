@@ -689,3 +689,20 @@ button:disabled {
     justify-self: end;
   }
 }
+
+/* =========================================
+   CENTERS SECTION LOADER (independent spinner)
+   ========================================= */
+.centers-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 2rem 0;
+}
+.centers-loader p {
+  margin: 0;
+  font-weight: 600;
+  color: var(--primary-dark);
+}
+.centers-loader.hidden { display: none; }

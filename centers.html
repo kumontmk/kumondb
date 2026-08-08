@@ -24,56 +24,55 @@
         <option value="en">English</option>
         <option value="zh-TW">繁體中文</option>
       </select>
-            <button id="logoutBtn" data-i18n="common.logout">Logout</button>
+      <button id="logoutBtn" data-i18n="common.logout">Logout</button>
     </nav>
   </header>
 
   <main class="dashboard">
+    <!-- 1️⃣ CENTER ADMINISTRATION — instantly tappable, no waiting -->
+    <section class="admin-section">
+      <h3 data-i18n="admin.centerAdministration">Center Tools</h3>
+      <div class="center-grid">
+        <a href="employees.html" class="center-card">
+          <div class="card-icon">👤</div>
+          <h3 data-i18n="admin.employeeManagement">Employee Management</h3>
+          <p data-i18n="admin.employeeManagementDesc">
+            Add/edit staff, QR codes & timeclock records
+          </p>
+        </a>
+
+        <a href="center-management.html" class="center-card">
+          <div class="card-icon">💼</div>
+          <h3 data-i18n="admin.centerManagement">Center Management</h3>
+          <p data-i18n="admin.centerManagementDesc">
+            Add/edit centers, GPS coordinates, and register NFC tags
+          </p>
+        </a>
+
+        <a href="timecard.html" class="center-card">
+          <div class="card-icon">⏱️</div>
+          <h3 data-i18n="admin.employeeTimecard">Employee Timecard</h3>
+          <p data-i18n="admin.employeeTimecardDesc">
+            QR scanning, geolocation verification & CSV export
+          </p>
+        </a>
+
+        <a href="employee-schedule.html" class="center-card">
+          <div class="card-icon">📅</div>
+          <h3 data-i18n="admin.employeeSchedule">Employee Schedule</h3>
+          <p data-i18n="admin.employeeScheduleDesc">See weekly shifts</p>
+        </a>
+      </div>
+    </section>
+
+    <!-- 2️⃣ CENTERS — loads independently below -->
     <h2 data-i18n="centers.selectYourCenter">Select Your Center</h2>
-
-    <div id="centerGrid" class="center-grid"></div>
-
-    <h2 style="margin-top: 2.5rem;" data-i18n="admin.centerAdministration">
-      Center Administration
-    </h2>
-
-    <div class="center-grid">
-      <a href="employees.html" class="center-card">
-        <div class="card-icon">👤</div>
-        <h3 data-i18n="admin.employeeManagement">Employee Management</h3>
-        <p data-i18n="admin.employeeManagementDesc">
-          Add/edit staff, QR codes & timeclock records
-        </p>
-      </a>
-
-      <a href="center-management.html" class="center-card">
-        <div class="card-icon">💼</div>
-        <h3 data-i18n="admin.centerManagement">Center Management</h3>
-        <p data-i18n="admin.centerManagementDesc">
-          Add/edit centers, GPS coordinates, and register NFC tags
-        </p>
-      </a>
-
-      <a href="timecard.html" class="center-card">
-        <div class="card-icon">⏱️</div>
-        <h3 data-i18n="admin.employeeTimecard">Employee Timecard</h3>
-        <p data-i18n="admin.employeeTimecardDesc">
-          QR scanning, geolocation verification & CSV export
-        </p>
-      </a>
-
-      <a href="employee-schedule.html" class="center-card">
-        <div class="card-icon">📅</div>
-        <h3 data-i18n="admin.employeeSchedule">Employee Schedule</h3>
-        <p data-i18n="admin.employeeScheduleDesc">See weekly shifts</p>
-      </a>
+    <div id="centersLoader" class="centers-loader">
+      <div class="spinner"></div>
+      <p data-i18n="centers.loading">⏳ Loading centers...</p>
     </div>
+    <div id="centerGrid" class="center-grid"></div>
   </main>
-
-  <div id="page-loader">
-    <div class="spinner"></div>
-    <p data-i18n="centers.loading">⏳ Loading centers...</p>
-  </div>
 
   <script type="module" src="centers-i18n.js"></script>
   <script type="module" src="centers.js"></script>

@@ -11,7 +11,7 @@ export default {
     errorLoading: "Error loading centers. Please refresh."
   },
   admin: {
-    centerAdministration: "Center Administration",
+    centerAdministration: "Center Tools",
     employeeManagement: "Employee Management",
     employeeManagementDesc: "Add/edit staff, QR codes & timeclock records",
     centerManagement: "Center Management",
