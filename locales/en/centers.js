@@ -1,7 +1,7 @@
 export default {
   centers: {
     documentTitle: "Select Center - Kumon DB",
-    headerTitle: "🏢 Centers",
+    headerTitle: "Centers Management",
     selectYourCenter: "Select Your Center",
     loading: "⏳ Loading centers...",
     noCenters: "No centers found in database. Please contact admin.",

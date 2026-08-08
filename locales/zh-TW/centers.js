@@ -1,7 +1,7 @@
 export default {
   centers: {
     documentTitle: "選擇中心 - KUMON 資料庫",
-    headerTitle: "🏢 中心",
+    headerTitle: "中心管理",
     selectYourCenter: "選擇您的中心",
     loading: "⏳ 載入中心中...",
     noCenters: "資料庫中沒有中心，請聯絡管理員。",
