@@ -1929,3 +1929,12 @@ textarea {
     background: #f1f5f9;
     border-color: #cbd5e1;
 }
+
+.schedule-dashboard {
+  opacity: 0;
+  transition: opacity 0.2s ease-in;
+}
+
+.schedule-dashboard.loaded {
+  opacity: 1;
+}

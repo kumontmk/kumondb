@@ -115,40 +115,84 @@ let isSaving = false; // ✅ Added to prevent double-clicks
 let selectedPatternDates = new Set(); // Tracks checked dates across month navigation
 let calendarViewDate = new Date();    // Tracks which month the calendar is showing
 
+// Add at the top with your other global state:
+let isInitialized = false;
+
+// Then wrap the initialization:
+document.addEventListener('DOMContentLoaded', () => {
+  onAuthStateChanged(auth, async (user) => {
+    // ✅ Prevent double-initialization
+    if (isInitialized) return;
+    if (!user) {
+      alert('Please log in first.');
+      window.location.href = 'centers.html';
+      return;
+    }
+    isInitialized = true;
+
+    // ... rest of the init code from above ...
+  });
+});
+
 // ============================================
-// INITIALIZATION
+// INITIALIZATION (OPTIMIZED)
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
-    onAuthStateChanged(auth, async (user) => {
-        if (!user) {
-            alert('Please log in first.');
-            window.location.href = 'centers.html';
-            return;
-        }
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+      alert('Please log in first.');
+      window.location.href = 'centers.html';
+      return;
+    }
 
-        currentUser = user;
-        await checkPermissions(user);
-        await loadAllCenters();
-        await loadAllCalendarEvents();
-        await loadEmployees();
-        await loadAllSchedules();
-        await loadAllTemplates();
+    currentUser = user;
+    await checkPermissions(user);
 
-        setupTabs();
-        setupAdminNav();
-        setupEmployeeNav();
-        setupCenterNav();
-        setupSubjectNav();
-        setupModal();
+    // ✅ Always load centers (needed for names/abbreviations)
+    await loadAllCenters();
 
-        applyPermissionUI();
-        renderAdminView();
-        renderEmployeeView();
-        renderCenterView();
-        renderSubjectView();
+    if (isAdminOrManager) {
+      // ─── ADMIN/MANAGER: Full load ───
+      await Promise.all([
+        loadAllCalendarEvents(),
+        loadEmployees(),
+        loadAllSchedules(),
+        loadAllTemplates()
+      ]);
 
-        document.getElementById('page-loader').classList.add('hidden');
-    });
+      setupTabs();
+      setupAdminNav();
+      setupEmployeeNav();
+      setupCenterNav();
+      setupSubjectNav();
+      setupModal();
+      applyPermissionUI();
+
+      renderAdminView();
+      renderEmployeeView();
+      renderCenterView();
+      renderSubjectView();
+    } else {
+      // ─── NORMAL EMPLOYEE: Minimal load ───
+      await Promise.all([
+        loadEmployeeOnly(user.uid),
+        loadEmployeeSchedulesOnly(user.uid),
+        loadEmployeeTemplateOnly(user.uid),
+        loadCalendarEventsForEmployee()
+      ]);
+
+      setupTabs();
+      setupEmployeeNav();
+      applyPermissionUI();
+
+      renderEmployeeView();
+    }
+
+    // ✅ Hide loader ONCE everything is rendered
+    document.getElementById('page-loader').classList.add('hidden');
+    document.getElementById('page-loader').classList.add('hidden');
+    document.querySelector('.schedule-dashboard').classList.add('loaded');
+  });
 });
 
 // ============================================
@@ -176,24 +220,27 @@ async function checkPermissions(user) {
 }
 
 function applyPermissionUI() {
-    const adminTabBtn = document.querySelector('.schedule-tabs .tab-btn[data-tab="admin"]');
-    const centerTabBtn = document.querySelector('.schedule-tabs .tab-btn[data-tab="center"]');
-    const subjectTabBtn = document.querySelector('.schedule-tabs .tab-btn[data-tab="subject"]');
+  const adminTabBtn = document.querySelector('.schedule-tabs .tab-btn[data-tab="admin"]');
+  const centerTabBtn = document.querySelector('.schedule-tabs .tab-btn[data-tab="center"]');
+  const subjectTabBtn = document.querySelector('.schedule-tabs .tab-btn[data-tab="subject"]');
 
-    if (!isAdminOrManager) {
-        if (adminTabBtn) adminTabBtn.style.display = 'none';
-        if (centerTabBtn) centerTabBtn.style.display = 'none';
-        if (subjectTabBtn) subjectTabBtn.style.display = 'none';
+  if (!isAdminOrManager) {
+    // ✅ Remove admin tabs from DOM entirely (not just hide)
+    if (adminTabBtn) adminTabBtn.remove();
+    if (centerTabBtn) centerTabBtn.remove();
+    if (subjectTabBtn) subjectTabBtn.remove();
 
-        document.querySelectorAll('.schedule-tabs .tab-btn').forEach(b => b.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        document.querySelector('.schedule-tabs .tab-btn[data-tab="employee"]').classList.add('active');
-        document.getElementById('tab-employee').classList.add('active');
-    } else {
-        if (adminTabBtn) adminTabBtn.style.display = '';
-        if (centerTabBtn) centerTabBtn.style.display = '';
-        if (subjectTabBtn) subjectTabBtn.style.display = '';
-    }
+    // Remove tab content panels
+    document.getElementById('tab-admin')?.remove();
+    document.getElementById('tab-center')?.remove();
+    document.getElementById('tab-subject')?.remove();
+
+    // Force employee tab active
+    document.querySelectorAll('.schedule-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    document.querySelector('.schedule-tabs .tab-btn[data-tab="employee"]').classList.add('active');
+    document.getElementById('tab-employee').classList.add('active');
+  }
 }
 
 // ============================================
@@ -276,6 +323,95 @@ async function loadAllSchedules() {
             console.warn(`Failed to load schedules for ${center.id}:`, e);
         }
     }
+}
+
+// ============================================
+// ✅ OPTIMIZED LOADERS FOR NORMAL EMPLOYEES
+// ============================================
+
+/**
+ * Load ONLY the current user's employee record.
+ * Instead of fetching ALL employees, we fetch just one.
+ */
+async function loadEmployeeOnly(uid) {
+  try {
+    const snap = await get(ref(db, `employees/${uid}`));
+    if (snap.exists()) {
+      employees[uid] = snap.val();
+    }
+  } catch (e) {
+    console.error('Failed to load employee record:', e);
+  }
+}
+
+/**
+ * Load ONLY the current user's schedules across all centers.
+ * Instead of: schedules/{centerId} → ALL employees → ALL dates
+ * We do:     schedules/{centerId}/{uid} → just this person
+ */
+async function loadEmployeeSchedulesOnly(uid) {
+  mergedSchedules = {};
+  rawSchedulesByCenter = {};
+  mergedSchedules[uid] = {};
+
+  const promises = allCenters.map(async (center) => {
+    try {
+      const snap = await get(ref(db, `schedules/${center.id}/${uid}`));
+      if (snap.exists()) {
+        const empSchedules = snap.val();
+        rawSchedulesByCenter[center.id] = { [uid]: empSchedules };
+
+        Object.entries(empSchedules).forEach(([dateStr, schedData]) => {
+          const tagged = { ...schedData, _sourceCenter: center.id };
+          if (!mergedSchedules[uid][dateStr]) {
+            mergedSchedules[uid][dateStr] = tagged;
+          } else {
+            mergedSchedules[uid][dateStr] = mergeScheduleRecords(
+              mergedSchedules[uid][dateStr], tagged
+            );
+          }
+        });
+      }
+    } catch (e) {
+      console.warn(`Failed to load schedules for ${center.id}:`, e);
+    }
+  });
+
+  await Promise.all(promises);
+}
+
+/**
+ * Load ONLY the current user's recurring pattern/template.
+ */
+async function loadEmployeeTemplateOnly(uid) {
+  try {
+    const snap = await get(ref(db, `scheduleTemplates/${uid}`));
+    if (snap.exists()) {
+      templates[uid] = snap.val();
+    }
+  } catch (e) {
+    console.warn('Failed to load template:', e);
+  }
+}
+
+/**
+ * Load calendar events (holidays) — needed to show holiday markers.
+ * This is still all centers because holidays affect display,
+ * but it's lightweight (just event names/dates, not schedules).
+ */
+async function loadCalendarEventsForEmployee() {
+  calendarEvents = {};
+  const promises = allCenters.map(async (center) => {
+    try {
+      const snap = await get(ref(db, `centers/${center.id}/calendar`));
+      if (snap.exists()) {
+        calendarEvents[center.id] = snap.val();
+      }
+    } catch (e) {
+      // silently skip
+    }
+  });
+  await Promise.all(promises);
 }
 
 function mergeScheduleRecords(existing, incoming) {
@@ -1532,6 +1668,7 @@ document.addEventListener('change', (e) => {
         checkModalWarnings(editingEmpId, editingDate);
     }
 });
+
 
 // ✅ Added helper to update modal loading state
 function updateModalLoadingState(loading) {
