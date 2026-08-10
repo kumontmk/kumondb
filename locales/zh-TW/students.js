@@ -16,6 +16,7 @@ export default {
     statusLabel: "📋 狀態：",
     allStatuses: "所有狀態",
     current: "目前",
+    completer: "完成者 ", 
     inquiry: "諮詢",
     pause: "暫停",
     drop: "退學",

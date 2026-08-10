@@ -972,6 +972,27 @@ input[type="month"]::-webkit-calendar-picker-indicator:hover {
     right: auto !important;
 }
 
+
+/* ============================================
+🏆 COMPLETER STATUS FIELDS
+============================================ */
+.completer-checkbox-group { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.25rem; }
+.completer-checkbox-label {
+    display: flex; align-items: center; gap: 0.5rem;
+    background: #fff; border: 2px solid #e2e8f0; border-radius: 8px;
+    padding: 0.5rem 0.9rem; cursor: pointer; font-size: 0.9rem; font-weight: 500;
+    transition: all 0.2s ease; user-select: none;
+}
+.completer-checkbox-label:hover { border-color: #9333ea; background: #faf5ff; }
+.completer-checkbox-label.checked {
+    border-color: #9333ea; background: #f3e8ff; color: #6b21a8; font-weight: 600;
+}
+.completer-checkbox-label input[type="checkbox"] {
+    width: 18px; height: 18px; accent-color: #9333ea; cursor: pointer;
+}
+.completer-test-group { display: flex; gap: 0.5rem; width: 100%; }
+.completer-test-group input { flex: 1; min-width: 0; }
+
 /* =========================================
 🌐 TRADITIONAL CHINESE FONT SUPPORT
 ========================================= */

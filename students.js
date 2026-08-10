@@ -271,11 +271,15 @@ async function initializePage(isAdmin = false) {
                 if (student.subjects && Array.isArray(student.subjects) && student.subjects.length > 0) {
                     const hasCurrent = student.subjects.some(sub => sub.status === 'current');
                     const hasInquiry = student.subjects.some(sub => sub.status === 'inquiry');
-                    const hasPause = student.subjects.some(sub => sub.status === 'pause');
+                    const allDrop = student.subjects.every(sub => sub.status === 'drop');
+                    const allFinished = student.subjects.every(sub => sub.status === 'drop' || sub.status === 'completer');
+                    const hasCompleter = student.subjects.some(sub => sub.status === 'completer');
+                    
                     if (hasCurrent) overallStatus = 'Current';
                     else if (hasInquiry) overallStatus = 'Inquiry';
-                    else if (hasPause) overallStatus = 'Pause';
-                    else overallStatus = 'Drop';
+                    else if (allDrop) overallStatus = 'Drop';
+                    else if (allFinished && hasCompleter) overallStatus = 'Completer';
+                    else overallStatus = 'Pause';
                 }
                 if (student.subjects && Array.isArray(student.subjects)) {
                     student.subjects.forEach(sub => {
@@ -655,7 +659,7 @@ async function initializePage(isAdmin = false) {
                     if (statuses.some(status => status === 'current')) {
                         return true;
                     }
-                    const nonCurrentStatuses = ['inquiry', 'pause', 'paused', 'drop', 'dropped', 'inactive', 'withdrawn'];
+                    const nonCurrentStatuses = ['inquiry', 'pause', 'paused', 'drop', 'dropped', 'inactive', 'withdrawn', 'completer'];
                     if (statuses.some(status => nonCurrentStatuses.includes(status))) {
                         return false;
                     }

@@ -500,9 +500,12 @@ function initApp() {
         const hasCurrent = statuses.some(s => s === 'current');
         const hasInquiry = statuses.some(s => s === 'inquiry');
         const allDrop = statuses.every(s => s === 'drop');
+        const allFinished = statuses.every(s => s === 'drop' || s === 'completer');
+        const hasCompleter = statuses.some(s => s === 'completer');
         if (hasCurrent) overall.value = 'Current';
         else if (hasInquiry) overall.value = 'Inquiry';
         else if (allDrop) overall.value = 'Drop';
+        else if (allFinished && hasCompleter) overall.value = 'Completer';
         else overall.value = 'Pause';
     }
 
@@ -522,6 +525,8 @@ function initApp() {
             let colorClass = 'subj-Math';
             if (status === 'drop' || status === 'pause') {
                 pillStyle = 'background: #9ca3af !important; color: #fff !important;';
+            } else if (status === 'completer') {
+                pillStyle = 'background: #FFD700 !important; color: #333 !important;';
             } else {
                 if (subjectName.includes('Chinese')) colorClass = 'subj-Chinese';
                 else if (subjectName.includes('ERP')) colorClass = 'subj-ERP';
@@ -585,7 +590,7 @@ function renderSchedule() {
         const statusEl = entry.querySelector('.status');
         const name = nameEl?.value;
         const status = statusEl?.value;
-        if (!name || status === 'drop' || status === 'pause' || status === 'inquiry') return;
+        if (!name || ['drop', 'pause', 'inquiry', 'completer'].includes(status)) return;
         entry.querySelectorAll('.timeslot-row').forEach(row => {
             const day = row.querySelector('.ts-day')?.value;
             const h = row.querySelector('.ts-hour')?.value;
@@ -685,7 +690,7 @@ function renderSchedule() {
         if (!prType) {
             if (banner) banner.classList.add('hidden');
             const status = entry.querySelector('.status')?.value;
-            if (btn && status !== 'drop' && status !== 'pause') btn.style.display = 'inline-block';
+            if (btn && status !== 'drop' && status !== 'pause' && status !== 'completer') btn.style.display = 'inline-block';
             return;
         }
         const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -738,6 +743,9 @@ function renderSchedule() {
         const statusEl = entry.querySelector('.status');
         if (!statusEl) return;
         const status = statusEl.value;
+        const completerMonth = entry.querySelector('.fld-completer-month');
+        const completerFor = entry.querySelector('.fld-completer-for');
+        const completerTest = entry.querySelector('.fld-completer-test');
         const inquiryDate = entry.querySelector('.fld-inquiry-date');
         const startLevel = entry.querySelector('.fld-start-level');
         const startWS = entry.querySelector('.fld-start-ws');
@@ -753,6 +761,8 @@ function renderSchedule() {
         [pauseFrom, pauseTo, pauseReason, dropDate, dropReason].forEach(el => {
             if (el) el.style.display = 'none';
         });
+        [completerMonth, completerFor, completerTest].forEach(el => { if (el) el.style.display = 'none'; });
+        entry.querySelectorAll('.completer-month-year, .completer-test-date, .completer-test-time').forEach(el => { if (el) el.required = false; });
         entry.querySelectorAll('.pause-from-month-year, .pause-to-month-year, .pause-reason').forEach(el => { if(el) el.required = false; });
         entry.querySelectorAll('.drop-month-year, .drop-reason').forEach(el => { if(el) el.required = false; });
         if (status === 'inquiry') {
@@ -811,21 +821,43 @@ function renderSchedule() {
             if (startLevel) { startLevel.style.display = 'none'; const sel = startLevel.querySelector('select'); if (sel) sel.required = false; }
             if (startWS) { startWS.style.display = 'none'; const sel = startWS.querySelector('select'); if (sel) sel.required = false; }
         }
+        if (status === 'completer') {
+            if (completerMonth) { completerMonth.style.display = 'block'; const input = completerMonth.querySelector('input'); if (input) input.required = true; }
+            if (completerFor) completerFor.style.display = 'block';
+            if (completerTest) {
+                completerTest.style.display = 'block';
+                const d = completerTest.querySelector('.completer-test-date'); if (d) d.required = true;
+                const tm = completerTest.querySelector('.completer-test-time'); if (tm) tm.required = true;
+            }
+            if (timeslots) timeslots.style.display = 'none';
+            if (enrolDate) { enrolDate.style.display = 'none'; const input = enrolDate.querySelector('input'); if (input) input.required = false; }
+            if (startLevel) { startLevel.style.display = 'none'; const sel = startLevel.querySelector('select'); if (sel) sel.required = false; }
+            if (startWS) { startWS.style.display = 'none'; const sel = startWS.querySelector('select'); if (sel) sel.required = false; }
+        }
+
         if (status === 'drop') {
             entry.style.opacity = '0.65';
             entry.style.filter = 'grayscale(0.4)';
+            entry.style.borderLeftColor = '';
         } else if (status === 'pause') {
             entry.style.opacity = '0.85';
             entry.style.filter = 'none';
+            entry.style.borderLeftColor = '';
+        } else if (status === 'completer') {
+            entry.style.opacity = '0.9';
+            entry.style.filter = 'none';
+            entry.style.borderLeftColor = '#FFD700';
         } else {
             entry.style.opacity = '1';
             entry.style.filter = 'none';
+            entry.style.borderLeftColor = '';
         }
+
         const statusSelect = entry.querySelector('.status');
         if (statusSelect) statusSelect.disabled = false;
         const addPrBtn = entry.querySelector('.add-pr-btn');
         if (addPrBtn) {
-            if (status === 'drop' || status === 'pause') {
+            if (status === 'drop' || status === 'pause' || status === 'completer') {
                 addPrBtn.style.display = 'none';
                 if (entry.querySelector('.pr-type')?.value || entry.querySelector('.pr-cancelled')?.value === 'true') {
                     entry.querySelector('.pr-cancelled').value = 'true';
@@ -854,7 +886,7 @@ function renderSchedule() {
             const statusEl = entry.querySelector('.status');
             const status = statusEl?.value || 'drop';
             const timeslots = [];
-            if (status !== 'inquiry' && status !== 'pause' && status !== 'drop') {
+            if (!['inquiry', 'pause', 'drop', 'completer'].includes(status)) {
                 entry.querySelectorAll('.timeslots-list .timeslot-row').forEach(row => {
                     const centerEl = row.querySelector('.ts-center');
                     const dayEl = row.querySelector('.ts-day');
@@ -867,6 +899,7 @@ function renderSchedule() {
                     });
                 });
             }
+            const completerMY = parseMonthYear(entry.querySelector('.completer-month-year')?.value);
             const pencilEntry = entry.querySelector('.pencil-skill-entry');
             const pencilVisible = pencilEntry && pencilEntry.style.display !== 'none';
             let pencilData = null;
@@ -897,6 +930,12 @@ function renderSchedule() {
                 dropMonth: dropMY.month,
                 dropYear: dropMY.year,
                 dropReason: entry.querySelector('.drop-reason')?.value?.trim() || '',
+                completerMonth: completerMY.month,
+                completerYear: completerMY.year,
+                completerForStudent: entry.querySelector('.completer-for-student')?.checked === true,
+                completerForTeacher: entry.querySelector('.completer-for-teacher')?.checked === true,
+                completerTestDate: entry.querySelector('.completer-test-date')?.value || '',
+                completerTestTime: entry.querySelector('.completer-test-time')?.value || '',
                 pendingRequest: (() => {
                     const isCancelled = entry.querySelector('.pr-cancelled')?.value === 'true';
                     if (isCancelled) return { cancelled: true, cancelledAt: new Date().toISOString() };
@@ -991,7 +1030,7 @@ function renderSchedule() {
         document.querySelectorAll('.subject-entry').forEach(entry => {
             if (entry === excludeEntry) return;
             const status = entry.querySelector('.status')?.value;
-            if (status && status !== 'drop') count++;
+            if (status && status !== 'drop' && status !== 'completer') count++;
         });
         return count;
     }
@@ -1004,7 +1043,7 @@ function renderSchedule() {
             const statusSelect = entry.querySelector('.status');
             const subject = subjectSelect?.value;
             const status = statusSelect?.value;
-            if (subject && status !== 'drop') used.add(subject);
+            if (subject && status !== 'drop' && status !== 'completer') used.add(subject);
         });
         return used;
     }
@@ -1057,6 +1096,7 @@ function renderSchedule() {
                  <select class="status">
                      <option value="inquiry" ${data.status === 'inquiry' ? 'selected' : ''}>${t('studentForm.inquiry')}</option>
                      <option value="current" ${data.status === 'current' ? 'selected' : ''} ${!data.status ? 'selected' : ''}>${t('studentForm.current')}</option>
+                     <option value="completer" ${data.status === 'completer' ? 'selected' : ''}>${t('studentForm.completer')}</option>
                      <option value="pause" ${data.status === 'pause' ? 'selected' : ''}>${t('studentForm.pause')}</option>
                      <option value="drop" ${data.status === 'drop' ? 'selected' : ''}>${t('studentForm.drop')}</option>
                  </select>
@@ -1073,6 +1113,24 @@ function renderSchedule() {
                  <label>${t('studentForm.dropMonth')}</label>
                  <input type="month" class="drop-month-year" value="${(data.dropYear && data.dropMonth) ? `${data.dropYear}-${String(data.dropMonth).padStart(2, '0')}` : ''}">
              </div>
+             <div class="fld-completer-month" style="display:${data.status === 'completer' ? 'block' : 'none'};">
+                 <label>${t('studentForm.completionMonth')}</label>
+                 <input type="month" class="completer-month-year" value="${(data.completerYear && data.completerMonth) ? `${data.completerYear}-${String(data.completerMonth).padStart(2, '0')}` : ''}">
+             </div>
+             <div class="fld-completer-for pause-drop-reason-field" style="display:${data.status === 'completer' ? 'block' : 'none'}; background:#faf5ff; border-left-color:#9333ea;">
+                 <label>${t('studentForm.completerFor')}</label>
+                 <div class="completer-checkbox-group">
+                     <label class="completer-checkbox-label"><input type="checkbox" class="completer-for-student" ${data.completerForStudent ? 'checked' : ''}> ${t('studentForm.completerStudent')}</label>
+                     <label class="completer-checkbox-label"><input type="checkbox" class="completer-for-teacher" ${data.completerForTeacher ? 'checked' : ''}> ${t('studentForm.completerTeacher')}</label>
+                 </div>
+             </div>
+             <div class="fld-completer-test" style="display:${data.status === 'completer' ? 'block' : 'none'};">
+                 <label>${t('studentForm.completerTestDate')}</label>
+                 <div class="completer-test-group">
+                     <input type="date" class="completer-test-date" value="${data.completerTestDate || ''}">
+                     <input type="time" class="completer-test-time" value="${data.completerTestTime || ''}">
+                 </div>
+             </div>
              <div>
                  <label>${t('studentForm.selectSubject')}</label>
                  <select class="subject-name" required>
@@ -1088,11 +1146,11 @@ function renderSchedule() {
                  <label>${t('studentForm.inquiryDate')}</label>
                  <input type="date" class="inquiry-date" value="${data.inquiryDate || ''}">
              </div>
-             <div class="fld-start-level" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'};">
+             <div class="fld-start-level" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop' || data.status === 'completer') ? 'none' : 'block'};">
                  <label>${t('studentForm.startLevel')}</label>
                  <select class="start-level subject-level-select">${levelOptionsHTML}</select>
              </div>
-             <div class="fld-start-ws" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'};">
+             <div class="fld-start-ws" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop' || data.status === 'completer') ? 'none' : 'block'};">
                  <label>${t('studentForm.startWS')}</label>
                  <select class="start-ws">${getWSDropdownOptions(data.startWS)}</select>
              </div>
@@ -1101,7 +1159,7 @@ function renderSchedule() {
                  <label>${t('studentForm.currentLevelLabel')}</label>
                  <input type="text" class="current-level-display" readonly value="${data.currentLevel || t('studentForm.notSet')}" style="background:#f1f5f9; color:#64748b; cursor:not-allowed;">
              </div>
-             <div class="fld-enrol-date" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'};">
+             <div class="fld-enrol-date" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop' || data.status === 'completer') ? 'none' : 'block'};">
                  <label>${t('studentForm.enrolDate')}</label>
                  <input type="date" class="enrol-date" value="${data.enrolDate || ''}">
              </div>
@@ -1146,10 +1204,10 @@ function renderSchedule() {
              <label>${t('studentForm.reasonForDrop')}</label>
              <input type="text" class="drop-reason" placeholder="${t('studentForm.enterDropReason')}" value="${data.dropReason || ''}">
          </div>
-      <div class="timeslots-container" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop') ? 'none' : 'block'}; margin-bottom:1rem;">
+      <div class="timeslots-container" style="display:${(data.status === 'inquiry' || data.status === 'pause' || data.status === 'drop' || data.status === 'completer') ? 'none' : 'block'}; margin-bottom:1rem;">
          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
              <h4 style="font-size:0.9rem; margin:0;">${t('studentForm.timeslotsTitle')}</h4>
-             <button type="button" class="add-timeslot-btn secondary" style="margin:0; padding:0.3rem 0.8rem; font-size:0.8rem; width:auto;">+ ${t('studentForm.addTimeslot')}</button>
+             <button type="button" class="add-timeslot-btn secondary" style="margin:0; padding:0.3rem 0.8rem; font-size:0.8rem; width:auto;"> ${t('studentForm.addTimeslot')}</button>
          </div>
          <div class="timeslots-list"></div>
      </div>
@@ -1191,6 +1249,13 @@ function renderSchedule() {
                 if (pencilWs) { pencilWs.value = ''; pencilWs.required = false; }
             };
         }
+
+        div.querySelectorAll('.completer-checkbox-label').forEach(lbl => {
+            const cb = lbl.querySelector('input');
+            lbl.classList.toggle('checked', cb?.checked === true);
+            cb?.addEventListener('change', () => lbl.classList.toggle('checked', cb.checked));
+        });
+
         const addPrBtn = div.querySelector('.add-pr-btn');
         if (addPrBtn) addPrBtn.onclick = () => openPRModal(div);
         const cancelPrBtn = div.querySelector('.cancel-pr-btn');
@@ -1238,7 +1303,7 @@ function renderSchedule() {
         const statusSelect = div.querySelector('.status');
         if (statusSelect) {
             statusSelect.addEventListener('change', () => {
-                if (statusSelect.value !== 'drop' && getActiveSubjectCount(div) >= 3) {
+                if (!['drop', 'completer'].includes(statusSelect.value) && getActiveSubjectCount(div) >= 3) {
                     showError(t('studentForm.maxActiveSubjects'));
                     statusSelect.value = 'drop';
                 }
@@ -1251,6 +1316,7 @@ function renderSchedule() {
     }
 
     function validateConflict(currentSelect) {
+        const isInactive = (st) => st === 'drop' || st === 'completer';
         if (!currentSelect) return;
         const selected = currentSelect.value;
         if (!selected) return;
@@ -1262,18 +1328,18 @@ function renderSchedule() {
             const otherEntry = s.closest('.subject-entry');
             const otherStatusEl = otherEntry?.querySelector('.status');
             const otherStatus = otherStatusEl?.value;
-            if (s.value === selected && otherStatus !== 'drop' && currentStatus !== 'drop') {
+            if (s.value === selected && !isInactive(otherStatus) && !isInactive(currentStatus)) {
                 showError(`${selected}${t('studentForm.subjectAlreadyAdded')}`);
                 currentSelect.value = ''; return;
             }
             if (['English ERP', 'English EFL'].includes(selected) && ['English ERP', 'English EFL'].includes(s.value)) {
-                if (otherStatus !== 'drop' && currentStatus !== 'drop') {
+                if (!isInactive(otherStatus) && !isInactive(currentStatus)) {
                     showError(t('studentForm.erpEflConflict'));
                     currentSelect.value = ''; return;
                 }
             }
             if (selected.includes('Chinese') && s.value.includes('Chinese')) {
-                if (otherStatus !== 'drop' && currentStatus !== 'drop') {
+                if (!isInactive(otherStatus) && !isInactive(currentStatus)) {
                     showError(t('studentForm.chineseConflict'));
                     currentSelect.value = ''; return;
                 }
@@ -1304,7 +1370,8 @@ function renderSchedule() {
         for (const row of document.querySelectorAll('.timeslot-row')) {
             if (row === excludeRow) continue;
             const subjectEntry = row.closest('.subject-entry');
-            if (subjectEntry?.querySelector('.status')?.value === 'drop') continue;
+            const st = subjectEntry?.querySelector('.status')?.value;
+            if (st === 'drop' || st === 'completer') continue;
             if (row.querySelector('.ts-day')?.value === day && row.querySelector('.ts-hour')?.value === hour && row.querySelector('.ts-min')?.value === min) {
                 return subjectEntry?.querySelector('.subject-name')?.value || 'another subject';
             }
@@ -1668,7 +1735,8 @@ function renderSchedule() {
         if (pencilCount > 1) return showError(t('studentForm.onePencilSkill'));
         let activeSubjectsCount = 0;
         for (const entry of document.querySelectorAll('.subject-entry')) {
-            if (entry.querySelector('.status')?.value !== 'drop') activeSubjectsCount++;
+            const st = entry.querySelector('.status')?.value;
+            if (st !== 'drop' && st !== 'completer') activeSubjectsCount++;
         }
         if (activeSubjectsCount > 3) {
             return showError(t('studentForm.max3Active'));
@@ -1693,6 +1761,13 @@ function renderSchedule() {
             const enrolDate = entry.querySelector('.enrol-date');
             const inquiryDate = entry.querySelector('.inquiry-date');
             if (!subject?.value) return showError(`${t('studentForm.dropMonthRequired')}${subIdx}${t('studentForm.subjectRequired')}`);
+            if (status === 'completer') {
+                if (!entry.querySelector('.completer-month-year')?.value) return showError(`${t('studentForm.dropMonthRequired')}${subIdx}${t('studentForm.completerMonthRequiredEnd')}`);
+                if (!entry.querySelector('.completer-test-date')?.value) return showError(`${t('studentForm.dropMonthRequired')}${subIdx}${t('studentForm.completerTestDateRequired')}`);
+                if (!entry.querySelector('.completer-test-time')?.value) return showError(`${t('studentForm.dropMonthRequired')}${subIdx}${t('studentForm.completerTestTimeRequired')}`);
+                subIdx++;
+                continue;
+            }
             if (status === 'pause') {
                 const pauseFromMY = entry.querySelector('.pause-from-month-year');
                 const pauseToMY = entry.querySelector('.pause-to-month-year');
@@ -1756,6 +1831,7 @@ function renderSchedule() {
         for (const entry of document.querySelectorAll('.subject-entry')) {
             if (entry.querySelector('.status')?.value === 'drop') continue;
             if (entry.querySelector('.status')?.value === 'pause') continue;
+            if (entry.querySelector('.status')?.value === 'completer') continue;
             const subjectName = entry.querySelector('.subject-name')?.value || t('studentForm.unknown');
             entry.querySelectorAll('.timeslots-list .timeslot-row').forEach(row => {
                 const day = row.querySelector('.ts-day')?.value, hour = row.querySelector('.ts-hour')?.value, min = row.querySelector('.ts-min')?.value;
@@ -2110,7 +2186,7 @@ document.getElementById('saveScheduleDTBtn')?.addEventListener('click', () => {
             const subjects = Array.isArray(student.subjects)
                 ? student.subjects
                 : Object.values(student.subjects || {});
-            const activeSubjects = subjects.filter(s => s.status && s.status !== 'drop');
+            const activeSubjects = subjects.filter(s => s.status && s.status !== 'drop' && s.status !== 'completer');
             const subjectsHtml = activeSubjects.length > 0
                 ? activeSubjects.map(s =>
                     `<span class="subj-pill ${getSubjectColorClass(s.name)}">${s.name} <small>(${s.status})</small></span>`
@@ -2217,7 +2293,7 @@ document.getElementById('saveScheduleDTBtn')?.addEventListener('click', () => {
         document.querySelectorAll('.subject-entry').forEach(entry => {
             const subj = entry.querySelector('.subject-name')?.value;
             const status = entry.querySelector('.status')?.value;
-            if (subj && status !== 'drop') currentSubjects.add(subj);
+            if (subj && status !== 'drop' && status !== 'completer') currentSubjects.add(subj);
         });
         if (currentSubjects.size === 0) {
             container.innerHTML = `<p class="hint">${t('studentForm.addSubjectsForTeachers')}</p>`;

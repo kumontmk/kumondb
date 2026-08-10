@@ -16,6 +16,7 @@ export default {
     statusLabel: "📋 Status:",
     allStatuses: "All Statuses",
     current: "Current",
+    completer: "Completer ",
     inquiry: "Inquiry",
     pause: "Pause",
     drop: "Drop",

@@ -211,7 +211,7 @@ export default {
     selectSubject: "選擇科目 *",
     selectLevel: "選擇級別",
     selectWS: "選擇 WS",
-    currentLevelLabel: "目前級別（來自資料庫）",
+    currentLevelLabel: "目前級別 (自動)",
     notSet: "未設定",
     enrolDate: "入學日期 *",
     worksheetType: "工作表類型",
@@ -273,5 +273,14 @@ export default {
     time24h: "時間（24小時制）",
     dtTimeslot: "DT 時段 *",
     dtTimeslotRequired: "⚠️ 請選擇 DT 時段。",
+    completer: "完成者",
+    completionMonth: "完成月份 *",
+    completerFor: "完成者表單已提交給：",
+    completerStudent: "學生",
+    completerTeacher: "導師",
+    completerTestDate: "完成者測試日期 *",
+    completerMonthRequiredEnd: "：完成月份為必填。",
+    completerTestDateRequired: "：完成者測試日期為必填。",
+    completerTestTimeRequired: "：完成者測試時間為必填。",
   }
 };
