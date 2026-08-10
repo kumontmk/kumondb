@@ -108,5 +108,8 @@ export default {
     shiftCenter: "Center",
     work: "Work",
     break: "Break",
+    centerOther: "Other",
+    otherDescLabel: "Assignment",
+    otherDescPlaceholder: "e.g. Training, Meeting, Event",
   }
 };

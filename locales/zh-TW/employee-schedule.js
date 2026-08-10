@@ -108,5 +108,8 @@ export default {
     shiftCenter: "中心",
     work: "工作",
     break: "休息",
+    centerOther: "其他",
+    otherDescLabel: "任務簡述",
+    otherDescPlaceholder: "例如：培訓、開會、活動",
   }
 };

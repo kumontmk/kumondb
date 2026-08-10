@@ -351,7 +351,8 @@ function extractShifts(sched) {
         type: s.type || 'work',
         start: s.start,
         end: s.end,
-        center: s.center || sched._sourceCenter
+        center: s.center || sched._sourceCenter,
+        otherDesc: s.otherDesc || '' 
       });
     });
   } else {
@@ -603,20 +604,16 @@ function renderMergedScheduleCell(td, sched, empId, dateStr) {
     return;
   }
   td.classList.add('has-schedule');
-  const centersUsed = [...new Set(shifts.filter(s => s.center).map(s => s.center))];
-  const isMultiCenter = centersUsed.length > 1;
-  if (isMultiCenter) td.classList.add('has-warning');
   let html = '<div class="cell-content">';
   const sortedShifts = [...shifts].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
   sortedShifts.forEach(shift => {
     if (shift.type === 'break') {
       html += `<div class="shift-line break-line">☕ ${shift.start}-${shift.end}</div>`;
     } else {
-      const cAbbr = getCenterAbbr(shift.center);
-      const cClass = getCenterClass(shift.center);
+      const badge = getShiftBadgeInfo(shift);
       html += `<div class="shift-line">
-          <span class="shift-time">${shift.start}-${shift.end}</span>
-          <span class="shift-center ${cClass}">${cAbbr}</span>
+        <span class="shift-time">${shift.start}-${shift.end}</span>
+        <span class="shift-center ${badge.cls}" title="${badge.title}">${badge.label}</span>
       </div>`;
     }
   });
@@ -625,9 +622,43 @@ function renderMergedScheduleCell(td, sched, empId, dateStr) {
     html += `<div class="holiday-indicator">🎌 ${holidayInfo.name || t('schedule.holiday')}</div>`;
   }
   if (sched.notes) html += `<div class="notes-indicator">📝</div>`;
-  if (isMultiCenter) html += `<div class="multi-center-indicator">${t('schedule.multiCenter')}</div>`;
   html += '</div>';
   td.innerHTML = html;
+}
+
+
+// ============================================
+// 🆕 "OTHER" ASSIGNMENT HELPERS
+// ============================================
+function escapeHtml(str) {
+  return (str == null ? '' : String(str))
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** Badge info for a shift line (center abbr OR "Other" description) */
+function getShiftBadgeInfo(shift) {
+  if (shift.center === 'other') {
+    const desc = (shift.otherDesc || '').trim();
+    const label = desc
+      ? (desc.length > 12 ? desc.slice(0, 12).trim() + '…' : desc)
+      : t('schedule.centerOther');
+    return { label: escapeHtml(label), cls: 'c-OTHER', title: escapeHtml(desc || label) };
+  }
+  const c = allCenters.find(x => x.id === shift.center);
+  return {
+    label: escapeHtml(getCenterAbbr(shift.center)),
+    cls: getCenterClass(shift.center),
+    title: escapeHtml(c ? c.name : (shift.center || ''))
+  };
+}
+
+/** Show/hide the hidden description field when center = Other */
+function toggleOtherDescField(selectEl) {
+  const shiftDiv = selectEl.closest('.shift-item');
+  if (!shiftDiv) return;
+  const otherField = shiftDiv.querySelector('.other-field');
+  if (otherField) otherField.style.display = (selectEl.value === 'other') ? '' : 'none';
 }
 
 function getCenterAbbr(centerId) {
@@ -819,16 +850,15 @@ function renderEmployeeBody(dates, empId) {
             sortedShifts.forEach(shift => {
               if (shift.type === 'break') {
                 detailsHTML += `<div class="mobile-shift break">☕ ${shift.start} - ${shift.end}</div>`;
-              } else {
-                const centerAbbr = getCenterAbbr(shift.center);
-                const centerClass = getCenterClass(shift.center);
-                detailsHTML += `
+                } else {
+                  const badge = getShiftBadgeInfo(shift);
+                  detailsHTML += `
                     <div class="mobile-shift">
-                        ${shift.start} - ${shift.end}
-                        <span class="mobile-center-badge ${centerClass}">${centerAbbr}</span>
+                      ${shift.start} - ${shift.end}
+                      <span class="mobile-center-badge ${badge.cls}">${badge.label}</span>
                     </div>
-                `;
-              }
+                  `;
+                }
             });
           }
         }
@@ -1129,10 +1159,10 @@ function printSubjectSchedule() {
             sortedShifts.forEach(s => {
               if (s.type === 'break') {
                 cellContent += `<div class="print-shift break-shift">☕ ${s.start}-${s.end}</div>`;
-              } else {
-                const cAbbr = getCenterAbbr(s.center);
-                cellContent += `<div class="print-shift"><span class="time">${s.start}-${s.end}</span> <span style="font-weight:700;font-size:5.5pt;">${cAbbr}</span></div>`;
-              }
+                } else {
+                  const badge = getShiftBadgeInfo(s);
+                  cellContent += `<div class="print-shift"><span class="time">${s.start}-${s.end}</span> <span style="font-weight:700;font-size:5.5pt;">${badge.label}</span></div>`;
+                }
             });
             if (isTemplate) {
               cellContent += `<div style="font-size:5pt;color:#888;font-style:italic;">${t('schedule.printPattern')}</div>`;
@@ -1272,6 +1302,12 @@ function populateCenterDropdown(selectEl, selectedValue = '') {
     if (c.id === selectedValue) opt.selected = true;
     selectEl.appendChild(opt);
   });
+  // 🆕 "Other" option
+  const otherOpt = document.createElement('option');
+  otherOpt.value = 'other';
+  otherOpt.textContent = t('schedule.centerOther');
+  if (selectedValue === 'other') otherOpt.selected = true;
+  selectEl.appendChild(otherOpt);
 }
 
 function addShiftRow(shiftData = null) {
@@ -1283,23 +1319,31 @@ function addShiftRow(shiftData = null) {
   const isBreak = shiftData?.type === 'break';
   if (isBreak) shiftDiv.classList.add('break-shift');
   const typeOptions = `<option value="work" ${!isBreak ? 'selected' : ''}>${t('schedule.work')}</option> <option value="break" ${isBreak ? 'selected' : ''}>${t('schedule.break')}</option>`;
-  shiftDiv.innerHTML = `<div class="shift-field"> <label>${t('schedule.shiftType')}</label> <select class="shift-type" onchange="toggleShiftType(this)"> ${typeOptions} </select> </div> <div class="shift-field"> <label>${t('schedule.shiftStart')}</label> <input type="time" class="shift-start" value="${shiftData?.start || ''}"> </div> <div class="shift-field"> <label>${t('schedule.shiftEnd')}</label> <input type="time" class="shift-end" value="${shiftData?.end || ''}"> </div> <div class="shift-field center-field" style="${isBreak ? 'display:none' : ''}"> <label>${t('schedule.shiftCenter')}</label> <select class="shift-center"></select> </div> <button type="button" class="remove-shift-btn" onclick="removeShiftRow(this)" title="Remove shift"> <i class="fas fa-times"></i> </button>`;
+  shiftDiv.innerHTML = `<div class="shift-field"> <label>${t('schedule.shiftType')}</label> <select class="shift-type" onchange="toggleShiftType(this)"> ${typeOptions} </select> </div> <div class="shift-field"> <label>${t('schedule.shiftStart')}</label> <input type="time" class="shift-start" value="${shiftData?.start || ''}"> </div> <div class="shift-field"> <label>${t('schedule.shiftEnd')}</label> <input type="time" class="shift-end" value="${shiftData?.end || ''}"> </div> <div class="shift-field center-field" style="${isBreak ? 'display:none' : ''}"> <label>${t('schedule.shiftCenter')}</label> <select class="shift-center"></select> </div> <div class="shift-field other-field" style="display:none"> <label>${t('schedule.otherDescLabel')}</label> <input type="text" class="shift-other-desc" maxlength="60" placeholder="${t('schedule.otherDescPlaceholder')}" value="${escapeHtml(shiftData?.otherDesc || '')}"> </div> <button type="button" class="remove-shift-btn" onclick="removeShiftRow(this)" title="Remove shift"> <i class="fas fa-times"></i> </button>`;
   container.appendChild(shiftDiv);
   const centerSelect = shiftDiv.querySelector('.shift-center');
   populateCenterDropdown(centerSelect, shiftData?.center || '');
+  // 🆕 toggle hidden desc field
+  centerSelect.addEventListener('change', () => toggleOtherDescField(centerSelect));
+  toggleOtherDescField(centerSelect);
 }
 
 window.toggleShiftType = function (selectEl) {
   const shiftDiv = selectEl.closest('.shift-item');
   const centerField = shiftDiv.querySelector('.center-field');
+  const otherField = shiftDiv.querySelector('.other-field');
   if (selectEl.value === 'break') {
     shiftDiv.classList.add('break-shift');
     centerField.style.display = 'none';
+    if (otherField) otherField.style.display = 'none';
   } else {
     shiftDiv.classList.remove('break-shift');
     centerField.style.display = '';
+    const centerSelect = shiftDiv.querySelector('.shift-center');
+    if (centerSelect) toggleOtherDescField(centerSelect);
   }
 };
+
 window.removeShiftRow = function (btn) {
   const shiftDiv = btn.closest('.shift-item');
   shiftDiv.remove();
@@ -1421,8 +1465,12 @@ async function saveSchedule() {
       const start = item.querySelector('.shift-start').value;
       const end = item.querySelector('.shift-end').value;
       const center = type === 'work' ? item.querySelector('.shift-center').value : null;
-      if (start && end) shifts.push({ type, start, end, center });
+      const otherDesc = center === 'other'
+        ? (item.querySelector('.shift-other-desc')?.value || '').trim()
+        : '';
+      if (start && end) shifts.push({ type, start, end, center, otherDesc });
     });
+
     const data = { status, shifts, notes, updatedAt: new Date().toISOString(), updatedBy: currentUser.uid };
     const errors = validateSchedule(data, editingDate);
     if (errors.length > 0) {
@@ -1439,9 +1487,10 @@ async function saveSchedule() {
         await set(ref(db, `schedules/${center.id}/${editingEmpId}/${editingDate}`), data);
       }
       localRecord = { ...data, _sourceCenter: allCenters[0]?.id || null };
-    } else {
+      } else {
       let targetCenter = null;
-      const workShifts = shifts.filter(s => s.type === 'work' && s.center);
+      const workShifts = shifts.filter(s => s.type === 'work' && s.center && s.center !== 'other');
+      
       if (workShifts.length > 0) targetCenter = workShifts[0].center;
       if (!targetCenter) targetCenter = editingSourceCenter;
       if (!targetCenter) {
@@ -1474,14 +1523,18 @@ async function saveSchedule() {
       await set(ref(db, `schedules/${targetCenter}/${editingEmpId}/${editingDate}`), data);
       localRecord = { ...data, _sourceCenter: targetCenter };
     }
-    const checkedDates = Array.from(selectedPatternDates).filter(d => d !== editingDate);
-    if (checkedDates.length > 0) {
-      const hasContent = shifts.length > 0 || status !== 'scheduled';
-      let copyCenter = null;
-      const copyWorkShifts = shifts.filter(s => s.type === 'work' && s.center);
-      if (copyWorkShifts.length > 0) copyCenter = copyWorkShifts[0].center;
-      if (!copyCenter) copyCenter = editingSourceCenter || (allCenters.length > 0 ? allCenters[0].id : null);
-      for (const dateStr of checkedDates) {
+      const checkedDates = Array.from(selectedPatternDates).filter(d => d !== editingDate);
+      if (checkedDates.length > 0) {
+        const hasContent = shifts.length > 0 || status !== 'scheduled';
+        let copyCenter = null;
+        
+        // ✅ ADD: && s.center !== 'other'
+        const copyWorkShifts = shifts.filter(s => s.type === 'work' && s.center && s.center !== 'other');
+        
+        if (copyWorkShifts.length > 0) copyCenter = copyWorkShifts[0].center;
+        if (!copyCenter) copyCenter = editingSourceCenter || (allCenters.length > 0 ? allCenters[0].id : null);
+        
+        for (const dateStr of checkedDates) {
         if (hasContent && copyCenter) {
           const copyData = { status, shifts, notes, isFromPattern: true, updatedAt: new Date().toISOString(), updatedBy: currentUser.uid };
           await set(ref(db, `schedules/${copyCenter}/${editingEmpId}/${dateStr}`), copyData);

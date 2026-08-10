@@ -1256,6 +1256,13 @@ textarea {
 }
 
 /* =========================================
+🆕 "OTHER" ASSIGNMENT BADGE (gray)
+========================================= */
+.cell-content .shift-center.c-OTHER { background: #7f8c8d; }
+.mobile-center-badge.c-OTHER { background: #7f8c8d; }
+.shift-item .other-field { flex: 1 1 100%; }  /* desc input gets its own row */
+
+/* =========================================
    🌐 TRADITIONAL CHINESE FONT SUPPORT
 ========================================= */
 :lang(zh-TW) body,
