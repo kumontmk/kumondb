@@ -1938,3 +1938,117 @@ textarea {
 .schedule-dashboard.loaded {
   opacity: 1;
 }
+
+/* =========================================
+📱 MOBILE HEADER — side-by-side (like timecard)
+========================================= */
+@media (max-width: 768px) {
+  header {
+    padding: 0.75rem 1rem;
+    flex-direction: row;          /* side-by-side instead of stacked */
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: nowrap;            /* never wrap to a second line */
+    gap: 0.75rem;
+  }
+
+  header h1 {
+    flex: 1;
+    min-width: 0;                 /* lets the title shrink inside flexbox */
+    margin: 0;
+    font-size: clamp(0.95rem, 4.5vw, 1.25rem);  /* auto-adjusts with screen width */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;      /* "📅 Employee Sch…" instead of wrapping */
+  }
+
+  header nav {
+    width: auto;
+    gap: 0.5rem;
+    flex-shrink: 0;               /* buttons keep their size, title shrinks */
+  }
+
+  header nav a,
+  header nav button {
+    padding: 0.5rem 0.75rem;
+    font-size: clamp(0.75rem, 3.5vw, 0.9rem);
+    white-space: nowrap;
+  }
+}
+
+/* Small phones — shrink a bit more */
+@media (max-width: 480px) {
+  header { padding: 0.625rem 0.75rem; gap: 0.5rem; }
+  header h1 { font-size: clamp(0.85rem, 4vw, 1.05rem); }
+  header nav { gap: 0.4rem; }
+  header nav a,
+  header nav button { padding: 0.45rem 0.6rem; font-size: 0.78rem; }
+}
+
+/* =========================================
+🎛️ TOOLBAR LABELS & DROPDOWNS (Center / Subject)
+Fixes oversized default label + select styling
+========================================= */
+.schedule-toolbar .nav-group > label,
+.schedule-toolbar label[for="centerDropdown"],
+.schedule-toolbar label[for="subjectDropdown"] {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-light);
+    white-space: nowrap;
+}
+
+#centerDropdown,
+#subjectDropdown {
+    padding: 0.4rem 0.8rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    background: var(--white);
+    color: var(--text);
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+#centerDropdown:hover,
+#subjectDropdown:hover {
+    border-color: var(--primary-dark);
+}
+
+#centerDropdown:focus,
+#subjectDropdown:focus {
+    outline: none;
+    border-color: var(--primary-dark);
+    box-shadow: 0 0 0 2px rgba(70, 130, 180, 0.2);
+}
+
+/* Keep them tidy when the toolbar stacks on mobile */
+@media (max-width: 768px) {
+    #centerDropdown,
+    #subjectDropdown {
+        width: 100%;
+    }
+}
+
+/* =========================================
+🌐 TRADITIONAL CHINESE FONT SUPPORT
+========================================= */
+:lang(zh-TW) body,
+:lang(zh-TW) input,
+:lang(zh-TW) select,
+:lang(zh-TW) button,
+:lang(zh-TW) textarea,
+:lang(zh-TW) th,
+:lang(zh-TW) td {
+  font-family:
+    "PingFang TC",
+    "Microsoft JhengHei",
+    "Noto Sans TC",
+    "Heiti TC",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+}

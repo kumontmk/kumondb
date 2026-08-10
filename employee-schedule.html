@@ -1,229 +1,185 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Employee Schedule - Kumon DB</title>
-<link rel="stylesheet" href="employee-schedule.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title data-i18n="schedule.title">Employee Schedule - Kumon DB</title>
+  <link rel="stylesheet" href="employee-schedule.css">
 </head>
 <body>
+  <div id="page-loader"><div class="spinner"></div></div>
 
-<div id="page-loader"><div class="spinner"></div></div>
+  <header>
+    <nav><a href="centers.html" data-i18n="schedule.backToCenters">← Centers</a></nav>
+    <h2 data-i18n="schedule.pageTitle">📅 Employee Schedule</h2>
+  </header>
 
-<header>
-    <nav>
-        <a href="centers.html">← Centers</a>
-    </nav>
-    <h2>📅 Employee Schedule</h2>
-</header>
-
-<div class="schedule-dashboard">
-
-    <!-- TABS -->
+  <div class="schedule-dashboard">
     <div class="schedule-tabs">
-        <button class="tab-btn active" data-tab="admin"><i class="fas fa-users-cog"></i> Admin View</button>
-        <button class="tab-btn" data-tab="center"><i class="fas fa-building"></i> Per Center</button>
-        <button class="tab-btn" data-tab="subject"><i class="fas fa-book"></i> Per Subject</button>
-        <button class="tab-btn" data-tab="employee"><i class="fas fa-user"></i> Employee View</button>
+      <button class="tab-btn active" data-tab="admin" data-i18n="schedule.tabAdmin">📋 Admin View</button>
+      <button class="tab-btn" data-tab="center" data-i18n="schedule.tabCenter">🏢 Per Center</button>
+      <button class="tab-btn" data-tab="subject" data-i18n="schedule.tabSubject">📚 Per Subject</button>
+      <button class="tab-btn" data-tab="employee" data-i18n="schedule.tabEmployee">👤 Employee View</button>
     </div>
 
-    <!-- ADMIN VIEW TAB -->
-    <div class="tab-content active" id="tab-admin">
-        <div class="schedule-toolbar">
-            <div class="nav-group">
-                <button class="nav-btn" id="prevWeekBtn"><i class="fas fa-chevron-left"></i> Prev</button>
-                <span class="week-range" id="weekRangeDisplay">Loading...</span>
-                <button class="nav-btn" id="nextWeekBtn">Next <i class="fas fa-chevron-right"></i></button>
-                <button class="nav-btn today-btn" id="todayBtn">Today</button>
-            </div>
-            <!-- SEARCH INPUT GROUP -->
-            <div class="nav-group">
-                <input type="text" id="adminSearchInput" placeholder="🔍 Search employees..." class="search-input">
-            </div>
-            <div class="nav-group">
-                <button class="action-btn primary" id="applyPatternBtn"><i class="fas fa-magic"></i> Apply Patterns to Month</button>
-            </div>
+    <!-- ADMIN VIEW -->
+    <div id="tab-admin" class="tab-content active">
+      <div class="schedule-toolbar">
+        <div class="nav-group">
+          <button id="prevWeekBtn" class="nav-btn" data-i18n="schedule.prev">Prev</button>
+          <span id="weekRangeDisplay" class="week-range" data-i18n="schedule.loading">Loading...</span>
+          <button id="nextWeekBtn" class="nav-btn" data-i18n="schedule.next">Next</button>
+          <button id="todayBtn" class="nav-btn today-btn" data-i18n="schedule.today">Today</button>
+          <button id="applyPatternBtn" class="action-btn primary" data-i18n="schedule.applyPatterns">Apply Patterns to Month</button>
         </div>
-        <div class="table-wrapper">
-            <table class="schedule-table">
-                <thead><tr id="adminHeaderRow"></tr></thead>
-                <tbody id="adminBody"></tbody>
-            </table>
-        </div>
-        <div class="empty-state hidden" id="adminEmptyState">
-            <i class="fas fa-users" style="font-size:3rem;color:#ccc;margin-bottom:1rem;"></i>
-            <p>No employees found. Add employees first.</p>
-        </div>
+        <input type="text" id="adminSearchInput" class="search-input" data-i18n-placeholder="schedule.searchPlaceholder" placeholder="Search...">
+      </div>
+      <div id="adminEmptyState" class="empty-state hidden" data-i18n="schedule.adminEmpty">No employees found. Add employees first.</div>
+      <div class="table-wrapper">
+        <table class="schedule-table">
+          <thead><tr id="adminHeaderRow"></tr></thead>
+          <tbody id="adminBody"></tbody>
+        </table>
+      </div>
     </div>
 
-    <!-- PER CENTER TAB -->
-    <div class="tab-content" id="tab-center">
-        <div class="schedule-toolbar">
-            <div class="nav-group">
-                <label style="font-size:0.85rem;font-weight:600;color:var(--text-light);">Center:</label>
-                <select id="centerDropdown" style="padding:0.4rem 0.8rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.85rem;min-width:220px;"></select>
-            </div>
-            <div class="nav-group">
-                <button class="nav-btn" id="centerPrevBtn"><i class="fas fa-chevron-left"></i> Prev</button>
-                <span class="week-range" id="centerWeekRangeDisplay">Loading...</span>
-                <button class="nav-btn" id="centerNextBtn">Next <i class="fas fa-chevron-right"></i></button>
-                <button id="centerTodayBtn" class="nav-btn today-btn">Today</button>
-                <label style="display:flex; align-items:center; gap:5px; font-weight:600; margin-left:15px; cursor:pointer;">
-                    <input type="checkbox" id="centerGroupBySubject"> Group by Subject
-                </label>
-            </div>
-            <div class="nav-group">
-                <button class="action-btn primary print-btn" id="printCenterBtn"><i class="fas fa-print"></i> Print Schedule</button>
-                <button id="exportJpegBtn" class="action-btn primary" style="background:#8e44ad; margin-left:0.5rem;">📷 Export as JPEG</button>
-            </div>
+    <!-- PER CENTER -->
+    <div id="tab-center" class="tab-content">
+      <div class="schedule-toolbar">
+        <div class="nav-group">
+          <label data-i18n="schedule.centerLabel">Center:</label>
+          <select id="centerDropdown"></select>
+          <button id="centerPrevBtn" class="nav-btn" data-i18n="schedule.prev">Prev</button>
+          <span id="centerWeekRangeDisplay" class="week-range" data-i18n="schedule.loading">Loading...</span>
+          <button id="centerNextBtn" class="nav-btn" data-i18n="schedule.next">Next</button>
+          <button id="centerTodayBtn" class="nav-btn today-btn" data-i18n="schedule.today">Today</button>
+          <label style="display:flex; align-items:center; gap:0.4rem;"><input type="checkbox" id="centerGroupBySubject"> <span data-i18n="schedule.groupBySubject">Group by Subject</span></label>
         </div>
-        <div class="table-wrapper" id="centerTableWrapper">
-            <table class="schedule-table center-view-table">
-                <thead><tr id="centerHeaderRow"></tr></thead>
-                <tbody id="centerBody"></tbody>
-            </table>
+        <div class="nav-group">
+          <button id="printCenterBtn" class="nav-btn print-btn" data-i18n="schedule.printSchedule">Print Schedule</button>
+          <button id="exportJpegBtn" class="nav-btn" data-i18n="schedule.exportJpeg">📷 Export as JPEG</button>
         </div>
-        <div class="empty-state hidden" id="centerEmptyState">
-            <i class="fas fa-building" style="font-size:3rem;color:#ccc;margin-bottom:1rem;"></i>
-            <p>No employees scheduled at this center for this period.</p>
-        </div>
+      </div>
+      <div id="centerEmptyState" class="empty-state hidden" data-i18n="schedule.centerEmpty">No employees scheduled at this center for this period.</div>
+      <div class="table-wrapper" id="centerTableWrapper">
+        <table class="schedule-table center-view-table">
+          <thead><tr id="centerHeaderRow"></tr></thead>
+          <tbody id="centerBody"></tbody>
+        </table>
+      </div>
     </div>
 
-    <!-- PER SUBJECT TAB -->
-    <div class="tab-content" id="tab-subject">
-        <div class="schedule-toolbar">
-            <div class="nav-group">
-                <label style="font-size:0.85rem;font-weight:600;color:var(--text-light);">Subject:</label>
-                <select id="subjectDropdown" style="padding:0.4rem 0.8rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.85rem;min-width:220px;">
-                    <option value="all">All Subjects</option>
-                    <option value="English Teacher">English</option>
-                    <option value="Math Teacher">Math</option>
-                    <option value="Chinese Teacher">Chinese</option>
-                </select>
-            </div>
-            <div class="nav-group">
-                <button class="nav-btn" id="subjectPrevBtn"><i class="fas fa-chevron-left"></i> Prev</button>
-                <span class="week-range" id="subjectWeekRangeDisplay">Loading...</span>
-                <button class="nav-btn" id="subjectNextBtn">Next <i class="fas fa-chevron-right"></i></button>
-                <button class="nav-btn today-btn" id="subjectTodayBtn">Today</button>
-            </div>
-            <div class="nav-group">
-                <button class="action-btn primary print-btn" id="printSubjectBtn"><i class="fas fa-print"></i> Print Schedule</button>
-            </div>
+    <!-- PER SUBJECT -->
+    <div id="tab-subject" class="tab-content">
+      <div class="schedule-toolbar">
+        <div class="nav-group">
+          <label data-i18n="schedule.subjectLabel">Subject:</label>
+          <select id="subjectDropdown">
+            <option value="all" data-i18n="schedule.allSubjects">All Subjects</option>
+            <option value="English Teacher" data-i18n="schedule.english">English</option>
+            <option value="Math Teacher" data-i18n="schedule.math">Math</option>
+            <option value="Chinese Teacher" data-i18n="schedule.chinese">Chinese</option>
+          </select>
+          <button id="subjectPrevBtn" class="nav-btn" data-i18n="schedule.prev">Prev</button>
+          <span id="subjectWeekRangeDisplay" class="week-range" data-i18n="schedule.loading">Loading...</span>
+          <button id="subjectNextBtn" class="nav-btn" data-i18n="schedule.next">Next</button>
+          <button id="subjectTodayBtn" class="nav-btn today-btn" data-i18n="schedule.today">Today</button>
+          <button id="printSubjectBtn" class="nav-btn print-btn" data-i18n="schedule.printSchedule">Print Schedule</button>
         </div>
-        <div class="table-wrapper" id="subjectTableWrapper">
-            <table class="schedule-table subject-view-table">
-                <thead><tr id="subjectHeaderRow"></tr></thead>
-                <tbody id="subjectBody"></tbody>
-            </table>
-        </div>
-        <div class="empty-state hidden" id="subjectEmptyState">
-            <i class="fas fa-book" style="font-size:3rem;color:#ccc;margin-bottom:1rem;"></i>
-            <p>No teachers found for this subject.</p>
-        </div>
+      </div>
+      <div id="subjectEmptyState" class="empty-state hidden" data-i18n="schedule.subjectEmpty">No teachers found for this subject.</div>
+      <div class="table-wrapper" id="subjectTableWrapper">
+        <table class="schedule-table subject-view-table">
+          <thead><tr id="subjectHeaderRow"></tr></thead>
+          <tbody id="subjectBody"></tbody>
+        </table>
+      </div>
     </div>
 
-    <!-- EMPLOYEE VIEW TAB -->
-    <div class="tab-content" id="tab-employee">
-        <div class="schedule-toolbar">
-            <div class="nav-group">
-                <button class="nav-btn" id="empPrevWeekBtn"><i class="fas fa-chevron-left"></i> Prev</button>
-                <span class="week-range" id="empWeekRangeDisplay">Loading...</span>
-                <button class="nav-btn" id="empNextWeekBtn">Next <i class="fas fa-chevron-right"></i></button>
-                <button class="nav-btn today-btn" id="empTodayBtn">Today</button>
-            </div>
-            <div class="employee-selector hidden" id="employeeSelectorWrap">
-                <label>View schedule for:</label>
-                <select id="employeeDropdown"></select>
-            </div>
+    <!-- EMPLOYEE VIEW -->
+    <div id="tab-employee" class="tab-content">
+      <div class="schedule-toolbar">
+        <div class="nav-group">
+          <button id="empPrevWeekBtn" class="nav-btn" data-i18n="schedule.prev">Prev</button>
+          <span id="empWeekRangeDisplay" class="week-range" data-i18n="schedule.loading">Loading...</span>
+          <button id="empNextWeekBtn" class="nav-btn" data-i18n="schedule.next">Next</button>
+          <button id="empTodayBtn" class="nav-btn today-btn" data-i18n="schedule.today">Today</button>
         </div>
-        <div class="table-wrapper">
-            <table class="schedule-table">
-                <thead><tr id="empHeaderRow"></tr></thead>
-                <tbody id="empBody"></tbody>
-            </table>
+        <div class="employee-selector" id="employeeSelectorWrap">
+          <label data-i18n="schedule.viewScheduleFor">View schedule for:</label>
+          <select id="employeeDropdown"></select>
         </div>
-        <!-- Mobile List View -->
-        <div id="employeeMobileView" class="employee-mobile-view hidden">
-            <div id="employeeMobileList"></div>
-        </div>
-        <div class="empty-state hidden" id="empEmptyState">
-            <i class="fas fa-calendar-times" style="font-size:3rem;color:#ccc;margin-bottom:1rem;"></i>
-            <p>No schedule assigned. Contact your manager.</p>
-        </div>
+      </div>
+      <div id="empEmptyState" class="empty-state hidden" data-i18n="schedule.employeeEmpty">No schedule assigned. Contact your manager.</div>
+      <div class="table-wrapper">
+        <table class="schedule-table">
+          <thead><tr id="empHeaderRow"></tr></thead>
+          <tbody id="empBody"></tbody>
+        </table>
+      </div>
+      <div class="employee-mobile-view">
+        <div id="employeeMobileList"></div>
+      </div>
     </div>
+  </div>
 
-</div>
-
-<!-- EDIT MODAL -->
-<div class="modal-overlay hidden" id="scheduleModal">
+  <!-- EDIT SCHEDULE MODAL -->
+  <div id="scheduleModal" class="modal-overlay hidden">
     <div class="modal-box">
-        <div class="modal-header">
-            <h2 id="modalTitle">Edit Schedule</h2>
-            <button class="modal-close" id="modalCloseBtn">&times;</button>
+      <div class="modal-header">
+        <h2 id="modalTitle" data-i18n="schedule.modalTitle">Edit Schedule</h2>
+        <button class="modal-close" id="modalCloseBtn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-date-info" id="modalDateInfo"></div>
+        <div class="modal-warnings" id="modalWarnings"></div>
+        <fieldset class="shift-group">
+          <legend data-i18n="schedule.shiftsLegend">🕐 Shifts</legend>
+          <div id="shiftsContainer" class="shifts-container"></div>
+          <button type="button" id="addShiftBtn" class="add-shift-btn" data-i18n="schedule.addShift">➕ Add Shift</button>
+        </fieldset>
+        <div class="shift-group">
+          <label for="scheduleStatus" data-i18n="schedule.statusLabel">Status</label>
+          <select id="scheduleStatus" class="center-select">
+            <option value="scheduled" data-i18n="schedule.statusScheduled">Scheduled</option>
+            <option value="other-center" data-i18n="schedule.statusOther">Other Centers</option>
+            <option value="leave" data-i18n="schedule.statusLeave">On Leave</option>
+            <option value="sick" data-i18n="schedule.statusSick">Sick</option>
+            <option value="off" data-i18n="schedule.statusOff">Day Off</option>
+          </select>
+          <label for="scheduleNotes" data-i18n="schedule.notesLabel">📝 Notes</label>
+          <textarea id="scheduleNotes" rows="2"></textarea>
         </div>
-        <div class="modal-body">
-            <div class="modal-date-info" id="modalDateInfo"></div>
-            <div class="modal-warnings" id="modalWarnings"></div>
-            <fieldset class="shift-group">
-                <legend>🕐 Shifts</legend>
-                <div class="shifts-container" id="shiftsContainer"></div>
-                <button type="button" class="add-shift-btn" id="addShiftBtn"><i class="fas fa-plus"></i> Add Shift</button>
-            </fieldset>
-            <fieldset class="shift-group">
-                <legend> Status</legend>
-                <div class="shift-fields">
-                    <label>
-                        Status
-                        <select id="scheduleStatus" class="center-select">
-                            <option value="scheduled">Scheduled</option>
-                            <option value="other-center">Other Centers</option>
-                            <option value="leave">On Leave</option>
-                            <option value="sick">Sick</option>
-                            <option value="off">Day Off</option>
-                        </select>
-                    </label>
-                </div>
-            </fieldset>
-            <fieldset class="shift-group">
-                <legend>📝 Notes</legend>
-                <textarea id="scheduleNotes" rows="2" placeholder="Optional notes..."></textarea>
-            </fieldset>
-                <div class="pattern-calendar-container">
-                    <div class="pattern-calendar-header">
-                        <button type="button" id="patternCalPrevBtn" class="cal-nav-btn">‹</button>
-                        <span id="patternCalendarMonth" class="cal-month-label">Month Year</span>
-                        <button type="button" id="patternCalNextBtn" class="cal-nav-btn">›</button>
-                    </div>
-                    <div id="patternCalendarGrid" class="pattern-calendar-grid">
-                        <!-- Calendar days will be injected here by JS -->
-                    </div>
-                    <label class="pattern-option" style="display:flex;align-items:center;gap:.5rem;margin-top:.75rem;cursor:pointer;">
-                        <input type="checkbox" id="saveAsPatternCb">
-                        Repeat weekly — also save as recurring pattern for this weekday
-                    </label>
-                    <div class="pattern-calendar-legend">
-                        <span class="legend-item"><span class="legend-box holiday"></span> Holiday</span>
-                        <span class="legend-item"><span class="legend-box closed"></span> Closed</span>
-                        <span class="legend-item"><span class="legend-box disabled"></span> Past Date</span>
-                    </div>
-                </div>
+        <div class="pattern-calendar-container">
+          <div class="pattern-calendar-header">
+            <button type="button" id="patternCalPrevBtn" class="cal-nav-btn">‹</button>
+            <span id="patternCalendarMonth" class="cal-month-label"></span>
+            <button type="button" id="patternCalNextBtn" class="cal-nav-btn">›</button>
+          </div>
+          <div id="patternCalendarGrid" class="pattern-calendar-grid"></div>
+          <div class="pattern-calendar-legend">
+            <span class="legend-item"><span class="legend-box holiday"></span> <span data-i18n="schedule.legendHoliday">Holiday</span></span>
+            <span class="legend-item"><span class="legend-box closed"></span> <span data-i18n="schedule.legendClosed">Closed</span></span>
+            <span class="legend-item"><span class="legend-box disabled"></span> <span data-i18n="schedule.legendPast">Past Date</span></span>
+          </div>
         </div>
-        <div class="modal-footer">
-            <button class="btn-danger" id="clearDayBtn">Clear Day</button>
-            <div class="modal-footer-right">
-                <button class="btn-secondary" id="cancelModalBtn">Cancel</button>
-                <button class="btn-primary" id="saveScheduleBtn">Save</button>
-            </div>
+        <div class="pattern-option">
+          <label><input type="checkbox" id="saveAsPatternCb"> <span data-i18n="schedule.saveAsPattern">Repeat weekly — also save as recurring pattern for this weekday</span></label>
         </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="clearDayBtn" class="btn-danger" data-i18n="schedule.clearDay">Clear Day</button>
+        <div class="modal-footer-right">
+          <button type="button" id="cancelModalBtn" class="btn-secondary" data-i18n="schedule.cancel">Cancel</button>
+          <button type="button" id="saveScheduleBtn" class="btn-primary" data-i18n="schedule.save">Save</button>
+        </div>
+      </div>
     </div>
-</div>
+  </div>
 
-<!-- PRINT AREA -->
-<div id="printArea"></div>
+  <div id="printArea"></div>
 
-<script type="module" src="employee-schedule.js"></script>
+  <script type="module" src="employee-schedule-i18n.js"></script>
+  <script type="module" src="employee-schedule.js"></script>
 </body>
 </html>

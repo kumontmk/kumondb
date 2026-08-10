@@ -87,7 +87,7 @@ export default {
     similarStudent: "Similar Student Found",
     similarStudentMsg: "A student with a matching name already exists in the system.",
     addAnyway: "➕ Add Anyway",
-    dropPauseRequest: "🗓️ Drop / Pause Request",
+    dropPauseRequest: "Drop / Pause Request",
     dropPauseHint: "Schedule a future drop or pause. The status will automatically update when the requested month arrives.",
     requestType: "Request Type *",
     pause: "Pause",
