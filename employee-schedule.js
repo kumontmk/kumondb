@@ -96,6 +96,8 @@ let isSaving = false;
 let selectedPatternDates = new Set();
 let calendarViewDate = new Date();
 let isInitialized = false;
+let adminMobileCurrentEmpId = null;
+let adminMobileCalDate = new Date();
 
 document.addEventListener('DOMContentLoaded', () => {
   onAuthStateChanged(auth, async (user) => {
@@ -411,6 +413,15 @@ function setupAdminNav() {
   document.getElementById('adminSearchInput')?.addEventListener('input', () => {
     renderAdminView();
   });
+  document.getElementById('adminMobileBackBtn')?.addEventListener('click', closeAdminMobileDetail);
+  document.getElementById('adminMobileCalPrev')?.addEventListener('click', () => {
+      adminMobileCalDate.setMonth(adminMobileCalDate.getMonth() - 1);
+      renderAdminMobileCalendar();
+  });
+  document.getElementById('adminMobileCalNext')?.addEventListener('click', () => {
+      adminMobileCalDate.setMonth(adminMobileCalDate.getMonth() + 1);
+      renderAdminMobileCalendar();
+  });
 }
 
 function setupEmployeeNav() {
@@ -483,10 +494,11 @@ function getSortedEmployees() {
 // ADMIN VIEW
 // ============================================
 function renderAdminView() {
-  const dates = get21Days(viewStartDate);
-  updateWeekRange('weekRangeDisplay', dates);
-  renderAdminHeader(dates);
-  renderAdminBody(dates);
+    const dates = get21Days(viewStartDate);
+    updateWeekRange('weekRangeDisplay', dates);
+    renderAdminHeader(dates);
+    renderAdminBody(dates);
+    renderAdminMobileView(); // 🆕 Render mobile list/calendar
 }
 
 function renderAdminHeader(dates) {
@@ -1398,10 +1410,11 @@ function openEditModal(empId, dateStr) {
 }
 
 function closeModal() {
-  document.getElementById('scheduleModal').classList.add('hidden');
-  editingEmpId = null;
-  editingDate = null;
-  editingSourceCenter = null;
+    document.getElementById('scheduleModal').classList.add('hidden');
+    editingEmpId = null;
+    editingDate = null;
+    editingSourceCenter = null;
+    renderAdminMobileView(); // 🆕 Refreshes mobile calendar if active
 }
 
 function checkModalWarnings(empId, dateStr) {
@@ -2338,6 +2351,190 @@ function printCenterSchedule() {
   if (printArea) printArea.innerHTML = html;
   window.print();
   setTimeout(() => { if (printArea) printArea.innerHTML = ''; }, 1000);
+}
+
+// ============================================
+// 📱 ADMIN MOBILE VIEW LOGIC
+// ============================================
+function renderAdminMobileView() {
+    const listView = document.getElementById('adminMobileList');
+    const detailView = document.getElementById('adminMobileDetail');
+    if (!listView || !detailView) return;
+
+    // ✅ Use the state variable (not class checks) to decide what's active
+    if (adminMobileCurrentEmpId) {
+        renderAdminMobileCalendar();
+        return;
+    }
+
+    // ✅ Force correct visibility: list shown, detail hidden
+    listView.classList.remove('hidden');
+    listView.style.display = '';
+    detailView.classList.add('hidden');
+    detailView.style.display = 'none';
+
+    listView.innerHTML = '';
+    const sorted = getSortedEmployees();
+    const searchInput = document.getElementById('adminSearchInput');
+    const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+
+    const filtered = sorted.filter(emp => {
+        if (!searchTerm) return true;
+        const name = (emp.englishName || '').toLowerCase();
+        const roles = getEmpPositions(emp).join(' ').toLowerCase();
+        return name.includes(searchTerm) || roles.includes(searchTerm);
+    });
+
+    if (filtered.length === 0) {
+        listView.innerHTML = `<div class="admin-mobile-empty">No employees found.</div>`;
+        return;
+    }
+
+    filtered.forEach(emp => {
+        const card = document.createElement('div');
+        card.className = 'admin-mobile-emp-card';
+        const termsClass = emp.terms === 'Full-time' ? 'terms-full' : 'terms-part';
+        const termsLabel = emp.terms === 'Full-time' ? 'FT' : 'PT';
+        card.innerHTML = `
+            <div class="admin-mobile-card-main">
+                <div class="admin-mobile-card-name">${emp.englishName || 'Unknown'}</div>
+                <div class="admin-mobile-card-role">${getEmpPositions(emp).join(', ') || ''}</div>
+            </div>
+            <span class="emp-terms ${termsClass}">${termsLabel}</span>
+        `;
+        card.addEventListener('click', () => openAdminMobileDetail(emp.uid));
+        listView.appendChild(card);
+    });
+}
+
+function openAdminMobileDetail(empId) {
+    adminMobileCurrentEmpId = empId;
+    adminMobileCalDate = new Date();
+
+    const listView = document.getElementById('adminMobileList');
+    const detailView = document.getElementById('adminMobileDetail');
+    const emp = employees[empId];
+    if (!listView || !detailView || !emp) return;
+
+    // ✅ Toggle BOTH class and inline style so neither can keep it hidden
+    listView.classList.add('hidden');
+    listView.style.display = 'none';
+    detailView.classList.remove('hidden');   
+    detailView.style.display = '';
+
+    detailView.querySelector('.admin-mobile-emp-name').textContent = emp.englishName || 'Unknown';
+    detailView.querySelector('.admin-mobile-emp-role').textContent = getEmpPositions(emp).join(', ');
+
+    renderAdminMobileCalendar();
+    window.scrollTo({ top: 0, behavior: 'auto' });
+}
+
+function closeAdminMobileDetail() {
+    adminMobileCurrentEmpId = null;
+    const listView = document.getElementById('adminMobileList');
+    const detailView = document.getElementById('adminMobileDetail');
+    if (listView) {
+        listView.classList.remove('hidden');
+        listView.style.display = '';
+    }
+    if (detailView) {
+        detailView.classList.add('hidden');
+        detailView.style.display = 'none';
+    }
+}
+
+function renderAdminMobileCalendar() {
+    const grid = document.getElementById('adminMobileCalendarGrid');
+    const monthLabel = document.getElementById('adminMobileCalMonth');
+    if (!grid || !adminMobileCurrentEmpId) return;
+    
+    const year = adminMobileCalDate.getFullYear();
+    const month = adminMobileCalDate.getMonth();
+    monthLabel.textContent = `${MONTH_NAMES[month]} ${year}`;
+    
+    grid.innerHTML = '';
+    
+    // Day headers (Sun, Mon, etc.)
+    DAY_SHORT.forEach(d => {
+        const h = document.createElement('div');
+        h.className = 'admin-mobile-cal-header';
+        h.textContent = d;
+        grid.appendChild(h);
+    });
+    
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Empty cells before 1st of month
+    for (let i = 0; i < firstDay; i++) {
+        const empty = document.createElement('div');
+        empty.className = 'admin-mobile-cal-cell empty';
+        grid.appendChild(empty);
+    }
+    
+    // Days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateObj = new Date(year, month, day);
+        const dateStr = formatDateStr(dateObj);
+        const dow = dateObj.getDay();
+        const isWeekend = dow === 0 || dow === 6;
+        const isToday = dateObj.getTime() === today.getTime();
+        
+        const cell = document.createElement('div');
+        cell.className = 'admin-mobile-cal-cell';
+        if (isWeekend) cell.classList.add('weekend');
+        if (isToday) cell.classList.add('today');
+        
+        const dayNum = document.createElement('div');
+        dayNum.className = 'admin-mobile-cal-day-num';
+        dayNum.textContent = day;
+        cell.appendChild(dayNum);
+        
+        const sched = mergedSchedules[adminMobileCurrentEmpId]?.[dateStr];
+        const tmpl = getTemplateForDate(adminMobileCurrentEmpId, dateStr);
+        const data = sched || tmpl;
+        
+        const contentWrap = document.createElement('div');
+        contentWrap.className = 'admin-mobile-cal-content';
+        
+        if (data) {
+            const status = data.status || 'scheduled';
+            if (status !== 'scheduled') {
+                const statusMap = {
+                    'other-center': { cls: 'status-other', label: t('schedule.otherCenter') },
+                    'leave': { cls: 'status-leave', label: t('schedule.leave') },
+                    'sick': { cls: 'status-sick', label: t('schedule.sick') },
+                    'off': { cls: 'status-off', label: t('schedule.off') }
+                };
+                const s = statusMap[status] || { cls: '', label: status };
+                contentWrap.innerHTML = `<span class="mini-status ${s.cls}">${s.label}</span>`;
+            } else {
+                const shifts = data._shifts || extractShifts(data);
+                if (hasValidShifts(shifts)) {
+                    const sortedShifts = [...shifts].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+                    let html = '';
+                    sortedShifts.forEach(shift => {
+                        if (shift.type === 'break') {
+                            html += `<div class="mini-shift break">☕ ${shift.start}-${shift.end}</div>`;
+                        } else {
+                            const badge = getShiftBadgeInfo(shift); // Automatically handles "Other" descriptions!
+                            html += `<div class="mini-shift">
+                                <span class="shift-center ${badge.cls}">${badge.label}</span>
+                                <span class="mini-time">${shift.start}-${shift.end}</span>
+                            </div>`;
+                        }
+                    });
+                    contentWrap.innerHTML = html;
+                }
+            }
+        }
+        
+        cell.appendChild(contentWrap);
+        cell.addEventListener('click', () => openEditModal(adminMobileCurrentEmpId, dateStr));
+        grid.appendChild(cell);
+    }
 }
 
 // ============================================

@@ -41,6 +41,30 @@
           <tbody id="adminBody"></tbody>
         </table>
       </div>
+          <!-- 🆕 MOBILE ADMIN VIEW (List + Calendar Drill-down) -->
+    <div id="adminMobileView" class="admin-mobile-view">
+        <!-- List View -->
+        <div id="adminMobileList" class="admin-mobile-list"></div>
+        
+        <!-- Detail View (Hidden by default) -->
+        <div id="adminMobileDetail" class="admin-mobile-detail hidden">
+            <div class="admin-mobile-header">
+                <button id="adminMobileBackBtn" class="nav-btn">← Back</button>
+                <div class="admin-mobile-emp-info">
+                    <div class="admin-mobile-emp-name"></div>
+                    <div class="admin-mobile-emp-role"></div>
+                </div>
+            </div>
+            <div class="admin-mobile-calendar-wrapper">
+                <div class="admin-mobile-calendar-nav">
+                    <button id="adminMobileCalPrev" class="nav-btn">‹</button>
+                    <span id="adminMobileCalMonth" class="admin-mobile-cal-month"></span>
+                    <button id="adminMobileCalNext" class="nav-btn">›</button>
+                </div>
+                <div id="adminMobileCalendarGrid" class="admin-mobile-calendar-grid"></div>
+            </div>
+        </div>
+    </div>
     </div>
 
     <!-- PER CENTER -->

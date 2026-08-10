@@ -1263,6 +1263,133 @@ textarea {
 .shift-item .other-field { flex: 1 1 100%; }  /* desc input gets its own row */
 
 /* =========================================
+📱 ADMIN MOBILE VIEW
+========================================= */
+.admin-mobile-view {
+    display: none; /* Hidden on desktop */
+}
+
+@media (max-width: 768px) {
+    /* Hide desktop table and empty state on mobile */
+    #tab-admin .table-wrapper { display: none !important; }
+    #tab-admin .empty-state { display: none !important; }
+    
+    /* Show mobile view */
+    .admin-mobile-view { display: block; }
+}
+
+/* List View */
+.admin-mobile-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.admin-mobile-emp-card {
+    display: flex; justify-content: space-between; align-items: center;
+    background: var(--white); padding: 1rem; border-radius: var(--radius);
+    box-shadow: var(--shadow); border: 1px solid #e2e8f0; cursor: pointer;
+    transition: transform 0.1s, background 0.1s;
+}
+.admin-mobile-emp-card:active { transform: scale(0.98); background: #f8fafc; }
+.admin-mobile-card-name { font-weight: 600; font-size: 1rem; color: var(--text); }
+.admin-mobile-card-role { font-size: 0.8rem; color: var(--text-light); margin-top: 2px; }
+.admin-mobile-empty { text-align: center; padding: 2rem; color: var(--text-light); }
+
+/* Detail View */
+.admin-mobile-detail { display: flex; flex-direction: column; gap: 1rem; }
+.admin-mobile-detail.hidden { display: none !important; }
+.admin-mobile-header {
+    display: flex; align-items: center; gap: 1rem;
+    background: var(--white); padding: 1rem; border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.admin-mobile-emp-info { flex: 1; }
+.admin-mobile-emp-name { font-weight: 700; font-size: 1.1rem; color: var(--text); }
+.admin-mobile-emp-role { font-size: 0.85rem; color: var(--text-light); }
+
+/* Calendar */
+.admin-mobile-calendar-wrapper {
+    background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1rem;
+}
+.admin-mobile-calendar-nav {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;
+}
+.admin-mobile-cal-month { font-weight: 700; font-size: 1.1rem; color: var(--primary-dark); }
+.admin-mobile-calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.admin-mobile-cal-header {
+    text-align: center; font-size: 0.75rem; font-weight: 700; color: var(--text-light); padding: 4px 0;
+}
+.admin-mobile-cal-cell {
+    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px;
+    min-height: 70px; display: flex; flex-direction: column; cursor: pointer;
+    transition: background 0.15s; overflow: hidden;
+}
+.admin-mobile-cal-cell.empty { background: transparent; border: none; cursor: default; }
+.admin-mobile-cal-cell.weekend { background: #f1f5f9; }
+.admin-mobile-cal-cell.today { border-color: var(--primary-dark); border-width: 2px; }
+.admin-mobile-cal-cell:active:not(.empty) { background: #e8f4fd; }
+.admin-mobile-cal-day-num { font-weight: 700; font-size: 0.85rem; color: var(--text); margin-bottom: 2px; }
+.admin-mobile-cal-cell.today .admin-mobile-cal-day-num { color: var(--primary-dark); }
+
+/* Mini Shifts inside Calendar Cells */
+.admin-mobile-cal-content {
+    display: flex; flex-direction: column; gap: 2px; font-size: 0.65rem; flex: 1; overflow-y: auto;
+}
+.mini-shift { display: flex; align-items: center; gap: 3px; line-height: 1.2; }
+.mini-shift.break { color: #856404; font-style: italic; }
+.mini-shift .shift-center { font-size: 0.6rem; padding: 0 3px; } /* Reuses your existing MK/PT/TS colors */
+.mini-time { color: var(--text); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini-status {
+    font-weight: 600; font-size: 0.65rem; padding: 2px 4px; border-radius: 3px; text-align: center;
+}
+.mini-status.status-leave { background: #e3f2fd; color: #2980b9; }
+.mini-status.status-sick { background: #fce4ec; color: #e74c3c; }
+.mini-status.status-off { background: #f5f5f5; color: #999; }
+.mini-status.status-other { background: #f3e5f5; color: #8e44ad; }
+
+/* ✅ FIX: make the .hidden class actually work for both mobile admin panels */
+.admin-mobile-list.hidden,
+.admin-mobile-detail.hidden {
+    display: none !important;
+}
+
+/* =========================================
+🔧 MOBILE ADMIN VIEW — FORMAT FIXES
+========================================= */
+
+/* 1️⃣ FT/PT badge — same compact pill as the desktop table */
+.admin-mobile-emp-card .emp-terms {
+    display: inline-block;
+    font-size: 0.6rem;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-weight: 600;
+    margin-left: 4px;
+    flex-shrink: 0;
+}
+
+/* 2️⃣ Mini-calendar center badges — colored squares like desktop */
+.mini-shift .shift-center {
+    display: inline-block;
+    font-size: 0.6rem;
+    padding: 0 4px;
+    border-radius: 3px;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+}
+.mini-shift .shift-center.c-MK    { background: #3498db; }
+.mini-shift .shift-center.c-PT    { background: #9b59b6; }
+.mini-shift .shift-center.c-TS    { background: #e67e22; }
+.mini-shift .shift-center.c-C     { background: #27ae60; }
+.mini-shift .shift-center.c-T11   { background: #16a085; }
+.mini-shift .shift-center.c-AO    { background: #d35400; }
+.mini-shift .shift-center.c-AM    { background: #34495e; }
+.mini-shift .shift-center.c-OTHER { background: #7f8c8d; }
+
+/* 3️⃣ Search bar — stretch full width on mobile */
+@media (max-width: 768px) {
+    #tab-admin .search-input {
+        width: 100%;
+    }
+}
+
+/* =========================================
    🌐 TRADITIONAL CHINESE FONT SUPPORT
 ========================================= */
 :lang(zh-TW) body,
