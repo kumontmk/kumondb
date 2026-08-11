@@ -91,6 +91,28 @@
           <tbody id="centerBody"></tbody>
         </table>
       </div>
+      <!-- 🆕 MOBILE CENTER VIEW (list + calendar drill-down) -->
+      <div id="centerMobileView" class="center-mobile-view">
+          <div id="centerMobileList" class="admin-mobile-list"></div>
+
+          <div id="centerMobileDetail" class="admin-mobile-detail hidden">
+              <div class="admin-mobile-header">
+                  <button id="centerMobileBackBtn" class="nav-btn">← Back</button>
+                  <div class="admin-mobile-emp-info">
+                      <div class="admin-mobile-emp-name"></div>
+                      <div class="admin-mobile-emp-role"></div>
+                  </div>
+              </div>
+              <div class="admin-mobile-calendar-wrapper">
+                  <div class="admin-mobile-calendar-nav">
+                      <button id="centerMobileCalPrev" class="nav-btn">‹</button>
+                      <span id="centerMobileCalMonth" class="admin-mobile-cal-month"></span>
+                      <button id="centerMobileCalNext" class="nav-btn">›</button>
+                  </div>
+                  <div id="centerMobileCalendarGrid" class="admin-mobile-calendar-grid"></div>
+              </div>
+          </div>
+      </div>
     </div>
 
     <!-- PER SUBJECT -->

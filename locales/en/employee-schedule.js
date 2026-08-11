@@ -111,5 +111,6 @@ export default {
     centerOther: "Other",
     otherDescLabel: "Assignment",
     otherDescPlaceholder: "e.g. Training, Meeting, Event",
+    noShiftToday: "No shift today",
   }
 };

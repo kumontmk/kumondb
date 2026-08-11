@@ -111,5 +111,6 @@ export default {
     centerOther: "其他",
     otherDescLabel: "任務簡述",
     otherDescPlaceholder: "例如：培訓、開會、活動",
+    noShiftToday: "今日無班",
   }
 };

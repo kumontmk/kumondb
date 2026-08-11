@@ -97,7 +97,10 @@ let selectedPatternDates = new Set();
 let calendarViewDate = new Date();
 let isInitialized = false;
 let adminMobileCurrentEmpId = null;
+let centerMobileCurrentEmpId = null;
+let centerMobileCalDate = new Date();
 let adminMobileCalDate = new Date();
+
 
 document.addEventListener('DOMContentLoaded', () => {
   onAuthStateChanged(auth, async (user) => {
@@ -1415,6 +1418,7 @@ function closeModal() {
     editingDate = null;
     editingSourceCenter = null;
     renderAdminMobileView(); // 🆕 Refreshes mobile calendar if active
+    renderCenterMobileView(); 
 }
 
 function checkModalWarnings(empId, dateStr) {
@@ -1784,6 +1788,15 @@ function setupCenterNav() {
   document.getElementById('printCenterBtn')?.addEventListener('click', printCenterSchedule);
   document.getElementById('exportJpegBtn')?.addEventListener('click', exportCenterAsJpeg);
   document.getElementById('centerGroupBySubject')?.addEventListener('change', (e) => { centerGroupBySubject = e.target.checked; renderCenterView(); });
+  document.getElementById('centerMobileBackBtn')?.addEventListener('click', closeCenterMobileDetail);
+  document.getElementById('centerMobileCalPrev')?.addEventListener('click', () => {
+      centerMobileCalDate.setMonth(centerMobileCalDate.getMonth() - 1);
+      renderCenterMobileCalendar();
+  });
+  document.getElementById('centerMobileCalNext')?.addEventListener('click', () => {
+      centerMobileCalDate.setMonth(centerMobileCalDate.getMonth() + 1);
+      renderCenterMobileCalendar();
+  });
 }
 
 function get14Days(start) {
@@ -1793,11 +1806,12 @@ function get14Days(start) {
 }
 
 function renderCenterView() {
-  if (!selectedCenterForView) return;
-  const dates = get14Days(centerViewDate);
-  updateWeekRange14('centerWeekRangeDisplay', dates);
-  renderCenterHeader(dates);
-  renderCenterBody(dates);
+    if (!selectedCenterForView) return;
+    const dates = get14Days(centerViewDate);
+    updateWeekRange14('centerWeekRangeDisplay', dates);
+    renderCenterHeader(dates);
+    renderCenterBody(dates);
+    renderCenterMobileView(); 
 }
 
 function updateWeekRange14(elementId, dates) {
@@ -2533,6 +2547,231 @@ function renderAdminMobileCalendar() {
         
         cell.appendChild(contentWrap);
         cell.addEventListener('click', () => openEditModal(adminMobileCurrentEmpId, dateStr));
+        grid.appendChild(cell);
+    }
+}
+
+// ============================================
+// 📱 CENTER MOBILE VIEW LOGIC
+// ============================================
+/** Same employee filter as the desktop Per Center table (14-day window) */
+function getCenterEmployeesWithShifts(dates) {
+    const sorted = getSortedEmployees();
+    const employeesWithShifts = [];
+    sorted.forEach(emp => {
+        let hasShiftHere = false;
+        for (const dateStr of dates) {
+            const sched = mergedSchedules[emp.uid]?.[dateStr];
+            const tmpl = getTemplateForDate(emp.uid, dateStr);
+            let currentShifts = [];
+            let currentStatus = 'scheduled';
+            let sourceCenter = null;
+            if (sched) {
+                currentShifts = sched._shifts || extractShifts(sched);
+                currentStatus = sched.status || 'scheduled';
+                sourceCenter = sched._sourceCenter;
+            } else if (tmpl) {
+                currentShifts = tmpl._shifts || extractShifts(tmpl);
+                currentStatus = tmpl.status || 'scheduled';
+            }
+            const hasCenterShift = currentShifts.some(s => s.center === selectedCenterForView && hasValidShifts([s]));
+            const isStatusHere = currentStatus !== 'scheduled' && sourceCenter === selectedCenterForView;
+            if (hasCenterShift || isStatusHere) { hasShiftHere = true; break; }
+        }
+        if (hasShiftHere) employeesWithShifts.push(emp);
+    });
+    return employeesWithShifts;
+}
+
+/** Today's work shifts for an emp at the selected center (falls back to pattern) */
+function getTodayCenterSlots(empId) {
+    const todayStr = formatDateStr(new Date());
+    const data = mergedSchedules[empId]?.[todayStr] || getTemplateForDate(empId, todayStr);
+    if (!data || (data.status || 'scheduled') !== 'scheduled') return [];
+    return (data._shifts || extractShifts(data))
+        .filter(s => s.type === 'work' && s.center === selectedCenterForView)
+        .sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+}
+
+function renderCenterMobileView() {
+    const listView = document.getElementById('centerMobileList');
+    const detailView = document.getElementById('centerMobileDetail');
+    if (!listView || !detailView) return;
+
+    if (centerMobileCurrentEmpId) { renderCenterMobileCalendar(); return; }
+
+    listView.style.display = '';
+    detailView.style.display = 'none';
+    listView.innerHTML = '';
+    if (!selectedCenterForView) return;
+
+    const dates = get14Days(centerViewDate);
+    const employeesWithShifts = getCenterEmployeesWithShifts(dates);
+    if (employeesWithShifts.length === 0) {
+        listView.innerHTML = `<div class="admin-mobile-empty">${t('schedule.centerEmpty')}</div>`;
+        return;
+    }
+
+    const appendCard = (emp) => {
+        const card = document.createElement('div');
+        card.className = 'admin-mobile-emp-card';
+        const termsClass = emp.terms === 'Full-time' ? 'terms-full' : 'terms-part';
+        const termsLabel = emp.terms === 'Full-time' ? 'FT' : 'PT';
+        const slots = getTodayCenterSlots(emp.uid);
+        const slotsHTML = slots.length > 0
+            ? slots.map(s => `<span class="slot-time">${s.start}-${s.end}</span>`).join(', ')
+            : `<span class="no-shift">${t('schedule.noShiftToday')}</span>`;
+        card.innerHTML = `
+            <div class="admin-mobile-card-main">
+                <div class="admin-mobile-card-name">${emp.englishName || 'Unknown'}</div>
+                <div class="admin-mobile-card-role">${getEmpPositions(emp).join(', ') || ''}</div>
+                <div class="center-mobile-slots">🕐 ${slotsHTML}</div>
+            </div>
+            <span class="emp-terms ${termsClass}">${termsLabel}</span>
+        `;
+        card.addEventListener('click', () => openCenterMobileDetail(emp.uid));
+        listView.appendChild(card);
+    };
+
+    if (centerGroupBySubject) {
+        // Same grouping rules as desktop (incl. tutorial-teacher hiding at main centers)
+        const groups = groupEmployeesBySubject(employeesWithShifts, selectedCenterForView);
+        groups.forEach(group => {
+            const config = SUBJECT_CONFIG[group.subject] || { label: group.subject, icon: '👤', cls: 'other-divider' };
+            const div = document.createElement('div');
+            div.className = `admin-mobile-divider ${config.cls}`;
+            const countLabel = group.teachers.length !== 1 ? t('schedule.teacherPlural') : t('schedule.teacherSingular');
+            div.innerHTML = `<span class="subject-icon">${config.icon}</span> ${trLabel(config.label)} <span class="admin-mobile-divider-count">${group.teachers.length} ${countLabel}</span>`;
+            listView.appendChild(div);
+            group.teachers.forEach(appendCard);
+        });
+    } else {
+        let lastTerms = null;
+        employeesWithShifts.forEach(emp => {
+            if (lastTerms !== null && emp.terms !== lastTerms) {
+                const div = document.createElement('div');
+                div.className = 'admin-mobile-divider';
+                div.textContent = t('schedule.partTimeDivider');
+                listView.appendChild(div);
+            }
+            lastTerms = emp.terms;
+            appendCard(emp);
+        });
+    }
+}
+
+function openCenterMobileDetail(empId) {
+    centerMobileCurrentEmpId = empId;
+    centerMobileCalDate = new Date();
+    const listView = document.getElementById('centerMobileList');
+    const detailView = document.getElementById('centerMobileDetail');
+    const emp = employees[empId];
+    if (!listView || !detailView || !emp) return;
+    listView.style.display = 'none';
+    detailView.style.display = '';
+    detailView.querySelector('.admin-mobile-emp-name').textContent = emp.englishName || 'Unknown';
+    detailView.querySelector('.admin-mobile-emp-role').textContent = getEmpPositions(emp).join(', ');
+    renderCenterMobileCalendar();
+    window.scrollTo({ top: 0, behavior: 'auto' });
+}
+
+function closeCenterMobileDetail() {
+    centerMobileCurrentEmpId = null;
+    const listView = document.getElementById('centerMobileList');
+    const detailView = document.getElementById('centerMobileDetail');
+    if (listView) listView.style.display = '';
+    if (detailView) detailView.style.display = 'none';
+}
+
+/** Mini calendar filtered to the SELECTED CENTER (statuses + holidays + closed days included) */
+function renderCenterMobileCalendar() {
+    const grid = document.getElementById('centerMobileCalendarGrid');
+    const monthLabel = document.getElementById('centerMobileCalMonth');
+    if (!grid || !centerMobileCurrentEmpId) return;
+
+    const year = centerMobileCalDate.getFullYear();
+    const month = centerMobileCalDate.getMonth();
+    monthLabel.textContent = `${MONTH_NAMES[month]} ${year}`;
+    grid.innerHTML = '';
+
+    DAY_SHORT.forEach(d => {
+        const h = document.createElement('div');
+        h.className = 'admin-mobile-cal-header';
+        h.textContent = d;
+        grid.appendChild(h);
+    });
+
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+
+    const centerCalEvents = calendarEvents[selectedCenterForView] || {};
+    const centerObj = allCenters.find(c => c.id === selectedCenterForView);
+    const closedDays = getClosedDaysForCenter(centerObj?.name || '');
+
+    for (let i = 0; i < firstDay; i++) {
+        const empty = document.createElement('div');
+        empty.className = 'admin-mobile-cal-cell empty';
+        grid.appendChild(empty);
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateObj = new Date(year, month, day);
+        const dateStr = formatDateStr(dateObj);
+        const dow = dateObj.getDay();
+        const cell = document.createElement('div');
+        cell.className = 'admin-mobile-cal-cell';
+        if (dow === 0 || dow === 6) cell.classList.add('weekend');
+        if (dateObj.getTime() === today.getTime()) cell.classList.add('today');
+
+        const dayNum = document.createElement('div');
+        dayNum.className = 'admin-mobile-cal-day-num';
+        dayNum.textContent = day;
+        cell.appendChild(dayNum);
+
+        const contentWrap = document.createElement('div');
+        contentWrap.className = 'admin-mobile-cal-content';
+
+        const event = centerCalEvents[dateStr];
+        const isHoliday = event && !event.muc;
+        const isClosed = closedDays.includes(dow) && !event;
+
+        const data = mergedSchedules[centerMobileCurrentEmpId]?.[dateStr] || getTemplateForDate(centerMobileCurrentEmpId, dateStr);
+        let rendered = false;
+
+        if (data) {
+            const status = data.status || 'scheduled';
+            if (status !== 'scheduled') {
+                const statusMap = {
+                    'other-center': { cls: 'status-other', label: t('schedule.otherCenter') },
+                    'leave': { cls: 'status-leave', label: t('schedule.leave') },
+                    'sick': { cls: 'status-sick', label: t('schedule.sick') },
+                    'off': { cls: 'status-off', label: t('schedule.off') }
+                };
+                const s = statusMap[status] || { cls: '', label: status };
+                contentWrap.innerHTML = `<span class="mini-status ${s.cls}">${s.label}</span>`;
+                rendered = true;
+            } else {
+                const shifts = (data._shifts || extractShifts(data))
+                    .filter(s => s.center === selectedCenterForView)
+                    .sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+                if (shifts.length > 0) {
+                    contentWrap.innerHTML = shifts.map(shift => {
+                        if (shift.type === 'break') return `<div class="mini-shift break">☕ ${shift.start}-${shift.end}</div>`;
+                        const badge = getShiftBadgeInfo(shift);
+                        return `<div class="mini-shift"><span class="shift-center ${badge.cls}">${badge.label}</span><span class="mini-time">${shift.start}-${shift.end}</span></div>`;
+                    }).join('');
+                    rendered = true;
+                }
+            }
+        }
+        if (!rendered) {
+            if (isHoliday) contentWrap.innerHTML = `<span class="mini-status status-holiday">🎌 ${event.name || t('schedule.holiday')}</span>`;
+            else if (isClosed) contentWrap.innerHTML = `<span class="mini-status status-closed">${t('schedule.closed')}</span>`;
+        }
+
+        cell.appendChild(contentWrap);
+        cell.addEventListener('click', () => openEditModal(centerMobileCurrentEmpId, dateStr));
         grid.appendChild(cell);
     }
 }

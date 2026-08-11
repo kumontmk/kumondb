@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kumon-db-cache-v3.7.3';
+const CACHE_NAME = 'kumon-db-cache-v3.7.5';
 
 const APP_SHELL = [
   'index.html',

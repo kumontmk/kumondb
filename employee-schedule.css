@@ -1445,6 +1445,55 @@ textarea {
 } 
 
 /* =========================================
+📱 PER SUBJECT: hidden on mobile
+========================================= */
+@media (max-width: 768px) {
+    .schedule-tabs .tab-btn[data-tab="subject"] { display: none !important; }
+}
+
+/* =========================================
+📱 CENTER MOBILE VIEW
+========================================= */
+.center-mobile-view { display: none; }
+
+@media (max-width: 768px) {
+    #tab-center .table-wrapper { display: none !important; }
+    #tab-center .empty-state { display: none !important; }
+    .center-mobile-view { display: block; }
+}
+
+/* List dividers (Part-Time + subject groups) */
+.admin-mobile-divider {
+    padding: 0.4rem 0.6rem;
+    margin-top: 0.5rem;
+    background: #f0f4f8;
+    border-top: 2px solid var(--primary);
+    border-radius: 4px;
+    font-weight: 700;
+    font-size: 0.75rem;
+    color: var(--primary-dark);
+}
+.admin-mobile-divider .admin-mobile-divider-count {
+    float: right; background: rgba(255,255,255,0.6);
+    padding: 0 6px; border-radius: 10px; font-size: 0.7rem;
+}
+.admin-mobile-divider.english-divider  { background: linear-gradient(135deg,#e67e22,#f39c12); color:#fff; border-top:none; }
+.admin-mobile-divider.math-divider     { background: linear-gradient(135deg,#1abc9c,#48c9b0); color:#fff; border-top:none; }
+.admin-mobile-divider.chinese-divider  { background: linear-gradient(135deg,#7cb342,#9acd32); color:#fff; border-top:none; }
+.admin-mobile-divider.tutorial-divider { background: linear-gradient(135deg,#8e44ad,#9b59b6); color:#fff; border-top:none; }
+.admin-mobile-divider.admin-divider    { background: linear-gradient(135deg,#2c3e50,#34495e); color:#fff; border-top:none; }
+.admin-mobile-divider.other-divider    { background: linear-gradient(135deg,#8e44ad,#9b59b6); color:#fff; border-top:none; }
+
+/* Today's time slots on center cards */
+.center-mobile-slots { font-size: 0.75rem; color: var(--text-light); margin-top: 2px; }
+.center-mobile-slots .slot-time { font-weight: 600; color: var(--text); }
+.center-mobile-slots .no-shift { font-style: italic; color: #aaa; }
+
+/* Holiday / Closed chips in the center mini calendar */
+.mini-status.status-holiday { background: #fef2f2; color: #b91c1c; }
+.mini-status.status-closed { background: #f8f9fa; color: #7f8c8d; }
+
+/* =========================================
    🌐 TRADITIONAL CHINESE FONT SUPPORT
 ========================================= */
 :lang(zh-TW) body,
