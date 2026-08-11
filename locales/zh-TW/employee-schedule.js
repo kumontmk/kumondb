@@ -112,5 +112,7 @@ export default {
     otherDescLabel: "任務簡述",
     otherDescPlaceholder: "例如：培訓、開會、活動",
     noShiftToday: "今日無班",
+    miniCalHint: "👆 點按日期以查看／編輯該日班表",
+    back: "← 返回",
   }
 };

@@ -112,5 +112,7 @@ export default {
     otherDescLabel: "Assignment",
     otherDescPlaceholder: "e.g. Training, Meeting, Event",
     noShiftToday: "No shift today",
+    miniCalHint: "👆 Tap any date to view / edit that day's schedule",
+    back: "← Back",
   }
 };

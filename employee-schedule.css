@@ -1494,6 +1494,145 @@ textarea {
 .mini-status.status-closed { background: #f8f9fa; color: #7f8c8d; }
 
 /* =========================================
+📱 MINI CALENDAR INSIDE THE MODAL
+========================================= */
+.modal-mini-cal {
+    margin-top: 1rem;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 0.75rem;
+}
+.modal-mini-cal.hidden { display: none; }
+/* slightly shorter cells so the modal doesn't get huge */
+.modal-mini-cal .admin-mobile-cal-cell { min-height: 52px; }
+/* the day currently loaded in the modal */
+.admin-mobile-cal-cell.mini-cal-selected {
+    border: 2px solid var(--primary-dark);
+    background: #e8f4fd;
+}
+
+/* =========================================
+📱 MODAL MINI CALENDAR — compact + padded + hint
+========================================= */
+.modal-mini-cal {
+    margin-top: 1rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 0.6rem;              /* ✅ breathing room on the sides */
+}
+
+/* "Tap any date…" indication above the calendar */
+.modal-mini-cal-hint {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--primary-dark);
+    text-align: center;
+    background: #e8f4fd;
+    border-radius: 6px;
+    padding: 0.35rem 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+/* smaller month navigation */
+.modal-mini-cal .admin-mobile-calendar-nav { margin-bottom: 0.5rem; }
+.modal-mini-cal .admin-mobile-cal-month { font-size: 0.95rem; }
+.modal-mini-cal .admin-mobile-calendar-nav .nav-btn {
+    padding: 0.25rem 0.6rem;
+    font-size: 0.8rem;
+}
+
+/* ✅ compact day cells */
+.modal-mini-cal .admin-mobile-calendar-grid { gap: 3px; }
+.modal-mini-cal .admin-mobile-cal-header { font-size: 0.65rem; padding: 2px 0; }
+.modal-mini-cal .admin-mobile-cal-cell {
+    min-height: 44px;             /* was 52–70px */
+    padding: 2px;
+    border-radius: 5px;
+}
+.modal-mini-cal .admin-mobile-cal-day-num { font-size: 0.7rem; margin-bottom: 1px; }
+
+/* smaller badges / status chips inside cells */
+.modal-mini-cal .mini-shift { gap: 2px; }
+.modal-mini-cal .mini-shift .shift-center { font-size: 0.5rem; padding: 0 3px; }
+.modal-mini-cal .mini-status { font-size: 0.55rem; padding: 1px 3px; }
+
+/* =========================================
+📱 CENTER MOBILE VIEW — hide desktop table on mobile
+========================================= */
+.center-mobile-view { display: none; }
+
+@media (max-width: 768px) {
+    #tab-center .table-wrapper { display: none !important; }
+    #tab-center .empty-state  { display: none !important; }
+    .center-mobile-view { display: block; }
+}
+
+/* Group dividers for the mobile list (in case missing) */
+.admin-mobile-divider {
+    padding: 0.4rem 0.6rem;
+    margin-top: 0.5rem;
+    background: #f0f4f8;
+    border-top: 2px solid var(--primary);
+    border-radius: 4px;
+    font-weight: 700;
+    font-size: 0.75rem;
+    color: var(--primary-dark);
+}
+.admin-mobile-divider .admin-mobile-divider-count {
+    float: right; background: rgba(255,255,255,0.6);
+    padding: 0 6px; border-radius: 10px; font-size: 0.7rem;
+}
+.admin-mobile-divider.english-divider  { background: linear-gradient(135deg,#e67e22,#f39c12); color:#fff; border-top:none; }
+.admin-mobile-divider.math-divider     { background: linear-gradient(135deg,#1abc9c,#48c9b0); color:#fff; border-top:none; }
+.admin-mobile-divider.chinese-divider  { background: linear-gradient(135deg,#7cb342,#9acd32); color:#fff; border-top:none; }
+.admin-mobile-divider.tutorial-divider { background: linear-gradient(135deg,#8e44ad,#9b59b6); color:#fff; border-top:none; }
+.admin-mobile-divider.admin-divider    { background: linear-gradient(135deg,#2c3e50,#34495e); color:#fff; border-top:none; }
+.admin-mobile-divider.other-divider    { background: linear-gradient(135deg,#8e44ad,#9b59b6); color:#fff; border-top:none; }
+
+/* =========================================
+📱 PER CENTER TOOLBAR — compact inline nav
+========================================= */
+@media (max-width: 768px) {
+  #tab-center .schedule-toolbar .nav-group {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  /* Date range gets its own full row on top */
+  #tab-center .schedule-toolbar .week-range {
+    order: -1;
+    flex: 1 1 100%;
+    min-width: 0;
+    font-size: 0.95rem;
+  }
+
+  /* ✅ Smaller Prev / Next buttons, side by side */
+  #tab-center .schedule-toolbar .nav-btn {
+    padding: 0.3rem 0.75rem;
+    font-size: 0.8rem;
+  }
+
+  /* Group-by-Subject toggle stays inline with the buttons */
+  #tab-center .schedule-toolbar .nav-group label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+
+  /* Smaller Print / Export buttons too */
+  #tab-center .schedule-toolbar .action-btn,
+  #tab-center .schedule-toolbar .print-btn {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8rem;
+  }
+}
+
+/* =========================================
    🌐 TRADITIONAL CHINESE FONT SUPPORT
 ========================================= */
 :lang(zh-TW) body,

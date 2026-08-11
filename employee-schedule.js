@@ -100,6 +100,7 @@ let adminMobileCurrentEmpId = null;
 let centerMobileCurrentEmpId = null;
 let centerMobileCalDate = new Date();
 let adminMobileCalDate = new Date();
+let modalMiniCalDate = new Date();
 
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -425,6 +426,8 @@ function setupAdminNav() {
       adminMobileCalDate.setMonth(adminMobileCalDate.getMonth() + 1);
       renderAdminMobileCalendar();
   });
+  const adminBackBtn = document.getElementById('adminMobileBackBtn');
+  if (adminBackBtn) adminBackBtn.textContent = t('schedule.back');
 }
 
 function setupEmployeeNav() {
@@ -1247,6 +1250,14 @@ function setupModal() {
       }
     }
   });
+  document.getElementById('modalMiniCalPrev')?.addEventListener('click', () => {
+    modalMiniCalDate.setMonth(modalMiniCalDate.getMonth() - 1);
+    renderModalMiniCalendar();
+  });
+  document.getElementById('modalMiniCalNext')?.addEventListener('click', () => {
+      modalMiniCalDate.setMonth(modalMiniCalDate.getMonth() + 1);
+      renderModalMiniCalendar();
+  });
 }
 
 function renderPatternCalendar() {
@@ -1409,6 +1420,19 @@ function openEditModal(empId, dateStr) {
   if (patternCb) patternCb.checked = false;
   renderPatternCalendar();
   checkModalWarnings(empId, dateStr);
+  // 🆕 Mobile-only mini calendar at the bottom of the modal
+  const miniCalWrap = document.getElementById('modalMiniCalWrap'); // ✅ MUST be declared
+  const miniCalHint = document.getElementById('modalMiniCalHint');
+  if (miniCalHint) miniCalHint.textContent = t('schedule.miniCalHint');
+  if (miniCalWrap) {
+      if (window.matchMedia('(max-width: 768px)').matches) {
+          miniCalWrap.classList.remove('hidden');
+          modalMiniCalDate = new Date(dateObj.getFullYear(), dateObj.getMonth(), 1); // ✅ no space in getMonth()
+          renderModalMiniCalendar();
+      } else {
+          miniCalWrap.classList.add('hidden');
+      }
+  }
   document.getElementById('scheduleModal').classList.remove('hidden');
 }
 
@@ -1797,6 +1821,8 @@ function setupCenterNav() {
       centerMobileCalDate.setMonth(centerMobileCalDate.getMonth() + 1);
       renderCenterMobileCalendar();
   });
+  const centerBackBtn = document.getElementById('centerMobileBackBtn');
+  if (centerBackBtn) centerBackBtn.textContent = t('schedule.back');
 }
 
 function get14Days(start) {
@@ -2368,6 +2394,88 @@ function printCenterSchedule() {
 }
 
 // ============================================
+// 📱 MODAL MINI CALENDAR (center badges inside dates)
+// ============================================
+function renderModalMiniCalendar() {
+    const grid = document.getElementById('modalMiniCalGrid');
+    const monthLabel = document.getElementById('modalMiniCalMonth');
+    if (!grid || !monthLabel || !editingEmpId) return;
+
+    const year = modalMiniCalDate.getFullYear();
+    const month = modalMiniCalDate.getMonth();
+    monthLabel.textContent = `${MONTH_NAMES[month]} ${year}`;
+    grid.innerHTML = '';
+
+    DAY_SHORT.forEach(d => {
+        const h = document.createElement('div');
+        h.className = 'admin-mobile-cal-header';
+        h.textContent = d;
+        grid.appendChild(h);
+    });
+
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    for (let i = 0; i < firstDay; i++) {
+        const empty = document.createElement('div');
+        empty.className = 'admin-mobile-cal-cell empty';
+        grid.appendChild(empty);
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateObj = new Date(year, month, day);
+        const dateStr = formatDateStr(dateObj);
+        const dow = dateObj.getDay();
+
+        const cell = document.createElement('div');
+        cell.className = 'admin-mobile-cal-cell';
+        if (dow === 0 || dow === 6) cell.classList.add('weekend');
+        if (dateObj.getTime() === today.getTime()) cell.classList.add('today');
+        if (dateStr === editingDate) cell.classList.add('mini-cal-selected');
+
+        const dayNum = document.createElement('div');
+        dayNum.className = 'admin-mobile-cal-day-num';
+        dayNum.textContent = day;
+        cell.appendChild(dayNum);
+
+        const contentWrap = document.createElement('div');
+        contentWrap.className = 'admin-mobile-cal-content';
+
+        const data = mergedSchedules[editingEmpId]?.[dateStr] || getTemplateForDate(editingEmpId, dateStr);
+        if (data) {
+            const status = data.status || 'scheduled';
+            if (status !== 'scheduled') {
+                const statusMap = {
+                    'other-center': { cls: 'status-other', label: t('schedule.otherCenter') },
+                    'leave': { cls: 'status-leave', label: t('schedule.leave') },
+                    'sick': { cls: 'status-sick', label: t('schedule.sick') },
+                    'off': { cls: 'status-off', label: t('schedule.off') }
+                };
+                const s = statusMap[status] || { cls: '', label: status };
+                contentWrap.innerHTML = `<span class="mini-status ${s.cls}">${s.label}</span>`;
+            } else {
+                const shifts = data._shifts || extractShifts(data);
+                if (hasValidShifts(shifts)) {
+                    const sortedShifts = [...shifts].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+                    contentWrap.innerHTML = sortedShifts.map(shift => {
+                        if (shift.type === 'break') return `<div class="mini-shift break">☕</div>`;
+                        const badge = getShiftBadgeInfo(shift); // handles MK/PT/… + "Other" desc
+                        return `<div class="mini-shift"><span class="shift-center ${badge.cls}">${badge.label}</span></div>`;
+                    }).join('');
+                }
+            }
+        }
+
+        cell.appendChild(contentWrap);
+        // ✅ Tap a date → modal reloads with that day's schedule
+        cell.addEventListener('click', () => openEditModal(editingEmpId, dateStr));
+        grid.appendChild(cell);
+    }
+}
+
+// ============================================
 // 📱 ADMIN MOBILE VIEW LOGIC
 // ============================================
 function renderAdminMobileView() {
@@ -2416,7 +2524,8 @@ function renderAdminMobileView() {
             </div>
             <span class="emp-terms ${termsClass}">${termsLabel}</span>
         `;
-        card.addEventListener('click', () => openAdminMobileDetail(emp.uid));
+        // ✅ new: open today's Edit Schedule modal
+        card.addEventListener('click', () => openEditModal(emp.uid, formatDateStr(new Date())));
         listView.appendChild(card);
     });
 }
@@ -2430,10 +2539,10 @@ function openAdminMobileDetail(empId) {
     const emp = employees[empId];
     if (!listView || !detailView || !emp) return;
 
-    // ✅ Toggle BOTH class and inline style so neither can keep it hidden
+    // ✅ Toggle BOTH class and inline style
     listView.classList.add('hidden');
     listView.style.display = 'none';
-    detailView.classList.remove('hidden');   
+    detailView.classList.remove('hidden'); 
     detailView.style.display = '';
 
     detailView.querySelector('.admin-mobile-emp-name').textContent = emp.englishName || 'Unknown';
@@ -2597,10 +2706,11 @@ function renderCenterMobileView() {
     const listView = document.getElementById('centerMobileList');
     const detailView = document.getElementById('centerMobileDetail');
     if (!listView || !detailView) return;
-
     if (centerMobileCurrentEmpId) { renderCenterMobileCalendar(); return; }
 
+    listView.classList.remove('hidden');
     listView.style.display = '';
+    detailView.classList.add('hidden');
     detailView.style.display = 'none';
     listView.innerHTML = '';
     if (!selectedCenterForView) return;
@@ -2634,7 +2744,7 @@ function renderCenterMobileView() {
     };
 
     if (centerGroupBySubject) {
-        // Same grouping rules as desktop (incl. tutorial-teacher hiding at main centers)
+        // ✅ Same grouping rules as desktop (incl. tutorial-teacher hiding at main centers)
         const groups = groupEmployeesBySubject(employeesWithShifts, selectedCenterForView);
         groups.forEach(group => {
             const config = SUBJECT_CONFIG[group.subject] || { label: group.subject, icon: '👤', cls: 'other-divider' };
@@ -2667,7 +2777,10 @@ function openCenterMobileDetail(empId) {
     const detailView = document.getElementById('centerMobileDetail');
     const emp = employees[empId];
     if (!listView || !detailView || !emp) return;
+    // ✅ Toggle BOTH class and inline style
+    listView.classList.add('hidden');
     listView.style.display = 'none';
+    detailView.classList.remove('hidden');
     detailView.style.display = '';
     detailView.querySelector('.admin-mobile-emp-name').textContent = emp.englishName || 'Unknown';
     detailView.querySelector('.admin-mobile-emp-role').textContent = getEmpPositions(emp).join(', ');
@@ -2679,8 +2792,8 @@ function closeCenterMobileDetail() {
     centerMobileCurrentEmpId = null;
     const listView = document.getElementById('centerMobileList');
     const detailView = document.getElementById('centerMobileDetail');
-    if (listView) listView.style.display = '';
-    if (detailView) detailView.style.display = 'none';
+    if (listView) { listView.classList.remove('hidden'); listView.style.display = ''; }
+    if (detailView) { detailView.classList.add('hidden'); detailView.style.display = 'none'; }
 }
 
 /** Mini calendar filtered to the SELECTED CENTER (statuses + holidays + closed days included) */

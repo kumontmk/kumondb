@@ -213,6 +213,17 @@
           <label><input type="checkbox" id="saveAsPatternCb"> <span data-i18n="schedule.saveAsPattern">Repeat weekly — also save as recurring pattern for this weekday</span></label>
         </div>
       </div>
+                <!-- 🆕 MOBILE MINI CALENDAR NAVIGATOR -->
+                <div id="modalMiniCalWrap" class="modal-mini-cal hidden">
+                    <div id="modalMiniCalHint" class="modal-mini-cal-hint">👆 Tap any date to view / edit that day's schedule</div>
+                    <div class="admin-mobile-calendar-nav">
+                        <button type="button" id="modalMiniCalPrev" class="nav-btn">‹</button>
+                        <span id="modalMiniCalMonth" class="admin-mobile-cal-month"></span>
+                        <button type="button" id="modalMiniCalNext" class="nav-btn">›</button>
+                    </div>
+                    <div id="modalMiniCalGrid" class="admin-mobile-calendar-grid"></div>
+                </div>
+      
       <div class="modal-footer">
         <button type="button" id="clearDayBtn" class="btn-danger" data-i18n="schedule.clearDay">Clear Day</button>
         <div class="modal-footer-right">
