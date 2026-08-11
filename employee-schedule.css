@@ -1390,6 +1390,61 @@ textarea {
 }
 
 /* =========================================
+📱 MOBILE-ONLY POLISH (toolbar, modal shifts, footer)
+========================================= */
+@media (max-width: 768px) {
+
+  /* 1️⃣ Remove Today button on mobile + un-cramp the admin toolbar */
+  .schedule-toolbar .today-btn { display: none !important; }
+
+  #tab-admin .schedule-toolbar .nav-group {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;   /* Prev | Next side by side */
+    gap: 0.5rem;
+    align-items: stretch;
+  }
+  #tab-admin .schedule-toolbar .week-range {
+    order: -1;              /* date range gets its own full row on top */
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+  #tab-admin .schedule-toolbar #applyPatternBtn {
+    grid-column: 1 / -1;    /* Apply Patterns gets its own full row */
+  }
+  #tab-admin .schedule-toolbar .nav-btn { width: 100%; }
+
+  /* 2️⃣ Stack shift fields vertically in the Edit Schedule modal */
+  .shift-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .shift-item .shift-field {
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+  }
+  .shift-item .remove-shift-btn {
+    align-self: flex-end;   /* × button sits bottom-right of the card */
+    margin-top: 0.25rem;
+  }
+
+  /* 3️⃣ Modal footer: Clear Day inline with Cancel / Save */
+  .modal-footer {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .modal-footer-right {
+    width: auto;
+    margin-left: auto;
+    justify-content: flex-end;
+  }
+} 
+
+/* =========================================
    🌐 TRADITIONAL CHINESE FONT SUPPORT
 ========================================= */
 :lang(zh-TW) body,
