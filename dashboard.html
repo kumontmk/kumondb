@@ -13,15 +13,21 @@
     <p data-i18n="common.loading"> Loading...</p>
   </div>
 
-  <header>
-    <h1> 
-      <a href="centers.html" data-i18n="dashboard.backToCenters">← Centers</a>
-      <span id="title-center-name"></span> <span data-i18n="dashboard.headerTitle">Dashboard</span>
-    </h1>
-    <nav>
-      <span id="userInfo" class="user-info"></span>
-    </nav>
-  </header>
+<header>
+  <!-- ROW 1: Back (left) · Welcome + Logout (right) -->
+  <div class="header-row header-top">
+    <a href="centers.html" id="backToCentersBtn" data-i18n="dashboard.backToCenters">← Centers</a>
+    <div class="header-user">
+      <span class="user-info" id="userInfo">Welcome</span>
+    </div>
+  </div>
+
+  <!-- ROW 2: Center name (left) · Page title (right) -->
+  <div class="header-row header-title">
+    <h1><span id="title-center-name">Center</span></h1>
+    <span class="header-page" data-i18n="dashboard.headerTitle">Dashboard</span>
+  </div>
+</header>
 
   <main class="dashboard">
 

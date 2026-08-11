@@ -26,62 +26,79 @@ body {
 }
 
 /* =========================================
-   HEADER
+   HEADER — two-row layout
+   Row 1: back left · user right
+   Row 2: center name left · page title right
    ========================================= */
 header {
   background: var(--primary);
   color: var(--white);
-  padding: 1rem 2rem;
+  padding: 0.75rem 2rem;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.4rem;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   position: relative;
   z-index: 1001;
 }
-
-header h1 {
-  font-size: 1.25rem;
-  font-weight: 600;
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+.header-user {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
+  justify-content: flex-end;
 }
-
-header nav {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
+header h1 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: 0;
+  min-width: 0;
+  line-height: 1.3;
 }
-
-header a, header button {
+.header-page {
+  font-size: 1rem;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0.95;
+}
+header a,
+header button {
   color: var(--white);
   text-decoration: none;
   background: rgba(255,255,255,0.2);
-  padding: 0.5rem 1rem;
+  padding: 0.4rem 0.9rem;
   border-radius: var(--radius);
   border: none;
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 500;
   transition: background 0.2s;
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
-
-header a:hover, header button:hover {
+header a:hover,
+header button:hover {
   background: rgba(255,255,255,0.35);
 }
-
 .user-info {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   background: rgba(255,255,255,0.15);
-  padding: 0.4rem 0.8rem;
+  padding: 0.35rem 0.75rem;
   border-radius: var(--radius);
-  margin-right: 0.5rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60vw;
 }
 
 /* =========================================
@@ -983,15 +1000,22 @@ header a:hover, header button:hover {
    ========================================= */
 @media (max-width: 768px) {
   header {
-    padding: 1rem;
-    flex-direction: column;
-    align-items: flex-start;
+    padding: 0.6rem 0.75rem;
+    gap: 0.35rem;
   }
-  
-  header nav {
-    width: 100%;
-    justify-content: space-between;
-    margin-top: 0.5rem;
+  .header-row { gap: 0.5rem; }
+  header h1 { font-size: 1.02rem; }
+  .header-page { font-size: 0.82rem; }
+  header a,
+  header button {
+    padding: 0.32rem 0.65rem;
+    font-size: 0.74rem;
+    border-radius: 6px;
+  }
+  .user-info {
+    font-size: 0.74rem;
+    padding: 0.3rem 0.6rem;
+    max-width: 55vw;
   }
   
   .dashboard {
