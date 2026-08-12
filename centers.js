@@ -31,6 +31,18 @@ const pageLoader = document.getElementById('page-loader');
    HELPERS
 ========================================= */
 
+function getStoredUserName() {
+  try {
+    const storedUser = sessionStorage.getItem('kumonUser');
+    if (storedUser) {
+      return JSON.parse(storedUser)?.name || '';
+    }
+  } catch (err) {
+    console.error('Error parsing kumonUser from sessionStorage:', err);
+  }
+  return '';
+}
+
 function getEmpPositions(obj) {
   if (!obj) return [];
 
@@ -162,7 +174,11 @@ function startCentersPage() {
       window.location.href = 'index.html';
       return;
     }
-    if (userEmailEl) userEmailEl.textContent = user.email;
+   // 👤 Show the user's name (email kept as hover tooltip)
+    if (userEmailEl) {
+      userEmailEl.textContent = getStoredUserName() || user.email;
+      userEmailEl.title = user.email || '';
+    }
     document.getElementById('logoutBtn')?.addEventListener('click', logout);
 
     try {
@@ -174,6 +190,16 @@ function startCentersPage() {
         return;
       }
       const userData = userSnap.val();
+      // Prefer the profile name; fall back to sessionStorage, then email
+      const displayName =
+        userData?.name ||
+        userData?.englishName ||
+        getStoredUserName() ||
+        user.email;
+      if (userEmailEl) {
+        userEmailEl.textContent = displayName;
+        userEmailEl.title = user.email || '';
+      }
       const isAdmin = user.email?.toLowerCase() === 'kumonchamps@gmail.com';
 
       // 🛡️ ROLE CHECK: Show admin-only cards only for managers/admins

@@ -27,6 +27,15 @@ body {
   flex-direction: column;
 }
 
+header span {
+  font-size: 0.9rem;
+  opacity: 0.9;
+  max-width: 240px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* =========================================
    Traditional Chinese font support
 ========================================= */
@@ -638,10 +647,10 @@ button:disabled {
 }
 
 /* =========================================
-   HEADER – MOBILE LAYOUT (2 rows)
-   Row 1: Center title (left) | User email (right)
-   Row 2: Language switch (left) | Logout (right)
-   ========================================= */
+HEADER – MOBILE LAYOUT (2 rows)
+Row 1: Center title (left) | User name (right)
+Row 2: Language switch (left) | Logout (right)
+========================================= */
 @media (max-width: 600px) {
   header {
     display: grid;
@@ -652,7 +661,6 @@ button:disabled {
     row-gap: 0.75rem;
     padding: 1rem 1.25rem; /* consistent left/right indent */
   }
-
   /* Row 1, left: center title */
   header h1 {
     grid-column: 1;
@@ -663,13 +671,11 @@ button:disabled {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-
   /* Unwrap nav so its children become grid items */
   header nav {
     display: contents;
   }
-
-  /* Row 1, right: user email */
+  /* Row 1, right: user name */
   header #userEmail {
     grid-column: 2;
     grid-row: 1;
@@ -680,14 +686,12 @@ button:disabled {
     white-space: nowrap;
     text-align: right;
   }
-
   /* Row 2, left: language switch */
   header .language-switch {
     grid-column: 1;
     grid-row: 2;
     justify-self: start;
   }
-
   /* Row 2, right: logout */
   header #logoutBtn {
     grid-column: 2;
@@ -714,7 +718,7 @@ button:disabled {
 .centers-loader.hidden { display: none; }
 
 /* =========================================
-   ADMIN-ONLY CARDS (Hidden from normal employees)
+ADMIN-ONLY CARDS (Hidden from normal employees)
 ========================================= */
 .admin-only-card {
   display: none !important; /* Hidden by default */
@@ -722,4 +726,3 @@ button:disabled {
 body.is-manager-or-admin .admin-only-card {
   display: flex !important; /* Shown for managers/admins */
 }
-
