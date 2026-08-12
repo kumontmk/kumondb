@@ -160,6 +160,12 @@ header button:hover {
    CARDS
 ========================================= */
 
+.centerSection h3 {
+  font-size: 1.1rem;
+  color: var(--primary-dark);
+  margin-bottom: 0.85rem;
+}
+
 .center-card {
   background: var(--white);
   padding: 1.5rem;
@@ -716,3 +722,4 @@ button:disabled {
 body.is-manager-or-admin .admin-only-card {
   display: flex !important; /* Shown for managers/admins */
 }
+

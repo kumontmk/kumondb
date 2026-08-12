@@ -19,7 +19,9 @@ export default {
     employeeTimecard: "Employee Timecard",
     employeeTimecardDesc: "QR scanning, geolocation verification & CSV export",
     employeeSchedule: "Employee Schedule",
-    employeeScheduleDesc: "See weekly shifts"
+    employeeScheduleDesc: "See weekly shifts",
+    manageCenterCalendar: "Manage Center Calendar",
+    manageCenterCalendarDesc: "Holidays, annual calendar & class schedules"
   },
   missing: {
     title: "⚠️ Missing Clock-Out Records",

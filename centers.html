@@ -3,9 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
   <title data-i18n="centers.documentTitle">Select Center - Kumon DB</title>
-
   <link rel="stylesheet" href="centers.css">
 </head>
 <body>
@@ -32,25 +30,31 @@
     <!-- 1️⃣ CENTER ADMINISTRATION — instantly tappable, no waiting -->
     <section class="admin-section">
       <h3 data-i18n="admin.centerAdministration">Center Tools</h3>
-      <div class="center-grid">
+        <div class="center-grid">
         <!-- Added 'admin-only-card' class -->
-        <a href="employees.html" class="center-card admin-only-card">
-          <div class="card-icon">👤</div>
-          <h3 data-i18n="admin.employeeManagement">Employee Management</h3>
-          <p data-i18n="admin.employeeManagementDesc">
-            Add/edit staff, QR codes & timeclock records
-          </p>
-        </a>
+          <a href="employees.html" class="center-card admin-only-card">
+            <div class="card-icon">👤</div>
+            <h3 data-i18n="admin.employeeManagement">Employee Management</h3>
+            <p data-i18n="admin.employeeManagementDesc">
+              Add/edit staff, QR codes & timeclock records
+            </p>
+          </a>
+          <a href="calendar.html" class="center-card admin-only-card" id="card-manageCenterCalendar">
+            <div class="card-icon">⚙️🗓️</div>
+            <h3 data-i18n="admin.manageCenterCalendar">Manage Center Calendar</h3>
+            <p data-i18n="admin.manageCenterCalendarDesc">
+              Holidays, annual calendar & class schedules
+            </p>
+          </a>
 
         <!-- Added 'admin-only-card' class -->
         <a href="center-management.html" class="center-card admin-only-card">
-          <div class="card-icon">💼</div>
+          <div class="card-icon">💼 🏢</div>
           <h3 data-i18n="admin.centerManagement">Center Management</h3>
           <p data-i18n="admin.centerManagementDesc">
             Add/edit centers, GPS coordinates, and register NFC tags
           </p>
         </a>
-
         <a href="timecard.html" class="center-card">
           <div class="card-icon">⏱️</div>
           <h3 data-i18n="admin.employeeTimecard">Employee Timecard</h3>
@@ -60,22 +64,22 @@
         </a>
 
         <a href="employee-schedule.html" class="center-card">
-          <div class="card-icon">📅</div>
+          <div class="card-icon">👥 📅</div>
           <h3 data-i18n="admin.employeeSchedule">Employee Schedule</h3>
           <p data-i18n="admin.employeeScheduleDesc">See weekly shifts</p>
         </a>
       </div>
     </section>
-
-    <!-- 2️⃣ CENTERS — loads independently below -->
-    <h2 data-i18n="centers.selectYourCenter">Select Your Center</h2>
-    <div id="centersLoader" class="centers-loader">
-      <div class="spinner"></div>
-      <p data-i18n="centers.loading">⏳ Loading centers...</p>
-    </div>
-    <div id="centerGrid" class="center-grid"></div>
-  </main>
-
+      <section class="centerSection"> 
+        <!-- 2️⃣ CENTERS — loads independently below -->
+        <h3 data-i18n="centers.selectYourCenter">Select Your Center</h3>
+          <div id="centersLoader" class="centers-loader">
+            <div class="spinner"></div>
+            <p data-i18n="centers.loading">⏳ Loading centers...</p>
+          </div>
+          <div id="centerGrid" class="center-grid"></div>
+      </section>
+    </main>
   <script type="module" src="centers-i18n.js"></script>
   <script type="module" src="centers.js"></script>
 </body>

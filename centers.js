@@ -52,6 +52,15 @@ function normalizeText(value) {
     .replace(/\s+/g, ' ');
 }
 
+function hasManagementPosition(positions) {
+  return (
+    positions.includes('manager') ||
+    positions.includes('master admin') ||
+    positions.includes('admin') ||
+    positions.includes('administrator')
+  );
+}
+
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (s) => ({
     '&': '&amp;',
@@ -88,7 +97,7 @@ async function isManagerUser(user, userData) {
     (p) => String(p).trim().toLowerCase()
   );
 
-  if (positions.includes('manager') || positions.includes('master admin')) {
+  if (hasManagementPosition(positions)) {
     return true;
   }
 

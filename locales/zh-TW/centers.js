@@ -19,7 +19,9 @@ export default {
     employeeTimecard: "員工打卡表",
     employeeTimecardDesc: "QR code 掃描、地理位置驗證與 CSV 匯出",
     employeeSchedule: "員工排班",
-    employeeScheduleDesc: "檢視每週班次"
+    employeeScheduleDesc: "檢視每週班次",
+    manageCenterCalendar: "管理中心行事曆",
+    manageCenterCalendarDesc: "假期、年度行事曆與課程表",
   },
   missing: {
     title: "⚠️ 缺少打卡下班紀錄",

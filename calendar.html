@@ -1,153 +1,296 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Calendar Management - Kumon DB</title>
-    <link rel="stylesheet" href="calendar.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Calendar Management - Kumon DB</title>
+
+  <link rel="stylesheet" href="calendar.css" />
+  <script type="module" src="calendar.js"></script>
 </head>
 <body>
-    <!-- Page Loader -->
-    <div id="page-loader">
-        <div class="spinner"></div>
+
+  <!-- PAGE LOADER -->
+  <div id="page-loader">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- HEADER -->
+  <header>
+    <nav>
+      <a href="centers.html">← Centers</a>
+    </nav>
+    <h1>
+      🗓️ <span id="calendar-center-name">Center Calendar Management</span>
+    </h1>
+  </header>
+
+  <!-- MAIN -->
+  <main class="dashboard">
+
+    <!-- CENTER SELECTION -->
+    <div class="card center-selection-card">
+      <h3>🏢 Centre Selection</h3>
+
+      <div class="form-group">
+        <label for="centerSelect">Centre</label>
+        <select id="centerSelect"></select>
+      </div>
     </div>
 
-    <!-- Header -->
-    <header>
-        <nav>
-            <a href="dashboard.html"> ← Dashboard</a>
-        </nav>
-        <h1><h1> 🗓️ Center Calendar Management</h1>
-    </header>
+    <!-- TABS -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="holidays">
+        📋 Holidays
+      </button>
 
-    <!-- PRINT HEADER (Hidden on screen, visible on print) -->
-    <div id="printHeader">
-        <h1 id="printCenterName">Kumon Center 2024 Calendar</h1>
-        <h2 id="printDocTitle">Report</h2>
+      <button class="tab-btn" data-tab="calendar">
+        📅 Center Calendar
+      </button>
+
+      <button class="tab-btn" data-tab="schedule">
+        🗓️ Monthly Class Schedule
+      </button>
     </div>
 
-    <!-- Main Dashboard -->
-    <div class="dashboard">
-        <div class="page-header">
-            <h2 id="calendar-center-name">Center Calendar</h2>
-            <p class="page-subtitle">Manage holidays, view the annual calendar, and generate class schedules.</p>
-        </div>
+    <!-- TAB 1: HOLIDAYS -->
+    <section id="tab-holidays" class="tab-content active">
 
-        <!-- Tabs -->
-        <div class="tabs">
-            <button class="tab-btn active" data-tab="holidays"><i class="fas fa-list"></i> Holidays</button>
-            <button class="tab-btn" data-tab="calendar"><i class="fas fa-calendar"></i> Center Calendar</button>
-            <button class="tab-btn" data-tab="schedule"><i class="fas fa-clock"></i> Monthly Class Schedule</button>
-        </div>
+      <div class="print-bar">
+        <button id="printHolidaysBtn" class="btn-print" type="button">
+          🖨️ Print Holidays
+        </button>
+      </div>
 
-        <!-- Tab 1: Holidays -->
-        <div id="tab-holidays" class="tab-content active">
-            <div class="print-bar">
-                <button id="printHolidaysBtn" class="btn-print"><i class="fas fa-print"></i> Print Holidays</button>
-            </div>
-            
-            <div class="card" id="holidayFormCard">
-                <h3><i class="fas fa-plus-circle"></i> Add New Holiday</h3>
-                <form id="holidayForm" class="holiday-form">
-                    <div class="form-group">
-                        <label for="holidayDate">Date</label>
-                        <input type="date" id="holidayDate" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="holidayType">Type of Leave</label>
-                        <select id="holidayType" required>
-                            <option value="public">Public Holiday</option>
-                            <option value="center">Center Holiday</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="holidayName">Holiday Name</label>
-                        <input type="text" id="holidayName" placeholder="e.g. Chinese New Year" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="holidayMUC">MUC (Make-Up Class)</label>
-                        <select id="holidayMUC" required>
-                            <option value="false">No</option>
-                            <option value="true">Yes</option>
-                        </select>
-                    </div>
-                    <div class="form-group form-group-btn">
-                        <button type="submit" class="btn-primary"><i class="fas fa-save"></i> Add Holiday</button>
-                    </div>
-                </form>
-            </div>
+      <div class="card" id="holidayFormCard">
+        <h3>➕ Add New Holiday</h3>
 
-            <div class="card">
-                <h3><i class="fas fa-list-ul"></i> Holiday List</h3>
-                <div class="table-responsive">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Type</th>
-                                <th>Holiday Name</th>
-                                <th>MUC</th>
-                                <th class="action-cell">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="holidayTableBody">
-                            <!-- Populated by JS -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+        <form id="holidayForm" class="holiday-form">
 
-        <!-- Tab 2: Center Calendar -->
-        <div id="tab-calendar" class="tab-content">
-            <div class="print-bar">
-                <button id="printCalendarBtn" class="btn-print"><i class="fas fa-print"></i> Print Calendar</button>
-            </div>
-            
-            <div class="card">
-                <h3><i class="fas fa-calendar-alt"></i> Annual Calendar</h3>
-                <div class="calendar-controls">
-                    <div class="year-selector">
-                        <button id="prevYearBtn" class="btn-icon"><i class="fas fa-chevron-left"></i></button>
-                        <span id="calendarYearDisplay">2024</span>
-                        <button id="nextYearBtn" class="btn-icon"><i class="fas fa-chevron-right"></i></button>
-                    </div>
-                </div>
-                <div class="calendar-legend">
-                    <span><span class="dot public"></span> Public Holiday</span>
-                    <span><span class="dot center"></span> Center Holiday</span>
-                    <span><span class="dot closed"></span> Center Closed</span>
-                </div>
-                <div id="yearCalendarGrid" class="year-calendar-grid">
-                    <!-- Populated by JS -->
-                </div>
+          <div class="form-group">
+            <label for="holidayDate">Date</label>
+            <input type="date" id="holidayDate" required />
+          </div>
+
+          <div class="form-group">
+            <label for="holidayType">Type of Leave</label>
+            <select id="holidayType">
+              <option value="public">Public Holiday</option>
+              <option value="center">Center Holiday</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="holidayName">Holiday Name</label>
+            <input type="text" id="holidayName" required />
+          </div>
+
+          <div class="form-group">
+            <label for="holidayMUC">MUC (Make-Up Class)</label>
+            <select id="holidayMUC">
+              <option value="false" selected>No</option>
+              <option value="true">Yes</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label>Apply holiday to centers</label>
+            <div id="holidayCenterTargets" class="center-target-list"></div>
+          </div>
+
+          <div class="form-group-btn">
+            <button type="submit" class="btn-primary">
+              Add Holiday
+            </button>
+          </div>
+
+        </form>
+      </div>
+
+        <div class="card">
+        <div class="holiday-list-header">
+            <h3>📋 Holiday List</h3>
+
+            <div class="year-selector">
+            <button id="holidayPrevYearBtn" class="btn-icon" type="button">
+                ‹
+            </button>
+
+            <span id="holidayYearDisplay"></span>
+
+            <button id="holidayNextYearBtn" class="btn-icon" type="button">
+                ›
+            </button>
             </div>
         </div>
 
-        <!-- Tab 3: Class Schedule -->
-        <div id="tab-schedule" class="tab-content">
-            <div class="print-bar">
-                <button id="printScheduleBtn" class="btn-print"><i class="fas fa-print"></i> Print Schedule</button>
-            </div>
-            
-            <div class="card">
-                <h3><i class="fas fa-clock"></i> Annual Class Schedule</h3>
-                <div class="calendar-controls">
-                    <div class="year-selector">
-                        <button id="schedulePrevYearBtn" class="btn-icon"><i class="fas fa-chevron-left"></i></button>
-                        <span id="scheduleYearDisplay">2024</span>
-                        <button id="scheduleNextYearBtn" class="btn-icon"><i class="fas fa-chevron-right"></i></button>
-                    </div>
-                </div>
-                <p class="schedule-hint">* Dates marked with an asterisk (*) indicate a Make-Up Class (MUC) on a holiday.</p>
-                <div id="classScheduleContainer" class="schedule-container">
-                    <!-- Populated by JS -->
-                </div>
-            </div>
+        <div class="table-responsive">
+            <table class="data-table">
+            <thead>
+                <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Holiday Name</th>
+                <th>MUC</th>
+                <th>Actions</th>
+                </tr>
+            </thead>
+
+            <tbody id="holidayTableBody">
+                <!-- rows are rendered by calendar.js -->
+            </tbody>
+            </table>
         </div>
+        </div>
+
+    </section>
+
+    <!-- TAB 2: ANNUAL CALENDAR -->
+    <section id="tab-calendar" class="tab-content">
+
+      <div class="print-bar">
+        <button id="printCalendarBtn" class="btn-print" type="button">
+          🖨️ Print Calendar
+        </button>
+      </div>
+
+      <div class="card">
+        <h3>📅 Annual Calendar</h3>
+
+        <div class="calendar-controls">
+          <div class="year-selector">
+            <button id="prevYearBtn" class="btn-icon" type="button">
+              ‹
+            </button>
+
+            <span id="calendarYearDisplay"></span>
+
+            <button id="nextYearBtn" class="btn-icon" type="button">
+              ›
+            </button>
+          </div>
+
+          <div class="calendar-legend">
+            <span><span class="dot public"></span> Public Holiday</span>
+            <span><span class="dot center"></span> Center Holiday</span>
+            <span><span class="dot closed"></span> Center Closed</span>
+          </div>
+        </div>
+
+        <div id="yearCalendarGrid" class="year-calendar-grid"></div>
+      </div>
+
+    </section>
+
+    <!-- TAB 3: CLASS SCHEDULE -->
+    <section id="tab-schedule" class="tab-content">
+
+      <div class="print-bar">
+        <button id="printScheduleBtn" class="btn-print" type="button">
+          🖨️ Print Schedule
+        </button>
+      </div>
+
+      <div class="card">
+        <h3>🗓️ Annual Class Schedule</h3>
+
+        <div class="calendar-controls">
+          <div class="year-selector">
+            <button id="schedulePrevYearBtn" class="btn-icon" type="button">
+              ‹
+            </button>
+
+            <span id="scheduleYearDisplay"></span>
+
+            <button id="scheduleNextYearBtn" class="btn-icon" type="button">
+              ›
+            </button>
+          </div>
+        </div>
+
+        <p class="schedule-hint">
+          * Dates marked with an asterisk (*) indicate a Make-Up Class (MUC) on a holiday.
+        </p>
+
+        <div id="classScheduleContainer" class="schedule-container"></div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- PRINT HEADER -->
+  <div id="printHeader">
+    <h2 id="printCenterName"></h2>
+    <p id="printDocTitle"></p>
+  </div>
+
+  <!-- HOLIDAY CONFLICT MODAL -->
+  <div id="holidayConflictModal" class="modal hidden">
+    <div class="modal-content">
+      <h3>⚠️ Holiday Conflict</h3>
+
+      <p id="holidayConflictSummary"></p>
+
+      <div id="holidayConflictList"></div>
+
+      <div class="modal-actions">
+        <button type="button" class="secondary" id="cancelHolidayConflictBtn">
+          Cancel
+        </button>
+
+        <button type="button" class="primary" id="confirmHolidayConflictBtn">
+          Continue
+        </button>
+      </div>
     </div>
+  </div>
 
-    <script type="module" src="calendar.js"></script>
+  <!-- DELETE HOLIDAY MODAL -->
+  <div id="deleteHolidayModal" class="modal hidden">
+    <div class="modal-content">
+      <h3>🗑️ Delete Holiday</h3>
+
+      <p>
+        Holiday:
+        <strong id="deleteHolidayName"></strong><br />
+        Date:
+        <strong id="deleteHolidayDate"></strong>
+      </p>
+
+      <div class="delete-option">
+        <label>
+          <input
+            type="radio"
+            name="deleteHolidayMode"
+            value="current"
+            id="deleteCurrentCenter"
+            checked
+          />
+          Delete from currently selected center only
+        </label>
+
+        <label>
+          <input
+            type="radio"
+            name="deleteHolidayMode"
+            value="all"
+          />
+          Delete from all centers where this holiday was added
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="secondary" id="cancelDeleteHolidayBtn">
+          Cancel
+        </button>
+
+        <button type="button" class="danger" id="confirmDeleteHolidayBtn">
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
