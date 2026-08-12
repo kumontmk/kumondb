@@ -1,3 +1,4 @@
+// calendar.js
 import { auth, requireAuth, logout, db } from './auth.js';
 import {
   ref,
@@ -7,10 +8,13 @@ import {
   remove,
   onValue
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-
 import {
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { i18nReady, t } from './calendar-i18n.js';
+
+// Wait for i18n before first render
+await i18nReady.catch(() => {});
 
 // ============================================
 // GLOBAL STATE
@@ -21,14 +25,11 @@ let calendarEventsMap = {};
 let currentCalendarYear = new Date().getFullYear();
 let currentScheduleYear = new Date().getFullYear();
 let currentHolidayYear = new Date().getFullYear();
-
 let canEditHolidays = false;
 let accessibleCenters = [];
 let calendarListener = null;
-
 let pendingHoliday = null;
 let deleteState = null;
-
 let bootstrapped = false;
 
 const centerClosedDays = {
@@ -38,23 +39,25 @@ const centerClosedDays = {
   'tap siac': [2]
 };
 
+// ✅ Translated date names (read live so language switches apply)
+function getMonthNames() { return t('calendar.months', { returnObjects: true }); }
+function getDayNamesShort() { return t('calendar.daysShort', { returnObjects: true }); }
+function getDayNamesLong() { return t('calendar.daysLong', { returnObjects: true }); }
+
 // ============================================
 // INITIALIZATION
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
   const loader = document.getElementById('page-loader');
-
   const logoutBtn = document.getElementById('logoutBtn');
+
   if (logoutBtn) {
     logoutBtn.addEventListener('click', async (e) => {
       e.preventDefault();
-
       try {
         logoutBtn.disabled = true;
-        logoutBtn.textContent = 'Logging out...';
-
+        logoutBtn.textContent = t('calendar.loggingOut');
         await logout();
-
         window.location.href = 'index.html';
       } catch (err) {
         console.error('Logout error:', err);
@@ -64,7 +67,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   const isAuth = requireAuth();
-
   if (!isAuth) {
     loader?.classList.add('hidden');
     return;
@@ -75,7 +77,6 @@ document.addEventListener('DOMContentLoaded', () => {
       window.location.href = 'index.html';
       return;
     }
-
     if (bootstrapped) return;
     bootstrapped = true;
 
@@ -83,7 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await initCalendar(user);
     } catch (error) {
       console.error('Error initializing calendar management:', error);
-      alert('Failed to load calendar management.');
+      alert(t('calendar.failedLoad'));
     } finally {
       loader?.classList.add('hidden');
     }
@@ -94,13 +95,13 @@ async function initCalendar(user) {
   await initializeCalendarAccess(user);
 
   if (!canEditHolidays) {
-    alert('Calendar management is available only to Managers, Admins, and KumonChamps.');
+    alert(t('calendar.onlyManagers'));
     window.location.href = 'centers.html';
     return;
   }
 
   if (accessibleCenters.length === 0) {
-    alert('No active centers are available for calendar management.');
+    alert(t('calendar.noActiveCenters'));
     window.location.href = 'centers.html';
     return;
   }
@@ -113,19 +114,15 @@ async function initCalendar(user) {
 
   populateCenterSelect();
   setupCenterSelect();
-
   setupTabs();
   setupHolidayForm();
   setupHolidayYearControls();
   setupYearControls();
   setupPrintButtons();
-
   setupHolidayDeleteListener();
   setupConflictModal();
   setupDeleteModal();
-
   await loadCenterDetails();
-
   renderHolidayCenterTargets();
 
   document.getElementById('calendarYearDisplay').textContent = currentCalendarYear;
@@ -140,14 +137,11 @@ async function initCalendar(user) {
 // ============================================
 async function initializeCalendarAccess(user) {
   const email = user.email?.toLowerCase() || '';
-
   const userSnap = await get(ref(db, `users/${user.uid}`));
   const userData = userSnap.exists() ? userSnap.val() : {};
-
   const employeeData = await getEmployeeData(user, email);
 
   const isKumonChamps = email === 'kumonchamps@gmail.com';
-
   const positions = [
     ...getEmpPositions(userData),
     ...getEmpPositions(employeeData)
@@ -157,11 +151,9 @@ async function initializeCalendarAccess(user) {
     positions.includes('admin') ||
     positions.includes('administrator') ||
     positions.includes('master admin');
-
   const hasManagerPosition = positions.includes('manager');
 
   canEditHolidays = isKumonChamps || hasAdminPosition || hasManagerPosition;
-
   if (!canEditHolidays) return;
 
   const centersSnap = await get(ref(db, 'centers'));
@@ -183,7 +175,6 @@ async function initializeCalendarAccess(user) {
 
   // Managers see centers listed in their employee/profile assignment
   const assignedCenterValues = extractAssignedCenterIds(employeeData, userData);
-
   const assignedNormalized = new Set(
     [...assignedCenterValues].map(value => normalizeText(value))
   );
@@ -206,21 +197,16 @@ async function initializeCalendarAccess(user) {
 async function getEmployeeData(user, email) {
   try {
     const employeeSnap = await get(ref(db, `employees/${user.uid}`));
-
     if (employeeSnap.exists()) {
       return employeeSnap.val();
     }
-
     if (email) {
       const allEmployeesSnap = await get(ref(db, 'employees'));
-
       if (allEmployeesSnap.exists()) {
         const allEmployees = allEmployeesSnap.val();
-
         const matchingEmp = Object.values(allEmployees).find(emp => {
           return normalizeText(emp?.email) === email;
         });
-
         if (matchingEmp) {
           return matchingEmp;
         }
@@ -229,25 +215,20 @@ async function getEmployeeData(user, email) {
   } catch (err) {
     console.error('Error loading employee profile:', err);
   }
-
   return null;
 }
 
 function getEmpPositions(obj) {
   if (!obj) return [];
-
   if (Array.isArray(obj.positions)) {
     return obj.positions.filter(Boolean);
   }
-
   if (typeof obj.positions === 'string' && obj.positions.trim()) {
     return [obj.positions];
   }
-
   if (obj.position) {
     return [obj.position];
   }
-
   return [];
 }
 
@@ -268,9 +249,7 @@ function isCenterActive(centerData = {}) {
   ) {
     return false;
   }
-
   const status = normalizeText(centerData.status || '');
-
   if (
     status === 'inactive' ||
     status === 'closed' ||
@@ -278,19 +257,16 @@ function isCenterActive(centerData = {}) {
   ) {
     return false;
   }
-
   return true;
 }
 
 function extractAssignedCenterIds(employeeData, userData) {
   const assigned = new Set();
-
   const sources = [
     employeeData,
     userData?.profile,
     userData
   ];
-
   const fields = [
     'assignedCenters',
     'centers',
@@ -304,13 +280,11 @@ function extractAssignedCenterIds(employeeData, userData) {
 
   sources.forEach(source => {
     if (!source || typeof source !== 'object') return;
-
     fields.forEach(field => {
       if (source[field]) {
         collectCenterIds(source[field], assigned, true);
       }
     });
-
     // Also support existing permission structure as fallback
     if (source.permissions?.centers) {
       collectCenterIds(source.permissions.centers, assigned, true);
@@ -343,9 +317,7 @@ function collectCenterIds(value, set, treatObjectKeysAsIds = false) {
     if (treatObjectKeysAsIds) {
       Object.entries(value).forEach(([key, val]) => {
         if (val === false || val === null || val === undefined) return;
-
         set.add(key);
-
         if (typeof val === 'string' || typeof val === 'number') {
           set.add(String(val).trim());
         } else if (typeof val === 'object') {
@@ -353,7 +325,6 @@ function collectCenterIds(value, set, treatObjectKeysAsIds = false) {
         }
       });
     }
-
     const idFields = [
       'centerId',
       'center_id',
@@ -361,7 +332,6 @@ function collectCenterIds(value, set, treatObjectKeysAsIds = false) {
       'center',
       'centerID'
     ];
-
     idFields.forEach(field => {
       if (value[field]) {
         collectCenterIds(value[field], set, false);
@@ -376,29 +346,23 @@ function collectCenterIds(value, set, treatObjectKeysAsIds = false) {
 function populateCenterSelect() {
   const select = document.getElementById('centerSelect');
   if (!select) return;
-
   select.innerHTML = '';
-
   accessibleCenters.forEach(center => {
     const option = document.createElement('option');
     option.value = center.id;
     option.textContent = center.name;
     select.appendChild(option);
   });
-
   select.value = currentCenterId;
 }
 
 function setupCenterSelect() {
   const select = document.getElementById('centerSelect');
   if (!select) return;
-
   select.addEventListener('change', async (e) => {
     currentCenterId = e.target.value;
     sessionStorage.setItem('selectedCenter', currentCenterId);
-
     await loadCenterDetails();
-
     renderHolidayCenterTargets();
     subscribeCalendar();
   });
@@ -406,11 +370,9 @@ function setupCenterSelect() {
 
 async function loadCenterDetails() {
   const snap = await get(ref(db, `centers/${currentCenterId}`));
-
   if (snap.exists()) {
     const data = snap.val();
     centerName = data.name || data.centerName || "Center";
-
     const titleEl = document.getElementById('calendar-center-name');
     if (titleEl) {
       titleEl.textContent = `${centerName} Calendar`;
@@ -425,7 +387,6 @@ function subscribeCalendar() {
   if (calendarListener) {
     calendarListener();
   }
-
   calendarEventsMap = {};
   renderAllCalendarViews();
 
@@ -455,9 +416,7 @@ function setupTabs() {
     tab.addEventListener('click', () => {
       tabs.forEach(t => t.classList.remove('active'));
       contents.forEach(c => c.classList.remove('active'));
-
       tab.classList.add('active');
-
       const target = document.getElementById(`tab-${tab.dataset.tab}`);
       if (target) target.classList.add('active');
     });
@@ -475,7 +434,7 @@ function setupHolidayForm() {
     e.preventDefault();
 
     if (!canEditHolidays) {
-      alert("You do not have permission to add holidays.");
+      alert(t('calendar.noPermissionAdd'));
       return;
     }
 
@@ -485,14 +444,13 @@ function setupHolidayForm() {
     const muc = document.getElementById('holidayMUC').value === 'true';
 
     if (!date || !name) {
-      alert('Please enter both date and holiday name.');
+      alert(t('calendar.enterDateAndName'));
       return;
     }
 
     const targetCenterIds = getSelectedHolidayCenterIds();
-
     if (targetCenterIds.length === 0) {
-      alert('Please select at least one center.');
+      alert(t('calendar.selectAtLeastOne'));
       return;
     }
 
@@ -504,7 +462,6 @@ function setupHolidayForm() {
     };
 
     const conflicts = await checkHolidayConflicts(targetCenterIds, date);
-
     if (conflicts.length > 0) {
       openConflictModal(conflicts, targetCenterIds, holidayData);
     } else {
@@ -536,11 +493,10 @@ function getSelectedHolidayCenterIds() {
 function renderHolidayCenterTargets() {
   const container = document.getElementById('holidayCenterTargets');
   if (!container) return;
-
   container.innerHTML = '';
 
   if (accessibleCenters.length <= 1) {
-    container.innerHTML = '<p style="margin:0; color:#666;">Current center only</p>';
+    container.innerHTML = `<p style="margin:0; color:#666;">${t('calendar.currentCenterOnly')}</p>`;
     return;
   }
 
@@ -551,7 +507,6 @@ function renderHolidayCenterTargets() {
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.value = center.id;
-
     if (center.id === currentCenterId) {
       checkbox.checked = true;
       checkbox.disabled = true;
@@ -559,12 +514,11 @@ function renderHolidayCenterTargets() {
 
     const text = document.createElement('span');
     text.textContent = center.id === currentCenterId
-      ? `(Current Selection) ${center.name} `
+      ? t('calendar.currentSelection', { name: center.name })
       : center.name;
 
     label.appendChild(checkbox);
     label.appendChild(text);
-
     container.appendChild(label);
   });
 }
@@ -573,25 +527,19 @@ async function checkHolidayConflicts(centerIds, date) {
   const results = await Promise.all(
     centerIds.map(async centerId => {
       const snap = await get(ref(db, `centers/${centerId}/calendar/${date}`));
-
       if (!snap.exists()) return null;
-
       const existing = snap.val();
-
       if (existing && existing.type && existing.type !== 'none') {
         const center = accessibleCenters.find(c => c.id === centerId);
-
         return {
           centerId,
           centerName: center?.name || centerId,
           existing
         };
       }
-
       return null;
     })
   );
-
   return results.filter(Boolean);
 }
 
@@ -618,12 +566,10 @@ function setupConflictModal() {
     if (!pendingHoliday) return;
 
     const overwriteIds = [];
-
     pendingHoliday.conflicts.forEach((conflict, index) => {
       const selected = document.querySelector(
         `input[name="conflictAction-${index}"]:checked`
       );
-
       if (selected?.value === 'overwrite') {
         overwriteIds.push(conflict.centerId);
       }
@@ -638,7 +584,6 @@ function setupConflictModal() {
     );
 
     await writeHolidaysToCenters(finalTargetIds, pendingHoliday.holidayData);
-
     modal.classList.add('hidden');
     pendingHoliday = null;
   });
@@ -654,33 +599,30 @@ function openConflictModal(conflicts, targetIds, holidayData) {
   const modal = document.getElementById('holidayConflictModal');
   const summary = document.getElementById('holidayConflictSummary');
   const list = document.getElementById('holidayConflictList');
-
   if (!modal || !summary || !list) return;
 
   const nonConflictCount = targetIds.length - conflicts.length;
-
-  summary.textContent =
-    `${conflicts.length} center(s) already have a holiday on ${holidayData.date}. ` +
-    `${nonConflictCount} center(s) can be added without conflict.`;
+  summary.textContent = t('calendar.conflictSummary', {
+    conflicts: conflicts.length,
+    date: holidayData.date,
+    noConflict: nonConflictCount
+  });
 
   list.innerHTML = '';
-
   conflicts.forEach((conflict, index) => {
     const item = document.createElement('div');
     item.className = 'conflict-item';
 
     const existingType = conflict.existing.type === 'public'
-      ? 'Public Holiday'
-      : 'Center Holiday';
+      ? t('calendar.publicHoliday')
+      : t('calendar.centerHoliday');
 
     item.innerHTML = `
       <div class="conflict-title">${escapeHtml(conflict.centerName)}</div>
-
       <div class="conflict-existing">
-        Existing: ${escapeHtml(conflict.existing.name || 'Holiday')}
+        ${t('calendar.existing')}: ${escapeHtml(conflict.existing.name || t('calendar.holiday'))}
         (${existingType})
       </div>
-
       <label>
         <input
           type="radio"
@@ -688,19 +630,17 @@ function openConflictModal(conflicts, targetIds, holidayData) {
           value="skip"
           checked
         >
-        Skip this center
+        ${t('calendar.skipThisCenter')}
       </label>
-
       <label>
         <input
           type="radio"
           name="conflictAction-${index}"
           value="overwrite"
         >
-        Overwrite existing holiday
+        ${t('calendar.overwriteExisting')}
       </label>
     `;
-
     list.appendChild(item);
   });
 
@@ -709,7 +649,7 @@ function openConflictModal(conflicts, targetIds, holidayData) {
 
 async function writeHolidaysToCenters(centerIds, holidayData) {
   if (!centerIds.length) {
-    alert('No centers were updated.');
+    alert(t('calendar.noCentersUpdated'));
     return false;
   }
 
@@ -717,11 +657,9 @@ async function writeHolidaysToCenters(centerIds, holidayData) {
     const sharedHolidayId =
       crypto?.randomUUID?.() ||
       `holiday-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
     const timestamp = new Date().toISOString();
 
     const updates = {};
-
     centerIds.forEach(centerId => {
       updates[`centers/${centerId}/calendar/${holidayData.date}`] = {
         type: holidayData.type,
@@ -743,20 +681,17 @@ async function writeHolidaysToCenters(centerIds, holidayData) {
     if (form) {
       form.reset();
     }
-
     const dateInput = document.getElementById('holidayDate');
     if (dateInput) {
       dateInput.valueAsDate = new Date();
     }
 
     renderHolidayCenterTargets();
-
-    alert(`Holiday saved to ${centerIds.length} center(s).`);
-
+    alert(t('calendar.holidaySaved', { count: centerIds.length }));
     return true;
   } catch (error) {
     console.error('Error saving holiday:', error);
-    alert('Failed to save holiday.');
+    alert(t('calendar.failedSave'));
     return false;
   }
 }
@@ -764,13 +699,11 @@ async function writeHolidaysToCenters(centerIds, holidayData) {
 function renderHolidaysTable() {
   const tbody = document.getElementById('holidayTableBody');
   if (!tbody) return;
-
   tbody.innerHTML = '';
 
   const events = Object.entries(calendarEventsMap)
     .map(([key, val]) => {
       const isDateKey = /^\d{4}-\d{2}-\d{2}$/.test(key);
-
       return {
         id: key,
         ...val,
@@ -782,13 +715,11 @@ function renderHolidaysTable() {
     .sort((a, b) => new Date(a.date) - new Date(b.date));
 
   if (events.length === 0) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="5" style="text-align:center; color:#666;">
-          No holidays for ${currentHolidayYear}.
-        </td>
-      </tr>
-    `;
+    tbody.innerHTML = `<tr>
+      <td colspan="5" style="text-align:center; color:#666;">
+        ${t('calendar.noHolidays', { year: currentHolidayYear })}
+      </td>
+    </tr>`;
     return;
   }
 
@@ -796,12 +727,12 @@ function renderHolidaysTable() {
     const tr = document.createElement('tr');
 
     const mucDisplay = event.muc
-      ? '<span class="muc-yes">Yes</span>'
-      : '<span class="muc-no">No</span>';
+      ? `<span class="muc-yes">${t('calendar.yes')}</span>`
+      : `<span class="muc-no">${t('calendar.no')}</span>`;
 
     const typeDisplay = event.type === 'public'
-      ? 'Public Holiday'
-      : 'Center Holiday';
+      ? t('calendar.publicHoliday')
+      : t('calendar.centerHoliday');
 
     const actionCell = canEditHolidays
       ? `
@@ -811,10 +742,10 @@ function renderHolidaysTable() {
           data-shared="${escapeHtml(event.sharedHolidayId || '')}"
           type="button"
         >
-          <i class="fas fa-trash"></i> Delete
+          <i class="fas fa-trash"></i> ${t('calendar.delete')}
         </button>
       `
-      : `<span style="color:#999; font-size:0.85rem;">Restricted</span>`;
+      : `<span style="color:#999; font-size:0.85rem;">${t('calendar.restricted')}</span>`;
 
     tr.innerHTML = `
       <td>${escapeHtml(event.date)}</td>
@@ -823,7 +754,6 @@ function renderHolidaysTable() {
       <td>${mucDisplay}</td>
       <td class="action-cell">${actionCell}</td>
     `;
-
     tbody.appendChild(tr);
   });
 }
@@ -835,7 +765,6 @@ function setupHolidayDeleteListener() {
   tbody.addEventListener('click', async (e) => {
     const btn = e.target.closest('.delete-holiday-btn');
     if (!btn) return;
-
     await openDeleteHolidayModal(btn.dataset.date, btn.dataset.shared);
   });
 }
@@ -867,28 +796,27 @@ function setupDeleteModal() {
     )?.value || 'current';
 
     confirmBtn.disabled = true;
-    confirmBtn.textContent = 'Deleting...';
+    confirmBtn.textContent = t('calendar.deleting');
 
     try {
       if (mode === 'current') {
         await remove(
           ref(db, `centers/${currentCenterId}/calendar/${deleteState.date}`)
         );
-
-        alert('Holiday deleted from current center.');
+        alert(t('calendar.deletedCurrent'));
       } else {
         const deletedCount = await deleteHolidayFromAllCenters(deleteState);
-        alert(`Holiday deleted from ${deletedCount} center(s).`);
+        alert(t('calendar.deletedCount', { count: deletedCount }));
       }
 
       modal.classList.add('hidden');
       deleteState = null;
     } catch (error) {
       console.error('Error deleting holiday:', error);
-      alert('Failed to delete holiday.');
+      alert(t('calendar.failedDelete'));
     } finally {
       confirmBtn.disabled = false;
-      confirmBtn.textContent = 'Delete';
+      confirmBtn.textContent = t('calendar.delete');
     }
   });
 }
@@ -898,12 +826,10 @@ async function openDeleteHolidayModal(date, sharedId) {
   if (!modal) return;
 
   let event = calendarEventsMap[date];
-
   if (!event) {
     const snap = await get(
       ref(db, `centers/${currentCenterId}/calendar/${date}`)
     );
-
     event = snap.exists() ? snap.val() : null;
   }
 
@@ -915,7 +841,7 @@ async function openDeleteHolidayModal(date, sharedId) {
 
   document.getElementById('deleteHolidayDate').textContent = date;
   document.getElementById('deleteHolidayName').textContent =
-    event?.name || 'Holiday';
+    event?.name || t('calendar.holiday');
 
   const currentRadio = document.getElementById('deleteCurrentCenter');
   if (currentRadio) {
@@ -934,17 +860,14 @@ async function deleteHolidayFromAllCenters({ date, sharedId, event }) {
       const snap = await get(
         ref(db, `centers/${centerId}/calendar/${date}`)
       );
-
       if (!snap.exists()) return;
 
       const targetEvent = snap.val() || {};
-
       let shouldDelete = false;
 
       if (sharedId && targetEvent.sharedHolidayId === sharedId) {
         shouldDelete = true;
       }
-
       if (
         !sharedId &&
         event &&
@@ -961,11 +884,9 @@ async function deleteHolidayFromAllCenters({ date, sharedId, event }) {
   );
 
   const deletedCount = Object.keys(updates).length;
-
   if (deletedCount > 0) {
     await update(ref(db), updates);
   }
-
   return deletedCount;
 }
 
@@ -1021,34 +942,10 @@ function setupHolidayYearControls() {
 function renderYearCalendar(year) {
   const container = document.getElementById('yearCalendarGrid');
   if (!container) return;
-
   container.innerHTML = '';
 
-  const monthNames = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December"
-  ];
-
-  const dayNames = [
-    "Sun",
-    "Mon",
-    "Tue",
-    "Wed",
-    "Thu",
-    "Fri",
-    "Sat"
-  ];
-
+  const monthNames = getMonthNames();
+  const dayNames = getDayNamesShort();
   const closedDays = getClosedDaysForCenter(centerName);
   const today = new Date();
 
@@ -1093,10 +990,10 @@ function renderYearCalendar(year) {
       if (event && event.type && event.type !== 'none' && !event.muc) {
         if (event.type === 'public') {
           classes.push('has-public');
-          tooltip = `Public Holiday: ${event.name || ''}`;
+          tooltip = `${t('calendar.publicHoliday')}: ${event.name || ''}`;
         } else if (event.type === 'center') {
           classes.push('has-center');
-          tooltip = `Center Holiday: ${event.name || ''}`;
+          tooltip = `${t('calendar.centerHoliday')}: ${event.name || ''}`;
         }
       }
 
@@ -1108,7 +1005,6 @@ function renderYearCalendar(year) {
     }
 
     gridHtml += `</div>`;
-
     monthDiv.innerHTML = gridHtml;
     container.appendChild(monthDiv);
   });
@@ -1120,34 +1016,10 @@ function renderYearCalendar(year) {
 function renderClassSchedule(year) {
   const container = document.getElementById('classScheduleContainer');
   if (!container) return;
-
   container.innerHTML = '';
 
-  const monthNames = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December"
-  ];
-
-  const dayNames = [
-    "Sunday",
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday"
-  ];
-
+  const monthNames = getMonthNames();
+  const dayNames = getDayNamesLong();
   const closedDays = getClosedDaysForCenter(centerName);
   const openDays = [0, 1, 2, 3, 4, 5, 6].filter(d => !closedDays.includes(d));
 
@@ -1164,27 +1036,22 @@ function renderClassSchedule(year) {
 
     openDays.forEach(dayOfWeek => {
       const datesInMonth = [];
-
       const firstDayOfMonth = new Date(year, monthIndex, 1).getDay();
       const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
 
       let firstDate = 1 + (dayOfWeek - firstDayOfMonth + 7) % 7;
-
       for (let d = firstDate; d <= daysInMonth; d += 7) {
         datesInMonth.push(d);
       }
 
       if (datesInMonth.length > 0) {
         hasClasses = true;
-
         const validDates = datesInMonth.map(d => {
           const dateStr = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
           const event = calendarEventsMap[dateStr];
-
           if (event && event.type && event.type !== 'none' && !event.muc) {
             return null;
           }
-
           return event && event.muc ? `${d}*` : `${d}`;
         }).filter(d => d !== null);
 
@@ -1216,11 +1083,9 @@ function renderClassSchedule(year) {
   });
 
   if (container.innerHTML === '') {
-    container.innerHTML = `
-      <p style="text-align:center; color:#666; padding: 2rem;">
-        No class days found for this year based on center operating hours.
-      </p>
-    `;
+    container.innerHTML = `<p style="text-align:center; color:#666; padding: 2rem;">
+      ${t('calendar.noClassDays')}
+    </p>`;
   }
 }
 
@@ -1229,23 +1094,20 @@ function renderClassSchedule(year) {
 // ============================================
 function getClosedDaysForCenter(name) {
   const lowerName = String(name || '').toLowerCase();
-
   if (lowerName.includes('mei keng')) return centerClosedDays['mei keng'];
   if (lowerName.includes('pac tat')) return centerClosedDays['pac tat'];
   if (lowerName.includes('champs')) return centerClosedDays['champs'];
   if (lowerName.includes('tap siac')) return centerClosedDays['tap siac'];
-
   return [0];
 }
 
 function escapeHtml(value) {
-  return String(value ?? '').replace(/[&<>"']/g, (s) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;'
-  }[s]));
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 // ============================================
@@ -1255,21 +1117,21 @@ function setupPrintButtons() {
   const printHolidaysBtn = document.getElementById('printHolidaysBtn');
   if (printHolidaysBtn) {
     printHolidaysBtn.addEventListener('click', () => {
-      switchTabAndPrint('holidays', 'Holiday List');
+      switchTabAndPrint('holidays', t('calendar.printDocHolidayList'));
     });
   }
 
   const printCalendarBtn = document.getElementById('printCalendarBtn');
   if (printCalendarBtn) {
     printCalendarBtn.addEventListener('click', () => {
-      switchTabAndPrint('calendar', `${currentCalendarYear} Calendar`);
+      switchTabAndPrint('calendar', t('calendar.printDocCalendar', { year: currentCalendarYear }));
     });
   }
 
   const printScheduleBtn = document.getElementById('printScheduleBtn');
   if (printScheduleBtn) {
     printScheduleBtn.addEventListener('click', () => {
-      switchTabAndPrint('schedule', `${currentScheduleYear} Class Schedule`);
+      switchTabAndPrint('schedule', t('calendar.printDocSchedule', { year: currentScheduleYear }));
     });
   }
 }
@@ -1296,17 +1158,18 @@ function switchTabAndPrint(tabId, docTitle) {
   // Do NOT redeclare currentHolidayYear inside this function,
   // otherwise printing ignores the ‹ › pagination year.
   let year = currentCalendarYear;
-
   if (tabId === 'schedule') {
     year = currentScheduleYear;
   }
-
   if (tabId === 'holidays') {
     year = currentHolidayYear;
   }
 
   // Format: "Kumon Taipa Mei Keng 2025 Calendar"
-  const headerText = `${centerName || 'Kumon Center'} ${year} Calendar`;
+  const headerText = t('calendar.printHeaderTitle', {
+    center: centerName || 'Kumon Center',
+    year
+  });
 
   if (printCenterName) {
     printCenterName.textContent = headerText;

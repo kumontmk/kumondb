@@ -1000,3 +1000,121 @@ PRINT STYLES
     color: #000 !important;
   }
 }
+
+/* =========================================
+📱 MOBILE HEADER — side-by-side (left / right)
+========================================= */
+@media (max-width: 768px) {
+  header {
+    padding: 0.75rem 1rem;
+    flex-direction: row;          /* was column → caused stacking */
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: nowrap;            /* never wrap to a second line */
+    gap: 0.75rem;
+  }
+
+  header h1 {
+    flex: 1;
+    min-width: 0;                 /* lets the title shrink inside flexbox */
+    margin: 0;
+    font-size: clamp(0.95rem, 4.5vw, 1.25rem);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;      /* "🗓️ 中心日曆…" instead of wrapping */
+  }
+
+  header nav {
+    width: auto;                  /* undo the 100% width from the old rule */
+    margin-top: 0;
+    justify-content: flex-start;
+    gap: 0.5rem;
+    flex-shrink: 0;               /* buttons keep their size, title shrinks */
+  }
+
+  header nav a,
+  header nav button {
+    padding: 0.5rem 0.75rem;
+    font-size: clamp(0.75rem, 3.5vw, 0.9rem);
+    white-space: nowrap;
+  }
+}
+
+/* Small phones — shrink a bit more */
+@media (max-width: 480px) {
+  header { padding: 0.625rem 0.75rem; gap: 0.5rem; }
+  header h1 { font-size: clamp(0.85rem, 4vw, 1.05rem); }
+  header nav { gap: 0.4rem; }
+  header nav a,
+  header nav button { padding: 0.45rem 0.6rem; font-size: 0.78rem; }
+}
+
+/* =========================================
+📱 MOBILE: HEADER LEFT/RIGHT + HORIZONTAL TABS
+========================================= */
+@media (max-width: 768px) {
+  /* Header: one row — back button LEFT, title RIGHT */
+  header {
+    padding: 0.75rem 1rem;
+    flex-direction: row;          /* was column → caused stacking */
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    gap: 0.75rem;
+  }
+
+  header nav {
+    width: auto;
+    margin-top: 0;
+    flex-shrink: 0;               /* button keeps its size */
+  }
+
+  header h1 {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    justify-content: flex-end;    /* title hugs the RIGHT edge */
+    text-align: right;
+    font-size: clamp(0.95rem, 4.5vw, 1.25rem);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Tabs: single row, scroll sideways instead of stacking */
+  .tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 0.25rem;
+  }
+
+  .tab-btn {
+    flex: 0 0 auto;               /* never shrink/wrap */
+    white-space: nowrap;
+    padding: 0.6rem 1rem;
+    font-size: 0.9rem;
+  }
+}
+
+/* =========================================
+🌐 TRADITIONAL CHINESE FONT SUPPORT
+========================================= */
+:lang(zh-TW) body,
+:lang(zh-TW) input,
+:lang(zh-TW) select,
+:lang(zh-TW) button,
+:lang(zh-TW) textarea,
+:lang(zh-TW) th,
+:lang(zh-TW) td {
+  font-family:
+    "PingFang TC",
+    "Microsoft JhengHei",
+    "Noto Sans TC",
+    "Heiti TC",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+}
