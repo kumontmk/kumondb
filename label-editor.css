@@ -17,6 +17,11 @@ body {
     display: block; 
     padding: 2rem;
 }
+header{
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
 @media print {
     .controls-section, header, .dashboard-header { display: none !important; }
     body { background: white; }

@@ -63,6 +63,23 @@ function initApp() {
         'Math': 'subj-Math', 'Chinese (Trad)': 'subj-Chinese', 'Chinese (Simp)': 'subj-Chinese',
         'English ERP': 'subj-ERP', 'English EFL': 'subj-EFL'
     };
+    // 🏫 System-wide center abbreviation rules
+    const CENTER_ABBREVIATIONS = [
+        { match: 'pac tat',  abbr: 'PT' },
+        { match: 'mei keng', abbr: 'MK' },
+        { match: 'tap siac', abbr: 'TS' },
+        { match: 'champs',   abbr: 'C'  }
+    ];
+
+    function getCenterAbbr(name) {
+        if (!name) return '';
+        const lower = name.toLowerCase();
+        const rule = CENTER_ABBREVIATIONS.find(r => lower.includes(r.match));
+        if (rule) return rule.abbr;
+        // Fallback for any future center: strip leading "Kumon" then first 2 chars
+        const stripped = name.replace(/^kumon[\s.-]*/i, '').trim();
+        return (stripped || name).substring(0, 2).toUpperCase();
+    }
 
     document.getElementById('studentForm')?.setAttribute('novalidate', '');
 
@@ -606,7 +623,7 @@ function renderSchedule() {
             const pill = document.createElement('span');
             pill.className = `slot-pill ${slot.color}`;
             const centerName = allCenters.find(c => c.id === slot.center)?.name || '';
-            const centerAbbr = centerName ? ` (${centerName.substring(0, 2).toUpperCase()})` : '';
+            const centerAbbr = centerName ? ` (${getCenterAbbr(centerName)})` : '';
             pill.textContent = `${slot.name.substring(0,3)} ${slot.time}${centerAbbr}`;
             td.appendChild(pill);
         });

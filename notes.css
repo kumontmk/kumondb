@@ -21,7 +21,11 @@ body.notes-page {
     margin: 0;
     padding: 0;
 }
-
+header{
+        position: sticky;
+    top: 0;
+    z-index: 1000;
+}
 /* Header */
 .notes-page header.app-header {
     background: var(--notes-primary);
