@@ -12,16 +12,19 @@ onAuthStateChanged(auth, async (user) => {
         window.location.href = 'index.html';
         return;
     }
+
     try {
         const userSnap = await get(ref(db, `users/${user.uid}`));
         if (!userSnap.exists()) {
             window.location.href = 'index.html';
             return;
         }
+
         const userData = userSnap.val();
         const isAdmin = user.email?.toLowerCase() === 'kumonchamps@gmail.com';
         const dashPerms = userData.permissions?.dashboardCards || {};
         const hasAccess = isAdmin || dashPerms[REQUIRED_PERMISSION] === true;
+
         if (hasAccess) {
             document.getElementById('accessDenied')?.classList.add('hidden');
             document.getElementById('mainContent')?.classList.remove('hidden');
@@ -30,6 +33,7 @@ onAuthStateChanged(auth, async (user) => {
             document.getElementById('accessDenied')?.classList.remove('hidden');
             document.getElementById('mainContent')?.classList.add('hidden');
             document.getElementById('page-loader')?.classList.add('hidden');
+
             document.getElementById('backToDashboardBtn')?.addEventListener('click', () => {
                 window.location.href = 'dashboard.html';
             });
@@ -43,6 +47,7 @@ onAuthStateChanged(auth, async (user) => {
 function initializeReports() {
     const centerId = sessionStorage.getItem('selectedCenter');
     if (!centerId) window.location.href = 'centers.html';
+
     const studentsRef = ref(db, `centers/${centerId}/students`);
 
     let cachedStudents = [];
@@ -56,9 +61,15 @@ function initializeReports() {
     function getCachedStudents() {
         const cached = localStorage.getItem(CACHE_KEY);
         const timestamp = localStorage.getItem(CACHE_TIME_KEY);
+
         if (cached && timestamp && (Date.now() - parseInt(timestamp)) < CACHE_DURATION) {
-            try { return JSON.parse(cached); } catch (e) { return null; }
+            try {
+                return JSON.parse(cached);
+            } catch (e) {
+                return null;
+            }
         }
+
         return null;
     }
 
@@ -79,30 +90,50 @@ function initializeReports() {
     const monthlyReportContainer = document.getElementById('monthlyReport');
     const printBtn = document.getElementById('printReport');
 
-    function showLoader() { document.getElementById('page-loader')?.classList.remove('hidden'); }
-    function hideLoader() { document.getElementById('page-loader')?.classList.add('hidden'); }
+    function showLoader() {
+        document.getElementById('page-loader')?.classList.remove('hidden');
+    }
+
+    function hideLoader() {
+        document.getElementById('page-loader')?.classList.add('hidden');
+    }
+
+    function isMobileLayout() {
+        return window.matchMedia('(max-width: 768px)').matches;
+    }
 
     document.querySelectorAll('.subject-card').forEach(card => {
         card.addEventListener('click', () => {
             document.querySelectorAll('.subject-card').forEach(c => c.classList.remove('active'));
             card.classList.add('active');
             activeSubject = card.dataset.subject;
+
             if (isDataLoaded) buildReport();
         });
     });
 
     const now = new Date();
     const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
     if (reportMonthInput) {
         reportMonthInput.max = currentMonthStr;
         reportMonthInput.value = currentMonthStr;
-        const blockFuture = (e) => { if (e.target.value > currentMonthStr) e.target.value = currentMonthStr; };
-        reportMonthInput.addEventListener('change', (e) => { blockFuture(e); buildReport(); });
+
+        const blockFuture = (e) => {
+            if (e.target.value > currentMonthStr) e.target.value = currentMonthStr;
+        };
+
+        reportMonthInput.addEventListener('change', (e) => {
+            blockFuture(e);
+            buildReport();
+        });
+
         reportMonthInput.addEventListener('input', blockFuture);
     }
 
     async function loadStudents(forceRefresh = false) {
         if (isDataLoaded && !forceRefresh) return;
+
         if (forceRefresh) {
             localStorage.removeItem(CACHE_KEY);
             localStorage.removeItem(CACHE_TIME_KEY);
@@ -115,45 +146,72 @@ function initializeReports() {
                 return;
             }
         }
+
         showLoader();
         cachedStudents = [];
+
         try {
             const snap = await get(studentsRef);
+
             if (snap.exists()) {
                 snap.forEach(child => {
                     const data = child.val();
+
                     if (data.status === 'drop' || data.status === 'pause') return;
-                    data.subjects = Array.isArray(data.subjects) ? data.subjects : Object.values(data.subjects || {});
+
+                    data.subjects = Array.isArray(data.subjects)
+                        ? data.subjects
+                        : Object.values(data.subjects || {});
+
                     data.subjects = data.subjects.filter(sub =>
                         sub && !['drop', 'pause', 'inquiry'].includes(sub.status)
                     );
+
                     cachedStudents.push({ id: child.key, data });
                 });
             }
+
             cacheStudents(cachedStudents);
             isDataLoaded = true;
         } catch (err) {
             console.error('❌ Load failed:', err);
             alert(t('reports.loadFailed'));
         }
+
         hideLoader();
     }
 
     function getGradeOrder(grade) {
         if (!grade) return 999;
+
         const g = String(grade).trim().toUpperCase();
+
         if (/^K\d+$/.test(g)) {
             const n = parseInt(g.slice(1), 10);
             return (n >= 0 && n <= 3) ? n : 998;
         }
+
         const n = parseInt(g, 10);
         return (n >= 1 && n <= 13) ? n + 4 : 998;
     }
 
     function getTheadHTML(isPencil) {
         if (isPencil) {
-            return `<thead><tr><th>${t('reports.thStudentNo')}</th><th>${t('reports.thChineseName')}</th><th>${t('reports.thPinyin')}</th><th>${t('reports.thGrade')}</th><th>${t('reports.thSubject')}</th><th>${t('reports.thPencilLevel')}</th><th>${t('reports.thPencilWS')}</th></tr></thead>`;
+            return `
+                <thead>
+                    <tr>
+                        <th>${t('reports.thStudentNo')}</th>
+                        <th>${t('reports.thChineseName')}</th>
+                        <th>${t('reports.thPinyin')}</th>
+                        <th>${t('reports.thGrade')}</th>
+                        <th>${t('reports.thSubject')}</th>
+                        <th>${t('reports.thPencilLevel')}</th>
+                        <th>${t('reports.thPencilWS')}</th>
+                    </tr>
+                </thead>
+            `;
         }
+
         return `
             <thead>
                 <tr>
@@ -165,7 +223,9 @@ function initializeReports() {
                     <th rowspan="2">${t('reports.thPrevWS')}</th>
                     <th rowspan="2">${t('reports.thCurrentLevel')}</th>
                     <th rowspan="2">${t('reports.thNoWS')}</th>
-                    <th colspan="5" style="text-align:center; background: rgba(135,206,235,0.3);">${t('reports.thAT')}</th>
+                    <th colspan="5" style="text-align:center; background: rgba(135,206,235,0.3);">
+                        ${t('reports.thAT')}
+                    </th>
                 </tr>
                 <tr>
                     <th style="background: rgba(135,206,235,0.2);">${t('reports.thDate')}</th>
@@ -188,6 +248,7 @@ function initializeReports() {
         const scoreVal = test.score || '';
         const timeVal = test.time || '';
         const groupVal = test.group || '';
+
         return `
             <div class="at-block">
                 <input type="date" class="report-input test-date" value="${dateVal}" title="${t('reports.thDate')}">
@@ -200,13 +261,136 @@ function initializeReports() {
         `;
     }
 
+    function createMobileField(labelText, inputHtml, extraClass = '') {
+        return `
+            <div class="report-field ${extraClass}">
+                <label>${labelText}</label>
+                ${inputHtml}
+            </div>
+        `;
+    }
+
+    function forEachSubjectRecord(subName, sortedStudents, month, callback) {
+        sortedStudents.forEach(({ id, data: s }) => {
+            if (!s?.subjects) return;
+
+            s.subjects.forEach(sub => {
+                if (!sub) return;
+
+                const isPencil = subName === 'Pencil';
+
+                if (isPencil) {
+                    if (!sub.pencilSkill || !sub.pencilSkill.level) return;
+                } else {
+                    const dbName = (sub.name || '').trim();
+
+                    if (subName === 'Chinese') {
+                        if (
+                            dbName !== 'Chinese (Trad)' &&
+                            dbName !== 'Chinese (Simp)' &&
+                            dbName !== 'Chinese'
+                        ) {
+                            return;
+                        }
+                    } else {
+                        if (dbName !== subName) return;
+                    }
+                }
+
+                let progress = Array.isArray(sub.progress)
+                    ? sub.progress
+                    : Object.values(sub.progress || {});
+
+                const prog = progress.find(p => p?.month === month);
+
+                const sorted = [...progress].sort((a, b) =>
+                    (a?.month || '').localeCompare(b?.month || '')
+                );
+
+                const prev = sorted.filter(p => p?.month && p.month < month).pop();
+
+                const prevLevel = prev?.currLevel || sub.startLevel || '';
+                const prevWS = prev?.currWS ?? sub.startWS ?? 0;
+
+                const currLevel = prog?.currLevel || sub.currentLevel || '';
+                const currWS = prog?.currWS ?? sub.currentWS ?? 0;
+
+                const tests = prog?.tests || (prog?.test ? [prog.test] : []);
+
+                callback({
+                    studentId: id,
+                    studentData: s,
+                    sub,
+                    isPencil,
+                    prog,
+                    prevLevel,
+                    prevWS,
+                    currLevel,
+                    currWS,
+                    tests
+                });
+            });
+        });
+    }
+
+    function attachProgressTestControls(recordContainer) {
+        const currInput = recordContainer.querySelector('.curr-level');
+        const prevInput = recordContainer.querySelector('.prev-level');
+        const container = recordContainer.querySelector('.tests-container');
+
+        if (!currInput || !container) return;
+
+        const toggleTests = () => {
+            const curr = (currInput?.value || '').trim();
+            const prevVal = (prevInput?.value || '').trim();
+            const changed = curr !== '' && prevVal !== '' && curr !== prevVal;
+
+            const testInputs = container.querySelectorAll(
+                '.test-date, .test-level, .test-score, .test-time, .test-group'
+            );
+
+            testInputs.forEach(input => {
+                input.readOnly = !changed;
+                input.style.background = changed ? '#fff' : '#f8f9fa';
+                input.style.color = changed ? 'inherit' : '#999';
+                input.style.cursor = changed ? 'text' : 'not-allowed';
+
+                if (!changed && input.value) input.value = '';
+            });
+        };
+
+        currInput.addEventListener('input', toggleTests);
+
+        recordContainer.querySelector('.add-at-btn')?.addEventListener('click', () => {
+            container.insertAdjacentHTML('beforeend', createATBlock({}));
+            toggleTests();
+        });
+
+        container.addEventListener('click', (e) => {
+            if (e.target.classList.contains('remove-at-btn')) {
+                if (container.children.length > 1 || confirm(t('reports.removeATBlock'))) {
+                    e.target.closest('.at-block').remove();
+                }
+            }
+        });
+
+        toggleTests();
+    }
+
     function buildReport() {
         if (!isDataLoaded) return;
+
         const month = reportMonthInput?.value;
+
         reportOutput.innerHTML = '';
         monthlyReportContainer?.classList.add('hidden');
+
         if (saveBar) saveBar.classList.add('hidden');
-        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = t('reports.saveChanges'); }
+
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = t('reports.saveChanges');
+        }
 
         if (!month) {
             reportOutput.innerHTML = `<div class="empty-state">${t('reports.selectMonth')}</div>`;
@@ -217,135 +401,32 @@ function initializeReports() {
         const sortedStudents = [...cachedStudents].sort((a, b) => {
             const orderA = getGradeOrder(a.data.grade);
             const orderB = getGradeOrder(b.data.grade);
+
             if (orderA !== orderB) return orderA - orderB;
+
             const nameA = (a.data.namePinyin || a.data.nickname || a.data.nameCn || '').trim().toUpperCase();
             const nameB = (b.data.namePinyin || b.data.nickname || b.data.nameCn || '').trim().toUpperCase();
+
             return nameA.localeCompare(nameB, 'en', { sensitivity: 'base' });
         });
 
         let totalRows = 0;
+
         const subjectsToRender = activeSubject === 'all'
             ? ['Math', 'Chinese', 'English ERP', 'English EFL']
             : activeSubject === 'Pencil'
-            ? ['Pencil']
-            : [activeSubject];
+                ? ['Pencil']
+                : [activeSubject];
 
-        subjectsToRender.forEach(subName => {
-            const rowsForSubject = [];
-            sortedStudents.forEach(({ id, data: s }) => {
-                if (!s?.subjects) return;
-                s.subjects.forEach(sub => {
-                    if (!sub) return;
-                    const isPencil = subName === 'Pencil';
-                    if (isPencil) {
-                        if (!sub.pencilSkill || !sub.pencilSkill.level) return;
-                    } else {
-                        const dbName = (sub.name || '').trim();
-                        if (subName === 'Chinese') {
-                            if (dbName !== 'Chinese (Trad)' && dbName !== 'Chinese (Simp)' && dbName !== 'Chinese') return;
-                        } else {
-                            if (dbName !== subName) return;
-                        }
-                    }
-                    let progress = Array.isArray(sub.progress) ? sub.progress : Object.values(sub.progress || {});
-                    const prog = progress.find(p => p?.month === month);
-                    const sorted = [...progress].sort((a, b) => (a?.month || '').localeCompare(b?.month || ''));
-                    const prev = sorted.filter(p => p?.month && p.month < month).pop();
-                    const prevLevel = prev?.currLevel || sub.startLevel || '';
-                    const prevWS = prev?.currWS ?? sub.startWS ?? 0;
-                    const currLevel = prog?.currLevel || sub.currentLevel || '';
-                    const currWS = prog?.currWS ?? sub.currentWS ?? 0;
-                    const tests = prog?.tests || (prog?.test ? [prog.test] : []);
-
-                    const row = document.createElement('tr');
-                    row.dataset.studentId = id;
-                    row.dataset.subjectName = sub.name;
-                    let rowHTML = '';
-                    if (isPencil) {
-                        rowHTML = `
-                            <td>${s.studentNumber || '-'}</td>
-                            <td>${s.nameCn || '-'}</td>
-                            <td>${s.namePinyin || s.nickname || '-'}</td>
-                            <td>${s.grade || '-'}</td>
-                            <td>${sub.name || '-'}</td>
-                            <td>${createInput(sub.pencilSkill?.level || '', 'pencil-level', false)}</td>
-                            <td>${createInput(sub.pencilSkill?.ws || '', 'pencil-ws', false, 'number')}</td>
-                        `;
-                    } else {
-                        rowHTML = `
-                            <td>${s.studentNumber || '-'}</td>
-                            <td>${s.nameCn || '-'}</td>
-                            <td>${s.namePinyin || s.nickname || '-'}</td>
-                            <td>${s.grade || '-'}</td>
-                            <td>${createInput(prevLevel, 'prev-level', true)}</td>
-                            <td>${createInput(prevWS, 'prev-ws', true, 'number')}</td>
-                            <td>${createInput(currLevel, 'curr-level')}</td>
-                            <td>${createInput(currWS, 'curr-ws', false, 'number')}</td>
-                            <td colspan="5" style="padding: 0.5rem; min-width: 420px;">
-                                <div class="tests-container"></div>
-                                <button type="button" class="add-at-btn">${t('reports.addAT')}</button>
-                            </td>
-                        `;
-                    }
-                    row.innerHTML = rowHTML;
-                    rowsForSubject.push(row);
-                    totalRows++;
-
-                    if (!isPencil) {
-                        const currInput = row.querySelector('.curr-level');
-                        const container = row.querySelector('.tests-container');
-                        if (tests.length > 0) {
-                            tests.forEach(tst => container.insertAdjacentHTML('beforeend', createATBlock(tst)));
-                        } else {
-                            container.insertAdjacentHTML('beforeend', createATBlock({}));
-                        }
-                        const toggleTests = () => {
-                            const curr = (currInput?.value || '').trim();
-                            const prevVal = (row.querySelector('.prev-level')?.value || '').trim();
-                            const changed = curr !== '' && prevVal !== '' && curr !== prevVal;
-                            const testInputs = container.querySelectorAll('.test-date, .test-level, .test-score, .test-time, .test-group');
-                            testInputs.forEach(input => {
-                                input.readOnly = !changed;
-                                input.style.background = changed ? '#fff' : '#f8f9fa';
-                                input.style.color = changed ? 'inherit' : '#999';
-                                input.style.cursor = changed ? 'text' : 'not-allowed';
-                                if (!changed && input.value) input.value = '';
-                            });
-                        };
-                        currInput?.addEventListener('input', toggleTests);
-                        row.querySelector('.add-at-btn').addEventListener('click', () => {
-                            container.insertAdjacentHTML('beforeend', createATBlock({}));
-                            toggleTests();
-                        });
-                        container.addEventListener('click', (e) => {
-                            if (e.target.classList.contains('remove-at-btn')) {
-                                if (container.children.length > 1 || confirm(t('reports.removeATBlock'))) {
-                                    e.target.closest('.at-block').remove();
-                                }
-                            }
-                        });
-                        toggleTests();
-                    }
-                });
+        if (isMobileLayout()) {
+            subjectsToRender.forEach(subName => {
+                totalRows += buildMobileSubjectSection(subName, sortedStudents, month);
             });
-
-            if (rowsForSubject.length > 0) {
-                const wrapper = document.createElement('div');
-                wrapper.className = 'table-wrapper';
-                const table = document.createElement('table');
-                table.className = 'subject-table report-table report-sticky-table';
-                const isPencil = subName === 'Pencil';
-                table.dataset.subject = isPencil ? 'Pencil' : subName;
-                const captionText = isPencil
-                    ? t('reports.pencilReportCaption', { month })
-                    : t('reports.progressReportCaption', { subject: subName, month });
-                table.innerHTML = `<caption>${captionText}</caption>${getTheadHTML(isPencil)}<tbody></tbody>`;
-                const tbody = table.querySelector('tbody');
-                rowsForSubject.forEach(r => tbody.appendChild(r));
-                wrapper.appendChild(table);
-                reportOutput.appendChild(wrapper);
-            }
-        });
+        } else {
+            subjectsToRender.forEach(subName => {
+                totalRows += buildDesktopSubjectTable(subName, sortedStudents, month);
+            });
+        }
 
         if (totalRows > 0) {
             monthlyReportContainer?.classList.remove('hidden');
@@ -356,133 +437,455 @@ function initializeReports() {
         }
     }
 
-    if (generateBtn) generateBtn.addEventListener('click', buildReport);
+    function buildDesktopSubjectTable(subName, sortedStudents, month) {
+        const rowsForSubject = [];
+
+        forEachSubjectRecord(
+            subName,
+            sortedStudents,
+            month,
+            ({
+                studentId,
+                studentData: s,
+                sub,
+                isPencil,
+                prevLevel,
+                prevWS,
+                currLevel,
+                currWS,
+                tests
+            }) => {
+                const row = document.createElement('tr');
+                row.dataset.studentId = studentId;
+                row.dataset.subjectName = sub.name || (isPencil ? 'Pencil' : '');
+
+                let rowHTML = '';
+
+                if (isPencil) {
+                    rowHTML = `
+                        <td>${s.studentNumber || '-'}</td>
+                        <td>${s.nameCn || '-'}</td>
+                        <td>${s.namePinyin || s.nickname || '-'}</td>
+                        <td>${s.grade || '-'}</td>
+                        <td>${sub.name || '-'}</td>
+                        <td>${createInput(sub.pencilSkill?.level || '', 'pencil-level', false)}</td>
+                        <td>${createInput(sub.pencilSkill?.ws || '', 'pencil-ws', false, 'number')}</td>
+                    `;
+                } else {
+                    rowHTML = `
+                        <td>${s.studentNumber || '-'}</td>
+                        <td>${s.nameCn || '-'}</td>
+                        <td>${s.namePinyin || s.nickname || '-'}</td>
+                        <td>${s.grade || '-'}</td>
+                        <td>${createInput(prevLevel, 'prev-level', true)}</td>
+                        <td>${createInput(prevWS, 'prev-ws', true, 'number')}</td>
+                        <td>${createInput(currLevel, 'curr-level')}</td>
+                        <td>${createInput(currWS, 'curr-ws', false, 'number')}</td>
+                        <td colspan="5" style="padding: 0.5rem; min-width: 420px;">
+                            <div class="tests-container"></div>
+                            <button type="button" class="add-at-btn">${t('reports.addAT')}</button>
+                        </td>
+                    `;
+                }
+
+                row.innerHTML = rowHTML;
+                rowsForSubject.push(row);
+
+                if (!isPencil) {
+                    const container = row.querySelector('.tests-container');
+
+                    if (tests.length > 0) {
+                        tests.forEach(tst => container.insertAdjacentHTML('beforeend', createATBlock(tst)));
+                    } else {
+                        container.insertAdjacentHTML('beforeend', createATBlock({}));
+                    }
+
+                    attachProgressTestControls(row);
+                }
+            }
+        );
+
+        if (rowsForSubject.length > 0) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'table-wrapper';
+
+            const table = document.createElement('table');
+            table.className = 'subject-table report-table report-sticky-table';
+
+            const isPencil = subName === 'Pencil';
+            table.dataset.subject = isPencil ? 'Pencil' : subName;
+
+            const captionText = isPencil
+                ? t('reports.pencilReportCaption', { month })
+                : t('reports.progressReportCaption', { subject: subName, month });
+
+            table.innerHTML = `
+                <caption>${captionText}</caption>
+                ${getTheadHTML(isPencil)}
+                <tbody></tbody>
+            `;
+
+            const tbody = table.querySelector('tbody');
+            rowsForSubject.forEach(r => tbody.appendChild(r));
+
+            wrapper.appendChild(table);
+            reportOutput.appendChild(wrapper);
+        }
+
+        return rowsForSubject.length;
+    }
+
+    function buildMobileSubjectSection(subName, sortedStudents, month) {
+        const cards = [];
+
+        forEachSubjectRecord(
+            subName,
+            sortedStudents,
+            month,
+            ({
+                studentId,
+                studentData: s,
+                sub,
+                isPencil,
+                prevLevel,
+                prevWS,
+                currLevel,
+                currWS,
+                tests
+            }) => {
+                const card = document.createElement('article');
+                card.className = 'report-card';
+                card.dataset.studentId = studentId;
+                card.dataset.subjectName = sub.name || (isPencil ? 'Pencil' : '');
+
+                const nameCn = s.nameCn || '-';
+                const namePinyin = s.namePinyin || s.nickname || '-';
+                const studentNumber = s.studentNumber || '-';
+                const grade = s.grade || '-';
+                const subjectLabel = sub.name || subName;
+
+                const headerHTML = `
+                    <div class="report-card-header">
+                        <div class="report-card-title">
+                            <span class="report-card-name">${nameCn}</span>
+                            <span class="report-card-subject">${subjectLabel}</span>
+                        </div>
+
+                        <div class="report-card-meta">
+                            <span>${t('reports.thStudentNo')}: ${studentNumber}</span>
+                            <span>${t('reports.thGrade')}: ${grade}</span>
+                            <span>${t('reports.thPinyin')}: ${namePinyin}</span>
+                        </div>
+                    </div>
+                `;
+
+                let bodyHTML = '';
+
+                if (isPencil) {
+                    bodyHTML = `
+                        <div class="report-card-body">
+                            ${createMobileField(
+                                t('reports.thPencilLevel'),
+                                createInput(sub.pencilSkill?.level || '', 'pencil-level', false)
+                            )}
+
+                            ${createMobileField(
+                                t('reports.thPencilWS'),
+                                createInput(sub.pencilSkill?.ws || '', 'pencil-ws', false, 'number')
+                            )}
+                        </div>
+                    `;
+                } else {
+                    bodyHTML = `
+                        <div class="report-card-body">
+                            ${createMobileField(
+                                t('reports.thPrevLevel'),
+                                createInput(prevLevel, 'prev-level', true),
+                                'readonly-field'
+                            )}
+
+                            ${createMobileField(
+                                t('reports.thPrevWS'),
+                                createInput(prevWS, 'prev-ws', true, 'number'),
+                                'readonly-field'
+                            )}
+
+                            ${createMobileField(
+                                t('reports.thCurrentLevel'),
+                                createInput(currLevel, 'curr-level')
+                            )}
+
+                            ${createMobileField(
+                                t('reports.thNoWS'),
+                                createInput(currWS, 'curr-ws', false, 'number')
+                            )}
+                        </div>
+
+                        <details class="at-section" ${tests.length ? 'open' : ''}>
+                            <summary>${t('reports.thAT')}</summary>
+                            <div class="tests-container"></div>
+                            <button type="button" class="add-at-btn">${t('reports.addAT')}</button>
+                        </details>
+                    `;
+                }
+
+                card.innerHTML = headerHTML + bodyHTML;
+                cards.push(card);
+
+                if (!isPencil) {
+                    const container = card.querySelector('.tests-container');
+
+                    if (tests.length > 0) {
+                        tests.forEach(tst => container.insertAdjacentHTML('beforeend', createATBlock(tst)));
+                    } else {
+                        container.insertAdjacentHTML('beforeend', createATBlock({}));
+                    }
+
+                    attachProgressTestControls(card);
+                }
+            }
+        );
+
+        if (cards.length > 0) {
+            const section = document.createElement('section');
+            section.className = 'mobile-report-section';
+
+            const isPencilSection = subName === 'Pencil';
+
+            const captionText = isPencilSection
+                ? t('reports.pencilReportCaption', { month })
+                : t('reports.progressReportCaption', { subject: subName, month });
+
+            const heading = document.createElement('h2');
+            heading.className = 'mobile-report-caption';
+            heading.textContent = captionText;
+
+            section.appendChild(heading);
+            cards.forEach(card => section.appendChild(card));
+
+            reportOutput.appendChild(section);
+        }
+
+        return cards.length;
+    }
+
+    if (generateBtn) {
+        generateBtn.addEventListener('click', buildReport);
+    }
 
     if (printBtn) {
         printBtn.addEventListener('click', () => {
+            const details = document.querySelectorAll('details.at-section');
+            const detailsStates = Array.from(details).map(d => d.open);
+
+            details.forEach(d => {
+                d.open = true;
+            });
+
             const allATBlocks = document.querySelectorAll('.at-block');
+
             allATBlocks.forEach(block => {
                 const dateInput = block.querySelector('.test-date');
+
                 const hasAnyData = Array.from(block.querySelectorAll('input')).some(input => {
                     return input.value && input.value.trim() !== '';
                 });
+
                 if (!hasAnyData && dateInput) {
                     block.classList.add('hide-on-print');
                 }
             });
+
             const emptyDates = document.querySelectorAll('.test-date');
+
             emptyDates.forEach(input => {
                 if (!input.value || input.value.trim() === '') {
                     input.classList.add('hide-on-print');
                 }
             });
+
             window.print();
+
             setTimeout(() => {
                 allATBlocks.forEach(block => block.classList.remove('hide-on-print'));
                 emptyDates.forEach(input => input.classList.remove('hide-on-print'));
+
+                details.forEach((d, index) => {
+                    d.open = detailsStates[index];
+                });
             }, 1000);
         });
     }
 
     if (saveBtn) {
         saveBtn.addEventListener('click', async () => {
-            const rows = reportOutput?.querySelectorAll('tr[data-student-id]') || [];
-            if (rows.length === 0) return alert(t('reports.noDataToSave'));
+            const records = reportOutput?.querySelectorAll('[data-student-id][data-subject-name]') || [];
+
+            if (records.length === 0) {
+                return alert(t('reports.noDataToSave'));
+            }
+
             if (!confirm(t('reports.confirmSave'))) return;
+
             showLoader();
+
             saveBtn.disabled = true;
             saveBtn.textContent = t('reports.saving');
+
             const batchUpdates = {};
             const month = reportMonthInput?.value;
+
             try {
-                for (const row of rows) {
+                for (const row of records) {
                     const studentId = row.dataset.studentId;
                     const subjectName = row.dataset.subjectName;
+
                     if (!studentId || !subjectName) continue;
+
                     const getVal = (cls) => row.querySelector(`.${cls}`)?.value?.trim() || '';
+
                     const currLevelEl = row.querySelector('.curr-level');
                     const currWSEl = row.querySelector('.curr-ws');
+
                     const pencilLevelEl = row.querySelector('.pencil-level');
                     const pencilWSEl = row.querySelector('.pencil-ws');
 
                     const cachedStudent = cachedStudents.find(s => s.id === studentId);
                     if (!cachedStudent) continue;
+
                     const student = cachedStudent.data;
+
                     let subjects = student.subjects || {};
                     let subjectKey = null;
                     let subjectData = null;
+
                     const matchSubject = (dbName) => {
                         if (subjectName === 'Chinese') {
-                            return dbName === 'Chinese (Trad)' || dbName === 'Chinese (Simp)' || dbName === 'Chinese';
+                            return (
+                                dbName === 'Chinese (Trad)' ||
+                                dbName === 'Chinese (Simp)' ||
+                                dbName === 'Chinese'
+                            );
                         }
+
                         return dbName === subjectName;
                     };
+
                     if (Array.isArray(subjects)) {
                         subjectKey = subjects.findIndex(s => matchSubject((s.name || '').trim()));
                         subjectData = subjectKey !== -1 ? subjects[subjectKey] : null;
                     } else {
                         for (const key in subjects) {
                             if (matchSubject((subjects[key]?.name || '').trim())) {
-                                subjectKey = key; subjectData = subjects[key]; break;
+                                subjectKey = key;
+                                subjectData = subjects[key];
+                                break;
                             }
                         }
                     }
+
                     if (!subjectData) continue;
+
                     const basePath = `centers/${centerId}/students/${studentId}/subjects/${subjectKey}`;
 
                     if (currLevelEl) {
                         const newLevel = currLevelEl.value?.trim() || '';
+
                         if (newLevel && newLevel !== subjectData.currentLevel) {
                             batchUpdates[`${basePath}/currentLevel`] = newLevel;
                             subjectData.currentLevel = newLevel;
                         }
                     }
+
                     if (currWSEl) {
-                        const newWS = currWSEl.value?.trim() !== '' ? parseInt(currWSEl.value.trim()) : 0;
+                        const newWS = currWSEl.value?.trim() !== ''
+                            ? parseInt(currWSEl.value.trim())
+                            : 0;
+
                         if (newWS !== subjectData.currentWS) {
                             batchUpdates[`${basePath}/currentWS`] = newWS;
                             subjectData.currentWS = newWS;
                         }
                     }
+
                     if (pencilLevelEl || pencilWSEl) {
                         const pLevel = pencilLevelEl ? (pencilLevelEl.value?.trim() || '') : '';
                         const pWS = pencilWSEl ? (pencilWSEl.value?.trim() || '') : '';
+
                         const oldPencil = subjectData.pencilSkill || {};
+
                         if (pLevel !== '' || pWS !== '') {
-                            if (pLevel !== oldPencil.level) batchUpdates[`${basePath}/pencilSkill/level`] = pLevel;
+                            if (pLevel !== oldPencil.level) {
+                                batchUpdates[`${basePath}/pencilSkill/level`] = pLevel;
+                            }
+
                             const newPWS = pWS !== '' ? (parseInt(pWS) || 0) : '';
-                            if (newPWS !== oldPencil.ws) batchUpdates[`${basePath}/pencilSkill/ws`] = newPWS;
-                            subjectData.pencilSkill = { level: pLevel, ws: newPWS };
+
+                            if (newPWS !== oldPencil.ws) {
+                                batchUpdates[`${basePath}/pencilSkill/ws`] = newPWS;
+                            }
+
+                            subjectData.pencilSkill = {
+                                level: pLevel,
+                                ws: newPWS
+                            };
                         } else if (subjectData.pencilSkill) {
                             batchUpdates[`${basePath}/pencilSkill`] = null;
                             delete subjectData.pencilSkill;
                         }
                     }
 
-                    let progArr = Array.isArray(subjectData.progress) ? subjectData.progress : Object.values(subjectData.progress || {});
+                    let progArr = Array.isArray(subjectData.progress)
+                        ? subjectData.progress
+                        : Object.values(subjectData.progress || {});
+
                     const entry = { month };
-                    const pL = getVal('prev-level'); if (pL) entry.prevLevel = pL;
-                    const pW = getVal('prev-ws'); if (pW) entry.prevWS = parseInt(pW);
-                    if (currLevelEl && currLevelEl.value?.trim()) entry.currLevel = currLevelEl.value.trim();
-                    if (currWSEl && currWSEl.value?.trim() !== '') entry.currWS = parseInt(currWSEl.value.trim()) || 0;
+
+                    const pL = getVal('prev-level');
+                    if (pL) entry.prevLevel = pL;
+
+                    const pW = getVal('prev-ws');
+                    if (pW) entry.prevWS = parseInt(pW);
+
+                    if (currLevelEl && currLevelEl.value?.trim()) {
+                        entry.currLevel = currLevelEl.value.trim();
+                    }
+
+                    if (currWSEl && currWSEl.value?.trim() !== '') {
+                        entry.currWS = parseInt(currWSEl.value.trim()) || 0;
+                    }
 
                     const testsArray = [];
+
                     row.querySelectorAll('.at-block').forEach(block => {
                         const tDate = block.querySelector('.test-date')?.value?.trim() || '';
                         const tLevel = block.querySelector('.test-level')?.value?.trim() || '';
                         const tScore = block.querySelector('.test-score')?.value?.trim() || '';
                         const tTime = block.querySelector('.test-time')?.value?.trim() || '';
                         const tGroup = block.querySelector('.test-group')?.value?.trim() || '';
+
                         if (tDate || tLevel || tScore || tTime || tGroup) {
-                            testsArray.push({ date: tDate, level: tLevel, score: tScore, time: parseInt(tTime) || 0, group: tGroup });
+                            testsArray.push({
+                                date: tDate,
+                                level: tLevel,
+                                score: tScore,
+                                time: parseInt(tTime) || 0,
+                                group: tGroup
+                            });
                         }
                     });
+
                     entry.tests = testsArray;
 
                     const idx = progArr.findIndex(p => p?.month === month);
+
                     if (idx >= 0) {
                         const oldEntry = progArr[idx];
-                        const changed = Object.keys(entry).some(k => JSON.stringify(oldEntry[k]) !== JSON.stringify(entry[k]));
+
+                        const changed = Object.keys(entry).some(k =>
+                            JSON.stringify(oldEntry[k]) !== JSON.stringify(entry[k])
+                        );
+
                         if (changed) {
                             progArr[idx] = { ...oldEntry, ...entry };
                             batchUpdates[`${basePath}/progress/${idx}`] = progArr[idx];
@@ -491,13 +894,16 @@ function initializeReports() {
                         progArr.push(entry);
                         batchUpdates[`${basePath}/progress/${progArr.length - 1}`] = entry;
                     }
+
                     subjectData.progress = progArr;
                 }
 
                 if (Object.keys(batchUpdates).length > 0) {
                     await update(ref(db), batchUpdates);
+
                     alert(t('reports.savedSuccess'));
                     cacheStudents(cachedStudents);
+
                     setTimeout(buildReport, 300);
                 } else {
                     alert(t('reports.noChanges'));
@@ -507,6 +913,7 @@ function initializeReports() {
                 alert(t('reports.saveFailed', { message: err.message }));
             } finally {
                 hideLoader();
+
                 saveBtn.disabled = false;
                 saveBtn.textContent = t('reports.saveChanges');
             }
