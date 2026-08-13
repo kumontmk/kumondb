@@ -21,7 +21,9 @@ export default {
     employeeSchedule: "Employee Schedule",
     employeeScheduleDesc: "See weekly shifts",
     manageCenterCalendar: "Manage Center Calendar",
-    manageCenterCalendarDesc: "Holidays, annual calendar & class schedules"
+    manageCenterCalendarDesc: "Holidays, annual calendar & class schedules",
+    employeeActivityLog: "Employee Activity Log",
+    employeeActivityLogDesc: "View employee name, date/time, center, page, and action."
   },
   missing: {
     title: "⚠️ Missing Clock-Out Records",

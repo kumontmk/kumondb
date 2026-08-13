@@ -22,6 +22,8 @@ export default {
     employeeScheduleDesc: "檢視每週班次",
     manageCenterCalendar: "管理中心行事曆",
     manageCenterCalendarDesc: "假期、年度行事曆與課程表",
+    employeeActivityLog: "員工活動記錄",
+    employeeActivityLogDesc: "查看員工姓名、日期/時間、中心、頁面與操作。"
   },
   missing: {
     title: "⚠️ 缺少打卡下班紀錄",

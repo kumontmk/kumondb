@@ -285,6 +285,7 @@ async function loadCentersGrid(user, userData, isAdmin) {
         `;
         card.addEventListener('click', () => {
           sessionStorage.setItem('selectedCenter', centerId);
+          sessionStorage.setItem('selectedCenterName', centerData.name || centerId);
           window.location.href = 'dashboard.html';
         });
         centerGrid.appendChild(card);

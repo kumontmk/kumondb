@@ -53,8 +53,6 @@
               Holidays, annual calendar & class schedules
             </p>
           </a>
-
-        <!-- Added 'admin-only-card' class -->
         <a href="center-management.html" class="center-card admin-only-card">
           <div class="card-icon">💼 🏢</div>
           <h3 data-i18n="admin.centerManagement">Center Management</h3>
@@ -62,6 +60,15 @@
             Add/edit centers, GPS coordinates, and register NFC tags
           </p>
         </a>
+        <a href="employee-activity-log.html" class="center-card admin-only-card" id="card-employeeActivityLog">
+          <div class="card-icon">📜</div>
+          <h3 data-i18n="admin.employeeActivityLog">Employee Activity Log</h3>
+          <p data-i18n="admin.employeeActivityLogDesc">
+            View employee name, date/time, center, page, and action
+          </p>
+        </a>
+        <!-- END 'admin-only-card' class -->
+
         <a href="timecard.html" class="center-card">
           <div class="card-icon">⏱️</div>
           <h3 data-i18n="admin.employeeTimecard">Employee Timecard</h3>
@@ -69,6 +76,7 @@
             QR scanning, geolocation verification & CSV export
           </p>
         </a>
+
 
         <a href="employee-schedule.html" class="center-card">
           <div class="card-icon">👥 📅</div>
@@ -89,5 +97,6 @@
     </main>
   <script type="module" src="centers-i18n.js"></script>
   <script type="module" src="centers.js"></script>
+  <script type="module" src="./activity-logger-init.js"></script>
 </body>
 </html>
