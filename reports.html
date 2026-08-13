@@ -1,66 +1,66 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monthly Reports - Kumon DB</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="reports.css">
+    <!-- Shows the logo in the browser tab -->
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+  <!-- Optional: PNG fallback for older browsers -->
+  <link rel="icon" type="image/png" sizes="512x512" href="dblogo-maskable-512.png">
+
+  <!-- Optional: icon when saved to iOS home screen -->
+  <link rel="apple-touch-icon" href="dblogo-maskable-512.png">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title data-i18n="reports.title">Monthly Reports - Kumon DB</title>
+  <link rel="stylesheet" href="reports.css">
 </head>
 <body>
-    <div id="page-loader" class="hidden"><div class="spinner"></div></div>
+  <div id="page-loader"><div class="spinner"></div></div>
 
-    <!-- 🔐 ACCESS DENIED OVERLAY -->
-    <div id="accessDenied" class="access-denied hidden">
-        <div class="access-denied-content">
-            <h2>🔐 Access Restricted</h2>
-            <p>You do not have permission to view Monthly Reports.</p>
-            <button id="backToDashboardBtn" class="primary" style="margin-top:1rem">← Back to Dashboard</button>
-        </div>
+  <div id="accessDenied" class="access-denied hidden">
+    <div class="access-denied-content">
+      <h2 data-i18n="reports.accessRestricted">🔐 Access Restricted</h2>
+      <p data-i18n="reports.accessDeniedMsg">You do not have permission to view Monthly Reports.</p>
+      <button id="backToDashboardBtn" class="primary" data-i18n="reports.backToDashboard">← Back to Dashboard</button>
     </div>
+  </div>
 
-    <!-- ✅ MAIN CONTENT WRAPPER (Hidden by default until authorized) -->
-    <div id="mainContent" class="hidden">
-        <header>
-            <nav>
-                <a href="dashboard.html">← Dashboard</a>
-            </nav>
-            <h2>📊 Monthly Reports</h2>
-        </header>
+  <div id="mainContent" class="hidden">
+    <header>
+      <nav><a href="dashboard.html" data-i18n="reports.backToDashboardLink">← Dashboard</a></nav>
+      <h1 data-i18n="reports.pageTitle">📊 Monthly Reports</h1>
+    </header>
 
-        <main class="form-container">
-            <!-- Subject Selector -->
-            <div class="subject-grid" id="subjectSelector">
-                <div class="subject-card active" data-subject="all">📚 All Subjects</div>
-                <div class="subject-card" data-subject="Math">🔢 Math</div>
-                <div class="subject-card" data-subject="Chinese">🀄 Chinese</div>
-                <div class="subject-card" data-subject="English ERP">🔤 English ERP</div>
-                <div class="subject-card" data-subject="English EFL">🌍 English EFL</div>
-                <div class="subject-card" data-subject="Pencil">✏️ ZI/ZII Pencil</div>
-            </div>
+    <div class="form-container">
+      <div class="subject-grid">
+        <div class="subject-card active" data-subject="all" data-i18n="reports.allSubjects">📚 All Subjects</div>
+        <div class="subject-card" data-subject="Math" data-i18n="reports.math">🔢 Math</div>
+        <div class="subject-card" data-subject="Chinese" data-i18n="reports.chinese">🀄 Chinese</div>
+        <div class="subject-card" data-subject="English ERP" data-i18n="reports.englishERP">🔤 English ERP</div>
+        <div class="subject-card" data-subject="English EFL" data-i18n="reports.englishEFL">🌍 English EFL</div>
+        <div class="subject-card" data-subject="Pencil" data-i18n="reports.pencil">✏️ ZI/ZII Pencil</div>
+      </div>
 
-            <!-- Controls -->
-            <div class="controls">
-                <div class="control-group">
-                    <label class="control-label">📅 Month</label>
-                    <input type="month" id="reportMonth" class="report-input">
-                </div>
-                <button id="generateReport" class="primary">📊 Generate</button>
-                <button id="printReport" class="print-btn">🖨️ Print</button>
-            </div>
+      <div class="controls">
+        <div class="control-group">
+          <label class="control-label" for="reportMonth" data-i18n="reports.month">📅 Month</label>
+          <input type="month" id="reportMonth">
+        </div>
+        <button id="generateReport" class="primary" data-i18n="reports.generate">📊 Generate</button>
+        <button id="printReport" class="print-btn" data-i18n="reports.print">🖨️ Print</button>
+      </div>
 
-            <!-- Save Bar -->
-            <div id="saveBar" class="save-bar hidden">
-                <button id="saveReportBtn" class="primary">💾 Save Changes</button>
-            </div>
+      <div id="reportOutput"></div>
 
-            <!-- Report Output -->
-            <div id="monthlyReport" class="hidden">
-                <div id="reportOutput"></div>
-            </div>
-        </main>
-    </div> <!-- ✅ End of mainContent wrapper -->
+      <div id="monthlyReport" class="hidden">
+        <div id="saveBar" class="save-bar hidden">
+          <button id="saveReportBtn" data-i18n="reports.saveChanges">💾 Save Changes</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
-    <script type="module" src="reports.js"></script>
+  <script type="module" src="reports-i18n.js"></script>
+  <script type="module" src="reports.js"></script>
 </body>
 </html>

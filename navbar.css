@@ -1,0 +1,19 @@
+.navbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
+  background: #ffffff;
+}
+
+.navbar-brand {
+  display: inline-flex;
+  align-items: center;
+  margin-right: auto; /* pushes the rest of the nav to the right */
+}
+
+.navbar-logo {
+  height: 44px;   /* tweak to taste (36–48px works well) */
+  width: auto;
+  display: block;
+}
