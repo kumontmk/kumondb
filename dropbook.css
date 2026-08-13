@@ -788,3 +788,25 @@ input[readonly], input[disabled] {
     white-space: nowrap;
     text-decoration: none !important; /* Prevent strikethrough on the badge itself */
 }
+
+/* =========================================
+🌐 TRADITIONAL CHINESE FONT SUPPORT
+========================================= */
+:lang(zh-TW) body,
+:lang(zh-TW) input,
+:lang(zh-TW) select,
+:lang(zh-TW) button,
+:lang(zh-TW) textarea,
+:lang(zh-TW) th,
+:lang(zh-TW) td {
+  font-family:
+    "PingFang TC",
+    "Microsoft JhengHei",
+    "Noto Sans TC",
+    "Heiti TC",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+}

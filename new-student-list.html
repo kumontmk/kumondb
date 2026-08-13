@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="dblogo-maskable-512.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>New Student List - Kumon DB</title>
+    <title data-i18n="nsl.title">New Student List - Kumon DB</title>
     <link rel="stylesheet" href="new-student-list.css">
 </head>
 <body>
@@ -18,38 +18,38 @@
 
     <div id="accessDenied" class="access-denied hidden">
         <div class="access-denied-content">
-            <h2>🔐 Access Restricted</h2>
-            <p>You do not have permission to view the New Student List.</p>
-            <button id="backToDashboardBtn" class="primary">← Back to Dashboard</button>
+            <h2 data-i18n="nsl.accessRestricted">🔐 Access Restricted</h2>
+            <p data-i18n="nsl.accessDeniedMsg">You do not have permission to view the New Student List.</p>
+            <button id="backToDashboardBtn" class="primary" data-i18n="nsl.backToDashboard">← Back to Dashboard</button>
         </div>
     </div>
 
     <div id="mainContent" class="hidden">
         <header>
             <nav>
-                <a href="dashboard.html">← Dashboard</a>
+                <a href="dashboard.html" data-i18n="nsl.backToDashboardLink">← Dashboard</a>
             </nav>
-            <h2>📋 New Student List</h2>
+            <h2 data-i18n="nsl.pageTitle">📋 New Student List</h2>
         </header>
 
         <div class="page-container">
             <div class="filters-container">
                 <div class="filter-group">
-                    <label>View Mode:</label>
+                    <label data-i18n="nsl.viewMode">View Mode:</label>
                     <select id="viewMode">
-                        <option value="single">Single Month</option>
-                        <option value="year" selected>Whole Year</option>
-                        <option value="range">12-Month Range</option>
+                        <option value="single" data-i18n="nsl.singleMonth">Single Month</option>
+                        <option value="year" selected data-i18n="nsl.wholeYear">Whole Year</option>
+                        <option value="range" data-i18n="nsl.range12">12-Month Range</option>
                     </select>
                 </div>
                 <div id="singleMonthControls" class="filter-group hidden">
-                    <label>Month:</label>
+                    <label data-i18n="nsl.month">Month:</label>
                     <select id="filterMonth"></select>
-                    <label>Year:</label>
+                    <label data-i18n="nsl.year">Year:</label>
                     <select id="filterYear"></select>
                 </div>
                 <div id="rangeControls" class="filter-group">
-                    <label>Start:</label>
+                    <label data-i18n="nsl.start">Start:</label>
                     <select id="rangeStartMonth"></select>
                     <select id="rangeStartYear"></select>
                     <span id="rangeEndLabel"></span>
@@ -62,32 +62,32 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>#</th>
-                            <th>NAME</th>
-                            <th>REF</th>
-                            <th>ENROLLED</th>
-                            <th>PHONE</th>
-                            <th>SCHOOL</th>
-                            <th>GRADE</th>
-                            <th>DOB</th>
-                            <th>PO</th>
-                            <th>PO COMMENT</th>
-                            <th>SUBJECT</th>
-                            <th>TIMESLOT(s)</th>
-                            <th>START DATE</th>
-                            <th>PAYMENT</th>
-                            <th colspan="2">CD</th>
-                            <th>DT</th>
-                            <th>ENROLLED DATE</th>
-                            <th>ADM FEE</th>
-                            <th>1ST PAY</th>
-                            <th>2ND PAY</th>
-                            <th>BAG</th>
+                            <th data-i18n="nsl.thNum">#</th>
+                            <th data-i18n="nsl.thName">NAME</th>
+                            <th data-i18n="nsl.thRef">REF</th>
+                            <th data-i18n="nsl.thEnrolled">ENROLLED</th>
+                            <th data-i18n="nsl.thPhone">PHONE</th>
+                            <th data-i18n="nsl.thSchool">SCHOOL</th>
+                            <th data-i18n="nsl.thGrade">GRADE</th>
+                            <th data-i18n="nsl.thDob">DOB</th>
+                            <th data-i18n="nsl.thPo">PO</th>
+                            <th data-i18n="nsl.thPoComment">PO COMMENT</th>
+                            <th data-i18n="nsl.thSubject">SUBJECT</th>
+                            <th data-i18n="nsl.thTimeslots">TIMESLOT(s)</th>
+                            <th data-i18n="nsl.thStartDate">START DATE</th>
+                            <th data-i18n="nsl.thPayment">PAYMENT</th>
+                            <th colspan="2" data-i18n="nsl.thCd">CD</th>
+                            <th data-i18n="nsl.thDt">DT</th>
+                            <th data-i18n="nsl.thEnrolledDate">ENROLLED DATE</th>
+                            <th data-i18n="nsl.thAdmFee">ADM FEE</th>
+                            <th data-i18n="nsl.thPay1">1ST PAY</th>
+                            <th data-i18n="nsl.thPay2">2ND PAY</th>
+                            <th data-i18n="nsl.thBag">BAG</th>
                         </tr>
                         <tr>
                             <th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th></th>
                             <th></th><th></th><th></th><th></th>
-                            <th>CD 1</th><th>CD 2</th>
+                            <th data-i18n="nsl.thCd1">CD 1</th><th data-i18n="nsl.thCd2">CD 2</th>
                             <th></th><th></th><th></th><th></th><th></th><th></th>
                         </tr>
                     </thead>
@@ -103,27 +103,28 @@
     <div id="dtModal" class="modal hidden">
         <div class="modal-content">
             <span id="closeDtModal" class="close-modal">&times;</span>
-            <h3 id="dtModalTitle">Select Diagnostic Test (DT)</h3>
-            <p id="dtModalHint" class="hint">Click a row to select it for this subject.</p>
+            <h3 id="dtModalTitle" data-i18n="nsl.dtModalTitle">Select Diagnostic Test (DT)</h3>
+            <p id="dtModalHint" class="hint" data-i18n="nsl.dtModalHint">Click a row to select it for this subject.</p>
             <table id="dtModalTable">
                 <thead>
                     <tr>
-                        <th>DATE</th>
-                        <th>DT</th>
-                        <th>SUBJECT</th>
-                        <th>TIME</th>
-                        <th>SCR</th>
-                        <th>STRT LVL</th>
+                        <th data-i18n="nsl.thDtDate">DATE</th>
+                        <th data-i18n="nsl.thDtTest">DT</th>
+                        <th data-i18n="nsl.thDtSubject">SUBJECT</th>
+                        <th data-i18n="nsl.thDtTime">TIME</th>
+                        <th data-i18n="nsl.thDtScore">SCR</th>
+                        <th data-i18n="nsl.thDtStartLvl">STRT LVL</th>
                     </tr>
                 </thead>
                 <tbody id="dtModalBody"></tbody>
             </table>
             <div style="text-align: right; margin-top: 1rem;">
-                <button id="cancelDtBtn" class="secondary">Cancel</button>
+                <button id="cancelDtBtn" class="secondary" data-i18n="nsl.cancel">Cancel</button>
             </div>
         </div>
     </div>
 
+    <script type="module" src="new-student-list-i18n.js"></script>
     <script type="module" src="new-student-list.js"></script>
 </body>
 </html>

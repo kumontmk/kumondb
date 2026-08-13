@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="dblogo-maskable-512.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Drop Book - Kumon Management</title>
+    <title data-i18n="dropbook.title">Drop Book - Kumon Management</title>
     <link rel="stylesheet" href="dropbook.css">
 </head>
 <body>
@@ -21,34 +21,34 @@
 
     <header>
         <nav>
-            <a href="dashboard.html">← Dashboard</a>
+            <a href="dashboard.html" data-i18n="dropbook.backToDashboard">← Dashboard</a>
         </nav>
-                <h2>📉 Drop Book</h>
+                <h2 data-i18n="dropbook.pageTitle">📉 Drop Book</h>
     </header>
 
     <div id="accessDenied" class="access-denied hidden">
         <div class="access-denied-content">
-            <h2>🔐 Access Restricted</h2>
-            <p>You do not have permission to view the Drop Book.</p>
-            <button id="backToDashboardBtn" class="primary">← Back to Dashboard</button>
+            <h2 data-i18n="dropbook.accessRestricted">🔐 Access Restricted</h2>
+            <p data-i18n="dropbook.accessDeniedMsg">You do not have permission to view the Drop Book.</p>
+            <button id="backToDashboardBtn" class="primary" data-i18n="dropbook.backToDashboardBtn">← Back to Dashboard</button>
         </div>
     </div>
 
     <div id="mainContent" class="form-container hidden">
         <div class="controls">
             <select id="filterStatus">
-                <option value="all">All (Drop & Pause)</option>
-                <option value="drop">Drop Only</option>
-                <option value="pause">Pause Only</option>
+                <option value="all" data-i18n="dropbook.allDropPause">All (Drop & Pause)</option>
+                <option value="drop" data-i18n="dropbook.dropOnly">Drop Only</option>
+                <option value="pause" data-i18n="dropbook.pauseOnly">Pause Only</option>
             </select>
 
             <!-- View Mode Controls -->
             <div class="view-mode-controls">
-                <label for="viewMode">📅 View Mode:</label>
+                <label for="viewMode" data-i18n="dropbook.viewMode">📅 View Mode:</label>
                 <select id="viewMode">
-                    <option value="single">Single Month</option>
-                    <option value="year" selected>Current Year</option> 
-                    <option value="range">12-Month Range</option>
+                    <option value="single" data-i18n="dropbook.singleMonth">Single Month</option>
+                    <option value="year" selected data-i18n="dropbook.currentYear">Current Year</option> 
+                    <option value="range" data-i18n="dropbook.range12">12-Month Range</option>
                 </select>
             </div>
 
@@ -60,14 +60,14 @@
 
             <!-- Range Controls -->
             <div id="rangeControls" class="range-controls hidden">
-                <label for="rangeStartMonth">From:</label>
+                <label for="rangeStartMonth" data-i18n="dropbook.from">From:</label>
                 <select id="rangeStartMonth"></select>
                 <select id="rangeStartYear"></select>
                 <span id="rangeEndLabel" class="range-end-label"></span>
             </div>
 
             <!-- Add Request Button -->
-            <button id="addRequestBtn" class="add-request-btn">➕ Add Request</button>
+            <button id="addRequestBtn" class="add-request-btn" data-i18n="dropbook.addRequest">➕ Add Request</button>
         </div>
 
         <!-- Tabs Container -->
@@ -80,18 +80,18 @@
             <table id="dropBookTable">
                 <thead>
                     <tr>
-                        <th>#</th>
-                        <th>Student (CN)</th>
-                        <th>Nickname</th>
-                        <th>Date (Drop/Pause)</th>
-                        <th>Grade</th>
-                        <th>Subject</th>
-                        <th>Schedule</th>
-                        <th>Current Level</th>
-                        <th>Phone</th>
-                        <th>Reason</th>
-                        <th>Call</th>
-                        <th>Action</th>
+                        <th data-i18n="dropbook.thNum">#</th>
+                        <th data-i18n="dropbook.thStudentCN">Student (CN)</th>
+                        <th data-i18n="dropbook.thNickname">Nickname</th>
+                        <th data-i18n="dropbook.thDate">Date (Drop/Pause)</th>
+                        <th data-i18n="dropbook.thGrade">Grade</th>
+                        <th data-i18n="dropbook.thSubject">Subject</th>
+                        <th data-i18n="dropbook.thSchedule">Schedule</th>
+                        <th data-i18n="dropbook.thCurrentLevel">Current Level</th>
+                        <th data-i18n="dropbook.thPhone">Phone</th>
+                        <th data-i18n="dropbook.thReason">Reason</th>
+                        <th data-i18n="dropbook.thCall">Call</th>
+                        <th data-i18n="dropbook.thAction">Action</th>
                     </tr>
                 </thead>
                 <tbody id="dropBookBody">
@@ -104,98 +104,98 @@
     <div id="detailModal" class="modal hidden">
         <div class="modal-content dropbook-modal-content">
             <span id="closeModal" class="close-modal">&times;</span>
-            <h2>Student Drop/Pause Details</h2>
+            <h2 data-i18n="dropbook.detailTitle">Student Drop/Pause Details</h2>
             
             <div class="modal-grid">
                 <div class="info-group">
-                    <label>Student Name (CN)</label>
+                    <label data-i18n="dropbook.lblStudentCN">Student Name (CN)</label>
                     <input type="text" id="mNameCn" readonly>
                 </div>
                 <div class="info-group">
-                    <label>Nickname</label>
+                    <label data-i18n="dropbook.lblNickname">Nickname</label>
                     <input type="text" id="mNickname" readonly>
                 </div>
                 <div class="info-group">
-                    <label>Grade</label>
+                    <label data-i18n="dropbook.lblGrade">Grade</label>
                     <input type="text" id="mGrade" readonly>
                 </div>
                 <div class="info-group">
-                    <label>Subject</label>
+                    <label data-i18n="dropbook.lblSubject">Subject</label>
                     <input type="text" id="mSubject" readonly>
                 </div>
                 <div class="info-group">
-                    <label>Schedule</label>
+                    <label data-i18n="dropbook.lblSchedule">Schedule</label>
                     <input type="text" id="mSchedule" readonly>
                 </div>
                 <div class="info-group">
-                    <label>Current Level</label>
+                    <label data-i18n="dropbook.lblCurrentLevel">Current Level</label>
                     <input type="text" id="mCurrentLevel" readonly>
                 </div>
                 <div class="info-group">
-                    <label>Phone</label>
+                    <label data-i18n="dropbook.lblPhone">Phone</label>
                     <input type="text" id="mPhone" readonly>
                 </div>
                 <div class="info-group">
-                    <label>Enrolment Date</label>
+                    <label data-i18n="dropbook.lblEnrolDate">Enrolment Date</label>
                     <input type="text" id="mEnrolDate" readonly>
                 </div>
                 <div class="info-group" id="mPauseFromGroup" style="display: none;">
-                    <label>Pause Month</label>
+                    <label data-i18n="dropbook.lblPauseMonth">Pause Month</label>
                     <input type="text" id="mPauseFrom" readonly>
                 </div>
                 <div class="info-group full-width" id="mExpectedReturnGroup" style="display: none;">
-                    <label>Expected Return</label>
+                    <label data-i18n="dropbook.lblExpectedReturn">Expected Return</label>
                     <input type="text" id="mExpectedReturn" readonly>
                 </div>
                 <div class="info-group full-width">
-                    <label>Reason</label>
+                    <label data-i18n="dropbook.lblReason">Reason</label>
                     <textarea id="mReason" rows="3"></textarea>
                 </div>
             </div>
 
-            <h3>📞 Call Status</h3>
+            <h3 data-i18n="dropbook.callStatus">📞 Call Status</h3>
             <div class="modal-grid">
                 <div class="info-group full-width">
-                    <button id="mCallStatusBtn" class="call-status-btn red">✖ Not Called</button>
+                    <button id="mCallStatusBtn" class="call-status-btn red" data-i18n="dropbook.notCalled">✖ Not Called</button>
                 </div>
                 <div class="info-group">
-                    <label>Called By *</label>
-                    <input type="text" id="mCalledBy" placeholder="Staff name">
+                    <label data-i18n="dropbook.calledBy">Called By *</label>
+                    <input type="text" id="mCalledBy" placeholder="Staff name" data-i18n-placeholder="dropbook.phStaffName">
                 </div>
                 <div class="info-group full-width">
-                    <label>Notes *</label>
-                    <textarea id="mNotes" rows="3" placeholder="Call notes..."></textarea>
+                    <label data-i18n="dropbook.notes">Notes *</label>
+                    <textarea id="mNotes" rows="3" placeholder="Call notes..." data-i18n-placeholder="dropbook.phCallNotes"></textarea>
                 </div>
             </div>
 
-            <h3>📋 Exit Form</h3>
+            <h3 data-i18n="dropbook.exitForm">📋 Exit Form</h3>
             <div class="modal-grid">
                 <div class="info-group">
                     <label class="checkbox-label">
                         <input type="checkbox" id="mExitAutopay">
-                        <span>Confirm Autopay Cancellation</span>
+                        <span data-i18n="dropbook.confirmAutopay">Confirm Autopay Cancellation</span>
                     </label>
                 </div>
                 <div class="info-group">
-                    <label>Accounts</label>
-                    <input type="text" id="mAccounts" placeholder="Account notes">
+                    <label data-i18n="dropbook.accounts">Accounts</label>
+                    <input type="text" id="mAccounts" placeholder="Account notes" data-i18n-placeholder="dropbook.phAccountNotes">
                 </div>
             </div>
 
             <div id="resumeSection" style="display:none; margin-bottom:1rem; padding:1rem; background:#e8f5e9; border-radius:8px; border-left:4px solid #4caf50;">
-                <label style="color:#2e7d32; font-weight:600; margin-bottom:0.5rem; display:block;">📅 Return Month</label>
+                <label style="color:#2e7d32; font-weight:600; margin-bottom:0.5rem; display:block;" data-i18n="dropbook.returnMonth">📅 Return Month</label>
                 <input type="month" id="mResumeMonthYear" style="width:100%; padding:0.6rem; border:1px solid #ddd; border-radius:6px; font-size:1rem; font-family:inherit;">
-                <button id="cancelResumeBtn" type="button" style="margin-top:0.5rem; font-size:0.85rem; padding:0.4rem 0.8rem; background:#fff; border:1px solid #ccc; border-radius:6px; cursor:pointer;">Cancel</button>
+                <button id="cancelResumeBtn" type="button" style="margin-top:0.5rem; font-size:0.85rem; padding:0.4rem 0.8rem; background:#fff; border:1px solid #ccc; border-radius:6px; cursor:pointer;" data-i18n="dropbook.cancel">Cancel</button>
             </div>
 
             <div class="modal-actions">
-                <button id="reinstateRequestBtn" class="reinstate-request-btn" style="display: none; background: #0d6efd; color: white; margin-right: auto;">🔄 Reinstate Request</button>
-                <button id="cancelRequestBtn" class="cancel-request-btn" style="display: none; background: #dc3545; color: white; margin-right: auto;">❌ Cancel Request</button>
-                <button id="resumeBtn" style="display:none; background:#4caf50; color:white; padding:0.6rem 1.2rem; font-weight:600; border:none; border-radius:6px; cursor:pointer;">🔄 Resume</button>
-                <button id="cancelResumeRequestBtn" style="display:none; background:#ff9800; color:white; padding:0.6rem 1.2rem; font-weight:600; border:none; border-radius:6px; cursor:pointer;">❌ Cancel Resume</button>
-                <button id="confirmDropBtn" class="confirm-drop-btn">✔️ Confirm Drop/Pause</button>
-                <button id="cancelModalBtn" class="secondary">Cancel</button>
-                <button id="saveModalBtn" class="primary">💾 Save Changes</button>
+                <button id="reinstateRequestBtn" class="reinstate-request-btn" style="display: none; background: #0d6efd; color: white; margin-right: auto;" data-i18n="dropbook.reinstateRequest">🔄 Reinstate Request</button>
+                <button id="cancelRequestBtn" class="cancel-request-btn" style="display: none; background: #dc3545; color: white; margin-right: auto;" data-i18n="dropbook.cancelRequest">❌ Cancel Request</button>
+                <button id="resumeBtn" style="display:none; background:#4caf50; color:white; padding:0.6rem 1.2rem; font-weight:600; border:none; border-radius:6px; cursor:pointer;" data-i18n="dropbook.resume">🔄 Resume</button>
+                <button id="cancelResumeRequestBtn" style="display:none; background:#ff9800; color:white; padding:0.6rem 1.2rem; font-weight:600; border:none; border-radius:6px; cursor:pointer;" data-i18n="dropbook.cancelResume">❌ Cancel Resume</button>
+                <button id="confirmDropBtn" class="confirm-drop-btn" data-i18n="dropbook.confirmDropPause">✔️ Confirm Drop/Pause</button>
+                <button id="cancelModalBtn" class="secondary" data-i18n="dropbook.cancel">Cancel</button>
+                <button id="saveModalBtn" class="primary" data-i18n="dropbook.saveChanges">💾 Save Changes</button>
             </div>
         </div>
     </div>
@@ -204,13 +204,13 @@
     <div id="searchRequestModal" class="modal hidden">
         <div class="modal-content search-modal-content">
             <span id="closeSearchModal" class="close-modal">&times;</span>
-            <h2>➕ Add Drop/Pause Request</h2>
+            <h2 data-i18n="dropbook.addRequestTitle">➕ Add Drop/Pause Request</h2>
             
             <!-- Step 1: Search -->
             <div id="searchStep">
-                <input type="text" id="searchStudentInput" placeholder="Search by Name (CN), Nickname or Pinyin...">
+                <input type="text" id="searchStudentInput" placeholder="Search by Name (CN), Nickname or Pinyin..." data-i18n-placeholder="dropbook.phSearchStudent">
                 <div id="searchResults" class="search-results">
-                    <div class="search-result-item" style="color:#999; text-align:center;">Type to search...</div>
+                    <div class="search-result-item" style="color:#999; text-align:center;" data-i18n="dropbook.typeToSearch">Type to search...</div>
                 </div>
             </div>
 
@@ -218,35 +218,35 @@
             <div id="detailsStep" class="hidden">
                 <div class="selected-student-info">
                     <h3 id="selectedStudentName"></h3>
-                    <button id="backToSearchBtn" class="secondary" style="width:auto; padding:0.3rem 0.8rem; font-size:0.8rem;">← Change Student</button>
+                    <button id="backToSearchBtn" class="secondary" style="width:auto; padding:0.3rem 0.8rem; font-size:0.8rem;" data-i18n="dropbook.changeStudent">← Change Student</button>
                 </div>
                 
                 <div class="modal-grid">
                     <div class="info-group full-width">
-                        <label>Subject</label>
+                        <label data-i18n="dropbook.subject">Subject</label>
                         <select id="reqSubjectSelect"></select>
                     </div>
                     <div class="info-group">
-                        <label>Request Type</label>
+                        <label data-i18n="dropbook.requestType">Request Type</label>
                         <select id="reqType">
-                            <option value="pause">Pause</option>
-                            <option value="drop">Drop</option>
+                            <option value="pause" data-i18n="dropbook.pause">Pause</option>
+                            <option value="drop" data-i18n="dropbook.drop">Drop</option>
                         </select>
                     </div>
                     <div class="info-group full-width">
-                        <label>Reason *</label>
-                        <input type="text" id="reqReason" placeholder="Enter reason...">
+                        <label data-i18n="dropbook.reasonReq">Reason *</label>
+                        <input type="text" id="reqReason" placeholder="Enter reason..." data-i18n-placeholder="dropbook.phEnterReason">
                     </div>
                 </div>
 
                 <!-- Pause Fields: REMOVE "hidden" class (visible by default since Pause is default) -->
                 <div id="reqPauseFields" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
                     <div class="info-group">
-                        <label>Pause From *</label>
+                        <label data-i18n="dropbook.pauseFromReq">Pause From *</label>
                         <input type="month" id="reqPauseFrom" required>
                     </div>
                     <div class="info-group">
-                        <label>Pause To *</label>
+                        <label data-i18n="dropbook.pauseToReq">Pause To *</label>
                         <input type="month" id="reqPauseTo" required>
                     </div>
                 </div>
@@ -254,14 +254,14 @@
                 <!-- Drop Fields: ADD "hidden" class (hidden by default) -->
                 <div id="reqDropFields" class="hidden" style="margin-bottom: 1rem;">
                     <div class="info-group">
-                        <label>Drop Month/Year *</label>
+                        <label data-i18n="dropbook.dropMonthReq">Drop Month/Year *</label>
                         <input type="month" id="reqDrop" required>
                     </div>
                 </div>
 
                 <div class="modal-actions">
-                    <button id="cancelReqBtn" class="secondary">Cancel</button>
-                    <button id="saveReqBtn" class="primary">💾 Save Request</button>
+                    <button id="cancelReqBtn" class="secondary" data-i18n="dropbook.cancel">Cancel</button>
+                    <button id="saveReqBtn" class="primary" data-i18n="dropbook.saveRequest">💾 Save Request</button>
                 </div>
             </div>
         </div>
@@ -270,15 +270,16 @@
     <!-- NEW: Confirmation Action Modal -->
     <div id="confirmActionModal" class="modal hidden">
         <div class="modal-content" style="max-width: 400px; text-align: center;">
-            <h3 id="confirmTitle" style="margin-bottom: 1rem;">Confirm Action</h3>
-            <p id="confirmMessage" style="margin-bottom: 1.5rem; color: var(--text-light);">Are you sure?</p>
+            <h3 id="confirmTitle" style="margin-bottom: 1rem;" data-i18n="dropbook.confirmActionTitle">Confirm Action</h3>
+            <p id="confirmMessage" style="margin-bottom: 1.5rem; color: var(--text-light);" data-i18n="dropbook.areYouSure">Are you sure?</p>
             <div class="modal-actions" style="justify-content: center;">
-                <button id="cancelConfirmBtn" class="secondary">Cancel</button>
-                <button id="proceedConfirmBtn" class="primary">Proceed</button>
+                <button id="cancelConfirmBtn" class="secondary" data-i18n="dropbook.cancel">Cancel</button>
+                <button id="proceedConfirmBtn" class="primary" data-i18n="dropbook.proceed">Proceed</button>
             </div>
         </div>
     </div>
 
+    <script type="module" src="dropbook-i18n.js"></script>
     <script type="module" src="dropbook.js"></script>
 </body>
 </html>
