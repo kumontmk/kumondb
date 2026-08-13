@@ -1,29 +1,89 @@
-/* label-editor.css */
+/* ==========================================
+   🏷️ LABEL EDITOR STYLES
+   ========================================== */
+
 :root {
     --primary: #87CEEB;
     --primary-dark: #4682B4;
+    --secondary: #f0f8ff;
     --text: #333;
     --text-light: #666;
+    --white: #fff;
+    --shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    --radius: 8px;
 }
 
-body { 
-    font-family: Arial, sans-serif; 
-    background: #f0f8ff; 
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
     margin: 0;
+    padding: 0;
 }
 
-/* Screen Controls */
-.controls-section { 
-    display: block; 
-    padding: 2rem;
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--secondary);
+    color: var(--text);
+    line-height: 1.6;
 }
-header{
+
+/* ==========================================
+   TOP BAR ONLY: button left, title right
+   (Do NOT include .dashboard-header here!)
+   ========================================== */
+header {
     position: sticky;
     top: 0;
     z-index: 1000;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    text-align: left !important;
+    padding: 1rem 2rem !important;
+    gap: 1rem;
 }
+
+header h1 {
+    margin: 0 !important;
+    margin-left: auto !important;
+    text-align: right !important;
+}
+
+header a {
+    margin: 0 !important;
+}
+
+/* ==========================================
+   PAGE CONTENT: normal stacked layout + padding
+   ========================================== */
+#mainContent {
+    padding: 1.5rem 2rem 2rem;
+}
+
+/* Title + description stacked vertically, not a flex row */
+.dashboard-header {
+    display: block !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+    padding: 0 !important;
+    margin-bottom: 1.25rem;
+    text-align: left !important;
+}
+
+.dashboard-header h2 {
+    margin: 0 0 0.25rem 0;
+}
+
+.dashboard-header p {
+    margin: 0;
+    color: var(--text-light);
+}
+
 @media print {
     .controls-section, header, .dashboard-header { display: none !important; }
+    #mainContent { padding: 0 !important; }
     body { background: white; }
 }
 
@@ -52,7 +112,7 @@ header{
     grid-template-columns: repeat(4, 7cm);
     grid-template-rows: repeat(6, 3.3cm);
     /* Center the grid slightly if there's leftover space (28.7 - 28 = 0.7cm) */
-    justify-content: center; 
+    justify-content: center;
     align-content: center;
     gap: 0; /* No gap, borders touch */
     width: 100%;
@@ -81,7 +141,7 @@ header{
 
 /* LEFT SIDE: Student Info (55%) */
 .label-left {
-    width: 55%; 
+    width: 55%;
     border-right: 1px solid #000;
     padding: 2mm 3mm;
     display: flex;
@@ -177,4 +237,60 @@ header{
 .info-row:last-child .info-value {
     font-size: 10pt;
     font-weight: 600;
+}
+
+/* ==========================================
+LOADING STATE FOR STUDENT DROPDOWN
+========================================== */
+.control-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.grade-select-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+#gradeSelect:disabled,
+#generateBtn:disabled,
+#exportDocxBtn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.loading-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--primary-dark);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.loading-indicator[hidden] {
+  display: none !important;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(70, 130, 180, 0.25);
+  border-top-color: var(--primary-dark);
+  animation: label-editor-spin 0.8s linear infinite;
+}
+
+@keyframes label-editor-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.student-count {
+  margin-top: 0.5rem;
+  color: var(--text-light);
 }

@@ -4,6 +4,89 @@ import { ref, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-da
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const centerId = sessionStorage.getItem('selectedCenter');
+const GRADE_9_PLUS_VALUE = '9+';
+
+function getSubjectsArray(student) {
+    if (!student) return [];
+    return Array.isArray(student.subjects) ? student.subjects : Object.values(student.subjects || {});
+}
+
+function isActiveStudent(student) {
+    return getSubjectsArray(student).some(subject => subject?.status === 'current');
+}
+
+function getGradeNumber(grade) {
+    const gradeText = String(grade ?? '').trim();
+    const match = gradeText.match(/\d+/);
+    return match ? Number.parseInt(match[0], 10) : null;
+}
+
+function isGrade9OrAbove(grade) {
+    const gradeNumber = getGradeNumber(grade);
+    return gradeNumber !== null && gradeNumber >= 9;
+}
+
+function compareGrades(aGrade, bGrade) {
+    const aNumber = getGradeNumber(aGrade);
+    const bNumber = getGradeNumber(bGrade);
+    if (aNumber !== null && bNumber !== null) return aNumber - bNumber;
+    if (aNumber !== null) return -1;
+    if (bNumber !== null) return 1;
+    return String(aGrade ?? '').localeCompare(String(bGrade ?? ''));
+}
+
+function buildGradeFilterOptions(students, gradeSelect) {
+    gradeSelect.innerHTML = '<option value="all">All Grades</option>';
+    const optionsByKey = new Map();
+
+    students.filter(isActiveStudent).forEach(student => {
+        const rawGrade = String(student.grade ?? '').trim();
+        if (!rawGrade) return;
+
+        if (isGrade9OrAbove(rawGrade)) {
+            if (!optionsByKey.has(GRADE_9_PLUS_VALUE)) {
+                optionsByKey.set(GRADE_9_PLUS_VALUE, { value: GRADE_9_PLUS_VALUE, label: 'Grade 9 & Above', sort: 9 });
+            }
+            return;
+        }
+
+        if (!optionsByKey.has(rawGrade)) {
+            const gradeNumber = getGradeNumber(rawGrade);
+            optionsByKey.set(rawGrade, { value: rawGrade, label: `Grade ${rawGrade}`, sort: gradeNumber === null ? 999 : gradeNumber });
+        }
+    });
+
+    [...optionsByKey.values()]
+        .sort((a, b) => a.sort - b.sort || a.label.localeCompare(b.label))
+        .forEach(option => {
+            const opt = document.createElement('option');
+            opt.value = option.value;
+            opt.textContent = option.label;
+            gradeSelect.appendChild(opt);
+        });
+}
+
+function getFilteredActiveStudents(students, selectedGrade) {
+    let filtered = students.filter(isActiveStudent);
+
+    if (selectedGrade && selectedGrade !== 'all') {
+        if (selectedGrade === GRADE_9_PLUS_VALUE) {
+            filtered = filtered.filter(student => isGrade9OrAbove(student.grade));
+        } else {
+            filtered = filtered.filter(student => String(student.grade ?? '').trim() === selectedGrade);
+        }
+    }
+
+    filtered.sort((a, b) => {
+        const gradeComparison = compareGrades(a.grade, b.grade);
+        if (gradeComparison !== 0) return gradeComparison;
+        const aName = a.namePinyin || a.nameCn || '';
+        const bName = b.namePinyin || b.nameCn || '';
+        return aName.localeCompare(bName);
+    });
+
+    return filtered;
+}
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
@@ -37,88 +120,136 @@ onAuthStateChanged(auth, async (user) => {
 document.getElementById('logoutBtn')?.addEventListener('click', logout);
 
 async function initApp() {
-    const gradeSelect = document.getElementById('gradeSelect');
-    const generateBtn = document.getElementById('generateBtn');
-    const exportDocxBtn = document.getElementById('exportDocxBtn');
-    const printArea = document.getElementById('print-area');
-    const studentCountEl = document.getElementById('studentCount');
+  // ✅ Safety check for missing center ID
+  if (!centerId) {
+    alert('No center selected. Please go back to the dashboard and select a center first.');
+    window.location.href = 'dashboard.html';
+    return;
+  }
 
-    let allStudents = [];
+  const gradeSelect = document.getElementById('gradeSelect');
+  const generateBtn = document.getElementById('generateBtn');
+  const exportDocxBtn = document.getElementById('exportDocxBtn');
+  const printArea = document.getElementById('print-area');
+  const studentCountEl = document.getElementById('studentCount');
+  const loadingEl = document.getElementById('studentsLoadingIndicator');
 
-    try {
-        const snap = await get(ref(db, `centers/${centerId}/students`));
-        if (snap.exists()) {
-            snap.forEach(child => {
-                const val = child.val();
-                const subjects = Array.isArray(val.subjects) ? val.subjects : Object.values(val.subjects || {});
-                const hasActive = subjects.some(s => s.status === 'current');
-                if (hasActive) allStudents.push({ id: child.key, ...val });
-            });
+  function setLoading(isLoading, message = 'Loading students…') {
+    if (loadingEl) {
+      loadingEl.hidden = !isLoading;
+
+      const textEl = loadingEl.querySelector('.loading-text');
+      if (textEl) {
+        textEl.textContent = message;
+      }
+    }
+
+    gradeSelect.disabled = isLoading;
+    generateBtn.disabled = isLoading;
+
+    // Keep export disabled until a preview is generated.
+    exportDocxBtn.disabled = true;
+
+    if (isLoading) {
+      gradeSelect.innerHTML = '<option value="">Loading students…</option>';
+      if (studentCountEl) {
+        studentCountEl.textContent = message;
+      }
+    }
+  }
+
+  // ✅ Show visible loading state immediately
+  setLoading(true);
+
+  let allStudents = [];
+
+  try {
+    const snap = await get(ref(db, `centers/${centerId}/students`));
+
+    if (snap.exists()) {
+      snap.forEach(child => {
+        const val = child.val();
+        const subjects = Array.isArray(val.subjects)
+          ? val.subjects
+          : Object.values(val.subjects || {});
+
+        const hasActive = subjects.some(s => s.status === 'current');
+
+        if (hasActive) {
+          allStudents.push({ id: child.key, ...val });
         }
-    } catch (err) { console.error("Error fetching students:", err); }
+      });
+    }
+  } catch (err) {
+    console.error('Error fetching students:', err);
 
-    const grades = [...new Set(allStudents.map(s => s.grade).filter(g => g))].sort();
-    grades.forEach(g => {
-        const opt = document.createElement('option');
-        opt.value = g;
-        opt.textContent = `Grade ${g}`;
-        gradeSelect.appendChild(opt);
-    });
+    if (loadingEl) {
+      loadingEl.hidden = true;
+    }
 
-    generateBtn.addEventListener('click', () => {
-        const selectedGrade = gradeSelect.value;
-        let filtered = selectedGrade === 'all' 
-            ? allStudents 
-            : allStudents.filter(s => s.grade === selectedGrade);
+    gradeSelect.disabled = true;
+    generateBtn.disabled = true;
+    exportDocxBtn.disabled = true;
 
-        filtered.sort((a, b) => {
-            if (a.grade !== b.grade) return (a.grade || '').localeCompare(b.grade || '');
-            return (a.namePinyin || a.nameCn || '').localeCompare(b.namePinyin || b.nameCn || '');
-        });
+    if (studentCountEl) {
+      studentCountEl.textContent =
+        '❌ Unable to load students. Please refresh the page and try again.';
+    }
 
-        studentCountEl.textContent = `Found ${filtered.length} active students.`;
+    return;
+  }
 
-        printArea.innerHTML = '';
-        const chunkSize = 24;
-        
-        for (let i = 0; i < filtered.length; i += chunkSize) {
-            const chunk = filtered.slice(i, i + chunkSize);
-            const pageDiv = document.createElement('div');
-            pageDiv.className = 'print-page';
-            
-            const gridDiv = document.createElement('div');
-            gridDiv.className = 'label-grid';
-            
-            for (let j = 0; j < chunkSize; j++) {
-                const student = chunk[j];
-                gridDiv.innerHTML += generateLabelHTML(student);
-            }
-            
-            pageDiv.appendChild(gridDiv);
-            printArea.appendChild(pageDiv);
-        }
+  // ✅ Build dropdown options after students are loaded
+  buildGradeFilterOptions(allStudents, gradeSelect);
 
-        exportDocxBtn.style.display = 'inline-block';
-        printArea.scrollIntoView({ behavior: 'smooth' });
-    });
+  // ✅ Hide loading state and enable dropdown
+  setLoading(false);
 
-    exportDocxBtn.addEventListener('click', () => {
-        const selectedGrade = gradeSelect.value;
-        let filtered = selectedGrade === 'all' 
-            ? allStudents 
-            : allStudents.filter(s => s.grade === selectedGrade);
+  if (studentCountEl) {
+    studentCountEl.textContent = allStudents.length
+      ? `Loaded ${allStudents.length} active students. Select a grade and generate preview.`
+      : 'No active students found for this center.';
+  }
 
-        filtered.sort((a, b) => {
-            if (a.grade !== b.grade) return (a.grade || '').localeCompare(b.grade || '');
-            return (a.namePinyin || a.nameCn || '').localeCompare(b.namePinyin || b.nameCn || '');
-        });
+  generateBtn.addEventListener('click', () => {
+    const filtered = getFilteredActiveStudents(allStudents, gradeSelect.value);
 
-        exportToDOCX(filtered);
-    });
+    studentCountEl.textContent = `Found ${filtered.length} active students.`;
+    printArea.innerHTML = '';
+
+    const chunkSize = 24;
+
+    for (let i = 0; i < filtered.length; i += chunkSize) {
+      const chunk = filtered.slice(i, i + chunkSize);
+
+      const pageDiv = document.createElement('div');
+      pageDiv.className = 'print-page';
+
+      const gridDiv = document.createElement('div');
+      gridDiv.className = 'label-grid';
+
+      for (let j = 0; j < chunkSize; j++) {
+        const student = chunk[j];
+        gridDiv.innerHTML += generateLabelHTML(student);
+      }
+
+      pageDiv.appendChild(gridDiv);
+      printArea.appendChild(pageDiv);
+    }
+
+    exportDocxBtn.style.display = 'inline-block';
+    exportDocxBtn.disabled = filtered.length === 0;
+
+    printArea.scrollIntoView({ behavior: 'smooth' });
+  });
+
+  exportDocxBtn.addEventListener('click', () => {
+    const filtered = getFilteredActiveStudents(allStudents, gradeSelect.value);
+    exportToDOCX(filtered);
+  });
 }
 
 function exportToDOCX(students) {
-    // ✅ 1. Check libraries first
     if (typeof window.docx === 'undefined') {
         alert('❌ DOCX library not loaded. Please check your internet connection.');
         return;
@@ -154,9 +285,8 @@ function exportToDOCX(students) {
         const dob = student.birthday || '';
         const studentNo = student.studentNumber || '';
 
-        // Inner Grid Table
         const innerGridTable = new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE }, // ✅ Fill parent cell
+            width: { size: 100, type: WidthType.PERCENTAGE },
             borders: {
                 top: { style: BorderStyle.SINGLE, size: 4 }, bottom: { style: BorderStyle.SINGLE, size: 4 },
                 left: { style: BorderStyle.SINGLE, size: 4 }, right: { style: BorderStyle.SINGLE, size: 4 },
@@ -191,9 +321,8 @@ function exportToDOCX(students) {
             ]
         });
 
-        // Main Label Table
         const labelTable = new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE }, // ✅ FIXED: 100% instead of 7000 DXA to prevent overflow warping
+            width: { size: 100, type: WidthType.PERCENTAGE },
             borders: {
                 top: { style: BorderStyle.SINGLE, size: 8 }, bottom: { style: BorderStyle.SINGLE, size: 8 },
                 left: { style: BorderStyle.SINGLE, size: 8 }, right: { style: BorderStyle.SINGLE, size: 8 },
@@ -201,16 +330,15 @@ function exportToDOCX(students) {
             },
             rows: [
                 new TableRow({
-                    height: { value: 1750, rule: HeightRule.EXACT }, // ✅ FIXED: 1750 DXA (~3.1cm). 6 rows × 1750 = 10500 DXA (fits perfectly in A4 Landscape)
+                    height: { value: 1750, rule: HeightRule.EXACT },
                     children: [
                         new TableCell({
                             width: { size: 55, type: WidthType.PERCENTAGE },
-                            verticalAlign: VerticalAlign.CENTER, // ✅ FIXED: Use enum, not string "center"
+                            verticalAlign: VerticalAlign.CENTER,
                             children: [
                                 new Paragraph({ children: [new TextRun({ text: "姓名: ", bold: true, size: 18 }), new TextRun({ text: chineseName, bold: true, size: 32 })] }),
                                 new Paragraph({ children: [new TextRun({ text: "NAME: ", bold: true, size: 18 }), new TextRun({ text: pinyinName, size: 20 })] }),
                                 new Paragraph({ children: [new TextRun({ text: "DOB: ", bold: true, size: 18 }), new TextRun({ text: dob, size: 20 })] }),
-                                // ✅ FIXED: Split into two paragraphs to avoid "\n" corruption/weird spacing
                                 new Paragraph({ children: [new TextRun({ text: "學生編號:", bold: true, size: 18 })] }),
                                 new Paragraph({ children: [new TextRun({ text: studentNo, bold: true, size: 22 })] })
                             ]
@@ -227,7 +355,6 @@ function exportToDOCX(students) {
         labelTables.push(labelTable);
     });
 
-    // Arrange in grid (4x6 = 24 per page)
     const docChildren = [];
     const labelsPerPage = 24;
 
@@ -253,7 +380,7 @@ function exportToDOCX(students) {
             }
             pageRows.push(new TableRow({ 
                 children: rowCells,
-                height: { value: 1750, rule: HeightRule.EXACT } // ✅ Match the label height
+                height: { value: 1750, rule: HeightRule.EXACT }
             }));
         }
 
@@ -268,7 +395,6 @@ function exportToDOCX(students) {
         });
         docChildren.push(pageTable);
 
-        // ✅ FIXED: Proper page break instead of "\f"
         if (pageIndex + labelsPerPage < labelTables.length) {
             docChildren.push(new Paragraph({
                 pageBreakBefore: true,
@@ -282,7 +408,7 @@ function exportToDOCX(students) {
             properties: {
                 page: {
                     size: { 
-                        orientation: PageOrientation.LANDSCAPE, // ✅ FORCE LANDSCAPE
+                        orientation: PageOrientation.LANDSCAPE,
                         width: 16838, 
                         height: 11906 
                     },

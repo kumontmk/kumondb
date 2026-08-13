@@ -1,34 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-      <!-- Shows the logo in the browser tab -->
-  <link rel="icon" type="image/svg+xml" href="favicon.svg">
-
-  <!-- Optional: PNG fallback for older browsers -->
-  <link rel="icon" type="image/png" sizes="512x512" href="dblogo-maskable-512.png">
-
-  <!-- Optional: icon when saved to iOS home screen -->
-  <link rel="apple-touch-icon" href="dblogo-maskable-512.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Label Editor - Kumon DB</title>
+    
+    <!-- Icons -->
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="icon" type="image/png" sizes="512x512" href="dblogo-maskable-512.png">
+    <link rel="apple-touch-icon" href="dblogo-maskable-512.png">
+
+    <!-- Stylesheets -->
     <link rel="stylesheet" href="dashboard.css">
     <link rel="stylesheet" href="label-editor.css">
     
     <!-- DOCX generator -->
-   <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>    
+    <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-
 </head>
 <body>
     <header>
-        <nav>
-            <a href="dashboard.html">← Dashboard</a>
-        </nav>
+        <a href="dashboard.html" class="back-btn" style="text-decoration: none; color: var(--primary-dark); font-weight: 600;">← Dashboard</a>
         <h1>🏷️ Label Editor</h1>
     </header>
 
-    <div id="accessDenied" class="access-denied hidden" style="display:none;">
+    <div id="accessDenied" class="hidden" style="display:none; justify-content: center; align-items: center; height: 80vh; text-align: center;">
         <div class="access-denied-content">
             <h2>🔐 Access Restricted</h2>
             <p>You do not have permission to use the Label Editor.</p>
@@ -36,7 +32,7 @@
         </div>
     </div>
 
-    <div id="mainContent" class="dashboard hidden">
+    <div id="mainContent" class="hidden">
         <div class="dashboard-header">
             <h2>Generate Student Labels</h2>
             <p>Select a grade to generate labels for students. Export as DOCX (Word) or PDF.</p>
@@ -45,15 +41,25 @@
         <div class="controls-section" style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 2rem;">
             <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
                 <label for="gradeSelect" style="font-weight: 600;">Select Grade:</label>
-                <select id="gradeSelect" style="padding: 0.5rem; border-radius: 6px; border: 1px solid #cbd5e1; min-width: 200px;">
-                    <option value="all">All Grades</option>
+                
+                <!-- ✅ Dropdown disabled by default with loading text -->
+                <select id="gradeSelect" disabled style="padding: 0.5rem; border-radius: 6px; border: 1px solid #cbd5e1; min-width: 200px;">
+                    <option value="">Loading students…</option>
                 </select>
                 
-                <button id="generateBtn" class="primary" style="background: var(--primary-dark); color: white; border: none; padding: 0.6rem 1.5rem; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                <!-- ✅ Visible Loading Indicator -->
+                <span id="studentsLoadingIndicator" class="loading-indicator" role="status" aria-live="polite">
+                    <span class="spinner" aria-hidden="true"></span>
+                    <span class="loading-text">Loading students…</span>
+                </span>
+                
+                <!-- ✅ Generate button disabled by default -->
+                <button id="generateBtn" class="primary" disabled style="background: var(--primary-dark); color: white; border: none; padding: 0.6rem 1.5rem; border-radius: 6px; cursor: pointer; font-weight: 600;">
                     👁️ Generate Preview
                 </button>
 
-                <button id="exportDocxBtn" class="primary" style="display: none; background: #2b579a; color: white; border: none; padding: 0.6rem 1.5rem; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                <!-- ✅ Export button disabled by default -->
+                <button id="exportDocxBtn" class="primary" disabled style="display: none; background: #2b579a; color: white; border: none; padding: 0.6rem 1.5rem; border-radius: 6px; cursor: pointer; font-weight: 600;">
                     📄 Export as DOCX
                 </button>
             </div>
@@ -64,7 +70,6 @@
         <div id="print-area"></div>
     </div>
 
-    <!-- ✅ REQUIRED: Module Script Tag -->
     <script type="module" src="label-editor.js"></script>
     <script type="module" src="./activity-logger-init.js"></script>
 </body>
