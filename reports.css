@@ -1041,3 +1041,73 @@ td {
         display: none !important;
     }
 }
+
+/* ==========================================
+   PRINT DESKTOP FORMAT FROM MOBILE CARDS
+========================================== */
+
+.print-desktop-container {
+    display: none;
+}
+
+@media print {
+    body.print-desktop-mode #mainContent,
+    body.print-desktop-mode #monthlyReport,
+    body.print-desktop-mode #reportOutput,
+    body.print-desktop-mode .form-container,
+    body.print-desktop-mode .mobile-report-section {
+        display: none !important;
+    }
+
+    .print-desktop-container {
+        display: block !important;
+    }
+
+    .print-desktop-container .table-wrapper {
+        display: block !important;
+        box-shadow: none !important;
+        border: none !important;
+        max-height: none !important;
+        overflow: visible !important;
+        background: transparent !important;
+        padding: 0cm !important;
+        margin: 1rem !important;
+    }
+
+    .print-desktop-container table {
+        width: 100% !important;
+        border: 3px solid #333 !important;
+        table-layout: auto !important;
+        break-inside: avoid;
+        margin-bottom: 1rem;
+    }
+
+    .print-desktop-container th,
+    .print-desktop-container td,
+    .print-desktop-container caption {
+        border: 1px solid #333 !important;
+        padding: 0.3rem !important;
+        white-space: normal !important;
+        font-size: 0.75rem !important;
+    }
+
+    .print-desktop-container thead th {
+        text-align: center;
+        position: static !important;
+        color: #000 !important;
+        box-shadow: none !important;
+    }
+
+    .print-desktop-container input {
+        border: none !important;
+        padding: 0rem !important;
+        background: transparent !important;
+        width: 100% !important;
+        color: #000 !important;
+    }
+
+    .print-desktop-container .add-at-btn,
+    .print-desktop-container .remove-at-btn {
+        display: none !important;
+    }
+}

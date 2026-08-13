@@ -15,6 +15,7 @@ onAuthStateChanged(auth, async (user) => {
 
     try {
         const userSnap = await get(ref(db, `users/${user.uid}`));
+
         if (!userSnap.exists()) {
             window.location.href = 'index.html';
             return;
@@ -139,6 +140,7 @@ function initializeReports() {
             localStorage.removeItem(CACHE_TIME_KEY);
         } else {
             const cached = getCachedStudents();
+
             if (cached) {
                 cachedStudents = cached;
                 isDataLoaded = true;
@@ -240,6 +242,10 @@ function initializeReports() {
 
     function createInput(val, cls, readonly = false, type = 'text') {
         return `<input type="${type}" value="${val ?? ''}" class="report-input ${cls}" ${readonly ? 'readonly' : ''} autocomplete="off">`;
+    }
+
+    function createPrintInput(val, cls = '', type = 'text') {
+        return `<input type="${type}" value="${val ?? ''}" class="report-input ${cls}" readonly autocomplete="off">`;
     }
 
     function createATBlock(test = {}) {
@@ -555,8 +561,18 @@ function initializeReports() {
             }) => {
                 const card = document.createElement('article');
                 card.className = 'report-card';
+
                 card.dataset.studentId = studentId;
                 card.dataset.subjectName = sub.name || (isPencil ? 'Pencil' : '');
+
+                // Extra data used only for desktop-format printing
+                card.dataset.subjectKey = subName;
+                card.dataset.isPencil = isPencil ? 'true' : '';
+                card.dataset.studentNumber = s.studentNumber || '-';
+                card.dataset.nameCn = s.nameCn || '-';
+                card.dataset.namePinyin = s.namePinyin || s.nickname || '-';
+                card.dataset.grade = s.grade || '-';
+                card.dataset.subjectLabel = sub.name || subName;
 
                 const nameCn = s.nameCn || '-';
                 const namePinyin = s.namePinyin || s.nickname || '-';
@@ -669,20 +685,142 @@ function initializeReports() {
         return cards.length;
     }
 
+    function buildDesktopPrintContainerFromCards() {
+        const container = document.createElement('div');
+        container.className = 'print-desktop-container';
+
+        const month = reportMonthInput?.value || '';
+        const groups = new Map();
+
+        const cards = Array.from(reportOutput.querySelectorAll('.report-card'));
+
+        cards.forEach(card => {
+            const subjectKey = card.dataset.subjectKey || card.dataset.subjectName || 'Report';
+
+            if (!groups.has(subjectKey)) {
+                groups.set(subjectKey, {
+                    subjectKey,
+                    isPencil: card.dataset.isPencil === 'true',
+                    cards: []
+                });
+            }
+
+            groups.get(subjectKey).cards.push(card);
+        });
+
+        groups.forEach(group => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'table-wrapper';
+
+            const table = document.createElement('table');
+            table.className = 'subject-table report-table report-sticky-table';
+            table.dataset.subject = group.subjectKey;
+
+            const captionText = group.isPencil
+                ? t('reports.pencilReportCaption', { month })
+                : t('reports.progressReportCaption', { subject: group.subjectKey, month });
+
+            table.innerHTML = `
+                <caption>${captionText}</caption>
+                ${getTheadHTML(group.isPencil)}
+                <tbody></tbody>
+            `;
+
+            const tbody = table.querySelector('tbody');
+
+            group.cards.forEach(card => {
+                const tr = document.createElement('tr');
+
+                if (group.isPencil) {
+                    const pencilLevel = card.querySelector('.pencil-level')?.value || '';
+                    const pencilWS = card.querySelector('.pencil-ws')?.value || '';
+
+                    tr.innerHTML = `
+                        <td>${card.dataset.studentNumber || '-'}</td>
+                        <td>${card.dataset.nameCn || '-'}</td>
+                        <td>${card.dataset.namePinyin || '-'}</td>
+                        <td>${card.dataset.grade || '-'}</td>
+                        <td>${card.dataset.subjectLabel || 'Pencil'}</td>
+                        <td>${createPrintInput(pencilLevel, 'pencil-level')}</td>
+                        <td>${createPrintInput(pencilWS, 'pencil-ws', 'number')}</td>
+                    `;
+                } else {
+                    const prevLevel = card.querySelector('.prev-level')?.value || '';
+                    const prevWS = card.querySelector('.prev-ws')?.value || '';
+                    const currLevel = card.querySelector('.curr-level')?.value || '';
+                    const currWS = card.querySelector('.curr-ws')?.value || '';
+
+                    const testsContainer = document.createElement('div');
+                    testsContainer.className = 'tests-container';
+
+                    card.querySelectorAll('.at-block').forEach(block => {
+                        const clone = block.cloneNode(true);
+
+                        clone.querySelector('.remove-at-btn')?.remove();
+
+                        clone.querySelectorAll('input').forEach(input => {
+                            input.readOnly = true;
+                        });
+
+                        testsContainer.appendChild(clone);
+                    });
+
+                    tr.innerHTML = `
+                        <td>${card.dataset.studentNumber || '-'}</td>
+                        <td>${card.dataset.nameCn || '-'}</td>
+                        <td>${card.dataset.namePinyin || '-'}</td>
+                        <td>${card.dataset.grade || '-'}</td>
+                        <td>${createPrintInput(prevLevel, 'prev-level')}</td>
+                        <td>${createPrintInput(prevWS, 'prev-ws', 'number')}</td>
+                        <td>${createPrintInput(currLevel, 'curr-level')}</td>
+                        <td>${createPrintInput(currWS, 'curr-ws', 'number')}</td>
+                        <td colspan="5" style="padding: 0.5rem; min-width: 420px;"></td>
+                    `;
+
+                    const atCell = tr.lastElementChild;
+                    atCell.innerHTML = '';
+                    atCell.appendChild(testsContainer);
+                }
+
+                tbody.appendChild(tr);
+            });
+
+            wrapper.appendChild(table);
+            container.appendChild(wrapper);
+        });
+
+        return container;
+    }
+
     if (generateBtn) {
         generateBtn.addEventListener('click', buildReport);
     }
 
     if (printBtn) {
         printBtn.addEventListener('click', () => {
-            const details = document.querySelectorAll('details.at-section');
-            const detailsStates = Array.from(details).map(d => d.open);
+            let printContainer = null;
 
-            details.forEach(d => {
-                d.open = true;
-            });
+            const hasMobileCards = reportOutput.querySelector('.report-card') !== null;
 
-            const allATBlocks = document.querySelectorAll('.at-block');
+            let details = [];
+            let detailsStates = [];
+
+            if (hasMobileCards) {
+                printContainer = buildDesktopPrintContainerFromCards();
+                document.body.appendChild(printContainer);
+                document.body.classList.add('print-desktop-mode');
+            } else {
+                details = Array.from(document.querySelectorAll('details.at-section'));
+                detailsStates = details.map(d => d.open);
+
+                details.forEach(d => {
+                    d.open = true;
+                });
+            }
+
+            const printRoot = printContainer || document;
+
+            const allATBlocks = printRoot.querySelectorAll('.at-block');
 
             allATBlocks.forEach(block => {
                 const dateInput = block.querySelector('.test-date');
@@ -696,7 +834,7 @@ function initializeReports() {
                 }
             });
 
-            const emptyDates = document.querySelectorAll('.test-date');
+            const emptyDates = printRoot.querySelectorAll('.test-date');
 
             emptyDates.forEach(input => {
                 if (!input.value || input.value.trim() === '') {
@@ -713,6 +851,11 @@ function initializeReports() {
                 details.forEach((d, index) => {
                     d.open = detailsStates[index];
                 });
+
+                if (printContainer) {
+                    printContainer.remove();
+                    document.body.classList.remove('print-desktop-mode');
+                }
             }, 1000);
         });
     }
