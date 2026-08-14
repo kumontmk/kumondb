@@ -806,7 +806,6 @@ function startBulletinPage() {
 
   cancelAnnouncementBtn?.addEventListener('click', closeAnnouncementModal);
   closeAnnouncementModalBtn?.addEventListener('click', closeAnnouncementModal);
-  announcementModal?.addEventListener('click', (e) => { if (e.target === announcementModal) closeAnnouncementModal(); });
   announcementForm?.addEventListener('submit', saveAnnouncement);
 
   // Tag input events

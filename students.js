@@ -606,12 +606,201 @@ async function initializePage(isAdmin = false) {
         await exportFilteredStudents(() => true, "Export_All");
     }
 
-    async function exportBySubject(subject) {
-        await exportFilteredStudents(
-            s => s.subjects && s.subjects.some(sub => sub.name === subject),
-            `Subject_${subject.replace(/\s+/g, '_')}`
-        );
+// ==========================================
+// 📤 SUBJECT-SPECIFIC EXPORT LOGIC
+// ==========================================
+
+function normalizeStatusValue(value) {
+    return String(value || '').trim().toLowerCase();
+}
+
+function isCurrentStatusValue(value) {
+    const status = normalizeStatusValue(value);
+    return status === 'current' || status === 'active';
+}
+
+function getSubjectTimeslot(subject, index) {
+    const timeslots = subject?.timeslots;
+
+    if (Array.isArray(timeslots)) {
+        return timeslots[index] || {};
     }
+
+    if (timeslots && typeof timeslots === 'object') {
+        const values = Object.values(timeslots);
+        return values[index] || {};
+    }
+
+    return {};
+}
+
+function buildSubjectExportRow(student, subjectData, subjectName) {
+    const slot1 = getSubjectTimeslot(subjectData, 0);
+    const slot2 = getSubjectTimeslot(subjectData, 1);
+
+    const commonFields = {
+        'StudentNo': student.studentNumber || '',
+        'Chinese Name (Alphabet)': student.namePinyin || '',
+        'Chinese Name': student.nameCn || '',
+        'Nickname': student.nickname || '',
+        'SchoolGrade': student.grade || '',
+        'SchoolName': student.school || '',
+        'DateOfBirth': student.birthday || '',
+        'Nationality': student.nationality || '',
+        'Email': student.email || '',
+        'Phone (Emergency_M)': student.phone?.mom || '',
+        'Phone (Emergency_D)': student.phone?.dad || '',
+        'Phone (Emergency_Self)': student.phone?.own || '',
+        'Ship Address': student.address || '',
+        'Overall Status': student.overallStatus || '',
+        'Subject': subjectData.name || subjectName,
+        'Subject Status': subjectData.status || student.overallStatus || 'Current'
+    };
+
+    if (subjectName === 'Math') {
+        return {
+            ...commonFields,
+            'Maths': '1',
+            'MStarting': subjectData.startLevel || '',
+            'MStartingNo': subjectData.startWS ?? '',
+            'MEnrollmentDate': subjectData.enrolDate || '',
+            'MClassDay': slot1.day || '',
+            'MClassTime': slot1.time || '',
+            'MClassDay2': slot2.day || '',
+            'MClassTime2': slot2.time || '',
+            'CurrentMath': subjectData.currentLevel || '',
+            'MathNo': subjectData.currentWS ?? ''
+        };
+    }
+
+    if (subjectName === 'English ERP') {
+        return {
+            ...commonFields,
+            'English': '1',
+            'EStarting': subjectData.startLevel || '',
+            'EStartingNo': subjectData.startWS ?? '',
+            'EEnrollmentDate': subjectData.enrolDate || '',
+            'EClassDay': slot1.day || '',
+            'EClassTime': slot1.time || '',
+            'EClassDay2': slot2.day || '',
+            'EClassTime2': slot2.time || '',
+            'CurrentEng': subjectData.currentLevel || '',
+            'EngNo': subjectData.currentWS ?? ''
+        };
+    }
+
+    if (subjectName === 'English EFL') {
+        return {
+            ...commonFields,
+            'EFL': '1',
+            'EFLStarting': subjectData.startLevel || '',
+            'EFLStartingNo': subjectData.startWS ?? '',
+            'EFLEnrollmentDate': subjectData.enrolDate || '',
+            'EFLClassDay': slot1.day || '',
+            'EFLClassTime': slot1.time || '',
+            'EFLClassDay2': slot2.day || '',
+            'EFLClassTime2': slot2.time || '',
+            'CurrentEFL': subjectData.currentLevel || '',
+            'EFLNo': subjectData.currentWS ?? ''
+        };
+    }
+
+    if (subjectName === 'Chinese (Trad)') {
+        return {
+            ...commonFields,
+            'Chinese': '1',
+            'CStarting': subjectData.startLevel || '',
+            'CStartingNo': subjectData.startWS ?? '',
+            'CEnrollmentDate': subjectData.enrolDate || '',
+            'CClassDay': slot1.day || '',
+            'CClassTime': slot1.time || '',
+            'CClassDay2': slot2.day || '',
+            'CClassTime2': slot2.time || '',
+            'CurrentChinese': subjectData.currentLevel || '',
+            'ChiNo': subjectData.currentWS ?? ''
+        };
+    }
+
+    if (subjectName === 'Chinese (Simp)') {
+        return {
+            ...commonFields,
+            'Chinese (Simp)': '1',
+            'CSStarting': subjectData.startLevel || '',
+            'CSStartingNo': subjectData.startWS ?? '',
+            'CSEnrollmentDate': subjectData.enrolDate || '',
+            'CSClassDay': slot1.day || '',
+            'CSClassTime': slot1.time || '',
+            'CSClassDay2': slot2.day || '',
+            'CSClassTime2': slot2.time || '',
+            'CurrentChineseSimp': subjectData.currentLevel || '',
+            'ChiSimpNo': subjectData.currentWS ?? ''
+        };
+    }
+
+    return commonFields;
+}
+
+async function exportBySubject(subject) {
+    try {
+        const students = await fetchAllStudents();
+
+        if (students.length === 0) {
+            alert(t('students.noStudentsExport'));
+            return;
+        }
+
+        const exportRows = [];
+
+        students.forEach(student => {
+            const subjects = Array.isArray(student.subjects)
+                ? student.subjects
+                : Object.values(student.subjects || {});
+
+            const matchingSubject = subjects.find(sub => {
+                if (!sub || sub.name !== subject) return false;
+
+                // Prefer the subject's own status.
+                // If subject status is missing, fall back to overallStatus.
+                const effectiveStatus = sub.status || student.overallStatus;
+
+                return isCurrentStatusValue(effectiveStatus);
+            });
+
+            if (matchingSubject) {
+                exportRows.push(
+                    buildSubjectExportRow(student, matchingSubject, subject)
+                );
+            }
+        });
+
+        if (exportRows.length === 0) {
+            alert(t('students.noMatchExport'));
+            return;
+        }
+
+        const ws = XLSX.utils.json_to_sheet(exportRows);
+        const wb = XLSX.utils.book_new();
+
+        const safeSheetName = String(subject || '')
+            .replace(/[\\\/\?\*\[\]:]/g, '')
+            .substring(0, 31) || 'Students';
+
+        const safeFileName = String(subject || '')
+            .trim()
+            .replace(/\s+/g, '_')
+            .replace(/[^\w\-]+/g, '_');
+
+        XLSX.utils.book_append_sheet(wb, ws, safeSheetName);
+
+        XLSX.writeFile(
+            wb,
+            `Kumon_Students_${safeFileName}_${new Date().toISOString().split('T')[0]}.xlsx`
+        );
+    } catch (err) {
+        console.error('❌ Subject export failed:', err);
+        alert(`Export failed: ${err.message}`);
+    }
+}
 
     async function exportByFilter(field, value) {
         await exportFilteredStudents(
