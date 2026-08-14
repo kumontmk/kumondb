@@ -60,9 +60,7 @@ function normalizeText(value) {
 function hasManagementPosition(positions) {
   return (
     positions.includes('manager') ||
-    positions.includes('master admin') ||
-    positions.includes('admin') ||
-    positions.includes('administrator')
+    positions.includes('master admin') 
   );
 }
 
