@@ -32,5 +32,13 @@ export default {
   commentRequired: "留言不能為空。",
   announcementDetails: "在此輸入公告內容...",
   titlePlaceholder: "公告標題",
-  loadFailed: "載入佈告欄失敗。"
+  loadFailed: "載入佈告欄失敗。",
+  hashtags: "主題標籤",
+  tagPlaceholder: "#English #Chinese #Admin",
+  tagHint: "最多 5 個標籤。輸入 # 後按 Enter 或逗號新增。",
+  maxTagsReached: "最多只能 5 個標籤。",
+  filteringBy: "篩選：",
+  clearFilter: "清除",
+  filterByTag: "點按以依此標籤篩選",
+  noResultsForTag: "沒有符合此標籤的公告。"
 };

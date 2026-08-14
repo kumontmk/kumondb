@@ -35,6 +35,16 @@
         <h2 data-i18n="announcements">Announcements</h2>
         <button id="newAnnouncementBtn" class="primary" type="button" data-i18n="newAnnouncement">+ New Announcement</button>
       </div>
+
+      <!-- Active hashtag filter bar -->
+      <div id="tagFilterBar" class="tag-filter-bar hidden">
+        <span id="filteringByLabel" data-i18n="filteringBy">Filtering by</span>
+        <span id="activeTagPill"></span>
+        <button id="clearTagFilterBtn" type="button" class="tag-filter-clear">
+          ✕ <span id="clearFilterLabel" data-i18n="clearFilter">Clear</span>
+        </button>
+      </div>
+
       <div id="announcementList" class="announcement-grid" aria-live="polite">
         <!-- Announcement cards are injected here -->
       </div>
@@ -51,7 +61,10 @@
       </div>
 
       <article class="announcement-detail-card">
-        <h2 id="detailTitle" class="detail-title"></h2>
+        <div class="detail-title-row">
+          <h2 id="detailTitle" class="detail-title"></h2>
+          <div id="detailTags" class="detail-tags"></div>
+        </div>
         <div id="detailMeta" class="announcement-meta"></div>
         <div id="detailContent" class="announcement-content ql-editor"></div>
 
@@ -89,6 +102,17 @@
           data-i18n-placeholder="titlePlaceholder"
           placeholder="Announcement title"
         />
+
+        <!-- Hashtag chip input -->
+        <label for="tagInput" data-i18n="hashtags">Hashtags</label>
+        <div id="tagInputWrap" class="tag-input-wrap">
+          <div id="tagChips" class="tag-chips"></div>
+          <input type="text" id="tagInput" autocomplete="off" spellcheck="false"
+                 data-i18n-placeholder="tagPlaceholder" placeholder="#English #Chinese #Admin" />
+          <div id="tagSuggestions" class="tag-suggestions hidden"></div>
+        </div>
+        <p class="tag-hint" data-i18n="tagHint">Up to 5 hashtags. Type # then press Enter or comma to add.</p>
+
         <label data-i18n="details">Details</label>
         <div id="editor"></div>
         <div class="modal-actions">

@@ -674,3 +674,192 @@ input[type="text"]:focus {
     width: 100%;
   }
 }
+
+/* =========================================
+   HASHTAG PILLS
+========================================= */
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.4;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: inherit;
+  background: #f1f5f9;
+  color: #475569;
+  transition: filter 0.15s ease, transform 0.1s ease;
+}
+button.tag-pill:hover {
+  filter: brightness(0.94);
+  transform: translateY(-1px);
+}
+button.tag-pill:focus-visible {
+  outline: 2px solid var(--primary-dark);
+  outline-offset: 1px;
+}
+
+/* Automatic palette — assigned by tag-name hash */
+.tag-color-0 { background: #e0f2fe; color: #0369a1; border-color: #7dd3fc; } /* blue   */
+.tag-color-1 { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; } /* red    */
+.tag-color-2 { background: #dcfce7; color: #15803d; border-color: #86efac; } /* green  */
+.tag-color-3 { background: #fef9c3; color: #a16207; border-color: #fde047; } /* yellow */
+.tag-color-4 { background: #f3e8ff; color: #7e22ce; border-color: #d8b4fe; } /* purple */
+.tag-color-5 { background: #ffedd5; color: #c2410c; border-color: #fdba74; } /* orange */
+.tag-color-6 { background: #fce7f3; color: #be185d; border-color: #f9a8d4; } /* pink   */
+.tag-color-7 { background: #ccfbf1; color: #0f766e; border-color: #5eead4; } /* teal   */
+.tag-color-8 { background: #e0e7ff; color: #4338ca; border-color: #a5b4fc; } /* indigo */
+.tag-color-9 { background: #f1f5f9; color: #475569; border-color: #cbd5e1; } /* slate  */
+
+.tag-remove {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 0 0 0 0.15rem;
+  color: inherit;
+  opacity: 0.7;
+}
+.tag-remove:hover { opacity: 1; }
+
+/* =========================================
+   TAG INPUT (modal)
+========================================= */
+.tag-input-wrap {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0.45rem 0.5rem;
+  margin-bottom: 0.35rem;
+  background: #fff;
+}
+.tag-input-wrap:focus-within {
+  border-color: var(--primary-dark);
+  box-shadow: 0 0 0 3px rgba(70, 130, 180, 0.12);
+}
+.tag-input-wrap > input[type="text"] {
+  flex: 1 1 140px;
+  min-width: 140px;
+  width: auto;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  padding: 0.3rem 0.2rem;
+  margin: 0;
+  font-size: 0.95rem;
+}
+.tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.tag-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+  margin-top: 0.3rem;
+  z-index: 20;
+  max-height: 180px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.tag-suggestions.hidden { display: none; }
+.tag-suggest-item {
+  display: flex;
+  align-items: center;
+  padding: 0.45rem 0.6rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+.tag-suggest-item:hover { background: #f1f5f9; }
+
+.tag-hint {
+  font-size: 0.8rem;
+  color: var(--text-light);
+  margin: 0 0 1rem;
+}
+.tag-hint-warn {
+  color: #dc3545;
+  font-weight: 700;
+}
+
+/* =========================================
+   TAG FILTER BAR (list view)
+========================================= */
+.tag-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+.tag-filter-clear {
+  border: none;
+  background: transparent;
+  color: var(--primary-dark);
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  font-family: inherit;
+}
+.tag-filter-clear:hover { background: var(--secondary); }
+
+/* =========================================
+   TITLE + PILLS LAYOUT (detail & cards)
+========================================= */
+.detail-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+.detail-title-row .detail-title {
+  margin-bottom: 0;
+}
+.detail-tags {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.announcement-card-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+.announcement-card-title-row .announcement-card-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.card-tags {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}

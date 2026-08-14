@@ -32,5 +32,15 @@ export default {
   commentRequired: "Comment cannot be empty.",
   announcementDetails: "Write announcement details here...",
   titlePlaceholder: "Announcement title",
-  loadFailed: "Failed to load bulletin."
+  loadFailed: "Failed to load bulletin.",
+
+  // Hashtags
+  hashtags: "Hashtags",
+  tagPlaceholder: "#English #Chinese #Admin",
+  tagHint: "Up to 5 hashtags. Type # then press Enter or comma to add.",
+  maxTagsReached: "Maximum of 5 hashtags.",
+  filteringBy: "Filtering by",
+  clearFilter: "Clear",
+  filterByTag: "Click to filter by this hashtag",
+  noResultsForTag: "No announcements with this hashtag."
 };

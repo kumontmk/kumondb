@@ -902,3 +902,42 @@ button:disabled {
 body.is-manager-or-admin .admin-only-card {
   display: flex !important;
 }
+
+/* =========================================
+   HASHTAG PILLS (Bulletin Preview)
+========================================= */
+.bulletin-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+  margin-bottom: 0.15rem;
+}
+
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.4;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  font-family: inherit;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+/* Automatic palette — assigned by tag-name hash */
+.tag-color-0 { background: #e0f2fe; color: #0369a1; border-color: #7dd3fc; }
+.tag-color-1 { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
+.tag-color-2 { background: #dcfce7; color: #15803d; border-color: #86efac; }
+.tag-color-3 { background: #fef9c3; color: #a16207; border-color: #fde047; }
+.tag-color-4 { background: #f3e8ff; color: #7e22ce; border-color: #d8b4fe; }
+.tag-color-5 { background: #ffedd5; color: #c2410c; border-color: #fdba74; }
+.tag-color-6 { background: #fce7f3; color: #be185d; border-color: #f9a8d4; }
+.tag-color-7 { background: #ccfbf1; color: #0f766e; border-color: #5eead4; }
+.tag-color-8 { background: #e0e7ff; color: #4338ca; border-color: #a5b4fc; }
+.tag-color-9 { background: #f1f5f9; color: #475569; border-color: #cbd5e1; }

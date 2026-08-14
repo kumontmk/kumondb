@@ -186,14 +186,44 @@ function formatBulletinDate(value) {
   }).format(date);
 }
 
+/* =========================================
+   HASHTAG HELPERS (for Bulletin Preview)
+========================================= */
+function normalizeTag(raw) {
+  return String(raw || '').replace(/#/g, '').trim();
+}
+
+function hashTag(tag) {
+  const s = String(tag || '').toLowerCase().trim();
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+function tagColorClass(tag) {
+  return 'tag-color-' + (hashTag(tag) % 10);
+}
+
+function renderBulletinTagPills(tags) {
+  if (!Array.isArray(tags)) return '';
+  return tags
+    .map(normalizeTag)
+    .filter(Boolean)
+    .map((tag) => `<span class="tag-pill ${tagColorClass(tag)}">#${escapeHtml(tag)}</span>`)
+    .join('');
+}
+
 function bulletinCardTemplate(id, announcement) {
   const excerpt = makeBulletinExcerpt(bulletinHtmlToPlainText(announcement.html));
+  const tagsHtml = renderBulletinTagPills(announcement.hashtags);
+  
   return `
     <a class="bulletin-card" href="announcements.html#announcement/${encodeURIComponent(id)}">
       <div class="bulletin-card-top">
         <span class="bulletin-card-title">${escapeHtml(announcement.title || '')}</span>
         <span class="bulletin-card-date">${escapeHtml(formatBulletinDate(announcement.createdAt))}</span>
       </div>
+      ${tagsHtml ? `<div class="bulletin-card-tags">${tagsHtml}</div>` : ''}
       <p class="bulletin-card-excerpt">${escapeHtml(excerpt)}</p>
       <div class="bulletin-card-footer">
         <span class="bulletin-card-author">👤 ${escapeHtml(announcement.createdByName || t('common.unknown'))}</span>
