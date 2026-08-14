@@ -23,7 +23,20 @@ export default {
     manageCenterCalendar: "Manage Center Calendar",
     manageCenterCalendarDesc: "Holidays, annual calendar & class schedules",
     employeeActivityLog: "Employee Activity Log",
-    employeeActivityLogDesc: "View employee name, date/time, center, page, and action."
+    employeeActivityLogDesc: "View employee name, date/time, center, page, and action"
+  },
+  bulletin: {
+    title: "📢 Bulletin Board",
+    viewAll: "View all →",
+    readMore: "Read more →",
+    empty: "No announcements yet.",
+    loadFailed: "Failed to load announcements.",
+    cardTitle: "Announcements",
+    cardDescription: "View announcements and join the discussion"
+  },
+  common: {
+    unknown: "Unknown",
+    logout: "Logout"
   },
   missing: {
     title: "⚠️ Missing Clock-Out Records",
@@ -49,7 +62,7 @@ export default {
     date: "Date",
     center: "Center",
     clockIn: "Clock In",
-    close: "Close",  
+    close: "Close",
     proposedOut: "Proposed Out",
     requested: "Requested",
     actions: "Actions",
@@ -63,6 +76,15 @@ export default {
     confirmApproveSingle: "Approve this proposed clock-out?",
     confirmDenySingle: "Deny this proposed clock-out? The employee can submit again.",
     approveFailed: "Failed to approve this request.",
-    denyFailed: "Failed to deny this request."
-  }
+    denyFailed: "Failed to deny this request.",
+  },
+  bulletin: {
+  title: "📢 Bulletin Board",
+  viewAll: "View all →",
+  readMore: "Read more →",
+  empty: "No announcements yet.",
+  loadFailed: "Failed to load announcements.",
+  cardTitle: "Announcements",
+  cardDescription: "View announcements and join the discussion"
+},
 };

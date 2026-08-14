@@ -1,27 +1,24 @@
 // centers.js
-
 import { db, logout } from './auth.js';
-
 import {
   ref,
   get,
   push,
   set,
-  update
+  update,
+  onValue
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-
 import {
   getAuth,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-
 import {
   i18nReady,
-  t
+  t,
+  currentLanguage
 } from './centers-i18n.js';
 
 const auth = getAuth();
-
 const centerGrid = document.getElementById('centerGrid');
 const centersLoader = document.getElementById('centersLoader');
 const userEmailEl = document.getElementById('userEmail');
@@ -30,7 +27,6 @@ const pageLoader = document.getElementById('page-loader');
 /* =========================================
    HELPERS
 ========================================= */
-
 function getStoredUserName() {
   try {
     const storedUser = sessionStorage.getItem('kumonUser');
@@ -45,15 +41,12 @@ function getStoredUserName() {
 
 function getEmpPositions(obj) {
   if (!obj) return [];
-
   if (Array.isArray(obj.positions)) {
     return obj.positions.filter(Boolean);
   }
-
   if (obj.position) {
     return [obj.position];
   }
-
   return [];
 }
 
@@ -85,17 +78,18 @@ function escapeHtml(value) {
 
 function formatRequestedTimestamp(value) {
   if (!value) return '-';
-
   const date = new Date(value);
-
   if (isNaN(date.getTime())) return '-';
-
   return date.toLocaleString();
+}
+
+function timestampMs(value) {
+  const date = new Date(value);
+  return isNaN(date.getTime()) ? 0 : date.getTime();
 }
 
 async function isManagerUser(user, userData) {
   if (!user) return false;
-
   const email = user.email?.toLowerCase() || '';
 
   // Master admin email
@@ -108,7 +102,6 @@ async function isManagerUser(user, userData) {
   const positions = getEmpPositions(userData).map(
     (p) => String(p).trim().toLowerCase()
   );
-
   if (hasManagementPosition(positions)) {
     return true;
   }
@@ -116,15 +109,12 @@ async function isManagerUser(user, userData) {
   try {
     // Fallback: check employees/{uid}
     const empUidSnap = await get(ref(db, `employees/${user.uid}`));
-
     if (empUidSnap.exists()) {
       const emp = empUidSnap.val();
-
       if (emp?.isDisabled !== true) {
         const empPositions = getEmpPositions(emp).map(
           (p) => String(p).trim().toLowerCase()
         );
-
         if (
           empPositions.includes('manager') ||
           empPositions.includes('master admin')
@@ -137,17 +127,14 @@ async function isManagerUser(user, userData) {
     // Fallback: find employee record by email
     if (email) {
       const empSnap = await get(ref(db, 'employees'));
-
       if (empSnap.exists()) {
         const matchingEmp = Object.values(empSnap.val()).find(
           (e) => normalizeText(e.email) === email
         );
-
         if (matchingEmp && matchingEmp.isDisabled !== true) {
           const empPositions = getEmpPositions(matchingEmp).map(
             (p) => String(p).trim().toLowerCase()
           );
-
           if (
             empPositions.includes('manager') ||
             empPositions.includes('master admin')
@@ -165,20 +152,118 @@ async function isManagerUser(user, userData) {
 }
 
 /* =========================================
+   📢 BULLETIN BOARD PREVIEW (ALL employees)
+   Latest 3 announcements; click opens the
+   full announcement on announcements.html.
+========================================= */
+let bulletinSubscribed = false;
+let bulletinAnnouncements = {};
+
+function getLang() {
+  const l = typeof currentLanguage === 'function' ? currentLanguage() : currentLanguage;
+  return l === 'zh-TW' ? 'zh-TW' : 'en';
+}
+
+function bulletinHtmlToPlainText(html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = String(html || '').replace(/<[^>]*>/g, ' ');
+  return (tmp.textContent || '').replace(/\s+/g, ' ').trim();
+}
+
+function makeBulletinExcerpt(text, maxLen = 110) {
+  if (!text) return '';
+  return text.length <= maxLen ? text : text.slice(0, maxLen).trimEnd() + '…';
+}
+
+function formatBulletinDate(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return String(value);
+  const locale = getLang() === 'zh-TW' ? 'zh-TW' : 'en-US';
+  return new Intl.DateTimeFormat(locale, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date);
+}
+
+function bulletinCardTemplate(id, announcement) {
+  const excerpt = makeBulletinExcerpt(bulletinHtmlToPlainText(announcement.html));
+  return `
+    <a class="bulletin-card" href="announcements.html#announcement/${encodeURIComponent(id)}">
+      <div class="bulletin-card-top">
+        <span class="bulletin-card-title">${escapeHtml(announcement.title || '')}</span>
+        <span class="bulletin-card-date">${escapeHtml(formatBulletinDate(announcement.createdAt))}</span>
+      </div>
+      <p class="bulletin-card-excerpt">${escapeHtml(excerpt)}</p>
+      <div class="bulletin-card-footer">
+        <span class="bulletin-card-author">👤 ${escapeHtml(announcement.createdByName || t('common.unknown'))}</span>
+        <span class="bulletin-card-cta">${escapeHtml(t('bulletin.readMore'))}</span>
+      </div>
+    </a>
+  `;
+}
+
+function renderBulletinPreview() {
+  const grid = document.getElementById('bulletinPreviewGrid');
+  if (!grid) return;
+
+  const latest = Object.entries(bulletinAnnouncements || {})
+    .sort((a, b) => timestampMs(b[1]?.createdAt) - timestampMs(a[1]?.createdAt))
+    .slice(0, 3);
+
+  if (!latest.length) {
+    grid.innerHTML = `<div class="bulletin-empty">${escapeHtml(t('bulletin.empty'))}</div>`;
+    return;
+  }
+
+  grid.innerHTML = latest
+    .map(([id, announcement]) => bulletinCardTemplate(id, announcement))
+    .join('');
+}
+
+function subscribeBulletinPreview() {
+  if (bulletinSubscribed) return;
+  bulletinSubscribed = true;
+
+  onValue(
+    ref(db, 'announcements'),
+    (snapshot) => {
+      bulletinAnnouncements = snapshot.val() || {};
+      renderBulletinPreview();
+    },
+    (error) => {
+      console.error('Error loading bulletin preview:', error);
+      const grid = document.getElementById('bulletinPreviewGrid');
+      if (grid) {
+        grid.innerHTML = `<div class="bulletin-empty">${escapeHtml(t('bulletin.loadFailed'))}</div>`;
+      }
+    }
+  );
+}
+
+/* =========================================
    PAGE INIT
 ========================================= */
-
 function startCentersPage() {
+  // Re-render bulletin cards when language changes
+  document.querySelector('.language-switch')?.addEventListener('change', () => {
+    setTimeout(renderBulletinPreview, 0);
+  });
+
   onAuthStateChanged(auth, async (user) => {
     if (!user) {
       window.location.href = 'index.html';
       return;
     }
-   // 👤 Show the user's name (email kept as hover tooltip)
+
+    // 👤 Show the user's name (email kept as hover tooltip)
     if (userEmailEl) {
       userEmailEl.textContent = getStoredUserName() || user.email;
       userEmailEl.title = user.email || '';
     }
+
     document.getElementById('logoutBtn')?.addEventListener('click', logout);
 
     try {
@@ -190,16 +275,19 @@ function startCentersPage() {
         return;
       }
       const userData = userSnap.val();
+
       // Prefer the profile name; fall back to sessionStorage, then email
       const displayName =
         userData?.name ||
         userData?.englishName ||
         getStoredUserName() ||
         user.email;
+
       if (userEmailEl) {
         userEmailEl.textContent = displayName;
         userEmailEl.title = user.email || '';
       }
+
       const isAdmin = user.email?.toLowerCase() === 'kumonchamps@gmail.com';
 
       // 🛡️ ROLE CHECK: Show admin-only cards only for managers/admins
@@ -208,10 +296,11 @@ function startCentersPage() {
         document.body.classList.add('is-manager-or-admin');
       }
 
-      const userPermissions = userData.permissions?.centers || {};
-
       // 2) ⚡ Page is interactive NOW — admin cards tappable immediately
       pageLoader?.classList.add('hidden');
+
+      // 📢 Bulletin preview for ALL employees (independent of centers)
+      subscribeBulletinPreview();
 
       // 3) Centers load independently at the bottom (own spinner)
       const centersPromise = loadCentersGrid(user, userData, isAdmin);
@@ -249,7 +338,7 @@ function startCentersPage() {
 
 /* =========================================
    CENTERS GRID — independent loader at the bottom
-   ========================================= */
+========================================= */
 async function loadCentersGrid(user, userData, isAdmin) {
   try {
     const userPermissions = userData.permissions?.centers || {};
@@ -306,11 +395,7 @@ async function loadCentersGrid(user, userData, isAdmin) {
     return accessibleCenters;
   } catch (err) {
     console.error("Error loading centers:", err);
-    centerGrid.innerHTML = `
-      <p style="text-align:center; color:#dc3545; grid-column: 1/-1;">
-        ${escapeHtml(t('centers.errorLoading'))}
-      </p>
-    `;
+    centerGrid.innerHTML = `<p style="text-align:center; color:#dc3545; grid-column: 1/-1;"> ${escapeHtml(t('centers.errorLoading'))} </p>`;
     centersLoader?.classList.add('hidden');
     return [];
   }
@@ -319,14 +404,10 @@ async function loadCentersGrid(user, userData, isAdmin) {
 /* =========================================
    EMPLOYEE / MANAGER MISSING CLOCK-OUT CHECK
 ========================================= */
-
 async function checkMissingClockOuts() {
   const user = auth.currentUser;
-
   if (!user) {
-    return {
-      hasMissing: false
-    };
+    return { hasMissing: false };
   }
 
   const today = new Date().toISOString().split('T')[0];
@@ -339,10 +420,7 @@ async function checkMissingClockOuts() {
 
     if (!timecardsSnap.exists()) {
       console.log("No timecards found in database.");
-
-      return {
-        hasMissing: false
-      };
+      return { hasMissing: false };
     }
 
     const timecards = timecardsSnap.val();
@@ -353,7 +431,6 @@ async function checkMissingClockOuts() {
     // Exclude CONFIRMED and PENDING.
     // DENIED can appear again so employee can resubmit.
     const excludedVerificationKeys = new Set();
-
     Object.entries(verifications).forEach(([id, v]) => {
       if (
         v.empId === user.uid &&
@@ -364,29 +441,23 @@ async function checkMissingClockOuts() {
     });
 
     const missingRecords = [];
-
     Object.entries(timecards).forEach(([date, dayData]) => {
       if (date >= today) return; // Ignore today's records
-
       const empData = dayData[user.uid];
-
       if (!empData || !empData.logs) return;
 
       const rawLogs = Array.isArray(empData.logs)
         ? empData.logs
         : Object.values(empData.logs);
-
       const sortedLogs = [...rawLogs].sort((a, b) =>
         a.time.localeCompare(b.time)
       );
 
       let currentIn = null;
-
       for (const log of sortedLogs) {
         if (log.type === 'in') {
           if (currentIn) {
             const recordKey = `${date}_${currentIn.time}`;
-
             if (!excludedVerificationKeys.has(recordKey)) {
               missingRecords.push({
                 date,
@@ -396,7 +467,6 @@ async function checkMissingClockOuts() {
               });
             }
           }
-
           currentIn = log;
         } else if (log.type === 'out') {
           if (currentIn && currentIn.location === log.location) {
@@ -407,7 +477,6 @@ async function checkMissingClockOuts() {
 
       if (currentIn) {
         const recordKey = `${date}_${currentIn.time}`;
-
         if (!excludedVerificationKeys.has(recordKey)) {
           missingRecords.push({
             date,
@@ -428,92 +497,71 @@ async function checkMissingClockOuts() {
       };
     }
 
-    return {
-      hasMissing: false
-    };
+    return { hasMissing: false };
   } catch (err) {
     console.error("Error checking missing clock-outs:", err);
-
-    return {
-      hasMissing: false
-    };
+    return { hasMissing: false };
   }
 }
 
 /* =========================================
    MISSING CLOCK-OUT MODAL
 ========================================= */
-
 function showMissingClockOutModal(records) {
   return new Promise((resolve) => {
     let modal = document.getElementById('missingClockOutModal');
-
     let finished = false;
 
     const finish = () => {
       if (finished) return;
-
       finished = true;
-
       if (modal) {
         modal.style.display = 'none';
       }
-
       resolve();
     };
 
     if (!modal) {
       modal = document.createElement('div');
-
       modal.id = 'missingClockOutModal';
       modal.className = 'modal';
       modal.style.zIndex = '10000';
-
       modal.innerHTML = `
         <div class="modal-content" style="max-width: 600px; text-align: left;">
           <button class="close-btn" id="closeMissingModalBtn" type="button">&times;</button>
-
           <h3 style="text-align: center; color: #dc3545; margin-bottom: 1rem;">
             ${escapeHtml(t('missing.title'))}
           </h3>
-
           <p style="color: #666; margin-bottom: 1.5rem; text-align: center;">
             ${escapeHtml(t('missing.intro'))}
           </p>
-
           <div
             id="missingRecordsList"
             style="max-height: 400px; overflow-y: auto; margin-bottom: 1rem;"
           ></div>
-
           <div style="display:flex; gap:1rem; justify-content:flex-end;">
             <button class="secondary" id="remindLaterBtn" type="button">
               ${escapeHtml(t('missing.remindLater'))}
             </button>
-
             <button class="primary" id="submitMissingClockOutsBtn" type="button">
               ${escapeHtml(t('missing.submitForReview'))}
             </button>
           </div>
         </div>
       `;
-
       document.body.appendChild(modal);
     }
 
     const closeBtn = document.getElementById('closeMissingModalBtn');
     const remindBtn = document.getElementById('remindLaterBtn');
-
     if (closeBtn) closeBtn.onclick = finish;
     if (remindBtn) remindBtn.onclick = finish;
 
     const list = document.getElementById('missingRecordsList');
-
     list.innerHTML = '';
 
     records.forEach((rec) => {
       const item = document.createElement('div');
-
       item.style.cssText = `
         padding: 0.75rem;
         background: #f8f9fa;
@@ -521,27 +569,22 @@ function showMissingClockOutModal(records) {
         margin-bottom: 0.5rem;
         border: 1px solid #e2e8f0;
       `;
-
       item.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
           <span style="font-weight:600; color:#4682B4;">
             📅 ${escapeHtml(rec.date)}
           </span>
-
           <span style="font-size:0.85rem; color:#666;">
             📍 ${escapeHtml(rec.center || t('common.unknown'))}
           </span>
         </div>
-
         <div style="font-size:0.9rem; margin-bottom:0.5rem;">
           ${escapeHtml(t('missing.clockIn'))}: <strong>${escapeHtml(rec.inTime)}</strong> |
           ${escapeHtml(t('missing.missing'))}: <strong style="color:#dc3545;">${escapeHtml(t('missing.clockOut'))}</strong>
         </div>
-
         <label style="font-size:0.85rem; font-weight:500; display:block; margin-bottom:0.25rem;">
           ${escapeHtml(t('missing.proposedClockOut'))}
         </label>
-
         <input
           type="time"
           class="missing-time-input"
@@ -553,34 +596,27 @@ function showMissingClockOutModal(records) {
           style="width:100%; padding:0.5rem; border:1px solid #cbd5e1; border-radius:4px;"
         >
       `;
-
       list.appendChild(item);
     });
 
     modal.style.display = 'flex';
 
     const submitBtn = document.getElementById('submitMissingClockOutsBtn');
-
     if (submitBtn) {
       const newSubmitBtn = submitBtn.cloneNode(true);
-
       submitBtn.parentNode.replaceChild(newSubmitBtn, submitBtn);
-
       newSubmitBtn.disabled = false;
       newSubmitBtn.textContent = t('missing.submitForReview');
 
       newSubmitBtn.addEventListener('click', async () => {
         const inputs = document.querySelectorAll('.missing-time-input');
-
         const recordsToSubmit = [];
-
         let hasError = false;
         let timeError = false;
 
         inputs.forEach((input) => {
           const time = input.value;
           const inTime = input.dataset.inTime;
-
           if (!time) {
             hasError = true;
             input.style.borderColor = '#dc3545';
@@ -589,7 +625,6 @@ function showMissingClockOutModal(records) {
             input.style.borderColor = '#dc3545';
           } else {
             input.style.borderColor = '#cbd5e1';
-
             recordsToSubmit.push({
               empId: input.dataset.empId,
               date: input.dataset.date,
@@ -605,7 +640,6 @@ function showMissingClockOutModal(records) {
           alert(t('missing.fillAllMissing'));
           return;
         }
-
         if (timeError) {
           alert(t('missing.outAfterIn'));
           return;
@@ -616,28 +650,20 @@ function showMissingClockOutModal(records) {
 
         try {
           let userName = '';
-
           try {
             const storedUser = sessionStorage.getItem('kumonUser');
-
             if (storedUser) {
               userName = JSON.parse(storedUser)?.name || '';
             }
           } catch (parseErr) {
-            console.error(
-              'Error parsing kumonUser from sessionStorage:',
-              parseErr
-            );
+            console.error('Error parsing kumonUser from sessionStorage:', parseErr);
           }
 
           for (const rec of recordsToSubmit) {
             const verificationsSnap = await get(ref(db, 'timecardVerifications'));
-
             let existingId = null;
-
             if (verificationsSnap.exists()) {
               const verifications = verificationsSnap.val();
-
               Object.entries(verifications).forEach(([id, v]) => {
                 if (
                   v.empId === rec.empId &&
@@ -656,18 +682,14 @@ function showMissingClockOutModal(records) {
               center: rec.center,
               inTime: rec.inTime,
               missingType: rec.missingType,
-              proposedOutTime:
-                rec.missingType === 'out' ? rec.proposedTime : '',
+              proposedOutTime: rec.missingType === 'out' ? rec.proposedTime : '',
               status: 'pending',
               requestedAt: new Date().toISOString(),
               resubmittedAt: existingId ? new Date().toISOString() : null
             };
 
             if (existingId) {
-              await update(
-                ref(db, `timecardVerifications/${existingId}`),
-                verificationData
-              );
+              await update(ref(db, `timecardVerifications/${existingId}`), verificationData);
             } else {
               const newRef = push(ref(db, 'timecardVerifications'));
               await set(newRef, verificationData);
@@ -675,11 +697,9 @@ function showMissingClockOutModal(records) {
           }
 
           alert(t('missing.submittedSuccess'));
-
           finish();
         } catch (err) {
           console.error(err);
-
           alert(t('missing.submitFailed'));
         } finally {
           newSubmitBtn.disabled = false;
@@ -693,7 +713,6 @@ function showMissingClockOutModal(records) {
 /* =========================================
    MANAGER PENDING APPROVAL CHECK
 ========================================= */
-
 async function checkPendingApprovals({
   isAdmin = false,
   accessibleCenters = [],
@@ -701,7 +720,6 @@ async function checkPendingApprovals({
 }) {
   try {
     const verificationsSnap = await get(ref(db, 'timecardVerifications'));
-
     if (!verificationsSnap.exists()) {
       return;
     }
@@ -711,24 +729,18 @@ async function checkPendingApprovals({
     // Try to load employee names.
     // If database rules prevent this, fall back to empName saved in verification.
     let employees = {};
-
     try {
       const employeesSnap = await get(ref(db, 'employees'));
-
       if (employeesSnap.exists()) {
         employees = employeesSnap.val() || {};
       }
     } catch (employeeErr) {
-      console.warn(
-        'Could not load employee names for pending approvals:',
-        employeeErr
-      );
+      console.warn('Could not load employee names for pending approvals:', employeeErr);
     }
 
     const accessibleCenterNames = new Set(
       accessibleCenters.map((c) => normalizeText(c.name))
     );
-
     const accessibleCenterIds = new Set(
       accessibleCenters.map((c) => c.id)
     );
@@ -736,19 +748,13 @@ async function checkPendingApprovals({
     const pending = Object.entries(verifications)
       .map(([id, v]) => {
         const emp = employees[v.empId] || {};
-
         const displayName =
           v.empName ||
           emp.englishName ||
           emp.name ||
           v.empId ||
           t('common.unknown');
-
-        return {
-          id,
-          ...v,
-          displayName
-        };
+        return { id, ...v, displayName };
       })
       .filter((v) => String(v.status || '').toLowerCase() === 'pending')
       .filter(
@@ -766,41 +772,32 @@ async function checkPendingApprovals({
 
         // If future code saves centerId directly on verification
         const rawCenterId = String(v.centerId || '');
-
         if (rawCenterId && accessibleCenterIds.has(rawCenterId)) {
           return true;
         }
 
         // Sometimes center may be saved as center ID instead of center name
         const rawCenter = String(v.center || '');
-
         if (rawCenter && accessibleCenterIds.has(rawCenter)) {
           return true;
         }
 
         // Match by center name
         const centerName = normalizeText(rawCenter);
-
         return centerName && accessibleCenterNames.has(centerName);
       })
       .sort((a, b) => {
         const dateA = String(a.date || '');
         const dateB = String(b.date || '');
-
         if (dateA !== dateB) {
           return dateB.localeCompare(dateA);
         }
-
         const requestedA = String(a.requestedAt || a.resubmittedAt || '');
         const requestedB = String(b.requestedAt || b.resubmittedAt || '');
-
         if (requestedA !== requestedB) {
           return requestedB.localeCompare(requestedA);
         }
-
-        return String(a.displayName || '').localeCompare(
-          String(b.displayName || '')
-        );
+        return String(a.displayName || '').localeCompare(String(b.displayName || ''));
       });
 
     if (pending.length > 0) {
@@ -814,37 +811,29 @@ async function checkPendingApprovals({
 /* =========================================
    MANAGER PENDING APPROVAL MODAL
 ========================================= */
-
 function showPendingApprovalsModal(records) {
   const existing = document.getElementById('pendingApprovalsModal');
-
   if (existing) {
     existing.remove();
   }
 
   const modal = document.createElement('div');
-
   modal.id = 'pendingApprovalsModal';
   modal.className = 'modal';
   modal.style.zIndex = '10001';
-
   modal.innerHTML = `
     <div class="modal-content pending-approvals-modal">
       <button class="close-btn pending-close-btn" type="button">×</button>
-
       <h3 style="text-align:center; color:#4682B4; margin-bottom:1rem;">
         ${escapeHtml(t('pending.title'))}
       </h3>
-
       <p style="color:#666; margin-bottom:1rem; text-align:center;">
         ${escapeHtml(t('pending.intro'))}
       </p>
-
       <div class="pending-summary">
         <span id="pendingApprovalCount" class="pending-count"></span>
         <span class="pending-hint">${escapeHtml(t('pending.hint'))}</span>
       </div>
-
       <div class="pending-table-wrapper">
         <table class="pending-approvals-table">
           <thead>
@@ -865,27 +854,22 @@ function showPendingApprovalsModal(records) {
               <th>${escapeHtml(t('pending.actions'))}</th>
             </tr>
           </thead>
-
           <tbody id="pendingApprovalsTableBody"></tbody>
         </table>
       </div>
-
       <div class="pending-modal-actions">
         <button class="secondary pending-close-btn" type="button">
           ${escapeHtml(t('pending.close'))}
         </button>
-
         <button class="danger" id="denySelectedPendingBtn" type="button" disabled>
           ${escapeHtml(t('pending.denySelected'))}
         </button>
-
         <button class="primary" id="approveSelectedPendingBtn" type="button" disabled>
           ${escapeHtml(t('pending.approveSelected'))}
         </button>
       </div>
     </div>
   `;
-
   document.body.appendChild(modal);
 
   const tbody = modal.querySelector('#pendingApprovalsTableBody');
@@ -897,7 +881,6 @@ function showPendingApprovalsModal(records) {
   function updateCount() {
     const remainingRows = tbody.querySelectorAll('tr.pending-row');
     const remaining = remainingRows.length;
-
     countEl.textContent = `${remaining} ${t('pending.approvalLabel')}`;
 
     if (remaining === 0) {
@@ -906,11 +889,9 @@ function showPendingApprovalsModal(records) {
           <td colspan="8">${escapeHtml(t('pending.noPending'))}</td>
         </tr>
       `;
-
       selectAll.checked = false;
       selectAll.indeterminate = false;
       selectAll.disabled = true;
-
       approveSelectedBtn.disabled = true;
       denySelectedBtn.disabled = true;
     } else {
@@ -926,16 +907,13 @@ function showPendingApprovalsModal(records) {
 
   function updateBulkButtons() {
     const selected = getSelectedIds();
-
     approveSelectedBtn.disabled = selected.length === 0;
     denySelectedBtn.disabled = selected.length === 0;
 
     const boxes = Array.from(
       tbody.querySelectorAll('.pending-select:not(:disabled)')
     );
-
     selectAll.checked = boxes.length > 0 && boxes.every((cb) => cb.checked);
-
     selectAll.indeterminate =
       boxes.some((cb) => cb.checked) && !boxes.every((cb) => cb.checked);
   }
@@ -943,7 +921,6 @@ function showPendingApprovalsModal(records) {
   // Populate table
   records.forEach((rec) => {
     const tr = document.createElement('tr');
-
     tr.className = 'pending-row';
     tr.dataset.id = rec.id;
 
@@ -959,27 +936,23 @@ function showPendingApprovalsModal(records) {
           value="${escapeHtml(rec.id)}"
         >
       </td>
-
       <td>${escapeHtml(rec.displayName || t('common.unknown'))}</td>
       <td>${escapeHtml(rec.date || '-')}</td>
       <td>${escapeHtml(rec.center || '-')}</td>
       <td>${escapeHtml(rec.inTime || '-')}</td>
       <td><strong>${escapeHtml(rec.proposedOutTime || '-')}</strong></td>
       <td>${escapeHtml(requested)}</td>
-
       <td>
         <div class="pending-row-actions">
           <button class="primary btn-small pending-approve-btn" type="button">
             ${escapeHtml(t('pending.approve'))}
           </button>
-
           <button class="danger btn-small pending-deny-btn" type="button">
             ${escapeHtml(t('pending.deny'))}
           </button>
         </div>
       </td>
     `;
-
     tbody.appendChild(tr);
   });
 
@@ -1005,7 +978,6 @@ function showPendingApprovalsModal(records) {
     modal.querySelectorAll('.pending-select:not(:disabled)').forEach((cb) => {
       cb.checked = selectAll.checked;
     });
-
     updateBulkButtons();
   });
 
@@ -1019,7 +991,6 @@ function showPendingApprovalsModal(records) {
   // Bulk approve selected
   approveSelectedBtn.addEventListener('click', async () => {
     const ids = getSelectedIds();
-
     if (ids.length === 0) return;
 
     if (!confirm(t('pending.confirmApproveSelected', { count: ids.length }))) {
@@ -1031,22 +1002,17 @@ function showPendingApprovalsModal(records) {
     selectAll.disabled = true;
 
     for (const id of ids) {
-      await processPendingVerification(id, true, {
-        tbody,
-        updateCount
-      });
+      await processPendingVerification(id, true, { tbody, updateCount });
     }
 
     selectAll.disabled =
       tbody.querySelectorAll('tr.pending-row').length === 0;
-
     updateBulkButtons();
   });
 
   // Bulk deny selected
   denySelectedBtn.addEventListener('click', async () => {
     const ids = getSelectedIds();
-
     if (ids.length === 0) return;
 
     if (!confirm(t('pending.confirmDenySelected', { count: ids.length }))) {
@@ -1058,49 +1024,33 @@ function showPendingApprovalsModal(records) {
     selectAll.disabled = true;
 
     for (const id of ids) {
-      await processPendingVerification(id, false, {
-        tbody,
-        updateCount
-      });
+      await processPendingVerification(id, false, { tbody, updateCount });
     }
 
     selectAll.disabled =
       tbody.querySelectorAll('tr.pending-row').length === 0;
-
     updateBulkButtons();
   });
 
   // Single approve/deny buttons
   tbody.addEventListener('click', async (e) => {
     const btn = e.target.closest('button');
-
     if (!btn) return;
 
     const row = btn.closest('tr.pending-row');
-
     if (!row) return;
 
     const id = row.dataset.id;
 
     if (btn.classList.contains('pending-approve-btn')) {
       if (!confirm(t('pending.confirmApproveSingle'))) return;
-
-      await processPendingVerification(id, true, {
-        tbody,
-        updateCount
-      });
-
+      await processPendingVerification(id, true, { tbody, updateCount });
       updateBulkButtons();
     }
 
     if (btn.classList.contains('pending-deny-btn')) {
       if (!confirm(t('pending.confirmDenySingle'))) return;
-
-      await processPendingVerification(id, false, {
-        tbody,
-        updateCount
-      });
-
+      await processPendingVerification(id, false, { tbody, updateCount });
       updateBulkButtons();
     }
   });
@@ -1109,31 +1059,25 @@ function showPendingApprovalsModal(records) {
 /* =========================================
    APPROVE / DENY PENDING VERIFICATION
 ========================================= */
-
 async function processPendingVerification(id, approve, ui) {
   const row = ui?.tbody
     ? Array.from(ui.tbody.querySelectorAll('tr.pending-row')).find(
         (r) => r.dataset.id === id
       )
     : null;
-
   const buttons = row ? Array.from(row.querySelectorAll('button')) : [];
   const checkbox = row ? row.querySelector('.pending-select') : null;
 
   try {
     buttons.forEach((b) => (b.disabled = true));
-
     if (checkbox) {
       checkbox.disabled = true;
     }
 
     const vSnap = await get(ref(db, `timecardVerifications/${id}`));
-
     if (!vSnap.exists()) {
       if (row) row.remove();
-
       if (ui?.updateCount) ui.updateCount();
-
       return;
     }
 
@@ -1142,15 +1086,12 @@ async function processPendingVerification(id, approve, ui) {
     // If it is no longer pending, remove it from the modal
     if (String(v.status || '').toLowerCase() !== 'pending') {
       if (row) row.remove();
-
       if (ui?.updateCount) ui.updateCount();
-
       return;
     }
 
     if (approve) {
       const proposedOutTime = v.proposedOutTime;
-
       if (!v.date || !v.empId || !proposedOutTime) {
         throw new Error('Missing required verification data.');
       }
@@ -1165,9 +1106,7 @@ async function processPendingVerification(id, approve, ui) {
       });
 
       const daySnap = await get(ref(db, `timecards/${v.date}/${v.empId}`));
-
       let logs = daySnap.val()?.logs || [];
-
       if (!Array.isArray(logs)) {
         logs = Object.values(logs);
       }
@@ -1185,14 +1124,10 @@ async function processPendingVerification(id, approve, ui) {
           time: proposedOutTime,
           location
         });
-
         logs.sort((a, b) =>
           String(a.time || '').localeCompare(String(b.time || ''))
         );
-
-        await update(ref(db, `timecards/${v.date}/${v.empId}`), {
-          logs
-        });
+        await update(ref(db, `timecards/${v.date}/${v.empId}`), { logs });
       }
     } else {
       await update(ref(db, `timecardVerifications/${id}`), {
@@ -1203,17 +1138,13 @@ async function processPendingVerification(id, approve, ui) {
     }
 
     if (row) row.remove();
-
     if (ui?.updateCount) {
       ui.updateCount();
     }
   } catch (err) {
     console.error('Error processing pending verification:', err);
-
     alert(t(approve ? 'pending.approveFailed' : 'pending.denyFailed'));
-
     buttons.forEach((b) => (b.disabled = false));
-
     if (checkbox) {
       checkbox.disabled = false;
     }
@@ -1223,7 +1154,6 @@ async function processPendingVerification(id, approve, ui) {
 /* =========================================
    START PAGE AFTER I18N READY
 ========================================= */
-
 i18nReady
   .then(() => {
     startCentersPage();

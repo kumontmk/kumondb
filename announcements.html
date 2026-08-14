@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title data-i18n="documentTitle">Announcements - Kumon DB</title>
+
+  <!-- Quill rich text editor -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" />
+  <script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"></script>
+
+  <!-- DOMPurify (sanitizes rich text before rendering) -->
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+
+  <link rel="stylesheet" href="announcements.css" />
+</head>
+<body>
+  <!-- Page loader -->
+  <div id="page-loader">
+    <div class="spinner"></div>
+    <p data-i18n="loading">Loading announcements...</p>
+  </div>
+
+  <!-- Header: back button far LEFT, page title far RIGHT, always in one line -->
+  <header>
+    <a id="backBtn" class="back-link" href="centers.html" data-i18n="backToCenters">← Back to Centers</a>
+    <h1 data-i18n="headerTitle">📢 Announcements</h1>
+  </header>
+
+  <!-- Main content -->
+  <main class="dashboard">
+    <!-- ============ LIST VIEW: clickable announcement cards ============ -->
+    <section id="listView" class="announcement-section">
+      <div class="toolbar">
+        <h2 data-i18n="announcements">Announcements</h2>
+        <button id="newAnnouncementBtn" class="primary" type="button" data-i18n="newAnnouncement">+ New Announcement</button>
+      </div>
+      <div id="announcementList" class="announcement-grid" aria-live="polite">
+        <!-- Announcement cards are injected here -->
+      </div>
+    </section>
+
+    <!-- ============ DETAIL VIEW: full announcement + comments ============ -->
+    <section id="detailView" class="announcement-section hidden">
+      <div class="toolbar">
+        <button id="backToListBtn" class="secondary" type="button" data-i18n="backToList">← Back to announcements</button>
+        <div id="detailActions" class="announcement-actions hidden">
+          <button id="editAnnouncementBtn" class="secondary btn-small" type="button" data-i18n="edit">Edit</button>
+          <button id="deleteAnnouncementBtn" class="danger btn-small" type="button" data-i18n="delete">Delete</button>
+        </div>
+      </div>
+
+      <article class="announcement-detail-card">
+        <h2 id="detailTitle" class="detail-title"></h2>
+        <div id="detailMeta" class="announcement-meta"></div>
+        <div id="detailContent" class="announcement-content ql-editor"></div>
+
+        <div class="comments-section">
+          <h4 id="commentsHeading"></h4>
+          <div id="commentList" class="comment-list"></div>
+          <form id="commentForm" class="comment-form">
+            <input
+              type="text"
+              name="commentText"
+              maxlength="1000"
+              required
+              data-i18n-placeholder="writeComment"
+              placeholder="Write a comment..."
+            />
+            <button type="submit" class="primary" data-i18n="addComment">Post</button>
+          </form>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <!-- ============ New / Edit announcement modal ============ -->
+  <div id="announcementModal" class="modal hidden">
+    <div class="modal-content announcement-modal-content">
+      <button id="closeAnnouncementModalBtn" class="close-btn" type="button" aria-label="Close">×</button>
+      <h3 id="announcementModalTitle" data-i18n="newAnnouncement">New Announcement</h3>
+      <form id="announcementForm">
+        <label for="announcementTitle" data-i18n="title">Title</label>
+        <input
+          type="text"
+          id="announcementTitle"
+          maxlength="200"
+          required
+          data-i18n-placeholder="titlePlaceholder"
+          placeholder="Announcement title"
+        />
+        <label data-i18n="details">Details</label>
+        <div id="editor"></div>
+        <div class="modal-actions">
+          <button type="button" id="cancelAnnouncementBtn" class="secondary" data-i18n="cancel">Cancel</button>
+          <button type="submit" id="saveAnnouncementBtn" class="primary" data-i18n="save">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Activity logger -->
+  <script type="module" src="./activity-logger-init.js"></script>
+
+  <!-- i18n Translation Layer -->
+  <script type="module" src="announcements-i18n.js"></script>
+
+  <!-- Page logic -->
+  <script type="module" src="announcements.js"></script>
+</body>
+</html>

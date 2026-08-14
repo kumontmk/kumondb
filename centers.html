@@ -34,6 +34,32 @@
   </header>
 
   <main class="dashboard">
+    <!-- 📢 BULLETIN BOARD — visible to ALL employees (latest 3 announcements) -->
+    <section class="bulletin-preview" aria-labelledby="bulletinPreviewTitle">
+      <div class="bulletin-preview-header">
+        <h2 id="bulletinPreviewTitle" data-i18n="bulletin.title">📢 Bulletin Board</h2>
+        <a class="bulletin-view-all" href="announcements.html" data-i18n="bulletin.viewAll">View all →</a>
+      </div>
+      <div id="bulletinPreviewGrid" class="bulletin-preview-grid">
+        <!-- Loading skeletons (replaced when data arrives) -->
+        <div class="bulletin-card bulletin-skeleton" aria-hidden="true">
+          <div class="sk-line sk-title"></div>
+          <div class="sk-line"></div>
+          <div class="sk-line sk-short"></div>
+        </div>
+        <div class="bulletin-card bulletin-skeleton" aria-hidden="true">
+          <div class="sk-line sk-title"></div>
+          <div class="sk-line"></div>
+          <div class="sk-line sk-short"></div>
+        </div>
+        <div class="bulletin-card bulletin-skeleton" aria-hidden="true">
+          <div class="sk-line sk-title"></div>
+          <div class="sk-line"></div>
+          <div class="sk-line sk-short"></div>
+        </div>
+      </div>
+    </section>
+
     <!-- 1️⃣ CENTER ADMINISTRATION — instantly tappable, no waiting -->
     <section class="admin-section">
       <h3 data-i18n="admin.centerAdministration">Center Tools</h3>
@@ -47,7 +73,7 @@
             </p>
           </a>
           <a href="calendar.html" class="center-card admin-only-card" id="card-manageCenterCalendar">
-            <div class="card-icon">⚙️🗓️</div>
+            <div class="card-icon">⚙️️</div>
             <h3 data-i18n="admin.manageCenterCalendar">Manage Center Calendar</h3>
             <p data-i18n="admin.manageCenterCalendarDesc">
               Holidays, annual calendar & class schedules
@@ -76,13 +102,17 @@
             QR scanning, geolocation verification & CSV export
           </p>
         </a>
-
-
         <a href="employee-schedule.html" class="center-card">
-          <div class="card-icon">👥 📅</div>
+          <div class="card-icon">👥 </div>
           <h3 data-i18n="admin.employeeSchedule">Employee Schedule</h3>
           <p data-i18n="admin.employeeScheduleDesc">See weekly shifts</p>
         </a>
+        <a class="center-card" href="announcements.html">
+          <div class="card-icon">‼️📣</div>
+          <h3 data-i18n="bulletin.cardTitle">Announcements</h3>
+          <p data-i18n="bulletin.cardDescription">View announcements and join the discussion</p>
+        </a>
+
       </div>
     </section>
       <section class="centerSection"> 
