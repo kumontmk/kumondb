@@ -266,94 +266,92 @@ function exportToDOCX(students) {
 
     const labelTables = [];
 
-    students.forEach(student => {
-        const subjects = Array.isArray(student.subjects) ? student.subjects : Object.values(student.subjects || {});
-        
-        const getEnrolDate = (subjName) => {
-            const sub = subjects.find(s => s.name === subjName && s.status === 'current');
-            if (sub && sub.enrolDate) {
-                const d = new Date(sub.enrolDate);
-                const mm = String(d.getMonth() + 1).padStart(2, '0');
-                const yy = String(d.getFullYear()).slice(-2);
-                return `${mm}/${yy}`;
-            }
-            return ' '; 
-        };
+// Helper to build a grid cell
+const gridCell = (text, { bold = false, size = 16 } = {}) => new TableCell({
+    width: { size: 11.25, type: WidthType.PERCENTAGE },
+    verticalAlign: VerticalAlign.CENTER,
+    children: [new Paragraph({ children: [new TextRun({ text: text || ' ', bold, size })] })]
+});
 
-        const chineseName = student.nameCn || '';
-        const pinyinName = student.namePinyin || '';
-        const dob = student.birthday || '';
-        const studentNo = student.studentNumber || '';
+students.forEach(student => {
+    const subjects = Array.isArray(student.subjects) ? student.subjects : Object.values(student.subjects || {});
+    const getEnrolDate = (subjName) => {
+        const sub = subjects.find(s => s.name === subjName && s.status === 'current');
+        if (sub && sub.enrolDate) {
+            const d = new Date(sub.enrolDate);
+            return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getFullYear()).slice(-2)}`;
+        }
+        return ' ';
+    };
 
-        const innerGridTable = new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
-            borders: {
-                top: { style: BorderStyle.SINGLE, size: 4 }, bottom: { style: BorderStyle.SINGLE, size: 4 },
-                left: { style: BorderStyle.SINGLE, size: 4 }, right: { style: BorderStyle.SINGLE, size: 4 },
-                insideHorizontal: { style: BorderStyle.SINGLE, size: 4 }, insideVertical: { style: BorderStyle.SINGLE, size: 4 }
-            },
-            rows: [
-                new TableRow({ children: [new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "上課:", bold: true, size: 18 })], alignment: AlignmentType.LEFT })], columnSpan: 4 })] }),
-                new TableRow({ children: [
-                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "中", size: 16, bold: true })] })], width: { size: 25, type: WidthType.PERCENTAGE } }),
-                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "英", size: 16, bold: true })] })], width: { size: 25, type: WidthType.PERCENTAGE } }),
-                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "EFL", size: 16, bold: true })] })], width: { size: 25, type: WidthType.PERCENTAGE } }),
-                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "數", size: 16, bold: true })] })], width: { size: 25, type: WidthType.PERCENTAGE } })
-                ]}),
-                new TableRow({ children: [
-                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: getEnrolDate('Chinese (Trad)') || getEnrolDate('Chinese (Simp)'), size: 14 })] })], width: { size: 25, type: WidthType.PERCENTAGE } }),
-                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: getEnrolDate('English ERP'), size: 14 })] })], width: { size: 25, type: WidthType.PERCENTAGE } }),
-                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: getEnrolDate('English EFL'), size: 14 })] })], width: { size: 25, type: WidthType.PERCENTAGE } }),
-                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: getEnrolDate('Math'), size: 14 })] })], width: { size: 25, type: WidthType.PERCENTAGE } })
-                ]}),
-                new TableRow({ children: [
-                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "平", size: 16, bold: true })] })], width: { size: 25, type: WidthType.PERCENTAGE } }),
-                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "銅", size: 16, bold: true })] })], width: { size: 25, type: WidthType.PERCENTAGE } }),
-                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "銀", size: 16, bold: true })] })], width: { size: 25, type: WidthType.PERCENTAGE } }),
-                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "金", size: 16, bold: true })] })], width: { size: 25, type: WidthType.PERCENTAGE } })
-                ]}),
-                new TableRow({ children: [
-                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: " ", size: 16 })] })], width: { size: 25, type: WidthType.PERCENTAGE } }),
-                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: " ", size: 16 })] })], width: { size: 25, type: WidthType.PERCENTAGE } }),
-                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: " ", size: 16 })] })], width: { size: 25, type: WidthType.PERCENTAGE } }),
-                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: " ", size: 16 })] })], width: { size: 25, type: WidthType.PERCENTAGE } })
-                ]})
-            ]
-        });
+    const chineseName = student.nameCn || '';
+    const pinyinName = student.namePinyin || '';
+    const dob = student.birthday || '';
+    const studentNo = student.studentNumber || '';
 
-        const labelTable = new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
-            borders: {
-                top: { style: BorderStyle.SINGLE, size: 8 }, bottom: { style: BorderStyle.SINGLE, size: 8 },
-                left: { style: BorderStyle.SINGLE, size: 8 }, right: { style: BorderStyle.SINGLE, size: 8 },
-                insideHorizontal: { style: BorderStyle.SINGLE, size: 6 }, insideVertical: { style: BorderStyle.SINGLE, size: 6 }
-            },
-            rows: [
-                new TableRow({
-                    height: { value: 1750, rule: HeightRule.EXACT },
-                    children: [
-                        new TableCell({
-                            width: { size: 55, type: WidthType.PERCENTAGE },
-                            verticalAlign: VerticalAlign.CENTER,
-                            children: [
-                                new Paragraph({ children: [new TextRun({ text: "姓名: ", bold: true, size: 18 }), new TextRun({ text: chineseName, bold: true, size: 32 })] }),
-                                new Paragraph({ children: [new TextRun({ text: "NAME: ", bold: true, size: 18 }), new TextRun({ text: pinyinName, size: 20 })] }),
-                                new Paragraph({ children: [new TextRun({ text: "DOB: ", bold: true, size: 18 }), new TextRun({ text: dob, size: 20 })] }),
-                                new Paragraph({ children: [new TextRun({ text: "學生編號:", bold: true, size: 18 })] }),
-                                new Paragraph({ children: [new TextRun({ text: studentNo, bold: true, size: 22 })] })
-                            ]
-                        }),
-                        new TableCell({
-                            width: { size: 45, type: WidthType.PERCENTAGE },
-                            verticalAlign: VerticalAlign.CENTER,
-                            children: [innerGridTable]
-                        })
-                    ]
-                })
-            ]
-        });
-        labelTables.push(labelTable);
+    // ✅ ONE single flat table per label — no nested tables
+    const labelTable = new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        borders: {
+            top: { style: BorderStyle.SINGLE, size: 8 }, bottom: { style: BorderStyle.SINGLE, size: 8 },
+            left: { style: BorderStyle.SINGLE, size: 8 }, right: { style: BorderStyle.SINGLE, size: 8 },
+            insideHorizontal: { style: BorderStyle.SINGLE, size: 4 }, insideVertical: { style: BorderStyle.SINGLE, size: 4 }
+        },
+        rows: [
+            // Row 1: student info (rowSpan 5) + "上課:" header (columnSpan 4)
+            new TableRow({
+                height: { value: 350, rule: HeightRule.EXACT },
+                children: [
+                    new TableCell({
+                        width: { size: 55, type: WidthType.PERCENTAGE },
+                        rowSpan: 5,
+                        verticalAlign: VerticalAlign.CENTER,
+                        children: [
+                            new Paragraph({ children: [new TextRun({ text: "姓名: ", bold: true, size: 18 }), new TextRun({ text: chineseName, bold: true, size: 32 })] }),
+                            new Paragraph({ children: [new TextRun({ text: "NAME: ", bold: true, size: 18 }), new TextRun({ text: pinyinName, size: 20 })] }),
+                            new Paragraph({ children: [new TextRun({ text: "DOB: ", bold: true, size: 18 }), new TextRun({ text: dob, size: 20 })] }),
+                            new Paragraph({ children: [new TextRun({ text: "學生編號:", bold: true, size: 18 })] }),
+                            new Paragraph({ children: [new TextRun({ text: studentNo, bold: true, size: 22 })] })
+                        ]
+                    }),
+                    new TableCell({
+                        width: { size: 45, type: WidthType.PERCENTAGE },
+                        columnSpan: 4,
+                        verticalAlign: VerticalAlign.CENTER,
+                        children: [new Paragraph({ alignment: AlignmentType.LEFT, children: [new TextRun({ text: "上課:", bold: true, size: 18 })] })]
+                    })
+                ]
+            }),
+            // Row 2: subject headers
+            new TableRow({
+                height: { value: 350, rule: HeightRule.EXACT },
+                children: [gridCell("中", { bold: true }), gridCell("英", { bold: true }), gridCell("EFL", { bold: true }), gridCell("數", { bold: true })]
+            }),
+            // Row 3: enrolment dates
+            new TableRow({
+                height: { value: 350, rule: HeightRule.EXACT },
+                children: [
+                    gridCell(getEnrolDate('Chinese (Trad)') || getEnrolDate('Chinese (Simp)'), { size: 14 }),
+                    gridCell(getEnrolDate('English ERP'), { size: 14 }),
+                    gridCell(getEnrolDate('English EFL'), { size: 14 }),
+                    gridCell(getEnrolDate('Math'), { size: 14 })
+                ]
+            }),
+            // Row 4: award headers
+            new TableRow({
+                height: { value: 350, rule: HeightRule.EXACT },
+                children: [gridCell("平", { bold: true }), gridCell("銅", { bold: true }), gridCell("銀", { bold: true }), gridCell("金", { bold: true })]
+            }),
+            // Row 5: empty row
+            new TableRow({
+                height: { value: 350, rule: HeightRule.EXACT },
+                children: [gridCell(' '), gridCell(' '), gridCell(' '), gridCell(' ')]
+            })
+        ]
     });
+
+    labelTables.push(labelTable);
+});
 
     const docChildren = [];
     const labelsPerPage = 24;
