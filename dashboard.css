@@ -1612,6 +1612,189 @@ header button:hover {
 }
 
 /* =========================================
+🩷 OTHER EVENTS
+========================================= */
+
+/* Calendar day: Other event */
+.calendar-day.has-other-event:not(.has-center-holiday):not(.has-public-holiday):not(.has-po):not(.has-dt) {
+  background: #fdf2f8;
+  color: #9d174d;
+  font-weight: 700;
+  border: 1px solid #fbcfe8;
+  cursor: pointer;
+}
+
+.calendar-day.has-other-event:not(.has-center-holiday):not(.has-public-holiday):not(.has-po):not(.has-dt):hover {
+  background: #fbcfe8;
+}
+
+/* Pink outline when Other exists together with PO/DT/holiday */
+.calendar-day.has-other-event {
+  box-shadow: inset 0 0 0 2px #f472b6;
+}
+
+/* Other event text inside calendar date */
+.calendar-day .other-name {
+  color: #9d174d;
+}
+
+/* Other events editor inside Edit Calendar modal */
+.other-events-section {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px dashed #cbd5e1;
+}
+
+.other-events-section h4 {
+  margin-bottom: 0.75rem;
+  color: #9d174d;
+}
+
+.other-events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.other-event-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: #fdf2f8;
+  border: 1px solid #fbcfe8;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+}
+
+.other-event-name {
+  color: #9d174d;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.remove-other-btn {
+  background: #fee2e2;
+  color: #be185d;
+  border: 1px solid #fbcfe8;
+  border-radius: 6px;
+  padding: 0.2rem 0.6rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.remove-other-btn:hover {
+  background: #be185d;
+  color: white;
+}
+
+.other-event-add-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.other-event-add-row input {
+  flex: 1;
+  padding: 0.6rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.other-event-add-row input:focus {
+  outline: none;
+  border-color: #f472b6;
+  box-shadow: 0 0 0 3px rgba(244, 114, 182, 0.2);
+}
+
+#addOtherEventBtn {
+  background: #ec4899;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 0.6rem 0.9rem;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+#addOtherEventBtn:hover {
+  background: #db2777;
+}
+
+.no-other-events {
+  color: #9ca3af;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+/* =========================================
+💾 EDIT CALENDAR MODAL — ACTION BUTTONS
+========================================= */
+.edit-calendar-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+#editCalendarForm button[type="submit"],
+#editCalendarForm #clearCalendarBtn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.8rem 1.25rem;
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  line-height: 1.2;
+}
+
+/* 💾 Save Changes — primary button */
+#editCalendarForm button[type="submit"] {
+  background: var(--primary-dark);
+  color: var(--white);
+  border: none;
+  box-shadow: 0 2px 6px rgba(70, 130, 180, 0.3);
+}
+
+#editCalendarForm button[type="submit"]:hover {
+  background: var(--primary);
+}
+
+#editCalendarForm button[type="submit"]:disabled {
+  background: #cbd5e1;
+  color: #f8fafc;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* 🗑️ Clear Event — danger outline button */
+#editCalendarForm #clearCalendarBtn {
+  background: var(--white);
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+#editCalendarForm #clearCalendarBtn:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+@media (max-width: 768px) {
+  .edit-calendar-actions {
+    flex-direction: column;
+  }
+}
+
+/* =========================================
 🌐 TRADITIONAL CHINESE FONT SUPPORT
 ========================================= */
 :lang(zh-TW) body,

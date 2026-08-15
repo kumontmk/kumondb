@@ -79,7 +79,7 @@ export default {
     denyFailed: "Failed to deny this request.",
   },
   bulletin: {
-  title: "📢 Bulletin Board",
+  title: "Bulletin Board ‼️📣",
   viewAll: "View all →",
   readMore: "Read more →",
   empty: "No announcements yet.",

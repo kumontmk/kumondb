@@ -13,6 +13,14 @@ export default {
     welcome: "Welcome, {{name}}",
     noTime: "No time",
     selectedLabel: "✅ Selected:",
+    hintPink: "● Pink = Other",
+    holidayOther: "Other",
+    otherEventsTitle: "🩷 Other Events",
+    otherEventPlaceholder: "Add other event description...",
+    addOther: "➕ Add",
+    removeOther: "Remove other event",
+    noOtherEvents: "No other events.",
+    editCalendarOtherBtn: "🩷 Edit Holidays / Other Events for this Date",
 
     dtWarning: {
       publicHoliday: "{{date}} is a public holiday{{name}}",

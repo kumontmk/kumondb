@@ -79,7 +79,7 @@ export default {
     denyFailed: "拒絕請求失敗。"
   },
   bulletin: {
-  title: "📢 佈告欄",
+  title: "佈告欄 ‼️📣",
   viewAll: "查看全部 →",
   readMore: "閱讀全文 →",
   empty: "目前沒有公告。",

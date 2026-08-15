@@ -50,6 +50,7 @@
             <span style="color: #2e7d32; font-weight: 600;" data-i18n="dashboard.hintGreen">● Green = Center Holiday</span> |
             <span style="color: #c62828; font-weight: 600;" data-i18n="dashboard.hintRed">● Red = Public Holiday</span> |
             <span style="color: #e65100; font-weight: 600;" data-i18n="dashboard.hintOrange">● Orange = Diagnostic Test</span>
+            <span style="color: #e095d4; font-weight: 600;" data-i18n="dashboard.hintPink">● Pink = Other</span>
           </p>
       </div>
       <div class="calendar-wrapper">
@@ -209,9 +210,29 @@
         </div>
         <label for="calendarNote" data-i18n="dashboard.noteOptional">Note (Optional):</label>
         <textarea id="calendarNote" class="po-note-area"></textarea>
-        <div class="modal-actions" style="display:flex; gap:1rem; justify-content:flex-end; margin-top:1rem;">
-          <button type="submit" class="primary" data-i18n="common.saveChanges">💾 Save Changes</button>
-          <button type="button" id="clearCalendarBtn" class="secondary" data-i18n="dashboard.clearEvent">🗑️ Clear Event</button>
+
+        <!-- Other Events -->
+        <div id="otherEventsSection" class="other-events-section" style="display:none;">
+          <h4 data-i18n="dashboard.otherEventsTitle">🩷 Other Events</h4>
+
+          <div id="otherEventsList" class="other-events-list"></div>
+
+          <div class="other-event-add-row">
+            <input
+              type="text"
+              id="newOtherEventInput"
+              placeholder="Add other event description..."
+              data-i18n-placeholder="dashboard.otherEventPlaceholder"
+            />
+            <button type="button" id="addOtherEventBtn" data-i18n="dashboard.addOther">
+              ➕ Add
+            </button>
+          </div>
+        </div>
+
+        <div class="edit-calendar-actions">
+          <button type="submit" data-i18n="common.saveChanges">💾 Save Changes</button>
+          <button type="button" id="clearCalendarBtn" data-i18n="dashboard.clearEvent">🗑️ Clear Event</button>
         </div>
       </form>
     </div>

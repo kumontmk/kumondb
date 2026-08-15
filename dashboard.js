@@ -12,6 +12,10 @@ let poDataMap = {};
 let dtDataMap = {}; // Stores Diagnostic Test events
 let calendarEventsMap = {}; // Stores holiday events
 let centerName = ""; // Stores the center name to determine closed days
+
+let editingCalendarDate = null;
+let pendingOtherEvents = [];
+
 const centerId = sessionStorage.getItem('selectedCenter');
 
 // Locale-aware date formatting
@@ -519,9 +523,10 @@ function getClosedDaysForCenter(name) {
 }
 
 function autoShrinkHolidayNames() {
-  document.querySelectorAll('.holiday-name').forEach(el => {
+  document.querySelectorAll('.holiday-name, .other-name').forEach(el => {
     let fontSize = 0.6;
     el.style.fontSize = fontSize + 'rem';
+
     while (el.scrollWidth > el.clientWidth && fontSize > 0.35) {
       fontSize -= 0.05;
       el.style.fontSize = fontSize + 'rem';
@@ -649,6 +654,102 @@ function ensureQIDTGlobalFields() {
   });
 }
 
+// ============================================
+// 🩷 OTHER EVENTS HELPERS
+// ============================================
+
+function generateOtherEventKey() {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+    return window.crypto.randomUUID();
+  }
+
+  return `other_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function getOtherEventsFromCalendarEvent(event) {
+  if (!event) return [];
+
+  const results = [];
+
+  if (event.others) {
+    if (Array.isArray(event.others)) {
+      event.others.forEach((item, index) => {
+        if (!item) return;
+
+        const name = typeof item === 'string' ? item : item.name;
+
+        if (name) {
+          results.push({
+            id: item.id || `array_${index}`,
+            name
+          });
+        }
+      });
+    } else if (typeof event.others === 'object') {
+      Object.entries(event.others).forEach(([id, item]) => {
+        if (!item) return;
+
+        const name = typeof item === 'string' ? item : item.name;
+
+        if (name) {
+          results.push({
+            id,
+            name
+          });
+        }
+      });
+    }
+  }
+
+  // Legacy fallback:
+  // If an older/simple version saved type: "other"
+  if (event.type === 'other' && event.name) {
+    results.push({
+      id: 'legacy_other',
+      name: event.name
+    });
+  }
+
+  return results;
+}
+
+function renderOtherEventsList() {
+  const list = document.getElementById('otherEventsList');
+  if (!list) return;
+
+  list.innerHTML = '';
+
+  if (!pendingOtherEvents.length) {
+    list.innerHTML = `<p class="no-other-events">${t('dashboard.noOtherEvents')}</p>`;
+    return;
+  }
+
+  pendingOtherEvents.forEach((item, index) => {
+    const row = document.createElement('div');
+    row.className = 'other-event-row';
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'other-event-name';
+    nameEl.textContent = item.name;
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'remove-other-btn';
+    removeBtn.textContent = '×';
+    removeBtn.title = t('dashboard.removeOther');
+
+    removeBtn.onclick = () => {
+      pendingOtherEvents.splice(index, 1);
+      renderOtherEventsList();
+    };
+
+    row.appendChild(nameEl);
+    row.appendChild(removeBtn);
+
+    list.appendChild(row);
+  });
+}
+
 function renderMonthGrid(year, month, containerId, todayDate) {
   const container = document.getElementById(containerId);
   container.innerHTML = '';
@@ -678,37 +779,85 @@ function renderMonthGrid(year, month, containerId, todayDate) {
     }
     const dayOfWeek = new Date(year, month, day).getDay();
     const isClosed = closedDays.includes(dayOfWeek);
-    const event = calendarEventsMap[dateStr];
-    if (event) {
-      if (event.type === 'public') cell.classList.add('has-public-holiday');
-      if (event.type === 'center') cell.classList.add('has-center-holiday');
-      if (event.name) {
-        const nameEl = document.createElement('div');
-        nameEl.className = 'holiday-name';
-        nameEl.textContent = event.name;
-        nameEl.title = event.name;
-        cell.appendChild(nameEl);
-      }
-    }
-    if (poDataMap[dateStr] && poDataMap[dateStr].length > 0) {
-      cell.classList.add('has-po');
-      let tooltipText = t('dashboard.poTooltip', { count: poDataMap[dateStr].length });
-      if (event) {
-        let hType = event.type === 'center' ? t('dashboard.holidayCenter') : t('dashboard.holidayPublic');
-        tooltipText += ` | ${hType} ${t('dashboard.holiday')}`;
-        if (event.name) tooltipText += `: ${event.name}`;
-        if (event.muc) tooltipText += ` ${t('dashboard.muc')}`;
-      }
-      cell.title = tooltipText;
-    } else if (event) {
-      let hType = event.type === 'center' ? t('dashboard.holidayCenter') : t('dashboard.holidayPublic');
-      let titleText = `${hType} ${t('dashboard.holiday')}`;
-      if (event.name) titleText += `: ${event.name}`;
-      if (event.muc) titleText += ` ${t('dashboard.muc')}`;
-      cell.title = titleText;
-    } else if (isClosed) {
-      cell.classList.add('closed-day');
-    }
+    const event = calendarEventsMap[dateStr] || null;
+const otherEvents = getOtherEventsFromCalendarEvent(event);
+
+const hasHoliday = event && (
+  event.type === 'center' ||
+  event.type === 'public'
+);
+
+if (hasHoliday) {
+  if (event.type === 'public') {
+    cell.classList.add('has-public-holiday');
+  }
+
+  if (event.type === 'center') {
+    cell.classList.add('has-center-holiday');
+  }
+}
+
+if (otherEvents.length > 0) {
+  cell.classList.add('has-other-event');
+}
+
+if (hasHoliday && event.name) {
+  const nameEl = document.createElement('div');
+  nameEl.className = 'holiday-name';
+  nameEl.textContent = event.name;
+  nameEl.title = event.name;
+  cell.appendChild(nameEl);
+}
+
+otherEvents.forEach(other => {
+  const otherEl = document.createElement('div');
+  otherEl.className = 'holiday-name other-name';
+  otherEl.textContent = other.name;
+  otherEl.title = other.name;
+  cell.appendChild(otherEl);
+});
+
+const tooltipParts = [];
+
+if (poDataMap[dateStr] && poDataMap[dateStr].length > 0) {
+  cell.classList.add('has-po');
+
+  tooltipParts.push(
+    t('dashboard.poTooltip', {
+      count: poDataMap[dateStr].length
+    })
+  );
+}
+
+if (hasHoliday) {
+  const hType = event.type === 'center'
+    ? t('dashboard.holidayCenter')
+    : t('dashboard.holidayPublic');
+
+  let holidayText = `${hType} ${t('dashboard.holiday')}`;
+
+  if (event.name) {
+    holidayText += `: ${event.name}`;
+  }
+
+  if (event.muc) {
+    holidayText += ` ${t('dashboard.muc')}`;
+  }
+
+  tooltipParts.push(holidayText);
+}
+
+if (otherEvents.length > 0) {
+  tooltipParts.push(
+    `${t('dashboard.holidayOther')}: ${otherEvents.map(o => o.name).join(', ')}`
+  );
+}
+
+if (tooltipParts.length > 0) {
+  cell.title = tooltipParts.join(' | ');
+} else if (isClosed) {
+  cell.classList.add('closed-day');
+}
     const hasDT = dtDataMap[dateStr] && dtDataMap[dateStr].length > 0;
 
     if (hasDT) {
@@ -771,19 +920,42 @@ function setupModalListeners() {
   const closeEditBtn = document.getElementById('closeEditCalendarModal');
   const dtModal = document.getElementById('dtModal');
   const closeDtBtn = document.getElementById('closeDtModal');
-  document.addEventListener('click', (e) => {
-    if (e.target.classList.contains('calendar-day') && !e.target.classList.contains('empty')) {
-      const dateStr = e.target.dataset.date;
-      if (!dateStr) return;
-      if (e.target.classList.contains('has-po')) {
-        openPOModal(dateStr);
-      } else if (e.target.classList.contains('has-dt')) {
-        openDTModal(dateStr);
-      } else if (isAdmin) {
-        openEditCalendarModal(dateStr);
-      }
-    }
-  });
+document.addEventListener('click', (e) => {
+  const dayEl = e.target.closest('.calendar-day');
+
+  if (!dayEl || dayEl.classList.contains('empty')) return;
+
+  const dateStr = dayEl.dataset.date;
+  if (!dateStr) return;
+
+  if (dayEl.classList.contains('has-po')) {
+    openPOModal(dateStr);
+    return;
+  }
+
+  if (dayEl.classList.contains('has-dt')) {
+    openDTModal(dateStr);
+    return;
+  }
+
+  if (isAdmin) {
+    openEditCalendarModal(dateStr);
+    return;
+  }
+
+  // Non-admin users can view Other events if they exist
+  const event = calendarEventsMap[dateStr] || null;
+  const otherEvents = getOtherEventsFromCalendarEvent(event);
+
+  if (otherEvents.length > 0) {
+    const message = [
+      `${t('dashboard.holidayOther')}:`,
+      ...otherEvents.map(o => `• ${o.name}`)
+    ].join('\n');
+
+    alert(message);
+  }
+});
   closeDtBtn.addEventListener('click', () => dtModal.classList.add('hidden'));
   dtModal.addEventListener('click', (e) => { if (e.target === dtModal) dtModal.classList.add('hidden'); });
   closePoBtn.addEventListener('click', () => poModal.classList.add('hidden'));
@@ -887,81 +1059,228 @@ function openPOModal(dateStr) {
       list.appendChild(card);
     });
   }
-  const existingBtn = document.getElementById('adminEditHolidayBtn');
-  if (existingBtn) existingBtn.remove();
-  if (isAdmin) {
-    const editCalBtn = document.createElement('button');
-    editCalBtn.id = 'adminEditHolidayBtn';
-    editCalBtn.className = 'save-note-btn';
-    editCalBtn.style.marginTop = '1.5rem';
-    editCalBtn.style.background = '#e65100';
-    editCalBtn.style.width = '100%';
-    editCalBtn.textContent = t('dashboard.editHolidaysBtn');
-    editCalBtn.onclick = () => {
-      modal.classList.add('hidden');
-      openEditCalendarModal(dateStr);
-    };
-    modal.querySelector('.modal-content').appendChild(editCalBtn);
-  }
+const existingBtn =
+  document.getElementById('adminEditCalendarFromPoBtn') ||
+  document.getElementById('adminEditHolidayBtn');
+
+if (existingBtn) existingBtn.remove();
+
+if (isAdmin) {
+  const editCalBtn = document.createElement('button');
+
+  editCalBtn.id = 'adminEditCalendarFromPoBtn';
+  editCalBtn.className = 'save-note-btn';
+  editCalBtn.style.marginTop = '1.5rem';
+  editCalBtn.style.background = '#be185d';
+  editCalBtn.style.width = '100%';
+  editCalBtn.textContent = t('dashboard.editCalendarOtherBtn');
+
+  editCalBtn.onclick = () => {
+    modal.classList.add('hidden');
+    openEditCalendarModal(dateStr);
+  };
+
+  modal.querySelector('.modal-content').appendChild(editCalBtn);
+}
   modal.classList.remove('hidden');
 }
 
 function openEditCalendarModal(dateStr) {
   const modal = document.getElementById('editCalendarModal');
   const title = document.getElementById('editCalendarDateTitle');
-  const dateObj = new Date(dateStr + 'T00:00:00');
-  title.textContent = t('dashboard.editCalendarTitle', {
-    date: dateObj.toLocaleDateString(dateLocale(), { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-  });
   const form = document.getElementById('editCalendarForm');
+
+  if (!modal || !form) return;
+
+  editingCalendarDate = dateStr;
+
+  const dateObj = new Date(dateStr + 'T00:00:00');
+
+  title.textContent = t('dashboard.editCalendarTitle', {
+    date: dateObj.toLocaleDateString(dateLocale(), {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    })
+  });
+
   form.reset();
-  const event = calendarEventsMap[dateStr];
-  if (event) {
-    const radio = form.querySelector(`input[name="eventType"][value="${event.type}"]`);
-    if (radio) radio.checked = true;
-    document.getElementById('calendarNote').value = event.name || '';
-  } else {
-    form.querySelector('input[name="eventType"][value="none"]').checked = true;
+
+  const existingEvent = calendarEventsMap[dateStr] || {};
+
+  const holidayType =
+    existingEvent.type === 'center' ||
+    existingEvent.type === 'public'
+      ? existingEvent.type
+      : 'none';
+
+  const radio = form.querySelector(`input[name="eventType"][value="${holidayType}"]`);
+
+  if (radio) {
+    radio.checked = true;
   }
+
+  const noteInput = document.getElementById('calendarNote');
+
+  if (noteInput) {
+    noteInput.value = holidayType === 'none'
+      ? ''
+      : (existingEvent.name || '');
+  }
+
+  // Load Other events
+  pendingOtherEvents = getOtherEventsFromCalendarEvent(existingEvent).map(item => ({
+    id: item.id,
+    name: item.name
+  }));
+
+  renderOtherEventsList();
+
+  const otherSection = document.getElementById('otherEventsSection');
+  if (otherSection) {
+    otherSection.style.display = isAdmin ? 'block' : 'none';
+  }
+
+  const addOtherBtn = document.getElementById('addOtherEventBtn');
+  const newOtherInput = document.getElementById('newOtherEventInput');
+
+  if (newOtherInput) {
+    newOtherInput.value = '';
+  }
+
+  if (addOtherBtn && newOtherInput) {
+    addOtherBtn.onclick = () => {
+      const value = newOtherInput.value.trim();
+
+      if (!value) return;
+
+      pendingOtherEvents.push({
+        id: null,
+        name: value
+      });
+
+      newOtherInput.value = '';
+      renderOtherEventsList();
+      newOtherInput.focus();
+    };
+
+    newOtherInput.onkeydown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addOtherBtn.click();
+      }
+    };
+  }
+
   modal.classList.remove('hidden');
+
   form.onsubmit = async (e) => {
     e.preventDefault();
-    const eventType = form.querySelector('input[name="eventType"]:checked').value;
+
+    const eventType = form.querySelector('input[name="eventType"]:checked')?.value || 'none';
     const note = document.getElementById('calendarNote').value.trim();
+
     const saveBtn = form.querySelector('button[type="submit"]');
-    saveBtn.disabled = true;
-    saveBtn.textContent = t('common.saving');
+
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.textContent = t('common.saving');
+    }
+
     try {
-      if (eventType === 'none') {
-        await remove(ref(db, `centers/${centerId}/calendar/${dateStr}`));
+      const othersPayload = {};
+
+      pendingOtherEvents.forEach(item => {
+        const key = item.id && item.id !== 'legacy_other' && !String(item.id).startsWith('array_')
+          ? item.id
+          : generateOtherEventKey();
+
+        othersPayload[key] = {
+          name: item.name,
+          updatedAt: new Date().toISOString()
+        };
+      });
+
+      const hasHoliday = eventType !== 'none';
+      const hasOthers = Object.keys(othersPayload).length > 0;
+
+      const calendarRef = ref(db, `centers/${centerId}/calendar/${dateStr}`);
+
+      if (!hasHoliday && !hasOthers) {
+        await remove(calendarRef);
         delete calendarEventsMap[dateStr];
       } else {
-        const existingEvent = calendarEventsMap[dateStr] || {};
-        await update(ref(db, `centers/${centerId}/calendar/${dateStr}`), {
-          type: eventType,
-          name: note, 
-          muc: existingEvent.muc || false,
+        const updates = {
+          type: hasHoliday ? eventType : null,
+          name: hasHoliday ? note : null,
+          muc: hasHoliday ? (existingEvent.muc || false) : null,
+          others: hasOthers ? othersPayload : null,
           updatedAt: new Date().toISOString()
-        });
-        calendarEventsMap[dateStr] = { type: eventType, name: note, muc: existingEvent.muc || false };
+        };
+
+        await update(calendarRef, updates);
+
+        const newLocalEvent = {};
+
+        if (hasHoliday) {
+          newLocalEvent.type = eventType;
+          newLocalEvent.name = note;
+          newLocalEvent.muc = existingEvent.muc || false;
+        }
+
+        if (hasOthers) {
+          newLocalEvent.others = othersPayload;
+        }
+
+        calendarEventsMap[dateStr] = newLocalEvent;
       }
+
       renderDualCalendar();
       modal.classList.add('hidden');
     } catch (err) {
       console.error("Error saving calendar event:", err);
       alert(t('dashboard.failedSave'));
     } finally {
-      saveBtn.disabled = false;
-      saveBtn.textContent = t('common.saveChanges');
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = t('common.saveChanges');
+      }
     }
   };
-  document.getElementById('clearCalendarBtn').onclick = () => {
-    if (confirm(t('dashboard.confirmClearEvent'))) {
-      form.querySelector('input[name="eventType"][value="none"]').checked = true;
-      document.getElementById('calendarNote').value = '';
+
+  const clearBtn = document.getElementById('clearCalendarBtn');
+
+  if (clearBtn) {
+    clearBtn.onclick = () => {
+      if (!confirm(t('dashboard.confirmClearEvent'))) return;
+
+      const noneRadio = form.querySelector('input[name="eventType"][value="none"]');
+
+      if (noneRadio) {
+        noneRadio.checked = true;
+      }
+
+      const noteInput = document.getElementById('calendarNote');
+
+      if (noteInput) {
+        noteInput.value = '';
+      }
+
+      /*
+        By default, Clear Event clears the holiday only.
+        It does NOT clear Other events.
+
+        If you want Clear Event to also delete all Other events,
+        uncomment these lines:
+
+        pendingOtherEvents = [];
+        renderOtherEventsList();
+      */
+
       form.dispatchEvent(new Event('submit'));
-    }
-  };
+    };
+  }
 }
 
 window.savePoNote = async function(studentId, textareaId, btnElement) {
@@ -1306,6 +1625,29 @@ function openDTModal(dateStr) {
         };
       });
     });
+  }
+  const existingDtBtn = document.getElementById('adminEditCalendarFromDtBtn');
+
+  if (existingDtBtn) {
+    existingDtBtn.remove();
+  }
+
+  if (isAdmin) {
+    const editCalBtn = document.createElement('button');
+
+    editCalBtn.id = 'adminEditCalendarFromDtBtn';
+    editCalBtn.className = 'save-note-btn';
+    editCalBtn.style.marginTop = '1.5rem';
+    editCalBtn.style.background = '#be185d';
+    editCalBtn.style.width = '100%';
+    editCalBtn.textContent = t('dashboard.editCalendarOtherBtn');
+
+    editCalBtn.onclick = () => {
+      modal.classList.add('hidden');
+      openEditCalendarModal(dateStr);
+    };
+
+    modal.querySelector('.modal-content').appendChild(editCalBtn);
   }
   modal.classList.remove('hidden');
 }
