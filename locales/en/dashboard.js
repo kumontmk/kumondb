@@ -156,7 +156,7 @@ export default {
     editHolidaysBtn: "📅 Edit Center/Public Holidays for this Date",
     editDateTitle: "Edit Date",
     editCalendarTitle: "Edit Calendar: {{date}}",
-    eventType: "Event Type:",
+    eventType: "Holiday Type:", 
     eventNone: "None (Regular Day)",
     eventCenter: "🟢 Center Holiday",
     eventPublic: "🔴 Public Holiday",

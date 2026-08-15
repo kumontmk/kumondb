@@ -156,7 +156,7 @@ export default {
     editHolidaysBtn: "📅 編輯此日期的中心／公眾假期",
     editDateTitle: "編輯日期",
     editCalendarTitle: "編輯日曆：{{date}}",
-    eventType: "活動類型：",
+    eventType: "假期類型：",
     eventNone: "無（一般日）",
     eventCenter: "🟢 中心假期",
     eventPublic: "🔴 公眾假期",
