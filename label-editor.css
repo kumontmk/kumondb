@@ -1,7 +1,6 @@
 /* ==========================================
    🏷️ LABEL EDITOR STYLES
-   ========================================== */
-
+========================================== */
 :root {
     --primary: #87CEEB;
     --primary-dark: #4682B4;
@@ -28,10 +27,13 @@ body {
     line-height: 1.6;
 }
 
+.hidden {
+    display: none !important;
+}
+
 /* ==========================================
    TOP BAR ONLY: button left, title right
-   (Do NOT include .dashboard-header here!)
-   ========================================== */
+========================================== */
 header {
     position: sticky;
     top: 0;
@@ -57,7 +59,7 @@ header a {
 
 /* ==========================================
    PAGE CONTENT: normal stacked layout + padding
-   ========================================== */
+========================================== */
 #mainContent {
     padding: 1.5rem 2rem 2rem;
 }
@@ -85,11 +87,12 @@ header a {
     .controls-section, header, .dashboard-header { display: none !important; }
     #mainContent { padding: 0 !important; }
     body { background: white; }
+    .print-page { box-shadow: none; margin: 0 auto; }
 }
 
-/* =========================================
+/* ==========================================
    PRINT PAGE CONTAINER (A4 Landscape)
-   ========================================= */
+========================================== */
 .print-page {
     width: 28.7cm;  /* 29.7cm - 1cm margins */
     height: 20.0cm; /* 21.0cm - 1cm margins */
@@ -111,17 +114,16 @@ header a {
     display: grid;
     grid-template-columns: repeat(4, 7cm);
     grid-template-rows: repeat(6, 3.3cm);
-    /* Center the grid slightly if there's leftover space (28.7 - 28 = 0.7cm) */
     justify-content: center;
     align-content: center;
-    gap: 0; /* No gap, borders touch */
+    gap: 0;
     width: 100%;
     height: 100%;
 }
 
-/* =========================================
+/* ==========================================
    INDIVIDUAL LABEL CELL (Fixed Size)
-   ========================================= */
+========================================== */
 .label-cell {
     width: 7cm;
     height: 3.3cm;
@@ -131,10 +133,6 @@ header a {
     font-size: 9pt;
     overflow: hidden;
     position: relative;
-}
-
-/* Remove double borders between cells */
-.label-cell {
     margin-right: -1px;
     margin-bottom: -1px;
 }
@@ -164,7 +162,7 @@ header a {
     grid-template-rows: auto 1fr 1fr 1fr 1fr;
     border: 1px solid #000;
     width: 100%;
-    height: 90%; /* Leave a little breathing room */
+    height: 90%;
 }
 
 .grid-header {
@@ -187,7 +185,7 @@ header a {
 }
 
 /* Fix borders for grid */
-.unified-grid div:nth-child(4n+2) { border-right: none; } /* Adjusted for header offset */
+.unified-grid div:nth-child(4n+2) { border-right: none; }
 .unified-grid div:nth-child(n+14) { border-bottom: none; }
 
 /* Info Rows */
@@ -210,19 +208,21 @@ header a {
     font-size: 9pt;
 }
 
-/* ✅ Make only the actual name 16pt */
+/* Make only the actual name 16pt */
 .info-row:first-child {
     margin-bottom: 2mm;
 }
+
 .info-row:first-child .info-label {
-    font-size: 9pt; /* Keep label normal */
+    font-size: 9pt;
 }
+
 .info-row:first-child .info-value {
-    font-size: 13pt; /* ✅ Actual name */
+    font-size: 13pt;
     font-weight: 700;
 }
 
-/* ✅ Stack the student number below the label */
+/* Stack the student number below the label */
 .info-row:last-child {
     flex-direction: column;
     align-items: flex-start;
@@ -240,57 +240,53 @@ header a {
 }
 
 /* ==========================================
-LOADING STATE FOR STUDENT DROPDOWN
+   LOADING STATE FOR STUDENT DROPDOWN
 ========================================== */
 .control-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.75rem;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
 }
 
 .grade-select-wrapper {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
 }
 
 #gradeSelect:disabled,
 #generateBtn:disabled,
 #exportDocxBtn:disabled {
-  opacity: 0.65;
-  cursor: wait;
+    opacity: 0.65;
+    cursor: wait;
 }
 
 .loading-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  color: var(--primary-dark);
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.loading-indicator[hidden] {
-  display: none !important;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--primary-dark);
+    font-weight: 600;
+    white-space: nowrap;
 }
 
 .spinner {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 2px solid rgba(70, 130, 180, 0.25);
-  border-top-color: var(--primary-dark);
-  animation: label-editor-spin 0.8s linear infinite;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid rgba(70, 130, 180, 0.25);
+    border-top-color: var(--primary-dark);
+    animation: label-editor-spin 0.8s linear infinite;
 }
 
 @keyframes label-editor-spin {
-  to {
-    transform: rotate(360deg);
-  }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .student-count {
-  margin-top: 0.5rem;
-  color: var(--text-light);
+    margin-top: 0.5rem;
+    color: var(--text-light);
 }
