@@ -697,13 +697,24 @@ function getCenterClass(centerId) {
   const abbr = getCenterAbbr(centerId);
   return `c-${abbr}`;
 }
+function isHolidayEvent(event) {
+  if (!event || event.muc) return false;
+
+  // Only real holidays should be treated as holidays.
+  // "Other" events/reminders should not trigger holiday styling.
+  return event.type === 'public' || event.type === 'center';
+}
+
 function getHolidayForDate(dateStr) {
   for (const centerId in calendarEvents) {
     const events = calendarEvents[centerId];
-    if (events && events[dateStr] && !events[dateStr].muc) {
-      return events[dateStr];
+    const event = events ? events[dateStr] : null;
+
+    if (isHolidayEvent(event)) {
+      return event;
     }
   }
+
   return null;
 }
 function isCenterClosedOnDay(centerId, dayOfWeek) {
@@ -1863,8 +1874,8 @@ function renderCenterHeader(dates) {
     const isWeekend = dow === 0 || dow === 6;
     const isToday = dateObj.getTime() === today.getTime();
     const event = centerCalEvents[d];
-    const isHoliday = event && !event.muc;
-    const isClosed = closedDays.includes(dow) && !event;
+    const isHoliday = isHolidayEvent(event);
+    const isClosed = closedDays.includes(dow) && !isHoliday;
     const isWeek2Start = idx === 7;
     let cls = 'day-header';
     if (isHoliday) cls += ' holiday-col';
@@ -1941,8 +1952,8 @@ function renderCenterEmployeeRow(emp, dates, tbody, dailyCounts, centerCalEvents
     const dateObj = parseDate(dateStr);
     const dow = dateObj.getDay();
     const event = centerCalEvents[dateStr];
-    const isHoliday = event && !event.muc;
-    const isClosed = closedDays.includes(dow) && !event;
+    const isHoliday = isHolidayEvent(event);
+    const isClosed = closedDays.includes(dow) && !isHoliday;
     const isToday = dateObj.getTime() === today.getTime();
     if (isToday) td.style.outline = '2px solid #27ae60';
     const sched = mergedSchedules[emp.uid]?.[dateStr];
@@ -2017,8 +2028,8 @@ function getCenterPrintRowHtml(emp, dates, selectedCenterId, centerCalEvents, cl
     const isWeekend = dow === 0 || dow === 6;
     const isToday = dateObj.getTime() === today.getTime();
     const event = centerCalEvents[dateStr];
-    const isHoliday = event && !event.muc;
-    const isClosed = closedDays.includes(dow) && !event;
+    const isHoliday = isHolidayEvent(event);
+    const isClosed = closedDays.includes(dow) && !isHoliday;
     const isWeek2 = idx === 7;
     let cellCls = '';
     if (isWeek2) cellCls += ' week-sep';
@@ -2200,7 +2211,9 @@ function renderCenterShiftCell(td, shifts, isHoliday, event) {
     if (shift.type === 'break') html += `<div class="shift-line break-line">☕ ${shift.start}-${shift.end}</div>`;
     else html += `<div class="shift-line"><span class="shift-time">${shift.start}-${shift.end}</span></div>`;
   });
-  if (isHoliday && event && !event.muc) html += `<div class="holiday-indicator">🎌 ${event.name || t('schedule.holiday')}</div>`;
+  if (isHoliday) {
+    html += `<div class="holiday-indicator">🎌 ${event?.name || t('schedule.holiday')}</div>`;
+  }
   html += '</div>';
   td.innerHTML = html;
 }
@@ -2248,7 +2261,7 @@ function generateCenterPrintHTML() {
     const isWeekend = dow === 0 || dow === 6;
     const isToday = dateObj.getTime() === today.getTime();
     const event = centerCalEvents[d];
-    const isHoliday = event && !event.muc;
+    const isHoliday = isHolidayEvent(event);
     const isWeek2 = idx === 7;
     let cls = '';
     if (isHoliday) cls = 'style="background:#e74c3c !important;"';
@@ -2846,8 +2859,8 @@ function renderCenterMobileCalendar() {
         contentWrap.className = 'admin-mobile-cal-content';
 
         const event = centerCalEvents[dateStr];
-        const isHoliday = event && !event.muc;
-        const isClosed = closedDays.includes(dow) && !event;
+        const isHoliday = isHolidayEvent(event);
+        const isClosed = closedDays.includes(dow) && !isHoliday;
 
         const data = mergedSchedules[centerMobileCurrentEmpId]?.[dateStr] || getTemplateForDate(centerMobileCurrentEmpId, dateStr);
         let rendered = false;

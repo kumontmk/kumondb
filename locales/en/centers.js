@@ -20,10 +20,12 @@ export default {
     employeeTimecardDesc: "QR scanning, geolocation verification & CSV export",
     employeeSchedule: "Employee Schedule",
     employeeScheduleDesc: "See weekly shifts",
+    employeeLeave: "Leave",
     manageCenterCalendar: "Manage Center Calendar",
     manageCenterCalendarDesc: "Holidays, annual calendar & class schedules",
     employeeActivityLog: "Employee Activity Log",
     employeeActivityLogDesc: "View employee name, date/time, center, page, and action"
+
   },
   bulletin: {
     title: "📢 Bulletin Board",

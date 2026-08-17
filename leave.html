@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Leave - Kumon DB</title>
+  <link rel="stylesheet" href="leave.css" />
+</head>
+<body>
+
+  <header>
+    <nav>
+        <a href="centers.html">← Centers</a>
+    </nav>
+        <span class="page-title">🏖️ Leave</span>
+  </header>
+
+  <section id="accessDenied" class="access-denied hidden" aria-live="polite">
+    <div class="access-denied-content">
+      <h2>🔐 Access Restricted</h2>
+      <p>This page is available to registered employees.</p>
+    </div>
+  </section>
+
+  <main id="mainContent" class="leave-page hidden">
+
+    <div id="balanceStrip" class="balance-strip hidden"></div>
+
+    <div class="tabs" role="tablist" aria-label="Leave tabs">
+      <button
+        class="tab-btn active"
+        type="button"
+        data-main-tab="application"
+        role="tab"
+        aria-selected="true"
+        aria-controls="main-tab-application"
+      >
+        📝 Application
+      </button>
+
+      <button
+        class="tab-btn"
+        type="button"
+        data-main-tab="overview"
+        role="tab"
+        aria-selected="false"
+        aria-controls="main-tab-overview"
+      >
+        📅 Overview
+      </button>
+    </div>
+
+    <section
+      id="main-tab-application"
+      class="tab-content active"
+      role="tabpanel"
+      aria-label="Leave application list"
+    >
+
+      <div class="controls">
+        <button id="applyBtn" class="primary" type="button">
+          ＋ Apply for Leave
+        </button>
+
+        <!-- 🆕 MONTH-YEAR PICKER (replaces the old year pager) -->
+        <div class="month-picker" id="monthPicker">
+          <button type="button" id="monthPickerBtn" class="month-picker-btn"
+                  aria-haspopup="dialog" aria-expanded="false">
+            📅 <span id="monthPickerLabel">All months</span> ▾
+          </button>
+
+          <div class="month-picker-pop hidden" id="monthPickerPop" role="dialog" aria-label="Month and year picker">
+            <div class="mp-year-row">
+              <button type="button" id="mpYearPrev" class="pager-btn" aria-label="Previous year">‹</button>
+              <span id="mpYearLabel">----</span>
+              <button type="button" id="mpYearNext" class="pager-btn" aria-label="Next year">›</button>
+            </div>
+
+            <div class="mp-grid" id="mpGrid"></div>
+
+            <div class="mp-actions">
+              <button type="button" id="mpAllBtn" class="secondary">All months</button>
+              <button type="button" id="mpCloseBtn" class="primary">Done</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="adminFilters" class="admin-filters"></div>
+      </div>
+
+      <div class="status-pills" role="group" aria-label="Leave status filters">
+        <button class="pill active" type="button" data-status="all">
+          All <span id="countAll" class="pill-count">0</span>
+        </button>
+
+        <button class="pill pill-pending" type="button" data-status="pending">
+          Pending <span id="countPending" class="pill-count">0</span>
+        </button>
+
+        <button class="pill pill-approved" type="button" data-status="approved">
+          Approved <span id="countApproved" class="pill-count">0</span>
+        </button>
+
+        <button class="pill pill-rejected" type="button" data-status="rejected">
+          Rejected <span id="countRejected" class="pill-count">0</span>
+        </button>
+
+        <button class="pill pill-cancelled" type="button" data-status="cancelled">
+          Cancelled <span id="countCancelled" class="pill-count">0</span>
+        </button>
+      </div>
+
+      <div class="table-wrapper">
+        <table id="leaveTable"></table>
+      </div>
+
+    </section>
+
+    <section
+      id="main-tab-overview"
+      class="tab-content"
+      role="tabpanel"
+      aria-label="Leave overview calendar"
+    >
+
+      <div class="overview-controls">
+        <button id="prevMonth" type="button" aria-label="Previous month">‹</button>
+        <h2 id="monthLabel">Month</h2>
+        <button id="nextMonth" type="button" aria-label="Next month">›</button>
+        <button id="todayBtn" class="secondary" type="button">Today</button>
+      </div>
+
+      <div class="swipe-hint">← Swipe to scroll the calendar →</div>
+
+      <div class="overview-wrapper table-wrapper">
+        <table id="overviewTable"></table>
+      </div>
+
+      <div class="legend" aria-label="Overview legend">
+        <span class="legend-title">Legend:</span>
+
+        <span class="legend-item">
+          <span class="chip lv-annual approved"></span> Annual
+        </span>
+
+        <span class="legend-item">
+          <span class="chip lv-sick approved"></span> Sick
+        </span>
+
+        <span class="legend-item">
+          <span class="chip lv-unpaid approved"></span> Unpaid
+        </span>
+
+        <span class="legend-item">
+          <span class="chip lv-pt approved"></span> PT Leave
+        </span>
+
+        <span class="legend-divider"></span>
+
+        <span class="legend-item">
+          Approved = solid
+        </span>
+
+        <span class="legend-item">
+          Pending = faint / cross-hatched
+        </span>
+      </div>
+
+      <div id="overviewList"></div>
+
+    </section>
+
+  </main>
+
+  <!-- Apply Modal -->
+  <div
+    id="applyModal"
+    class="modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="applyModalTitle"
+  >
+    <div class="modal-content">
+      <button id="closeApplyBtn" class="close-btn" type="button" aria-label="Close">
+        ×
+      </button>
+
+      <h3 id="applyModalTitle">Apply for Leave</h3>
+      <p id="applyEmpInfo" class="modal-subtitle"></p>
+
+      <div class="form-grid">
+
+        <div id="applyEmpGroup" class="full-width"></div>
+
+        <div>
+          <label for="leaveType">Leave Type *</label>
+          <select id="leaveType" required></select>
+        </div>
+
+        <div>
+          <label>Duration Type *</label>
+          <div class="radio-group">
+            <label>
+              <input type="radio" name="durationType" value="days" checked />
+              Day(s)
+            </label>
+
+            <label>
+              <input type="radio" name="durationType" value="hours" />
+              Hours
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label for="dateFrom">Date From *</label>
+          <input type="date" id="dateFrom" required />
+        </div>
+
+        <div>
+          <label for="dateTo">Date To *</label>
+          <input type="date" id="dateTo" />
+        </div>
+
+        <div class="hours-fields hidden">
+          <label for="timeFrom">From (time) *</label>
+          <input type="time" id="timeFrom" step="300" />
+        </div>
+
+        <div class="hours-fields hidden">
+          <label for="timeTo">To (time) *</label>
+          <input type="time" id="timeTo" step="300" />
+        </div>
+
+        <div class="full-width">
+          <label for="reason">Reason *</label>
+          <textarea id="reason" rows="3" required></textarea>
+        </div>
+
+        <div class="full-width">
+          <label for="attachment">
+            Attachment (optional — upload or take a photo; auto-compressed to ≤ 100 KB)
+          </label>
+
+          <input
+            type="file"
+            id="attachment"
+            accept="image/*"
+          />
+
+          <div id="attachmentPreview" class="attachment-preview hidden"></div>
+        </div>
+
+        <div id="balanceBox" class="balance-box hidden"></div>
+
+        <div id="unpaidHint" class="hint hidden"></div>
+
+      </div>
+
+      <div class="modal-actions">
+        <button id="cancelApplyBtn" class="secondary" type="button">Cancel</button>
+        <button id="submitLeaveBtn" class="primary" type="button">Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Attachment Modal -->
+  <div
+    id="attachmentModal"
+    class="modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="attachmentModalTitle"
+  >
+    <div class="modal-content wide">
+      <button id="closeAttachmentBtn" class="close-btn" type="button" aria-label="Close">
+        ×
+      </button>
+
+      <h3 id="attachmentModalTitle">Attachment</h3>
+
+      <img
+        id="attachmentImg"
+        alt="Leave attachment"
+        style="max-width:100%; border-radius:8px;"
+      />
+
+      <p id="attachmentCaption" class="modal-subtitle"></p>
+
+      <div class="modal-actions">
+        <button id="deleteAttBtn" class="danger hidden" type="button">
+          🗑 Delete
+        </button>
+
+        <button id="downloadAttBtn" class="primary" type="button">
+          ⬇ Download
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🆕 Approve & Relief Assignment Modal -->
+  <div id="approveModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="approveModalTitle">
+    <div class="modal-content wide approve-modal-content">
+      <button id="closeApproveBtn" class="close-btn" type="button" aria-label="Close">×</button>
+      <h3 id="approveModalTitle">Approve Leave & Assign Relievers</h3>
+      <div id="approveLeaveDetails" class="modal-subtitle"></div>
+      
+      <div class="approve-table-wrapper">
+        <table id="approveReliefTable">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Emp Center</th>
+              <th>Emp Time</th>
+              <th>Reliever(s) & Shift Changes</th>
+            </tr>
+          </thead>
+          <tbody id="approveReliefBody"></tbody>
+        </table>
+      </div>
+
+      <div class="modal-actions">
+        <button id="cancelApproveBtn" class="secondary" type="button">Cancel</button>
+        <button id="confirmApproveBtn" class="primary" type="button">Confirm Approval</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  <script type="module" src="leave.js"></script>
+
+</body>
+</html>

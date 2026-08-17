@@ -20,6 +20,7 @@ export default {
     employeeTimecardDesc: "QR 掃描、地理位置驗證與 CSV 匯出",
     employeeSchedule: "員工班表",
     employeeScheduleDesc: "查看每週班表",
+    employeeLeave: "請假",
     manageCenterCalendar: "中心行事曆管理",
     manageCenterCalendarDesc: "假日、年度行事曆與課程時間表",
     employeeActivityLog: "員工活動紀錄",
