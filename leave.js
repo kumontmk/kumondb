@@ -14,9 +14,9 @@ const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const DOW_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
-const EMAILJS_SERVICE_ID = 'service_xiorqac';
-const EMAILJS_TEMPLATE_ID = 'template_leave';
-const EMAILJS_PUBLIC_KEY = 'h6ZUxpNW1GViOnq32';
+//const EMAILJS_SERVICE_ID = 'service_xiorqac';
+//const EMAILJS_TEMPLATE_ID = 'template_leave';
+//const EMAILJS_PUBLIC_KEY = 'h6ZUxpNW1GViOnq32';
 
 const TYPE_META = {
   annual: { label: 'Annual Leave', cls: 'lv-annual', ledger: 'annualUsed' },
