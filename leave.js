@@ -17,6 +17,7 @@ const MONTH_NAMES = ['January','February','March','April','May','June','July','A
 const EMAILJS_SERVICE_ID = 'service_xiorqac';
 const EMAILJS_TEMPLATE_ID = 'template_leave';
 const EMAILJS_PUBLIC_KEY = 'h6ZUxpNW1GViOnq32';
+const EMAIL_NOTIFICATIONS_ENABLED = false;
 
 const TYPE_META = {
   annual: { label: 'Annual Leave', cls: 'lv-annual', ledger: 'annualUsed' },
@@ -1478,24 +1479,58 @@ function emailjsConfigured() {
 }
 
 async function notifyManagersLeaveEvent(leave, eventType) {
+  if (!EMAIL_NOTIFICATIONS_ENABLED) {
+    console.info('📧 Email notifications are temporarily disabled.');
     return;
-  if (!emailjsConfigured()) { 
-    console.info('📧 EmailJS not configured — skipping notification.'); 
-    return; }
+  }
+
+  if (!emailjsConfigured()) {
+    console.info('📧 EmailJS not configured — skipping notification.');
+    return;
+  }
+
   try {
-    const tos = getManagerEmails(); if (!tos.length) return;
-    const subjects = { new: `🏖️ New Leave Request — ${leave.empName} (${leave.typeLabel})`, approved: `✅ Leave APPROVED — ${leave.empName} (${leave.typeLabel})`, rejected: `❌ Leave REJECTED — ${leave.empName} (${leave.typeLabel})` };
-    const actionLabel = { new: 'New application (PENDING)', approved: 'APPROVED', rejected: 'REJECTED' }[eventType] || eventType;
-    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-      to_email: tos.join(','), subject: subjects[eventType] || subjects.new, action: actionLabel,
-      acted_by: eventType === 'new' ? (leave.appliedByName || '-') : (currentUser?.email || '-'),
-      employee_name: leave.empName || '-', leave_type: leave.typeLabel || leave.type || '-',
-      dates: `${leave.dateFrom} → ${leave.dateTo}`,
-      duration: leave.durationType === 'hours' ? `${leave.amount} hr(s) (${leave.timeFrom}–${leave.timeTo})` : `${leave.amount} day(s)`,
-      reason: leave.reason || '-', applied_by: leave.appliedByName || '-',
-    }, { publicKey: EMAILJS_PUBLIC_KEY });
+    const tos = getManagerEmails();
+    if (!tos.length) return;
+
+    const subjects = {
+      new: `🏖️ New Leave Request — ${leave.empName} (${leave.typeLabel})`,
+      approved: `✅ Leave APPROVED — ${leave.empName} (${leave.typeLabel})`,
+      rejected: `❌ Leave REJECTED — ${leave.empName} (${leave.typeLabel})`
+    };
+
+    const actionLabel = {
+      new: 'New application (PENDING)',
+      approved: 'APPROVED',
+      rejected: 'REJECTED'
+    }[eventType] || eventType;
+
+    await emailjs.send(
+      EMAILJS_SERVICE_ID,
+      EMAILJS_TEMPLATE_ID,
+      {
+        to_email: tos.join(','),
+        subject: subjects[eventType] || subjects.new,
+        action: actionLabel,
+        acted_by: eventType === 'new'
+          ? (leave.appliedByName || '-')
+          : (currentUser?.email || '-'),
+        employee_name: leave.empName || '-',
+        leave_type: leave.typeLabel || leave.type || '-',
+        dates: `${leave.dateFrom} → ${leave.dateTo}`,
+        duration: leave.durationType === 'hours'
+          ? `${leave.amount} hr(s) (${leave.timeFrom}–${leave.timeTo})`
+          : `${leave.amount} day(s)`,
+        reason: leave.reason || '-',
+        applied_by: leave.appliedByName || '-'
+      },
+      { publicKey: EMAILJS_PUBLIC_KEY }
+    );
+
     console.info(`📧 Managers notified (${eventType}).`);
-  } catch (err) { console.warn('📧 Manager notification failed:', err?.text || err); }
+  } catch (err) {
+    console.warn('📧 Manager notification failed:', err?.text || err);
+  }
 }
 
 // ============================================================
