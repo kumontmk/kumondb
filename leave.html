@@ -101,30 +101,48 @@
             </div>
             <div id="overviewList"></div>
         </div>
-            <div class="tab-content" id="main-tab-entitlements">
-                <div class="controls">
-                    <div class="filter-group">
-                        <label for="entEmpFilter" data-i18n="employee">Employee</label>
-                        <select id="entEmpFilter"></select>
-                    </div>
-                    <button class="primary" id="exportEntitlementsBtn" type="button" data-i18n="exportExcel">Export to Excel</button>
+
+        <!-- LEAVE ENTITLEMENTS TAB -->
+        <div id="main-tab-entitlements" class="tab-content">
+            <div class="controls">
+                <div class="year-pager">
+                    <button type="button" class="pager-btn" id="entYearPrev">‹</button>
+                    <span id="entYearLabel">----</span>
+                    <button type="button" class="pager-btn" id="entYearNext">›</button>
                 </div>
-                <div class="table-wrapper">
-                    <table id="entitlementsTable">
-                        <thead>
-                            <tr>
-                                <th data-i18n="thEmployee">Employee</th>
-                                <th data-i18n="thEntAnnual">Annual (Ent / Used / Bal)</th>
-                                <th data-i18n="thEntSick">Sick (Ent / Used / Bal)</th>
-                                <th data-i18n="thEntPT">PT / TimeOff (Ent / Used / Bal)</th>
-                                <th data-i18n="thEntUnpaid">Unpaid Leaves</th>
-                                <th data-i18n="thActions">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
+                <div class="filter-group">
+                    <label for="entEmpSearch" data-i18n="employee">Employee</label>
+                    <input type="text" id="entEmpSearch" placeholder="Search by name..." />
                 </div>
+                <button class="primary" id="exportEntitlementsBtn" type="button" data-i18n="exportExcel">Export to Excel</button>
             </div>
+            <div class="table-wrapper">
+                <table id="entitlementsTable">
+                    <thead>
+                        <tr>
+                            <th rowspan="2" data-i18n="thEmployee">Employee</th>
+                            <th colspan="3" data-i18n="thAnnual">Annual</th>
+                            <th colspan="3" data-i18n="thSick">Sick</th>
+                            <th colspan="3" data-i18n="thPT">PT / TimeOff</th>
+                            <th rowspan="2" data-i18n="thEntUnpaid">Unpaid Leaves</th>
+                            <th rowspan="2" data-i18n="thActions">Actions</th>
+                        </tr>
+                        <tr>
+                            <th data-i18n="thEnt">Ent</th>
+                            <th data-i18n="thUsed">Used</th>
+                            <th data-i18n="thBal">Bal</th>
+                            <th data-i18n="thEnt">Ent</th>
+                            <th data-i18n="thUsed">Used</th>
+                            <th data-i18n="thBal">Bal</th>
+                            <th data-i18n="thEnt">Ent</th>
+                            <th data-i18n="thUsed">Used</th>
+                            <th data-i18n="thBal">Bal</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
     <!-- APPLY MODAL -->
@@ -222,30 +240,33 @@
         </div>
     </div>
 
-    <div class="modal" id="editEntitlementModal">
-        <div class="modal-content">
-            <button class="close-btn" id="closeEditEntModal">&times;</button>
-            <h3 data-i18n="editEntitlementTitle">Edit Entitlement</h3>
-            <div class="modal-subtitle" id="editEntEmpName"></div>
-            <form id="editEntitlementForm" class="form-grid">
-                <div>
-                    <label data-i18n="entAnnualLabel">Annual Leave (Days)</label>
-                    <input type="number" step="0.5" id="entAnnual" min="0" required>
-                </div>
-                <div>
-                    <label data-i18n="entSickLabel">Sick Leave (Days)</label>
-                    <input type="number" step="0.5" id="entSick" min="0" required>
-                </div>
-                <div>
-                    <label data-i18n="entPTLabel">PT / Time Off</label>
-                    <input type="number" step="0.5" id="entTimeOff" min="0" required>
-                </div>
-                <div class="modal-actions full-width">
-                    <button type="button" class="secondary" id="cancelEditEntBtn" data-i18n="cancel">Cancel</button>
-                    <button type="submit" class="primary" data-i18n="btnSaveChanges">Save Changes</button>
-                </div>
-            </form>
+    <!-- Edit Entitlement Modal -->
+    <div id="editEntitlementModal" class="modal hidden">
+    <div class="modal-content">
+        <button class="close-btn" id="closeEditEntModal">&times;</button>
+        <h3>Edit Entitlement</h3>
+        <p id="editEntEmpName" class="modal-subtitle"></p>
+        <form id="editEntitlementForm">
+        <div class="form-grid">
+            <div>
+            <label for="entAnnual">Annual</label>
+            <input type="number" id="entAnnual" step="0.5" min="0">
+            </div>
+            <div>
+            <label for="entSick">Sick</label>
+            <input type="number" id="entSick" step="0.5" min="0">
+            </div>
+            <div>
+            <label for="entTimeOff">PT / TimeOff</label>
+            <input type="number" id="entTimeOff" step="0.5" min="0">
+            </div>
         </div>
+        <div class="modal-actions">
+            <button type="button" class="secondary" id="cancelEditEntBtn">Cancel</button>
+            <button type="submit" class="primary">Save</button>
+        </div>
+        </form>
+    </div>
     </div>
 
     <script type="module" src="leave.js"></script>

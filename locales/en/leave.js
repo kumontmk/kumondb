@@ -88,4 +88,10 @@ export default {
     editEntitlement: "Edit",
     entitlementUpdated: "Entitlement updated successfully.",
     entitlementUpdateFailed: "Failed to update entitlement.",
+    thAnnual: "Annual",
+  thSick: "Sick", 
+  thPT: "PT / TimeOff",
+  thEnt: "Ent",
+  thUsed: "Used",
+  thBal: "Bal",
 };

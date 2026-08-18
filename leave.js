@@ -6,6 +6,7 @@ import { ref, get, update, onValue, push, runTransaction, remove } from "https:/
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { i18nReady, t, applyI18n, currentLanguage } from './leave-i18n.js';
 
+
 const auth = getAuth();
 const AUTHORIZED_EMAIL = 'kumonchamps@gmail.com';
 const MAX_ATTACHMENT_BYTES = 100 * 1024;
@@ -51,6 +52,7 @@ const ENTITLEMENT_FIELDS = { annualUsed: 'annual', sickUsed: 'sick', timeOffUsed
 let employees = {}, leaves = {}, currentUser = null;
 let statusFilter = 'all', monthFilter = 'all';
 let currentYear = new Date().getFullYear();
+let entYear = new Date().getFullYear();
 let pickerYear = currentYear;
 let viewDate = new Date();
 let pendingAttachment = null, currentAttLeaveId = null;
@@ -166,32 +168,40 @@ function initApp() {
   if (initializedForUid && initializedForUid !== currentUser.uid) { location.reload(); return; }
   if (initializedForUid === currentUser.uid) { refreshAll(); return; }
   initializedForUid = currentUser.uid;
-  
-  // 👇 ADD THIS: Hide Entitlements tab if user is not an Admin/Manager
+
+  // 👇 Hide Entitlements tab if user is not an Admin/Manager
   if (!currentUser.isAdmin) {
       const entTab = $('tabEntitlements');
       if (entTab) entTab.style.display = 'none';
   }
 
+  setText('entYearLabel', entYear);
+
   $('leaveTable').innerHTML = `<tbody><tr><td class="empty-state">${escapeHtml(t('loadingRecords'))}</td></tr></tbody>`;
-  injectAdminControls(); 
-  wireEvents(); 
-  renderMonthPickerLabel(); 
-  loadScheduleData(); 
-  populateEntEmpFilter();
-  
-  onValue(ref(db, 'employees'), s => { employees = s.val() || {}; refreshAll(); });
-  onValue(ref(db, 'leaves'), s => { leaves = s.val() || {}; refreshAll(); scheduleAutoSync(); });
+  injectAdminControls();
+  wireEvents();
+  renderMonthPickerLabel();
+  loadScheduleData();
+
+  // 🚀 OPTIMIZATION: Use refreshAllSoon() to debounce the initial load
+  // This prevents the UI from re-rendering 3-4 times in a split second
+  onValue(ref(db, 'employees'), s => { employees = s.val() || {}; refreshAllSoon(); });
+  onValue(ref(db, 'leaves'), s => { leaves = s.val() || {}; refreshAllSoon(); scheduleAutoSync(); });
 }
+
 function refreshAllSoon() { clearTimeout(refreshTimer); refreshTimer = setTimeout(refreshAll, 80); }
+
 function refreshAll() { 
     if (!currentUser) return; 
     populateEmpFilter(); 
     renderBalanceStrip(); 
     renderLeaveTable(); 
-    renderOverview(); 
     
-    // Re-render entitlements if tab is active
+    // 🚀 OPTIMIZATION: Only render heavy tabs if they are currently active
+    // This prevents the heavy Overview calendar from rendering in the background
+    if ($('main-tab-overview')?.classList.contains('active')) {
+        renderOverview();
+    }
     if ($('main-tab-entitlements')?.classList.contains('active')) {
         renderEntitlementsTab();
     }
@@ -318,6 +328,29 @@ function getApprovedUsedForYear(empId, year, typeKey) {
   });
   return round2(used);
 }
+// 🆕 FIX: Sum actual approved unpaid leave (days + hours) for a year,
+// instead of just counting the number of leave records.
+function getUnpaidTotalsForYear(empId, year) {
+  let days = 0, hours = 0;
+  Object.values(leaves).forEach(l => {
+    if (l.empId !== empId || l.type !== 'unpaid' || l.status !== 'approved') return;
+    if (l.durationType === 'hours') {
+      if (leaveRecordYear(l) === year) hours = round2(hours + Number(l.amount || 0));
+    } else {
+      let d = 0;
+      if (l.daysPerYear && l.daysPerYear[year] !== undefined) d = Number(l.daysPerYear[year] || 0);
+      else if (leaveRecordYear(l) === year) d = Number(l.deductDays || l.amount || 0);
+      days = round2(days + d);
+    }
+  });
+  return { days, hours };
+}
+function formatUnpaidTotal(totals) {
+  const parts = [];
+  if (totals.days) parts.push(`${totals.days}d`);
+  if (totals.hours) parts.push(`${totals.hours}h`);
+  return parts.length ? parts.join(' ') : '0';
+}
 function getBalancesForYear(emp, empId, year) {
   const le = emp?.leaveEntitlement || {};
   const annual = Number(le.annual || 0), sick = Number(le.sick || 0), timeOff = Number(le.timeOff || 0);
@@ -343,18 +376,18 @@ function buildTypeOptions(emp, empId, year) {
   } else {
     opts.push({ key: 'pt', text: t('optPT', { balance: b.timeOff.balance, tag }), disabled: false });
   }
-  
+
   const annualLeft = Math.max(0, b.annual.balance);
   const isMaster = currentUser?.isMaster;
   // Only disable unpaid leave if annual balance > 0 AND user is NOT master admin
-  const disableUnpaid = annualLeft > 0 && !isMaster; 
-  
-  opts.push({ 
-      key: 'unpaid', 
-      text: annualLeft > 0 ? t('optUnpaidAvailable', { left: annualLeft, tag }) : t('optUnpaid', { tag }), 
-      disabled: disableUnpaid, 
-      showHint: annualLeft > 0 && !isMaster 
-  }); // <--- ADDED MISSING ); HERE
+  const disableUnpaid = annualLeft > 0 && !isMaster;
+
+  opts.push({
+      key: 'unpaid',
+      text: annualLeft > 0 ? t('optUnpaidAvailable', { left: annualLeft, tag }) : t('optUnpaid', { tag }),
+      disabled: disableUnpaid,
+      showHint: annualLeft > 0 && !isMaster
+  });
 
   return opts;
 }
@@ -907,34 +940,48 @@ function renderEntitlementsTab() {
     const tbody = table?.querySelector('tbody');
     if (!tbody) return;
 
-    const empFilter = $('entEmpFilter');
-    const selectedEmp = empFilter?.value || 'all';
+    const searchInput = $('entEmpSearch');
+    const query = searchInput?.value.trim().toLowerCase() || '';
 
     let empList = Object.entries(employees).filter(([id, e]) => !e.isDisabled);
-    if (selectedEmp !== 'all') {
-        empList = empList.filter(([id]) => id === selectedEmp);
+
+    // Filter by search query (English name, Chinese name, or ID)
+    if (query) {
+        empList = empList.filter(([id, e]) => {
+            const english = (e.englishName || '').toLowerCase();
+            const chinese = (e.chineseName || '').toLowerCase();
+            return english.includes(query) || chinese.includes(query) || id.toLowerCase().includes(query);
+        });
     }
+
     empList.sort((a, b) => (a[1].englishName || '').localeCompare(b[1].englishName || ''));
 
     if (empList.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="empty-state">${escapeHtml(t('noEmployeesFound'))}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="12" class="empty-state">${escapeHtml(query ? 'No employees match your search.' : t('noEmployeesFound'))}</td></tr>`;
         return;
     }
 
-    const year = new Date().getFullYear();
+    const year = entYear;
     let html = '';
     for (const [empId, emp] of empList) {
         const b = getBalancesForYear(emp, empId, year);
-        const unpaidCount = Object.values(leaves).filter(l => l.empId === empId && l.type === 'unpaid' && l.status === 'approved').length;
+        // 🆕 FIX: show total approved unpaid days/hours for the selected year (e.g. "7d", "0.5h")
+        const unpaidTotal = formatUnpaidTotal(getUnpaidTotalsForYear(empId, year));
 
         html += `
             <tr>
-                <td>${escapeHtml(emp.englishName || '-')} ${emp.chineseName ? `<small>(${escapeHtml(emp.chineseName)})</small>` : ''}</td>
-                <td>${b.annual.entitled} / ${b.annual.used} / <strong>${b.annual.balance}</strong></td>
-                <td>${b.sick.entitled} / ${b.sick.used} / <strong>${b.sick.balance}</strong></td>
-                <td>${b.timeOff.entitled} / ${b.timeOff.used} / <strong>${b.timeOff.balance}</strong></td>
-                <td>${unpaidCount}</td>
-                <td>
+                <td data-label="${escapeHtml(t('thEmployee'))}">${escapeHtml(emp.englishName || '-')} ${emp.chineseName ? `<small>(${escapeHtml(emp.chineseName)})</small>` : ''}</td>
+                <td data-label="Annual Ent">${b.annual.entitled}</td>
+                <td data-label="Annual Used">${b.annual.used}</td>
+                <td data-label="Annual Bal"><strong>${b.annual.balance}</strong></td>
+                <td data-label="Sick Ent">${b.sick.entitled}</td>
+                <td data-label="Sick Used">${b.sick.used}</td>
+                <td data-label="Sick Bal"><strong>${b.sick.balance}</strong></td>
+                <td data-label="PT Ent">${b.timeOff.entitled}</td>
+                <td data-label="PT Used">${b.timeOff.used}</td>
+                <td data-label="PT Bal"><strong>${b.timeOff.balance}</strong></td>
+                <td data-label="${escapeHtml(t('thEntUnpaid'))}">${unpaidTotal}</td>
+                <td data-label="${escapeHtml(t('thActions'))}">
                     <button class="icon-btn" data-action="edit-ent" data-id="${empId}" type="button">✏️ ${escapeHtml(t('editEntitlement'))}</button>
                 </td>
             </tr>
@@ -959,7 +1006,7 @@ async function saveEntitlement(e) {
     e.preventDefault();
     const empId = e.target.dataset.empId;
     if (!empId) return;
-    
+
     const annual = parseFloat($('entAnnual').value) || 0;
     const sick = parseFloat($('entSick').value) || 0;
     const timeOff = parseFloat($('entTimeOff').value) || 0;
@@ -972,7 +1019,7 @@ async function saveEntitlement(e) {
         closeModal('editEntitlementModal');
         alert(t('entitlementUpdated'));
         renderEntitlementsTab();
-        renderBalanceStrip(); 
+        renderBalanceStrip();
     } catch (err) {
         console.error(err);
         alert(t('entitlementUpdateFailed'));
@@ -981,12 +1028,12 @@ async function saveEntitlement(e) {
 
 function exportEntitlements() {
     if (typeof XLSX === 'undefined') return alert(t('excelNotLoaded')); // Reusing existing key
-    const year = new Date().getFullYear();
+    const year = entYear;
     const empList = Object.entries(employees).filter(([_, e]) => !e.isDisabled).sort((a, b) => (a[1].englishName || '').localeCompare(b[1].englishName || ''));
 
     const rows = empList.map(([empId, emp]) => {
         const b = getBalancesForYear(emp, empId, year);
-        const unpaidCount = Object.values(leaves).filter(l => l.empId === empId && l.type === 'unpaid' && l.status === 'approved').length;
+        const unpaid = getUnpaidTotalsForYear(empId, year); // 🆕 FIX: totals instead of record count
         return {
             'Employee': emp.englishName || '',
             'Chinese Name': emp.chineseName || '',
@@ -999,7 +1046,7 @@ function exportEntitlements() {
             'PT Entitled': b.timeOff.entitled,
             'PT Used': b.timeOff.used,
             'PT Balance': b.timeOff.balance,
-            'Unpaid Leaves (Approved)': unpaidCount
+            'Unpaid Leaves (Approved)': formatUnpaidTotal(unpaid)
         };
     });
 
@@ -1015,13 +1062,13 @@ function wireEvents() {
     btn.addEventListener('click', () => {
       document.querySelectorAll('[data-main-tab]').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('[id^="main-tab-"]').forEach(c => c.classList.remove('active'));
-      btn.classList.add('active'); 
+      btn.classList.add('active');
       $(`main-tab-${btn.dataset.mainTab}`)?.classList.add('active');
       if (btn.dataset.mainTab === 'overview') renderOverview();
-      if (btn.dataset.mainTab === 'entitlements') renderEntitlementsTab(); 
+      if (btn.dataset.mainTab === 'entitlements') renderEntitlementsTab();
     });
   });
-  
+
   $('applyBtn')?.addEventListener('click', openApplyModal);
   $('monthPickerBtn')?.addEventListener('click', e => { e.stopPropagation(); const pop = $('monthPickerPop'); const willOpen = pop.classList.contains('hidden'); pop.classList.toggle('hidden', !willOpen); $('monthPickerBtn').setAttribute('aria-expanded', String(willOpen)); if (willOpen) { pickerYear = currentYear; renderMonthGrid(); } });
   $('mpYearPrev')?.addEventListener('click', e => { e.stopPropagation(); pickerYear--; renderMonthGrid(); });
@@ -1055,8 +1102,24 @@ function wireEvents() {
   $('confirmApproveBtn')?.addEventListener('click', confirmApproval);
   $('downloadAttBtn')?.addEventListener('click', () => { const l = leaves[currentAttLeaveId]; if (!l?.attachment?.dataUrl) return; const a = document.createElement('a'); a.href = l.attachment.dataUrl; a.download = l.attachment.name || 'attachment.jpg'; a.click(); });
   $('deleteAttBtn')?.addEventListener('click', () => deleteAttachment(currentAttLeaveId));
-  
-  $('entEmpFilter')?.addEventListener('change', renderEntitlementsTab);
+
+  let entSearchTimer = null;
+    $('entEmpSearch')?.addEventListener('input', () => {
+        clearTimeout(entSearchTimer);
+        entSearchTimer = setTimeout(renderEntitlementsTab, 150);
+    });
+
+    // Year Pager for Entitlements
+    $('entYearPrev')?.addEventListener('click', () => {
+        entYear--;
+        setText('entYearLabel', entYear);
+        renderEntitlementsTab();
+    });
+    $('entYearNext')?.addEventListener('click', () => {
+        entYear++;
+        setText('entYearLabel', entYear);
+        renderEntitlementsTab();
+    });
   $('exportEntitlementsBtn')?.addEventListener('click', exportEntitlements);
   $('entitlementsTable')?.addEventListener('click', e => {
       const btn = e.target.closest('button[data-action="edit-ent"]');
@@ -1065,42 +1128,42 @@ function wireEvents() {
   $('editEntitlementForm')?.addEventListener('submit', saveEntitlement);
   $('closeEditEntModal')?.addEventListener('click', () => closeModal('editEntitlementModal'));
   $('cancelEditEntBtn')?.addEventListener('click', () => closeModal('editEntitlementModal'));
-  
-  document.addEventListener('keydown', e => { 
-    if (e.key === 'Escape') { 
-      closeModal('applyModal'); 
-      closeModal('attachmentModal'); 
-      closeModal('approveModal'); 
-      closeModal('editEntitlementModal'); 
-      closeMonthPicker(); 
-    } 
-  });
-} 
 
-function renderMonthPickerLabel() { 
-  setText('monthPickerLabel', monthFilter === 'all' ? t('allMonths', { year: currentYear }) : t('monthOnly', { month: MONTH_NAMES[monthFilter - 1], year: currentYear })); 
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      closeModal('applyModal');
+      closeModal('attachmentModal');
+      closeModal('approveModal');
+      closeModal('editEntitlementModal');
+      closeMonthPicker();
+    }
+  });
+}
+
+function renderMonthPickerLabel() {
+  setText('monthPickerLabel', monthFilter === 'all' ? t('allMonths', { year: currentYear }) : t('monthOnly', { month: MONTH_NAMES[monthFilter - 1], year: currentYear }));
 }
 
 function renderMonthGrid() {
-  const grid = $('mpGrid'); 
-  if (!grid) return; 
+  const grid = $('mpGrid');
+  if (!grid) return;
   setText('mpYearLabel', pickerYear);
-  grid.innerHTML = MONTH_NAMES.map((name, i) => { 
-    const m = i + 1; 
-    const active = (pickerYear === currentYear && monthFilter === m); 
-    return `<button type="button" class="mp-month${active ? ' active' : ''}" data-month="${m}">${name.slice(0, 3)}</button>`; 
+  grid.innerHTML = MONTH_NAMES.map((name, i) => {
+    const m = i + 1;
+    const active = (pickerYear === currentYear && monthFilter === m);
+    return `<button type="button" class="mp-month${active ? ' active' : ''}" data-month="${m}">${name.slice(0, 3)}</button>`;
   }).join('');
 }
 
-function closeMonthPicker() { 
-  $('monthPickerPop')?.classList.add('hidden'); 
-  $('monthPickerBtn')?.setAttribute('aria-expanded', 'false'); 
+function closeMonthPicker() {
+  $('monthPickerPop')?.classList.add('hidden');
+  $('monthPickerBtn')?.setAttribute('aria-expanded', 'false');
 }
 
-function applyMonthPick(monthOrAll) { 
-  currentYear = pickerYear; 
-  monthFilter = monthOrAll; 
-  closeMonthPicker(); 
-  renderMonthPickerLabel(); 
-  renderLeaveTable(); 
+function applyMonthPick(monthOrAll) {
+  currentYear = pickerYear;
+  monthFilter = monthOrAll;
+  closeMonthPicker();
+  renderMonthPickerLabel();
+  renderLeaveTable();
 }

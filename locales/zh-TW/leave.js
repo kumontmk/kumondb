@@ -87,5 +87,11 @@ export default {
     noEmployeesFound: "沒有找到員工。",
     editEntitlement: "編輯",
     entitlementUpdated: "額度更新成功。",
-    entitlementUpdateFailed: "額度更新失敗。"
+    entitlementUpdateFailed: "額度更新失敗。",
+    thAnnual: "年假",
+  thSick: "病假",
+  thPT: "PT / 休假",
+  thEnt: "應得",
+  thUsed: "已用",
+  thBal: "餘額",
 };
