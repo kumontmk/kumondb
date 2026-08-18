@@ -64,6 +64,8 @@ let searchTimer = null;
 let currentApproveLeave = null;
 let empASchedulesCache = {};
 
+let lastTypeOptionsYear = null; // tracks which quota year the type dropdown was built for
+
 // ---------- helpers ----------
 const $ = id => document.getElementById(id);
 
@@ -401,12 +403,15 @@ async function countLeaveDays(empId, from, to) {
   const offDates = await getOffDates(empId);
   if (!Object.keys(centerCalendars).length) await loadCenterCalendars();
   let days = 0; const skipped = [];
+  const daysPerYear = {};
   eachDate(from, to, d => {
     const ds = fmtISO(d);
     if (weeklyOffDays.has(d.getDay()) || offDates.has(ds) || isHoliday(empId, ds)) { skipped.push(ds); return; }
     days++;
+    const yr = d.getFullYear();
+    daysPerYear[yr] = (daysPerYear[yr] || 0) + 1;
   });
-  return { days, skipped, weeklyOffDays };
+  return { days, skipped, weeklyOffDays, daysPerYear };
 }
 
 // 🆕 Fetch Emp Schedule for a specific date across all centers
@@ -460,28 +465,78 @@ function injectAdminControls() {
 // ============================================================
 // ENTITLEMENTS
 // ============================================================
-function getBalances(emp) {
+// ============================================================
+// YEAR-AWARE ENTITLEMENTS
+// Quota is per calendar year, keyed by the year of the leave's dateFrom.
+// "Used" is computed from APPROVED leave records for that year, so
+// next-year applications automatically draw on next year's quota.
+// ============================================================
+function leaveRecordYear(l) {
+  return Number(l?.year) || parseInt((l?.dateFrom || '').slice(0, 4), 10) || new Date().getFullYear();
+}
+
+function getApprovedUsedForYear(empId, year, typeKey) {
+  let used = 0;
+  Object.values(leaves).forEach(l => {
+    if (l.empId !== empId || l.status !== 'approved') return; 
+    if (l.type !== typeKey) return;
+    
+    let d = 0;
+    if (l.daysPerYear && l.daysPerYear[year] !== undefined) {
+      d = Number(l.daysPerYear[year] || 0);
+    } else {
+      // Fallback for old records that don't have daysPerYear
+      if (leaveRecordYear(l) === year) d = Number(l.deductDays || 0);
+    }
+    used += d;
+  });
+  return round2(used);
+}
+
+function getBalancesForYear(emp, empId, year) {
   const le = emp?.leaveEntitlement || {};
-  const annual = le.annual || 0, sick = le.sick || 0, timeOff = le.timeOff || 0;
+  const annual  = Number(le.annual || 0);
+  const sick    = Number(le.sick || 0);
+  const timeOff = Number(le.timeOff || 0);
+  const annualUsed  = empId ? getApprovedUsedForYear(empId, year, 'annual') : Number(le.annualUsed || 0);
+  const sickUsed    = empId ? getApprovedUsedForYear(empId, year, 'sick')   : Number(le.sickUsed || 0);
+  const timeOffUsed = empId ? getApprovedUsedForYear(empId, year, 'pt')     : Number(le.timeOffUsed || 0);
   return {
-    annual: { entitled: annual, used: le.annualUsed || 0, balance: round2(annual - (le.annualUsed || 0)) },
-    sick: { entitled: sick, used: le.sickUsed || 0, balance: round2(sick - (le.sickUsed || 0)) },
-    timeOff: { entitled: timeOff, used: le.timeOffUsed || 0, balance: round2(timeOff - (le.timeOffUsed || 0)) }
+    year,
+    annual:  { entitled: annual,  used: annualUsed,  balance: round2(annual - annualUsed) },
+    sick:    { entitled: sick,    used: sickUsed,    balance: round2(sick - sickUsed) },
+    timeOff: { entitled: timeOff, used: timeOffUsed, balance: round2(timeOff - timeOffUsed) }
   };
 }
 
-function buildTypeOptions(emp) {
-  const b = getBalances(emp); const opts = [];
+// Current-year convenience wrapper (keeps old call sites working)
+function getBalances(emp, empId = null) {
+  return getBalancesForYear(emp, empId, new Date().getFullYear());
+}
+
+// The year targeted by the Apply modal (driven by Date From)
+function selectedLeaveYear() {
+  const dateFrom = $('dateFrom')?.value;
+  const y = dateFrom ? parseInt(dateFrom.slice(0, 4), 10) : NaN;
+  return Number.isInteger(y) ? y : new Date().getFullYear();
+}
+
+function buildTypeOptions(emp, empId, year) {
+  const b = getBalancesForYear(emp, empId, year);
+  const tag = year !== new Date().getFullYear() ? ` — ${year} quota` : '';
+  const opts = [];
   if (!isPartTime(emp)) {
-    opts.push({ key: 'annual', text: `Annual Leave — balance ${b.annual.balance} day(s)`, disabled: b.annual.balance <= 0 });
-    opts.push({ key: 'sick', text: `Sick Leave — balance ${b.sick.balance} day(s)`, disabled: b.sick.balance <= 0 });
+    opts.push({ key: 'annual', text: `Annual Leave — balance ${b.annual.balance} day(s)${tag}`, disabled: b.annual.balance <= 0 });
+    opts.push({ key: 'sick',   text: `Sick Leave — balance ${b.sick.balance} day(s)${tag}`,   disabled: b.sick.balance <= 0 });
   } else {
-    opts.push({ key: 'pt', text: `PT Time Off — ${b.timeOff.balance} credit(s) left (no balance required)`, disabled: false });
+    opts.push({ key: 'pt', text: `PT Time Off — ${b.timeOff.balance} credit(s) left${tag}`, disabled: false });
   }
   const annualLeft = Math.max(0, b.annual.balance);
   opts.push({
     key: 'unpaid',
-    text: annualLeft > 0 ? `Unpaid Leave — available after Annual credits used up (${annualLeft} left)` : 'Unpaid Leave',
+    text: annualLeft > 0
+      ? `Unpaid Leave — available after Annual credits used up (${annualLeft} left)${tag}`
+      : `Unpaid Leave${tag}`,
     disabled: annualLeft > 0, showHint: annualLeft > 0
   });
   return opts;
@@ -510,35 +565,43 @@ async function adjustEntitlementAtomic(leave, delta, { enforceBalance = true } =
 async function recalcEntitlementUsed(empId) {
   const emp = employees[empId];
   if (!emp) return false;
-
   const le = emp.leaveEntitlement || {};
-  const entYear = le.lastResetYear || new Date().getFullYear();
+  const currentYear = new Date().getFullYear();
+  let entYear = Number(le.lastResetYear) || currentYear;
+  const extraUpdates = {};
+
+  if (currentYear > entYear) {
+    entYear = currentYear;
+    extraUpdates.lastResetYear = currentYear;
+  }
 
   let annual = 0, sick = 0, timeOff = 0;
-
   Object.values(leaves).forEach(l => {
-    if (l.empId !== empId || l.status !== 'approved') return; // cancelled/pending/rejected never count
-    const yr = l.year || parseInt((l.dateFrom || '').slice(0, 4), 10);
-    if (yr !== entYear) return; // only the current entitlement year
-    const d = Number(l.deductDays || 0);
-    if (l.type === 'annual') annual += d;
-    else if (l.type === 'sick') sick += d;
-    else if (l.type === 'pt') timeOff += d;
+    if (l.empId !== empId || l.status !== 'approved') return;
+    
+    let d = 0;
+    if (l.daysPerYear && l.daysPerYear[entYear] !== undefined) {
+      d = Number(l.daysPerYear[entYear] || 0);
+    } else {
+      if (leaveRecordYear(l) === entYear) d = Number(l.deductDays || 0);
+    }
+    
+    if (d > 0) {
+      if (l.type === 'annual') annual += d;
+      else if (l.type === 'sick') sick += d;
+      else if (l.type === 'pt') timeOff += d;
+    }
   });
-
   annual = round2(annual); sick = round2(sick); timeOff = round2(timeOff);
 
-  // ✅ Skip the write if nothing changed (prevents pointless DB writes / loops)
-  if (
+  const unchanged = !extraUpdates.lastResetYear &&
     (le.annualUsed || 0) === annual &&
     (le.sickUsed || 0) === sick &&
-    (le.timeOffUsed || 0) === timeOff
-  ) return false;
+    (le.timeOffUsed || 0) === timeOff;
+  if (unchanged) return false;
 
   await update(ref(db, `employees/${empId}/leaveEntitlement`), {
-    annualUsed: annual,
-    sickUsed: sick,
-    timeOffUsed: timeOff
+    annualUsed: annual, sickUsed: sick, timeOffUsed: timeOff, ...extraUpdates
   });
   return true;
 }
@@ -608,8 +671,8 @@ function renderBalanceStrip() {
   }
   const emp = (!currentUser.isMaster && currentUser.empId) ? employees[currentUser.empId] : null;
   if (emp) {
-    const b = getBalances(emp);
-    const cards = !isPartTime(emp)
+        const b = getBalancesForYear(emp, currentUser.empId, new Date().getFullYear());    
+        const cards = !isPartTime(emp)
       ? [{ cls: 'bc-annual', icon: '📅', title: 'Annual', d: b.annual }, { cls: 'bc-sick', icon: '🏥', title: 'Sick', d: b.sick }]
       : [{ cls: 'bc-pt', icon: '⏱️', title: 'PT Time Off', d: b.timeOff }];
     html += cards.map(c => `<div class="balance-card ${c.cls}"><div class="bc-title">${c.icon} ${escapeHtml(c.title)}</div><div class="bc-nums"><span>${round2(c.d.entitled)}<label>entitled</label></span><span>${round2(c.d.used)}<label>used</label></span><span class="bc-bal">${round2(c.d.balance)}<label>balance</label></span></div></div>`).join('');
@@ -880,7 +943,6 @@ async function confirmApproval() {
   btn.disabled = true; btn.textContent = 'Processing...';
   
   try {
-    // (Removed the duplicate `const l = ...` that used to be here)
     const reliefPlan = [];
     const dates = Object.keys(empASchedulesCache).sort();
     
@@ -920,16 +982,37 @@ async function confirmApproval() {
     }
     
     let deduct = +(l.deductDays || 0), amount = l.amount, skippedStr = l.restDaysExcluded || '';
+    let daysPerYear = l.daysPerYear || null;
     if (l.durationType !== 'hours') {
       const c = await countLeaveDays(l.empId, l.dateFrom, l.dateTo);
       deduct = c.days; amount = c.days; skippedStr = c.skipped.join(', ') || '';
+      daysPerYear = c.daysPerYear;
+    } else {
+      if (!daysPerYear) daysPerYear = { [parseInt(l.dateFrom.slice(0,4), 10)]: deduct };
+    }
+    
+    // 🆕 balance guard against ALL years the leave spans
+    const ledgerField = TYPE_META[l.type]?.ledger;
+    if (ledgerField === 'annualUsed' || ledgerField === 'sickUsed') {
+      for (const [yr, daysInYr] of Object.entries(daysPerYear || {})) {
+        const yearNum = parseInt(yr, 10);
+        const b = getBalancesForYear(employees[l.empId], l.empId, yearNum);
+        const bal = ledgerField === 'annualUsed' ? b.annual : b.sick;
+        if (daysInYr > bal.balance + 0.001) throw new Error(`Insufficient ${TYPE_META[l.type].label} balance for ${yearNum}.`);
+      }
     }
     
     await update(ref(db, `leaves/${l.id}`), {
       status: 'approved', reviewedBy: currentUser.uid, reviewedAt: new Date().toISOString(),
-      deductDays: deduct, amount, restDaysExcluded: skippedStr, reliefPlan: reliefPlan
+      deductDays: deduct, amount, restDaysExcluded: skippedStr, reliefPlan: reliefPlan,
+      daysPerYear: daysPerYear
     });
     
+    // 🆕 update local cache, then recompute Used from approved leaves
+    leaves[l.id] = { ...l, status: 'approved', deductDays: deduct, amount, year: parseInt(l.dateFrom.slice(0,4), 10), daysPerYear: daysPerYear };
+    await recalcEntitlementUsed(l.empId);
+
+    // Schedule & Reliever Updates
     for (const dayPlan of reliefPlan) {
       const dateStr = dayPlan.date;
       const centersToUpdate = new Set();
@@ -967,17 +1050,6 @@ async function confirmApproval() {
       }
     }
     
-    // 🆕 balance guard for annual/sick before approving
-    const ledgerField = TYPE_META[l.type]?.ledger;
-    if (ledgerField === 'annualUsed' || ledgerField === 'sickUsed') {
-      const b = getBalances(employees[l.empId]);
-      const bal = ledgerField === 'annualUsed' ? b.annual : b.sick;
-      if (deduct > bal.balance + 0.001) throw new Error('Insufficient leave balance.');
-    }
-
-    // 🆕 update local cache, then recompute Used from approved leaves
-    leaves[l.id] = { ...l, status: 'approved', deductDays: deduct, amount };
-    await recalcEntitlementUsed(l.empId);
     notifyManagersLeaveEvent({ ...l, amount, deductDays: deduct }, 'approved');
     
     closeModal('approveModal');
@@ -1237,16 +1309,22 @@ function populateTypeSelect() {
   const sel = $('leaveType'); const hint = $('unpaidHint');
   if (!sel) return;
   if (hint) hint.classList.add('hidden');
+
+  const year = selectedLeaveYear();
+  lastTypeOptionsYear = year;
+
   if (!empId || !employees[empId]) {
     sel.innerHTML = `<option value="">${currentUser.isAdmin ? '— select employee first —' : '—'}</option>`;
     updateBalancePanel(); return;
   }
-  const opts = buildTypeOptions(employees[empId]);
+  const prevSelected = sel.value;
+  const opts = buildTypeOptions(employees[empId], empId, year);
   sel.innerHTML = opts.map(o => `<option value="${o.key}" ${o.disabled ? 'disabled' : ''}>${escapeHtml(o.text)}</option>`).join('');
+  const prevStillValid = prevSelected && opts.some(o => o.key === prevSelected && !o.disabled);
   const first = opts.find(o => !o.disabled);
-  sel.value = first ? first.key : '';
+  sel.value = prevStillValid ? prevSelected : (first ? first.key : '');
   if (opts.some(o => o.showHint) && hint) {
-    hint.textContent = '⚠️ Unpaid leave can only be applied once Annual leave credits are used up.';
+    hint.textContent = `⚠️ Unpaid leave can only be applied once ${year} Annual leave credits are used up.`;
     hint.classList.remove('hidden');
   }
   updateBalancePanel();
@@ -1258,13 +1336,14 @@ async function computeRequestDraft() {
   if (durationType === 'hours') {
     const f = timeToMinutes($('timeFrom')?.value), t = timeToMinutes($('timeTo')?.value);
     if (f == null || t == null || t <= f) return null;
-    return { durationType, amount: round1((t - f) / 60), deductDays: round2((t - f) / 60 / 8), skipped: [] };
+    const deductDays = round2((t - f) / 60 / 8);
+    return { durationType, amount: round1((t - f) / 60), deductDays, skipped: [], daysPerYear: { [parseInt(($('dateFrom')?.value || '').slice(0,4), 10)]: deductDays } };
   }
   const from = $('dateFrom')?.value; if (!from) return null;
   const to = $('dateTo')?.value || from; if (to < from) return null;
   if (empId && employees[empId]) {
-    const { days, skipped } = await countLeaveDays(empId, from, to);
-    return { durationType, amount: days, deductDays: days, skipped };
+    const { days, skipped, daysPerYear } = await countLeaveDays(empId, from, to);
+    return { durationType, amount: days, deductDays: days, skipped, daysPerYear };
   }
   const days = daysBetweenInclusive(from, to);
   return { durationType, amount: days, deductDays: days, skipped: [] };
@@ -1273,24 +1352,37 @@ async function computeRequestDraft() {
 async function updateBalancePanel() {
   const box = $('balanceBox'); if (!box) return;
   const typeKey = $('leaveType')?.value;
-  const emp = employees[selectedApplyEmpId()];
+  const empId = selectedApplyEmpId();
+  const emp = employees[empId];
+  const year = selectedLeaveYear();
   if (!typeKey || !emp || !TYPE_META[typeKey]) { box.classList.add('hidden'); return; }
+
   if (typeKey === 'unpaid') {
     box.innerHTML = `<div class="balance-title">Unpaid Leave</div><div style="font-size:0.85rem;color:var(--text-light);">Not deducted from leave entitlement.</div>`;
     box.classList.remove('hidden'); return;
   }
-  const b = getBalances(emp);
+
+  const b = getBalancesForYear(emp, empId, year);
   const map = { annual: b.annual, sick: b.sick, pt: b.timeOff };
   const d = map[typeKey]; if (!d) { box.classList.add('hidden'); return; }
   const noBalanceNeeded = typeKey === 'pt';
+
   let afterHtml = '';
   const draft = await computeRequestDraft();
   if (draft) {
-    const after = round2(d.balance - draft.deductDays);
-    const skippedNote = draft.skipped?.length ? `· ${draft.skipped.length} rest day(s)/holiday(s) excluded` : '';
-    afterHtml = `<div class="balance-after ${(after < 0 && !noBalanceNeeded) ? 'low' : ''}">Balance after this leave (${draft.durationType === 'hours' ? draft.amount + ' hr(s)' : draft.amount + ' day(s)'}${skippedNote}):<strong>${after}</strong>${noBalanceNeeded ? ' <small>(balance not required for PT)</small>' : (after < 0 ? ' — ⚠️ exceeds balance' : '')}</div>`;
+    // Deduct only the portion that falls in the currently viewed year
+    const deductInYear = (draft.daysPerYear && draft.daysPerYear[year] !== undefined) ? draft.daysPerYear[year] : draft.deductDays;
+    const after = round2(d.balance - deductInYear);
+    const skippedNote = draft.skipped?.length ? ` · ${draft.skipped.length} rest day(s)/holiday(s) excluded` : '';
+    const splitNote = (draft.daysPerYear && Object.keys(draft.daysPerYear).length > 1) ? ` · spans multiple years` : '';
+    afterHtml = `<div class="balance-after ${(after < 0 && !noBalanceNeeded) ? 'low' : ''}">Balance after this leave in ${year} (${draft.durationType === 'hours' ? draft.amount + ' hr(s)' : deductInYear + ' day(s)'}${skippedNote}${splitNote}):<strong>${after}</strong>${noBalanceNeeded ? ' <small>(balance not required for PT)</small>' : (after < 0 ? ' — ⚠️ exceeds balance' : '')}</div>`;
   }
-  box.innerHTML = `<div class="balance-title">${TYPE_META[typeKey].label} — Entitlement Balance</div><div class="balance-grid"><div><label>Entitled</label><span>${round2(d.entitled)}</span></div><div><label>Used</label><span>${round2(d.used)}</span></div><div><label>Balance</label><span class="bal">${round2(d.balance)}</span></div></div>${afterHtml}`;
+
+  const yearNote = year !== new Date().getFullYear()
+    ? `<div class="hint">ℹ️ This leave falls in <strong>${year}</strong> — it will be deducted from the <strong>${year}</strong> quota (resets on 1 Jan ${year}), not from this year's balance.</div>`
+    : '';
+
+  box.innerHTML = `<div class="balance-title">${TYPE_META[typeKey].label} — ${year} Entitlement</div><div class="balance-grid"><div><label>Entitled</label><span>${round2(d.entitled)}</span></div><div><label>Used in ${year}</label><span>${round2(d.used)}</span></div><div><label>Balance</label><span class="bal">${round2(d.balance)}</span></div></div>${yearNote}${afterHtml}`;
   box.classList.remove('hidden');
 }
 
@@ -1314,8 +1406,8 @@ function openApplyModal() {
     const emp = employees[currentUser.empId];
     setText('applyEmpInfo', emp ? `${emp.englishName || ''} · ${getEmpPositions(emp).join(', ') || '-'} · ${emp.terms || ''}` : '');
   }
-  const leaveType = $('leaveType'); if (leaveType) leaveType.innerHTML = '';
-  populateTypeSelect();
+  
+  // Reset dates FIRST so the type options are built for the correct quota year
   const daysRadio = document.querySelector('input[name="durationType"][value="days"]');
   if (daysRadio) daysRadio.checked = true;
   toggleHoursFields();
@@ -1327,6 +1419,9 @@ function openApplyModal() {
   if ($('attachment')) $('attachment').value = '';
   pendingAttachment = null;
   $('attachmentPreview')?.classList.add('hidden');
+
+  const leaveType = $('leaveType'); if (leaveType) leaveType.innerHTML = '';
+  populateTypeSelect(); // now uses the year of dateFrom
   openModal('applyModal');
 }
 
@@ -1416,7 +1511,8 @@ async function submitLeave() {
   let dateTo = $('dateTo')?.value || dateFrom;
   if (!dateFrom) return alert('⚠️ Please select the Date From.');
   const durationType = document.querySelector('input[name="durationType"]:checked')?.value || 'days';
-  let amount, deductDays, timeFrom = '', timeTo = '', skipped = [];
+    let amount, deductDays, timeFrom = '', timeTo = '', skipped = [];
+  let daysPerYear = null;
   
   if (durationType === 'hours') {
     dateTo = dateFrom;
@@ -1428,6 +1524,7 @@ async function submitLeave() {
     if (await isDayOff(empId, dateFrom)) return alert(`⚠️ ${fmtDate(dateFrom)} is a rest day or holiday for ${emp.englishName}. Leave is not required.`);
     amount = round1((t - f) / 60); deductDays = round2(amount / 8);
     if (amount <= 0) return alert('⚠️ Hour duration must be greater than zero.');
+    daysPerYear = { [parseInt(dateFrom.slice(0, 4), 10)]: deductDays };
   } else {
     const count = await countLeaveDays(empId, dateFrom, dateTo);
     skipped = count.skipped;
@@ -1436,6 +1533,7 @@ async function submitLeave() {
       return alert(`⚠️ All selected dates fall on ${emp.englishName}'s rest day(s) or holiday(s) (${offDayNames} / scheduled off / center holiday). No leave is needed.`);
     }
     amount = count.days; deductDays = count.days;
+    daysPerYear = count.daysPerYear;
   }
   
   const reason = $('reason')?.value.trim();
@@ -1447,9 +1545,15 @@ async function submitLeave() {
   
   const ledgerField = TYPE_META[type].ledger;
   if (ledgerField === 'annualUsed' || ledgerField === 'sickUsed') {
-    const b = getBalances(emp);
-    const bal = ledgerField === 'annualUsed' ? b.annual : b.sick;
-    if (deductDays > bal.balance + 0.001) return alert(`⚠️ Insufficient balance. Remaining ${TYPE_META[type].label} balance is ${bal.balance} day(s), but this request needs ${deductDays}.`);
+    // 🆕 Validate balance for EACH year the leave spans
+    for (const [yr, daysInYr] of Object.entries(daysPerYear || {})) {
+      const yearNum = parseInt(yr, 10);
+      const b = getBalancesForYear(emp, empId, yearNum);
+      const bal = ledgerField === 'annualUsed' ? b.annual : b.sick;
+      if (daysInYr > bal.balance + 0.001) {
+        return alert(`⚠️ Insufficient balance. Remaining ${TYPE_META[type].label} balance for ${yearNum} is ${bal.balance} day(s), but this request needs ${daysInYr} day(s) in ${yearNum}.`);
+      }
+    }
   }
   
   const applicantName = currentUser.isAdmin ? `${employees[currentUser.empId]?.englishName || currentUser.email || 'Admin'} (on behalf)` : (emp.englishName || '');
@@ -1461,6 +1565,7 @@ async function submitLeave() {
     reason, attachment: pendingAttachment || null,
     status: 'pending', appliedBy: currentUser.uid, appliedByName: applicantName,
     appliedAt: new Date().toISOString(), year: parseInt(dateFrom.slice(0, 4), 10),
+    daysPerYear: daysPerYear // 🆕 Saved to DB
   };
   
   const btn = $('submitLeaveBtn');
@@ -1535,13 +1640,16 @@ function wireEvents() {
   $('leaveType')?.addEventListener('change', updateBalancePanel);
   document.querySelectorAll('input[name="durationType"]').forEach(r => r.addEventListener('change', () => { toggleHoursFields(); updateBalancePanel(); }));
   
-  $('dateFrom')?.addEventListener('change', () => {
+    $('dateFrom')?.addEventListener('change', () => {
     const isHours = document.querySelector('input[name="durationType"]:checked')?.value === 'hours';
     const dateTo = $('dateTo'); const dateFrom = $('dateFrom');
     if (!dateTo || !dateFrom) return;
-    if (isHours) { dateTo.value = dateFrom.value; } else if (!dateTo.value || dateTo.value < dateFrom.value) { dateTo.value = dateFrom.value; }
-    updateBalancePanel();
-  });
+    if (isHours) { dateTo.value = dateFrom.value; }
+    else if (!dateTo.value || dateTo.value < dateFrom.value) { dateTo.value = dateFrom.value; }
+    // If the date moved into another quota year, rebuild the leave-type options
+    if (selectedLeaveYear() !== lastTypeOptionsYear) populateTypeSelect();
+    else updateBalancePanel();
+    });
   
   ['dateTo', 'timeFrom', 'timeTo'].forEach(id => $(id)?.addEventListener('change', updateBalancePanel));
   ['timeFrom', 'timeTo'].forEach(id => $(id)?.addEventListener('input', updateBalancePanel));
