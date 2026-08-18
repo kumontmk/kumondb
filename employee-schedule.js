@@ -2960,4 +2960,185 @@ function getPrintDividerClass(subject) {
   return map[subject] || 'other';
 }
 
+// ============================================
+// 📊 EXPORT TO EXCEL
+// ============================================
+document.getElementById('exportExcelBtn')?.addEventListener('click', openExportModal);
+document.getElementById('closeExportModalBtn')?.addEventListener('click', closeExportModal);
+document.getElementById('cancelExportBtn')?.addEventListener('click', closeExportModal);
+document.getElementById('confirmExportBtn')?.addEventListener('click', handleExportExcel);
+
+document.querySelectorAll('input[name="empExportType"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+        document.getElementById('specificEmpListWrap').style.display = e.target.value === 'specific' ? 'block' : 'none';
+    });
+});
+
+document.getElementById('selectAllEmps')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    document.querySelectorAll('#specificEmpCheckboxes input[type="checkbox"]').forEach(cb => cb.checked = true);
+});
+document.getElementById('deselectAllEmps')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    document.querySelectorAll('#specificEmpCheckboxes input[type="checkbox"]').forEach(cb => cb.checked = false);
+});
+
+function openExportModal() {
+    // Default to the month currently being viewed in Admin View
+    const d = viewStartDate;
+    const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    document.getElementById('exportMonthPicker').value = monthStr;
+    
+    // Populate employee checkboxes
+    const container = document.getElementById('specificEmpCheckboxes');
+    container.innerHTML = '';
+    const sorted = getSortedEmployees();
+    sorted.forEach(emp => {
+        const label = document.createElement('label');
+        label.style.fontSize = '0.85rem';
+        label.style.cursor = 'pointer';
+        label.style.display = 'flex';
+        label.style.alignItems = 'center';
+        label.innerHTML = `<input type="checkbox" value="${emp.uid}" style="margin-right:6px; accent-color: var(--primary-dark);"> ${emp.englishName || 'Unknown'}`;
+        container.appendChild(label);
+    });
+    
+    // Reset radio to "All"
+    document.querySelector('input[name="empExportType"][value="all"]').checked = true;
+    document.getElementById('specificEmpListWrap').style.display = 'none';
+    
+    document.getElementById('exportExcelModal').classList.remove('hidden');
+}
+
+function closeExportModal() {
+    document.getElementById('exportExcelModal').classList.add('hidden');
+}
+
+function handleExportExcel() {
+    const monthPicker = document.getElementById('exportMonthPicker');
+    if (!monthPicker.value) {
+        alert('Please select a month and year.');
+        return;
+    }
+    
+    const [year, month] = monthPicker.value.split('-').map(Number);
+    const daysInMonth = new Date(year, month, 0).getDate();
+    
+    const exportType = document.querySelector('input[name="empExportType"]:checked').value;
+    let selectedEmpIds = [];
+    
+    if (exportType === 'all') {
+        selectedEmpIds = Object.keys(employees);
+    } else {
+        document.querySelectorAll('#specificEmpCheckboxes input[type="checkbox"]:checked').forEach(cb => {
+            selectedEmpIds.push(cb.value);
+        });
+        if (selectedEmpIds.length === 0) {
+            alert('Please select at least one employee.');
+            return;
+        }
+    }
+    
+    // Prepare data for Excel (Array of Arrays)
+    const aoa = []; 
+    
+    // Header Row
+    const header = ['Employee Name', 'Role', 'Terms'];
+    for (let d = 1; d <= daysInMonth; d++) {
+        header.push(`${d}`);
+    }
+    aoa.push(header);
+    
+    // Data Rows
+    selectedEmpIds.forEach(uid => {
+        const emp = employees[uid];
+        if (!emp) return;
+        
+        const row = [
+            emp.englishName || 'Unknown',
+            getEmpPositions(emp).join(', '),
+            emp.terms || ''
+        ];
+        
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            
+            // Get schedule data. Note: getTemplateForDate ignores past dates, 
+            // which is correct for historical exports (shows actual scheduled data).
+            const sched = mergedSchedules[uid]?.[dateStr];
+            const tmpl = getTemplateForDate(uid, dateStr);
+            const data = sched || tmpl;
+            
+            let cellText = '';
+            if (data) {
+                const status = data.status || 'scheduled';
+                if (status !== 'scheduled') {
+                    // Uses your i18n translations for statuses
+                    const statusMap = {
+                        'other-center': t('schedule.otherCenter'),
+                        'leave': t('schedule.leave'),
+                        'sick': t('schedule.sick'),
+                        'off': t('schedule.off')
+                    };
+                    cellText = statusMap[status] || status;
+                } else {
+                    const shifts = data._shifts || extractShifts(data);
+                    if (hasValidShifts(shifts)) {
+                        const sortedShifts = [...shifts].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+                        const shiftStrs = sortedShifts.map(s => {
+                            let centerAbbr = '';
+                            if (s.type === 'work' && s.center) {
+                                if (s.center === 'other') {
+                                    centerAbbr = s.otherDesc ? ` (${s.otherDesc})` : ' (Other)';
+                                } else {
+                                    centerAbbr = ` (${getCenterAbbr(s.center)})`;
+                                }
+                            }
+                            const typePrefix = s.type === 'break' ? '☕ ' : '';
+                            return `${typePrefix}${s.start}-${s.end}${centerAbbr}`;
+                        });
+                        cellText = shiftStrs.join('\n'); // Newline for multiple shifts in the same cell
+                    }
+                }
+            }
+            row.push(cellText);
+        }
+        aoa.push(row);
+    });
+    
+    // Check if SheetJS is loaded
+    if (typeof XLSX === 'undefined') {
+        alert('Excel export library (SheetJS) is not loaded. Please check your internet connection or refresh the page.');
+        return;
+    }
+    
+    // Generate Excel Workbook
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    
+    // Set column widths
+    const colWidths = [{ wch: 20 }, { wch: 25 }, { wch: 10 }];
+    for (let d = 1; d <= daysInMonth; d++) {
+        colWidths.push({ wch: 16 });
+    }
+    ws['!cols'] = colWidths;
+    
+    // Enable text wrapping for cells with newlines (multiple shifts)
+    for (const key in ws) {
+        if (key[0] !== '!' && ws[key].v && typeof ws[key].v === 'string' && ws[key].v.includes('\n')) {
+            if (!ws[key].s) ws[key].s = {};
+            ws[key].s.alignment = { wrapText: true, vertical: 'top' };
+        }
+    }
+    
+    const wb = XLSX.utils.book_new();
+    const monthName = MONTH_NAMES[month - 1];
+    XLSX.utils.book_append_sheet(wb, ws, `${monthName} ${year}`);
+    
+    // Trigger Download
+    const fileName = `Schedule_${monthName}_${year}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    
+    closeExportModal();
+}
+
 document.getElementById('logoutBtn')?.addEventListener('click', logout);

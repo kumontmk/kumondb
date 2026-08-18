@@ -1,18 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!-- Shows the logo in the browser tab -->
+  <!-- Shows the logo in the browser tab -->
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-
   <!-- Optional: PNG fallback for older browsers -->
   <link rel="icon" type="image/png" sizes="512x512" href="dblogo-maskable-512.png">
-
   <!-- Optional: icon when saved to iOS home screen -->
   <link rel="apple-touch-icon" href="dblogo-maskable-512.png">
+
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title data-i18n="schedule.title">Employee Schedule - Kumon DB</title>
   <link rel="stylesheet" href="employee-schedule.css">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
   <div id="page-loader"><div class="spinner"></div></div>
@@ -41,6 +41,7 @@
           <button id="applyPatternBtn" class="action-btn primary" data-i18n="schedule.applyPatterns">Apply Patterns to Month</button>
         </div>
         <input type="text" id="adminSearchInput" class="search-input" data-i18n-placeholder="schedule.searchPlaceholder" placeholder="Search...">
+        <button id="exportExcelBtn" class="action-btn" style="background:#217346; color:#fff;">📊 Export Excel</button>
       </div>
       <div id="adminEmptyState" class="empty-state hidden" data-i18n="schedule.adminEmpty">No employees found. Add employees first.</div>
       <div class="table-wrapper">
@@ -237,6 +238,46 @@
         <div class="modal-footer-right">
           <button type="button" id="cancelModalBtn" class="btn-secondary" data-i18n="schedule.cancel">Cancel</button>
           <button type="button" id="saveScheduleBtn" class="btn-primary" data-i18n="schedule.save">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+    <!-- Export Excel Modal -->
+  <div id="exportExcelModal" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width: 600px;">
+      <div class="modal-header">
+        <h2>Export Schedule to Excel</h2>
+        <button class="modal-close" id="closeExportModalBtn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="shift-group">
+          <legend>1. Select Month & Year</legend>
+          <input type="month" id="exportMonthPicker" style="width:100%; padding:0.5rem; border:1px solid #cbd5e1; border-radius:6px; font-size:0.9rem;">
+        </div>
+        
+        <div class="shift-group" style="margin-top:1rem;">
+          <legend>2. Select Employees</legend>
+          <div style="display:flex; gap:1rem; margin-bottom:0.75rem;">
+            <label style="cursor:pointer;"><input type="radio" name="empExportType" value="all" checked> All Employees</label>
+            <label style="cursor:pointer;"><input type="radio" name="empExportType" value="specific"> Specific Employees</label>
+          </div>
+          <div id="specificEmpListWrap" style="display:none; max-height: 250px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 0.75rem;">
+            <div style="margin-bottom:0.5rem; display:flex; gap:1rem; font-size:0.8rem;">
+              <a href="#" id="selectAllEmps" style="color:var(--primary-dark); text-decoration:none; font-weight:600;">Select All</a>
+              <a href="#" id="deselectAllEmps" style="color:var(--primary-dark); text-decoration:none; font-weight:600;">Deselect All</a>
+            </div>
+            <div id="specificEmpCheckboxes" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.5rem;">
+              <!-- Checkboxes injected via JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div></div>
+        <div class="modal-footer-right">
+          <button class="btn-secondary" id="cancelExportBtn">Cancel</button>
+          <button class="btn-primary" id="confirmExportBtn" style="background:#217346;">📊 Export</button>
         </div>
       </div>
     </div>

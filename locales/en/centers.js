@@ -21,6 +21,7 @@ export default {
     employeeSchedule: "Employee Schedule",
     employeeScheduleDesc: "See weekly shifts",
     employeeLeave: "Leave",
+    employeeLeaveDesc: "Check your balances and apply for leave ",
     manageCenterCalendar: "Manage Center Calendar",
     manageCenterCalendarDesc: "Holidays, annual calendar & class schedules",
     employeeActivityLog: "Employee Activity Log",

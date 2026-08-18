@@ -1593,3 +1593,110 @@ td.lv.pending,
 }
 .sync-toast.visible { opacity: 1; transform: translateY(0); }
 .sync-toast.done { background: #059669; }
+
+:lang(zh-TW) body, :lang(zh-TW) input, :lang(zh-TW) select,
+:lang(zh-TW) button, :lang(zh-TW) textarea, :lang(zh-TW) th, :lang(zh-TW) td {
+  font-family: "PingFang TC","Microsoft JhengHei","Noto Sans TC","Heiti TC",
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* ============================================================
+🆕 LEAVE ENTITLEMENTS TAB STYLING
+============================================================ */
+
+/* Ensure filter groups work outside of admin-filters */
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 150px;
+}
+.filter-group select {
+  min-width: 150px;
+  padding: 0.6rem;
+}
+
+/* Style the new entitlements table to match the leave table */
+#entitlementsTable {
+  min-width: 900px;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+#entitlementsTable th,
+#entitlementsTable td {
+  padding: 0.75rem 0.6rem;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+  vertical-align: middle;
+}
+#entitlementsTable th {
+  background: var(--primary-dark);
+  color: var(--white);
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  white-space: nowrap;
+}
+#entitlementsTable tbody tr:hover {
+  background-color: #f8fafc;
+}
+
+/* Ensure the Edit Entitlement Modal form grid looks correct */
+#editEntitlementForm .modal-actions {
+  margin-top: 1rem;
+}
+
+/* Mobile responsiveness for the new table */
+@media (max-width: 768px) {
+  #entitlementsTable {
+    min-width: 0;
+  }
+  #entitlementsTable thead {
+    display: none;
+  }
+  #entitlementsTable tbody {
+    display: block;
+  }
+  #entitlementsTable tr {
+    display: block;
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--primary-dark);
+    border-radius: 10px;
+    padding: 0.4rem 0.9rem;
+    margin-bottom: 0.75rem;
+    box-shadow: var(--shadow);
+  }
+  #entitlementsTable td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    border: none;
+    padding: 0.45rem 0;
+    white-space: normal;
+    text-align: right;
+  }
+  #entitlementsTable td + td {
+    border-top: 1px dashed #eef2f7;
+  }
+  #entitlementsTable td::before {
+    content: attr(data-label);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-light);
+    text-align: left;
+    flex-shrink: 0;
+  }
+  /* Hide the ::before for the Actions column to keep buttons clean */
+  #entitlementsTable td:last-child::before {
+    content: none;
+  }
+  #entitlementsTable td:last-child {
+    justify-content: flex-end;
+  }
+}
