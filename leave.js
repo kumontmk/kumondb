@@ -109,6 +109,33 @@ function fmtDateShort(s) {
   if (!s) return '-';
   return new Date(s + 'T00:00:00').toLocaleDateString(uiLocale(), { month: 'short', day: 'numeric' });
 }
+
+function getDowAbbr(date) {
+  // Use browser/locale weekday for Traditional Chinese
+  if (currentLanguage === 'zh-TW') {
+    return date.toLocaleDateString('zh-TW', { weekday: 'short' });
+  }
+
+  // English abbreviations matching your example: Thurs / Tues
+  const enDowAbbr = ['Sun', 'Mon', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat'];
+  return enDowAbbr[date.getDay()];
+}
+
+function fmtDateWithDow(s) {
+  if (!s) return '-';
+
+  const d = new Date(s + 'T00:00:00');
+  if (isNaN(d.getTime())) return s;
+
+  const dateText = d.toLocaleDateString(uiLocale(), {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+
+  return `${dateText} (${getDowAbbr(d)})`;
+}
+
 function getEmpPositions(emp) { if (Array.isArray(emp?.positions)) return emp.positions; if (emp?.position) return [emp.position]; return []; }
 function base64Bytes(dataUrl) { const b64 = (dataUrl || '').split(',')[1] || ''; return Math.ceil(b64.length * 3 / 4); }
 function openModal(id) { const el = $(id); if (el) { el.classList.remove('hidden'); el.style.display = 'flex'; } }
@@ -326,20 +353,41 @@ async function getSplitLeaveRanges(empId, from, to, maxPaidDays) {
 }
 
 async function getEmpScheduleForDate(empId, dateStr) {
-  if (!allCenterIds.length) await loadCenterIds();
-  let mergedShifts = [], originalStatus = 'scheduled', originalNotes = '';
-  for (const cid of allCenterIds) {
-    try {
-      const snap = await get(ref(db, `schedules/${cid}/${empId}/${dateStr}`));
-      if (snap.exists()) {
-        const data = snap.val();
-        if (data.status && data.status !== 'scheduled') originalStatus = data.status;
-        if (data.notes) originalNotes = data.notes;
-        if (data.shifts && Array.isArray(data.shifts)) data.shifts.forEach(s => mergedShifts.push({ ...s, _center: s.center || cid }));
-      }
-    } catch (e) { console.warn(`Failed to load schedule for ${empId} at ${cid} on ${dateStr}`, e); }
-  }
-  return { status: originalStatus, notes: originalNotes, shifts: mergedShifts };
+    if (!allCenterIds.length) await loadCenterIds();
+    let mergedShifts = [], originalStatus = 'scheduled', originalNotes = '';
+    
+    // First, try to get explicit schedule from all centers
+    for (const cid of allCenterIds) {
+        try {
+            const snap = await get(ref(db, `schedules/${cid}/${empId}/${dateStr}`));
+            if (snap.exists()) {
+                const data = snap.val();
+                if (data.status && data.status !== 'scheduled') originalStatus = data.status;
+                if (data.notes) originalNotes = data.notes;
+                if (data.shifts && Array.isArray(data.shifts)) data.shifts.forEach(s => mergedShifts.push({ ...s, _center: s.center || cid }));
+            }
+        } catch (e) { console.warn(`Failed to load schedule for ${empId} at ${cid} on ${dateStr}`, e); }
+    }
+    
+    // 🆕 If no explicit shifts found, fall back to weekly pattern/template
+    if (mergedShifts.length === 0 && originalStatus === 'scheduled') {
+        const dow = new Date(dateStr + 'T00:00:00').getDay();
+        const tmpl = scheduleTemplates[empId]?.[dow];
+        if (tmpl) {
+            if (tmpl.status && tmpl.status !== 'scheduled') originalStatus = tmpl.status;
+            if (tmpl.notes) originalNotes = tmpl.notes;
+            if (tmpl.shifts && Array.isArray(tmpl.shifts)) {
+                const empCenters = getEmpCenterIds(empId);
+                tmpl.shifts.forEach(s => {
+                    // Use shift's center, or employee's first center, or first available center
+                    const center = s.center || empCenters[0] || allCenterIds[0];
+                    mergedShifts.push({ ...s, _center: center });
+                });
+            }
+        }
+    }
+    
+    return { status: originalStatus, notes: originalNotes, shifts: mergedShifts };
 }
 
 // ============ ADMIN CONTROLS ============
@@ -552,8 +600,12 @@ function renderLeaveTable() {
   if (list.length === 0) { table.innerHTML = thead + `<tbody><tr><td colspan="${cols}" class="empty-state">${escapeHtml(t('noLeaveRecords', { year: currentYear }))}</td></tr></tbody>`; return; }
   const rows = list.map(l => {
     const meta = TYPE_META[l.type] || { label: l.typeLabel || l.type, cls: '' };
-    const fromCell = l.durationType === 'hours' ? `${fmtDate(l.dateFrom)}${l.timeFrom ? ' · ' + l.timeFrom : ''}` : fmtDate(l.dateFrom);
-    const toCell = l.durationType === 'hours' ? `${fmtDate(l.dateTo)}${l.timeTo ? ' · ' + l.timeTo : ''}` : fmtDate(l.dateTo);
+    const fromCell = l.durationType === 'hours'
+  ? `${fmtDateWithDow(l.dateFrom)}${l.timeFrom ? ' · ' + l.timeFrom : ''}`
+  : fmtDateWithDow(l.dateFrom);
+    const toCell = l.durationType === 'hours'
+    ? `${fmtDateWithDow(l.dateTo)}${l.timeTo ? ' · ' + l.timeTo : ''}`
+    : fmtDateWithDow(l.dateTo);
     let actions = '';
     if (admin && l.status === 'pending') actions += `<button class="primary" data-action="approve" data-id="${escapeHtml(l.id)}" type="button">✅</button><button class="danger" data-action="reject" data-id="${escapeHtml(l.id)}" type="button">❌</button>`;
     const canCancel = (l.status === 'pending' && (admin || l.empId === currentUser.empId)) || (l.status === 'approved' && admin);
@@ -570,8 +622,7 @@ function renderLeaveTable() {
 async function openApproveModal(id) {
   const l = leaves[id]; if (!l || l.status !== 'pending') return;
   currentApproveLeave = { id, ...l }; empASchedulesCache = {};
-  $('approveLeaveDetails').innerHTML = `<strong>${escapeHtml(l.empName)}</strong> · ${escapeHtml(TYPE_META[l.type]?.label || l.type)}<br> ${fmtDate(l.dateFrom)} → ${fmtDate(l.dateTo)} · ${durationText(l)}<br> <em>${escapeHtml(t('thReason'))}: ${escapeHtml(l.reason)}</em>`;
-  $('confirmApproveBtn').disabled = true; $('confirmApproveBtn').textContent = t('loadingSchedules');
+  $('approveLeaveDetails').innerHTML = `<strong>${escapeHtml(l.empName)}</strong> · ${escapeHtml(TYPE_META[l.type]?.label || l.type)}<br> ${fmtDateWithDow(l.dateFrom)} → ${fmtDateWithDow(l.dateTo)} · ${durationText(l)}<br> <em>${escapeHtml(t('thReason'))}: ${escapeHtml(l.reason)}</em>`;  $('confirmApproveBtn').disabled = true; $('confirmApproveBtn').textContent = t('loadingSchedules');
   openModal('approveModal');
   const dates = [];
   if (l.durationType === 'hours') dates.push(l.dateFrom);
@@ -588,12 +639,12 @@ function renderApproveTable(leave, schedulesByDate) {
   const dates = Object.keys(schedulesByDate).sort();
   dates.forEach(dateStr => {
     const sched = schedulesByDate[dateStr];
-    if (sched.isDayOff) { const tr = document.createElement('tr'); tr.innerHTML = `<td>${fmtDate(dateStr)}</td><td colspan="3" class="no-shift-msg">${escapeHtml(t('dayOffNoRelief'))}</td>`; tbody.appendChild(tr); return; }
-    if (!sched.shifts || sched.shifts.length === 0) { const tr = document.createElement('tr'); tr.innerHTML = `<td>${fmtDate(dateStr)}</td><td colspan="3" class="no-shift-msg">${escapeHtml(t('noShiftNoRelief'))}</td>`; tbody.appendChild(tr); return; }
+    if (sched.isDayOff) { const tr = document.createElement('tr'); tr.innerHTML = `<td>${fmtDateWithDow(dateStr)}</td><td colspan="3" class="no-shift-msg">${escapeHtml(t('dayOffNoRelief'))}</td>`; tbody.appendChild(tr); return; }
+    if (!sched.shifts || sched.shifts.length === 0) { const tr = document.createElement('tr'); tr.innerHTML = `<td>${fmtDateWithDow(dateStr)}</td><td colspan="3" class="no-shift-msg">${escapeHtml(t('noShiftNoRelief'))}</td>`; tbody.appendChild(tr); return; }
     sched.shifts.forEach((shift, shiftIdx) => {
       const tr = document.createElement('tr'); tr.dataset.date = dateStr; tr.dataset.shiftIdx = shiftIdx;
       const centerAbbr = getCenterAbbr(shift._center);
-      tr.innerHTML = `<td>${fmtDate(dateStr)}</td><td><strong>${centerAbbr}</strong></td><td>${shift.start} - ${shift.end}</td><td class="relievers-cell" data-date="${dateStr}" data-center="${shift._center}" data-start="${shift.start}" data-end="${shift.end}"><div class="no-reliever-toggle"><label><input type="checkbox" class="no-reliever-cb"><span>${escapeHtml(t('noRelieverNeeded'))}</span></label></div><div class="relievers-container"></div><button type="button" class="add-reliever-btn">${escapeHtml(t('addReliever'))}</button></td>`;
+      tr.innerHTML = `<td>${fmtDateWithDow(dateStr)}</td><td><strong>${centerAbbr}</strong></td><td>${shift.start} - ${shift.end}</td><td class="relievers-cell" data-date="${dateStr}" data-center="${shift._center}" data-start="${shift.start}" data-end="${shift.end}"><div class="no-reliever-toggle"><label><input type="checkbox" class="no-reliever-cb"><span>${escapeHtml(t('noRelieverNeeded'))}</span></label></div><div class="relievers-container"></div><button type="button" class="add-reliever-btn">${escapeHtml(t('addReliever'))}</button></td>`;
       tbody.appendChild(tr);
       const addBtn = tr.querySelector('.add-reliever-btn'), noRelieverCb = tr.querySelector('.no-reliever-cb'), relieversContainer = tr.querySelector('.relievers-container');
       noRelieverCb.addEventListener('change', () => { const isNo = noRelieverCb.checked; addBtn.style.display = isNo ? 'none' : ''; relieversContainer.style.display = isNo ? 'none' : ''; if (isNo) relieversContainer.innerHTML = ''; });
