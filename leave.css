@@ -1543,3 +1543,30 @@ color: var(--c-unpaid-ink);
 #entitlementsTable tbody td:last-child {
 background-color: var(--white);
 }
+
+/* ============================================================
+🆕 EXCESS UNPAID LEAVE TOGGLE
+============================================================ */
+.unpaid-excess-toggle {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    background: #fff7ed;
+    border: 1px solid #fdba74;
+    border-radius: 6px;
+    grid-column: 1 / -1;
+}
+.unpaid-excess-toggle label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-weight: 600;
+    color: #9a3412;
+    font-size: 0.9rem;
+}
+.unpaid-excess-toggle input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+    accent-color: #ea580c;
+    transform: scale(1.2);
+}

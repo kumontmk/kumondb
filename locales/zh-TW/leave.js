@@ -94,4 +94,6 @@ export default {
   thEnt: "應得",
   thUsed: "已用",
   thBal: "餘額",
+  applyExcessUnpaid: "將超出的 {{days}} 天申請為無薪假",
+  splitLeaveSuccess: "✅ 休假已提交！已拆分為 {{paid}} 天 {{type}} 和 {{unpaid}} 天無薪假。",
 };

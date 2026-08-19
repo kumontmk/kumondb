@@ -17,20 +17,33 @@
 
   <header>
     <h1 data-i18n="centers.headerTitle">Centers Management</h1>
-    <nav>
-      <span id="userEmail"></span>
-      <select
-        id="languageSwitch"
-        class="language-switch"
-        data-i18n-title="common.language"
-        title="Language"
-        aria-label="Language"
-      >
-        <option value="en">English</option>
-        <option value="zh-TW">繁體中文</option>
-      </select>
-      <button id="logoutBtn" data-i18n="common.logout">Logout</button>
-    </nav>
+      <nav>
+        <span id="userEmail">Loading...</span>
+
+        <!-- 🔔 NEW: Flex container for bell + language switch -->
+        <div class="notif-and-lang">
+          <button id="leaveNotifBtn" class="notif-btn" title="Leave Notifications">
+            🔔
+            <span id="leaveNotifBadge" class="notif-badge" style="display:none;">0</span>
+          </button>
+
+          <select id="languageSwitch" class="language-switch">
+            <option value="en">English</option>
+            <option value="zh-TW">繁體中文</option>
+          </select>
+        </div>
+
+        <button id="logoutBtn">Logout</button>
+
+        <!--  Notification Dropdown -->
+        <div id="leaveNotifDropdown" class="notif-dropdown hidden">
+          <div class="notif-header">
+            <h4>Leave Notifications</h4>
+            <button id="markAllReadBtn" class="mark-read-btn">Mark all read</button>
+          </div>
+          <div id="leaveNotifList" class="notif-list"></div>
+        </div>
+      </nav>
   </header>
 
   <main class="dashboard">

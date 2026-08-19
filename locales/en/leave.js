@@ -94,4 +94,6 @@ export default {
   thEnt: "Ent",
   thUsed: "Used",
   thBal: "Bal",
+  applyExcessUnpaid: "Apply {{days}} excess day(s) as Unpaid Leave",
+  splitLeaveSuccess: "✅ Leave submitted! Split into {{paid}} day(s) {{type}} and {{unpaid}} day(s) Unpaid.",
 };

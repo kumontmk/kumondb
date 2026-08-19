@@ -318,11 +318,31 @@ function startCentersPage() {
 
       const isAdmin = user.email?.toLowerCase() === 'kumonchamps@gmail.com';
 
-      // 🛡️ ROLE CHECK: Show admin-only cards only for managers/admins
       const isManagerOrAdmin = await isManagerUser(user, userData);
+      isCurrentUserManager = isManagerOrAdmin; // Store for notification filtering
+
+      // 🔽 Resolve Employee ID to filter their own leaves
+      currentEmployeeId = user.uid;
+      try {
+        const empSnap = await get(ref(db, `employees/${user.uid}`));
+        if (empSnap.exists()) {
+          currentEmployeeId = user.uid;
+        } else {
+          const allEmpSnap = await get(ref(db, 'employees'));
+          if (allEmpSnap.exists()) {
+            const match = Object.entries(allEmpSnap.val()).find(([_, e]) => normalizeText(e.email) === normalizeText(user.email));
+            if (match) currentEmployeeId = match[0];
+          }
+        }
+      } catch(e) { console.warn('Could not resolve empId', e); }
+      // 🔼 End Resolve Employee ID
+
       if (isManagerOrAdmin) {
         document.body.classList.add('is-manager-or-admin');
       }
+
+      // 🔔 INITIALIZE LEAVE NOTIFICATIONS FOR EVERYONE (Managers & Employees)
+      initLeaveNotifications();
 
       // 2) ⚡ Page is interactive NOW — admin cards tappable immediately
       pageLoader?.classList.add('hidden');
@@ -1176,6 +1196,192 @@ async function processPendingVerification(id, approve, ui) {
     if (checkbox) {
       checkbox.disabled = false;
     }
+  }
+}
+
+
+// ============================================
+// 🔔 LEAVE NOTIFICATIONS
+// ============================================
+let leaveNotifications = [];
+let leaveUnsub = null;
+let currentEmployeeId = null;   // 🔽 NEW: Tracks the logged-in employee's ID
+let isCurrentUserManager = false; // 🔽 NEW: Tracks if user is manager/admin
+
+function initLeaveNotifications() {
+  
+  setupLeaveNotifUI();
+  
+  // Subscribe to leaves node in real-time
+  leaveUnsub = onValue(ref(db, 'leaves'), (snapshot) => {
+    const data = snapshot.val() || {};
+    processLeaveNotifications(data);
+  });
+}
+
+function processLeaveNotifications(leavesData) {
+  const lastSeen = parseInt(localStorage.getItem('leaveNotifLastSeen') || '0');
+  const now = Date.now();
+  const notifications = [];
+  let pendingCount = 0;
+  let unreadCount = 0;
+  
+  Object.entries(leavesData).forEach(([id, leave]) => {
+    if (!leave.status || !leave.empId) return;
+    
+    // 🔽 ROLE-BASED FILTERING 🔽
+    if (!isCurrentUserManager) {
+      // EMPLOYEE: Only show their own leaves, and only if approved/rejected
+      if (leave.empId !== currentEmployeeId) return;
+      if (leave.status !== 'approved' && leave.status !== 'rejected') return;
+    } else {
+      // MANAGER: Show all pending, approved, rejected
+      if (leave.status !== 'pending' && leave.status !== 'approved' && leave.status !== 'rejected') return;
+    }
+    // 🔼 END FILTERING 🔼
+    
+    const appliedAt = leave.appliedAt ? new Date(leave.appliedAt).getTime() : 0;
+    const reviewedAt = leave.reviewedAt ? new Date(leave.reviewedAt).getTime() : 0;
+    const eventTime = Math.max(appliedAt, reviewedAt);
+    
+    let type = '';
+    if (leave.status === 'pending') {
+      type = 'new';
+      if (isCurrentUserManager) pendingCount++;
+    } else if (leave.status === 'approved') {
+      type = 'approved';
+    } else if (leave.status === 'rejected') {
+      type = 'rejected';
+    }
+    
+    const isUnread = eventTime > lastSeen;
+    const daysDiff = (now - eventTime) / (1000 * 60 * 60 * 24);
+    
+    if (isUnread || daysDiff < 14) {
+      if (isUnread) unreadCount++;
+      notifications.push({
+        id,
+        type,
+        empName: leave.empName || 'Unknown',
+        leaveType: leave.typeLabel || leave.type || 'Leave',
+        dateFrom: leave.dateFrom,
+        dateTo: leave.dateTo,
+        time: eventTime,
+        isUnread,
+        status: leave.status
+      });
+    }
+  });
+  
+  notifications.sort((a, b) => b.time - a.time);
+  leaveNotifications = notifications;
+  
+  // 🔽 UPDATE BADGE BASED ON ROLE 🔽
+  const badge = document.getElementById('leaveNotifBadge');
+  if (badge) {
+    // Managers see pending count; Employees see unread count
+    const countToShow = isCurrentUserManager ? pendingCount : unreadCount;
+    if (countToShow > 0) {
+      badge.textContent = countToShow > 99 ? '99+' : countToShow;
+      badge.style.display = 'block';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+  // 🔼 END BADGE UPDATE 🔼
+  
+  renderLeaveNotifications();
+}
+
+function renderLeaveNotifications() {
+  const list = document.getElementById('leaveNotifList');
+  if (!list) return;
+  list.innerHTML = '';
+  
+  if (leaveNotifications.length === 0) {
+    list.innerHTML = '<div class="notif-empty">No recent leave notifications</div>';
+    return;
+  }
+  
+  leaveNotifications.forEach(notif => {
+    const item = document.createElement('div');
+    item.className = `notif-item ${notif.isUnread ? 'unread' : ''} ${notif.status}`;
+    
+    let icon = '📝';
+    let statusText = 'New Application';
+    let titleText = notif.empName;
+    
+    if (notif.type === 'approved') { icon = '✅'; statusText = 'Approved'; }
+    if (notif.type === 'rejected') { icon = '❌'; statusText = 'Rejected'; }
+    
+    // 🔽 PERSONALIZE TEXT FOR EMPLOYEES 🔽
+    if (!isCurrentUserManager) {
+        titleText = 'Your Leave';
+        statusText = notif.type === 'approved' ? 'Your leave was approved' : 'Your leave was rejected';
+    }
+    // 🔼 END PERSONALIZE 🔽
+    
+    const dateStr = `${notif.dateFrom || '?'} → ${notif.dateTo || '?'}`;
+    const timeAgo = getTimeAgo(notif.time);
+    
+    item.innerHTML = `
+      <div class="notif-icon">${icon}</div>
+      <div class="notif-content">
+        <div class="notif-title">${titleText}</div>
+        <div class="notif-desc">${statusText} · ${notif.leaveType}</div>
+        <div class="notif-meta">${dateStr} · ${timeAgo}</div>
+      </div>
+    `;
+    
+    item.onclick = () => {
+      const lastSeen = parseInt(localStorage.getItem('leaveNotifLastSeen') || '0');
+      if (notif.time > lastSeen) {
+        localStorage.setItem('leaveNotifLastSeen', notif.time.toString());
+      }
+      window.location.href = 'leave.html';
+    };
+    
+    list.appendChild(item);
+  });
+}
+
+function getTimeAgo(timestamp) {
+  const seconds = Math.floor((Date.now() - timestamp) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function setupLeaveNotifUI() {
+  const btn = document.getElementById('leaveNotifBtn');
+  const dropdown = document.getElementById('leaveNotifDropdown');
+  const markAllBtn = document.getElementById('markAllReadBtn');
+  
+  if (!btn || !dropdown) return;
+  
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dropdown.classList.toggle('hidden');
+  });
+  
+  document.addEventListener('click', (e) => {
+    if (!dropdown.contains(e.target) && !btn.contains(e.target)) {
+      dropdown.classList.add('hidden');
+    }
+  });
+  
+  if (markAllBtn) {
+    markAllBtn.addEventListener('click', () => {
+      localStorage.setItem('leaveNotifLastSeen', Date.now().toString());
+      // Update UI immediately
+      document.querySelectorAll('.notif-item.unread').forEach(el => el.classList.remove('unread'));
+      const badge = document.getElementById('leaveNotifBadge');
+      if (badge) badge.style.display = 'none';
+    });
   }
 }
 

@@ -1,5 +1,5 @@
 // ============================================================
-// leave.js — Leave Module (Application + Overview) — v10 FINAL
+// leave.js — Leave Module (Application + Overview) 
 // ============================================================
 import { db, logout } from './auth.js';
 import { ref, get, update, onValue, push, runTransaction, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
@@ -56,6 +56,7 @@ let entYear = new Date().getFullYear();
 let pickerYear = currentYear;
 let viewDate = new Date();
 let pendingAttachment = null, currentAttLeaveId = null;
+let applyExcessAsUnpaid = false;
 let scheduleTemplates = {}, offDatesCache = {};
 let allCenterIds = [], allCenters = [], centerCalendars = {};
 let allSchedulesCache = null, employeeScheduleByCenter = {}, employeeScheduleLoadedCenters = new Set();
@@ -282,6 +283,48 @@ async function countLeaveDays(empId, from, to) {
   });
   return { days, skipped, weeklyOffDays, daysPerYear };
 }
+
+// 🆕 Splits a date range into paid and unpaid chronological working days
+async function getSplitLeaveRanges(empId, from, to, maxPaidDays) {
+    const weeklyOffDays = getWeeklyOffDays(empId);
+    const offDates = await getOffDates(empId);
+    if (!Object.keys(centerCalendars).length) await loadCenterCalendars();
+
+    let paidCount = 0;
+    let paidFrom = null, paidTo = null;
+    let unpaidFrom = null, unpaidTo = null;
+    let skippedPaid = [], skippedUnpaid = [];
+    let daysPerYear_paid = {}, daysPerYear_unpaid = {};
+
+    eachDate(from, to, d => {
+        const ds = fmtISO(d);
+        const yr = d.getFullYear();
+        
+        if (weeklyOffDays.has(d.getDay()) || offDates.has(ds) || isHoliday(empId, ds)) {
+            if (paidCount < maxPaidDays) skippedPaid.push(ds);
+            else skippedUnpaid.push(ds);
+            return;
+        }
+
+        paidCount++;
+        if (paidCount <= maxPaidDays) {
+            if (!paidFrom) paidFrom = ds;
+            paidTo = ds;
+            daysPerYear_paid[yr] = (daysPerYear_paid[yr] || 0) + 1;
+        } else {
+            if (!unpaidFrom) unpaidFrom = ds;
+            unpaidTo = ds;
+            daysPerYear_unpaid[yr] = (daysPerYear_unpaid[yr] || 0) + 1;
+        }
+    });
+
+    return {
+        paid: paidFrom ? { from: paidFrom, to: paidTo, days: Math.min(paidCount, maxPaidDays), daysPerYear: daysPerYear_paid, skipped: skippedPaid } : null,
+        unpaid: unpaidFrom ? { from: unpaidFrom, to: unpaidTo, days: Math.max(0, paidCount - maxPaidDays), daysPerYear: daysPerYear_unpaid, skipped: skippedUnpaid } : null,
+        totalDays: paidCount
+    };
+}
+
 async function getEmpScheduleForDate(empId, dateStr) {
   if (!allCenterIds.length) await loadCenterIds();
   let mergedShifts = [], originalStatus = 'scheduled', originalNotes = '';
@@ -804,6 +847,7 @@ async function computeRequestDraft() {
   if (empId && employees[empId]) { const { days, skipped, daysPerYear } = await countLeaveDays(empId, from, to); return { durationType, amount: days, deductDays: days, skipped, daysPerYear }; }
   const days = daysBetweenInclusive(from, to); return { durationType, amount: days, deductDays: days, skipped: [] };
 }
+
 async function updateBalancePanel() {
   const box = $('balanceBox'); if (!box) return;
   const typeKey = $('leaveType')?.value; const empId = selectedApplyEmpId(); const emp = employees[empId]; const year = selectedLeaveYear();
@@ -812,6 +856,7 @@ async function updateBalancePanel() {
   const b = getBalancesForYear(emp, empId, year); const map = { annual: b.annual, sick: b.sick, pt: b.timeOff }; const d = map[typeKey]; if (!d) { box.classList.add('hidden'); return; }
   const noBalanceNeeded = typeKey === 'pt'; let afterHtml = '';
   const draft = await computeRequestDraft();
+  
   if (draft) {
     const deductInYear = (draft.daysPerYear && draft.daysPerYear[year] !== undefined) ? draft.daysPerYear[year] : draft.deductDays;
     const after = round2(d.balance - deductInYear);
@@ -819,11 +864,53 @@ async function updateBalancePanel() {
     const splitNote = (draft.daysPerYear && Object.keys(draft.daysPerYear).length > 1) ? ` ${t('spansYearsNote')}` : '';
     const amountStr = draft.durationType === 'hours' ? `${draft.amount} ${t('hrUnit')}` : `${deductInYear} ${t('dayUnit')}`;
     afterHtml = `<div class="balance-after ${(after < 0 && !noBalanceNeeded) ? 'low' : ''}">${escapeHtml(t('balanceAfter', { year, amount: amountStr, skipped: skippedNote, split: splitNote }))}<strong>${after}</strong>${noBalanceNeeded ? ` <small>${escapeHtml(t('noBalanceNeededPT'))}</small>` : (after < 0 ? escapeHtml(t('exceedsBalance')) : '')}</div>`;
+
+    // 🆕 Show toggle if balance is exceeded, user is full-time, and applying for days
+    let excessToggleHtml = '';
+    if (after < 0 && !isPartTime(emp) && draft.durationType === 'days') {
+        const excessDays = round2(Math.abs(after));
+        applyExcessAsUnpaid = false; // Reset state
+        excessToggleHtml = `
+            <div class="unpaid-excess-toggle">
+                <label>
+                    <input type="checkbox" id="applyExcessUnpaidCb">
+                    ${t('applyExcessUnpaid', { days: excessDays })}
+                </label>
+            </div>
+        `;
+    } else {
+        applyExcessAsUnpaid = false;
+    }
+
+    const yearNote = year !== new Date().getFullYear() ? `<div class="hint">${escapeHtml(t('yearNote', { year }))}</div>` : '';
+    box.innerHTML = `
+        <div class="balance-title">${escapeHtml(t('entitlementTitle', { label: TYPE_META[typeKey].label, year }))}</div>
+        <div class="balance-grid">
+            <div><label>${escapeHtml(t('entitledLabel'))}</label><span>${round2(d.entitled)}</span></div>
+            <div><label>${escapeHtml(t('usedInYear', { year }))}</label><span>${round2(d.used)}</span></div>
+            <div><label>${escapeHtml(t('balanceLabel'))}</label><span class="bal">${round2(d.balance)}</span></div>
+        </div>
+        ${yearNote}
+        ${afterHtml}
+        ${excessToggleHtml}
+    `;
+    box.classList.remove('hidden');
+
+    // 🆕 Wire up the new checkbox
+    const cb = $('applyExcessUnpaidCb');
+    if (cb) {
+        cb.addEventListener('change', (e) => {
+            applyExcessAsUnpaid = e.target.checked;
+        });
+    }
+  } else {
+    // Fallback if no draft
+    const yearNote = year !== new Date().getFullYear() ? `<div class="hint">${escapeHtml(t('yearNote', { year }))}</div>` : '';
+    box.innerHTML = `<div class="balance-title">${escapeHtml(t('entitlementTitle', { label: TYPE_META[typeKey].label, year }))}</div><div class="balance-grid"><div><label>${escapeHtml(t('entitledLabel'))}</label><span>${round2(d.entitled)}</span></div><div><label>${escapeHtml(t('usedInYear', { year }))}</label><span>${round2(d.used)}</span></div><div><label>${escapeHtml(t('balanceLabel'))}</label><span class="bal">${round2(d.balance)}</span></div></div>${yearNote}`;
+    box.classList.remove('hidden');
   }
-  const yearNote = year !== new Date().getFullYear() ? `<div class="hint">${escapeHtml(t('yearNote', { year }))}</div>` : '';
-  box.innerHTML = `<div class="balance-title">${escapeHtml(t('entitlementTitle', { label: TYPE_META[typeKey].label, year }))}</div><div class="balance-grid"><div><label>${escapeHtml(t('entitledLabel'))}</label><span>${round2(d.entitled)}</span></div><div><label>${escapeHtml(t('usedInYear', { year }))}</label><span>${round2(d.used)}</span></div><div><label>${escapeHtml(t('balanceLabel'))}</label><span class="bal">${round2(d.balance)}</span></div></div>${yearNote}${afterHtml}`;
-  box.classList.remove('hidden');
 }
+
 function toggleHoursFields() {
   const isHours = document.querySelector('input[name="durationType"]:checked')?.value === 'hours';
   document.querySelectorAll('.hours-fields').forEach(el => el.classList.toggle('hidden', !isHours));
@@ -840,10 +927,13 @@ function openApplyModal() {
   if ($('dateFrom')) $('dateFrom').value = todayStr(); if ($('dateTo')) $('dateTo').value = todayStr();
   if ($('timeFrom')) $('timeFrom').value = ''; if ($('timeTo')) $('timeTo').value = '';
   if ($('reason')) $('reason').value = ''; if ($('attachment')) $('attachment').value = '';
-  pendingAttachment = null; $('attachmentPreview')?.classList.add('hidden');
+  pendingAttachment = null; 
+  $('attachmentPreview')?.classList.add('hidden');
+  applyExcessAsUnpaid = false; 
   const leaveType = $('leaveType'); if (leaveType) leaveType.innerHTML = '';
   populateTypeSelect(); openModal('applyModal');
 }
+
 function readFileAsDataURL(file) { return new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(file); }); }
 function loadImage(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; }); }
 async function compressImage(file) {
@@ -912,18 +1002,122 @@ async function submitLeave() {
   const conflict = Object.values(leaves).find(l => l.empId === empId && (l.status === 'pending' || l.status === 'approved') && leaveDateRangeOverlaps(l, dateFrom, dateTo, durationType, timeFrom, timeTo));
   if (conflict) return alert(t('duplicateAlert', { name: emp.englishName, type: TYPE_META[conflict.type]?.label || conflict.type, status: statusLabel(conflict.status), from: fmtDate(conflict.dateFrom), to: fmtDate(conflict.dateTo) }));
   const ledgerField = TYPE_META[type].ledger;
-  if (ledgerField === 'annualUsed' || ledgerField === 'sickUsed') {
-    for (const [yr, daysInYr] of Object.entries(daysPerYear || {})) {
-      const yearNum = parseInt(yr, 10); const b = getBalancesForYear(emp, empId, yearNum); const bal = ledgerField === 'annualUsed' ? b.annual : b.sick;
-      if (daysInYr > bal.balance + 0.001) return alert(t('insufficientBalanceAlert', { label: TYPE_META[type].label, year: yearNum, balance: bal.balance, days: daysInYr }));
+  // 🆕 MODIFIED: Skip strict balance block ONLY if applying excess as unpaid AND it's a days request
+  const canSkipBalanceCheck = applyExcessAsUnpaid && !isPartTime(emp) && durationType === 'days';
+  
+  if (!canSkipBalanceCheck && (ledgerField === 'annualUsed' || ledgerField === 'sickUsed')) {
+        for (const [yr, daysInYr] of Object.entries(daysPerYear || {})) {
+            const yearNum = parseInt(yr, 10); 
+            const b = getBalancesForYear(emp, empId, yearNum); 
+            const bal = ledgerField === 'annualUsed' ? b.annual : b.sick;
+            if (daysInYr > bal.balance + 0.001) return alert(t('insufficientBalanceAlert', { label: TYPE_META[type].label, year: yearNum, balance: bal.balance, days: daysInYr }));
+        }
     }
-  }
-  const applicantName = currentUser.isAdmin ? `${employees[currentUser.empId]?.englishName || currentUser.email || 'Admin'} ${t('onBehalf')}` : (emp.englishName || '');
-  const leaveData = { empId, empName: emp.englishName || '', empChinese: emp.chineseName || '', type, typeLabel: TYPE_META[type].label, durationType, dateFrom, dateTo, timeFrom: timeFrom || '', timeTo: timeTo || '', amount, deductDays, restDaysExcluded: skipped.join(', ') || '', reason, attachment: pendingAttachment || null, status: 'pending', appliedBy: currentUser.uid, appliedByName: applicantName, appliedAt: new Date().toISOString(), year: parseInt(dateFrom.slice(0, 4), 10), daysPerYear };
-  const btn = $('submitLeaveBtn'); if (btn) { btn.disabled = true; btn.textContent = t('submitting'); }
-  try { await push(ref(db, 'leaves'), leaveData); notifyManagersLeaveEvent(leaveData, 'new'); closeModal('applyModal'); alert(t('submitted')); }
-  catch (err) { console.error(err); alert(t('submitFailed', { message: err.message })); }
-  finally { if (btn) { btn.disabled = false; btn.textContent = t('submit'); } }
+    const applicantName = currentUser.isAdmin ? `${employees[currentUser.empId]?.englishName || currentUser.email || 'Admin'} ${t('onBehalf')}` : (emp.englishName || '');
+
+    // Base data template
+    const baseLeaveData = {
+        empId, empName: emp.englishName || '', empChinese: emp.chineseName || '',
+        durationType, reason, attachment: pendingAttachment || null, status: 'pending',
+        appliedBy: currentUser.uid, appliedByName: applicantName, appliedAt: new Date().toISOString()
+    };
+
+    let leaveRecordsToPush = [];
+
+    // 🆕 SPLIT LOGIC: If excess unpaid is checked, split into two records
+    if (applyExcessAsUnpaid && !isPartTime(emp) && durationType === 'days') {
+        // Calculate total available balance across all involved years
+        let totalAvailableBalance = 0;
+        const yearsInvolved = Object.keys(daysPerYear || {});
+        for (const yr of yearsInvolved) {
+            const yBal = getBalancesForYear(emp, empId, parseInt(yr, 10));
+            totalAvailableBalance += (ledgerField === 'annualUsed' ? yBal.annual : yBal.sick).balance;
+        }
+        
+        const paidDays = Math.max(0, totalAvailableBalance);
+        const unpaidDays = round2(amount - paidDays);
+
+        if (unpaidDays > 0 && paidDays > 0) {
+            const split = await getSplitLeaveRanges(empId, dateFrom, dateTo, paidDays);
+            
+            // 1. Paid Record
+            if (split.paid) {
+                leaveRecordsToPush.push({
+                    ...baseLeaveData,
+                    type, typeLabel: TYPE_META[type].label,
+                    dateFrom: split.paid.from, dateTo: split.paid.to,
+                    amount: split.paid.days, deductDays: split.paid.days,
+                    restDaysExcluded: split.paid.skipped.join(', ') || '',
+                    daysPerYear: split.paid.daysPerYear,
+                    year: parseInt(split.paid.from.slice(0, 4), 10)
+                });
+            }
+            
+            // 2. Unpaid Record
+            if (split.unpaid) {
+                leaveRecordsToPush.push({
+                    ...baseLeaveData,
+                    type: 'unpaid', typeLabel: TYPE_META.unpaid.label,
+                    dateFrom: split.unpaid.from, dateTo: split.unpaid.to,
+                    amount: split.unpaid.days, deductDays: split.unpaid.days,
+                    restDaysExcluded: split.unpaid.skipped.join(', ') || '',
+                    daysPerYear: split.unpaid.daysPerYear,
+                    year: parseInt(split.unpaid.from.slice(0, 4), 10)
+                });
+            }
+        } else if (unpaidDays > 0 && paidDays === 0) {
+            // Edge case: 0 balance, all days become unpaid
+            leaveRecordsToPush.push({
+                ...baseLeaveData,
+                type: 'unpaid', typeLabel: TYPE_META.unpaid.label,
+                dateFrom, dateTo, amount, deductDays,
+                restDaysExcluded: skipped.join(', ') || '',
+                daysPerYear, year: parseInt(dateFrom.slice(0, 4), 10)
+            });
+        } else {
+            // Fallback
+            leaveRecordsToPush.push({ ...baseLeaveData, type, typeLabel: TYPE_META[type].label, dateFrom, dateTo, amount, deductDays, restDaysExcluded: skipped.join(', ') || '', daysPerYear, year: parseInt(dateFrom.slice(0, 4), 10) });
+        }
+    } else {
+        // Standard single record submission
+        leaveRecordsToPush.push({
+            ...baseLeaveData,
+            type, typeLabel: TYPE_META[type].label,
+            dateFrom, dateTo, timeFrom: timeFrom || '', timeTo: timeTo || '',
+            amount, deductDays, restDaysExcluded: skipped.join(', ') || '',
+            daysPerYear, year: parseInt(dateFrom.slice(0, 4), 10)
+        });
+    }
+
+    const btn = $('submitLeaveBtn'); 
+    if (btn) { btn.disabled = true; btn.textContent = t('submitting'); }
+
+    try {
+        for (const data of leaveRecordsToPush) {
+            await push(ref(db, 'leaves'), data);
+            notifyManagersLeaveEvent(data, 'new');
+        }
+        
+        closeModal('applyModal');
+        
+        // Custom success message if split
+        if (leaveRecordsToPush.length > 1) {
+            const paidRec = leaveRecordsToPush.find(r => r.type !== 'unpaid');
+            const unpaidRec = leaveRecordsToPush.find(r => r.type === 'unpaid');
+            alert(t('splitLeaveSuccess', { 
+                paid: paidRec?.amount || 0, 
+                type: TYPE_META[paidRec?.type]?.label || '', 
+                unpaid: unpaidRec?.amount || 0 
+            }));
+        } else {
+            alert(t('submitted'));
+        }
+    } catch (err) {
+        console.error(err);
+        alert(t('submitFailed', { message: err.message }));
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = t('submit'); }
+    }
 }
 
 
