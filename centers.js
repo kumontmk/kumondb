@@ -24,6 +24,10 @@ const centersLoader = document.getElementById('centersLoader');
 const userEmailEl = document.getElementById('userEmail');
 const pageLoader = document.getElementById('page-loader');
 
+// Global state for notifications
+let currentEmployeeId = null;
+let isCurrentUserManager = false;
+
 /* =========================================
    HELPERS
 ========================================= */
@@ -341,8 +345,8 @@ function startCentersPage() {
         document.body.classList.add('is-manager-or-admin');
       }
 
-      // 🔔 INITIALIZE LEAVE NOTIFICATIONS FOR EVERYONE (Managers & Employees)
-      initLeaveNotifications();
+      // 🔔 INITIALIZE UNIFIED NOTIFICATIONS FOR EVERYONE (Managers & Employees)
+      initUnifiedNotifications(user);
 
       // 2) ⚡ Page is interactive NOW — admin cards tappable immediately
       pageLoader?.classList.add('hidden');
@@ -1201,188 +1205,573 @@ async function processPendingVerification(id, approve, ui) {
 
 
 // ============================================
-// 🔔 LEAVE NOTIFICATIONS
+// 🔔 UNIFIED NOTIFICATIONS (LEAVES + ANNOUNCEMENTS)
 // ============================================
-let leaveNotifications = [];
-let leaveUnsub = null;
-let currentEmployeeId = null;   // 🔽 NEW: Tracks the logged-in employee's ID
-let isCurrentUserManager = false; // 🔽 NEW: Tracks if user is manager/admin
+let unifiedNotifications = [];
+let unifiedLeavesCache = {};
+let unifiedAnnouncementsCache = {};
+let unifiedNotificationState = {};
+let unifiedCurrentUserUid = null;
+let unifiedNotifSubscribed = false;
+let unifiedNotifUiBound = false;
 
-function initLeaveNotifications() {
-  
-  setupLeaveNotifUI();
-  
-  // Subscribe to leaves node in real-time
-  leaveUnsub = onValue(ref(db, 'leaves'), (snapshot) => {
-    const data = snapshot.val() || {};
-    processLeaveNotifications(data);
-  });
+/* -----------------------------------------
+Helpers
+----------------------------------------- */
+function notifText(key, fallback) {
+  try {
+    const translated = t(key);
+    return translated && translated !== key ? translated : fallback;
+  } catch (err) {
+    return fallback;
+  }
 }
 
-function processLeaveNotifications(leavesData) {
-  const lastSeen = parseInt(localStorage.getItem('leaveNotifLastSeen') || '0');
-  const now = Date.now();
-  const notifications = [];
-  let pendingCount = 0;
-  let unreadCount = 0;
-  
-  Object.entries(leavesData).forEach(([id, leave]) => {
-    if (!leave.status || !leave.empId) return;
-    
-    // 🔽 ROLE-BASED FILTERING 🔽
+function escapeNotificationHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function safeNotificationKey(key) {
+  // Firebase keys cannot contain . # $ [ ] /
+  return String(key || '').replace(/[.#$\[\]\/]/g, '_');
+}
+
+function getTimeAgo(timestamp) {
+  const seconds = Math.floor((Date.now() - timestamp) / 1000);
+
+  if (seconds < 60) return 'just now';
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+/* -----------------------------------------
+Read / cleared state helpers
+----------------------------------------- */
+function getNotificationReadAllAt(category) {
+  return Number(unifiedNotificationState?.[`readAllAt_${category}`] || 0);
+}
+
+function getNotificationClearedAt() {
+  return Number(unifiedNotificationState?.clearedAt || 0);
+}
+
+function isNotificationRead(id, time, category) {
+  const readAllAt = getNotificationReadAllAt(category);
+
+  // If mark-all-read happened after this notification time, it is read.
+  if (time <= readAllAt) return true;
+
+  const reads = unifiedNotificationState?.read || {};
+  return reads[safeNotificationKey(id)] === true;
+}
+
+function isNotificationCleared(time) {
+  return time <= getNotificationClearedAt();
+}
+
+/* -----------------------------------------
+Build leave notifications
+----------------------------------------- */
+function buildLeaveNotificationItems() {
+  const items = [];
+  const leaves = unifiedLeavesCache || {};
+
+  Object.entries(leaves).forEach(([leaveId, leave]) => {
+    if (!leave || !leave.status || !leave.empId) return;
+
+    const status = normalizeText(leave.status);
+    if (!['pending', 'approved', 'rejected'].includes(status)) return;
+
+    // Role-based filtering
     if (!isCurrentUserManager) {
-      // EMPLOYEE: Only show their own leaves, and only if approved/rejected
+      // Employee: only their own approved/rejected leaves
       if (leave.empId !== currentEmployeeId) return;
-      if (leave.status !== 'approved' && leave.status !== 'rejected') return;
+      if (status !== 'approved' && status !== 'rejected') return;
+    }
+
+    const appliedAt = timestampMs(leave.appliedAt);
+    const reviewedAt = timestampMs(leave.reviewedAt);
+
+    let eventTime = 0;
+
+    if (status === 'pending') {
+      eventTime = appliedAt || reviewedAt;
     } else {
-      // MANAGER: Show all pending, approved, rejected
-      if (leave.status !== 'pending' && leave.status !== 'approved' && leave.status !== 'rejected') return;
+      eventTime = reviewedAt || appliedAt;
     }
-    // 🔼 END FILTERING 🔼
-    
-    const appliedAt = leave.appliedAt ? new Date(leave.appliedAt).getTime() : 0;
-    const reviewedAt = leave.reviewedAt ? new Date(leave.reviewedAt).getTime() : 0;
-    const eventTime = Math.max(appliedAt, reviewedAt);
-    
-    let type = '';
-    if (leave.status === 'pending') {
-      type = 'new';
-      if (isCurrentUserManager) pendingCount++;
-    } else if (leave.status === 'approved') {
-      type = 'approved';
-    } else if (leave.status === 'rejected') {
-      type = 'rejected';
+
+    if (!eventTime) return;
+    if (isNotificationCleared(eventTime)) return;
+
+    const notificationId = `leave:${leaveId}:${status}`;
+
+    let icon = '📝';
+    let statusLabel = notifText('notifications.newApplication', 'New Application');
+
+    if (status === 'approved') {
+      icon = '✅';
+      statusLabel = notifText('notifications.approved', 'Approved');
     }
-    
-    const isUnread = eventTime > lastSeen;
-    const daysDiff = (now - eventTime) / (1000 * 60 * 60 * 24);
-    
-    if (isUnread || daysDiff < 14) {
-      if (isUnread) unreadCount++;
-      notifications.push({
-        id,
-        type,
-        empName: leave.empName || 'Unknown',
-        leaveType: leave.typeLabel || leave.type || 'Leave',
-        dateFrom: leave.dateFrom,
-        dateTo: leave.dateTo,
-        time: eventTime,
-        isUnread,
-        status: leave.status
-      });
+
+    if (status === 'rejected') {
+      icon = '❌';
+      statusLabel = notifText('notifications.rejected', 'Rejected');
     }
+
+    const leaveTypeLabel =
+      leave.typeLabel ||
+      leave.type ||
+      notifText('notifications.leave', 'Leave');
+
+    const title = isCurrentUserManager
+      ? (leave.empName || notifText('common.unknown', 'Unknown'))
+      : notifText('notifications.yourLeave', 'Your leave');
+
+    let desc;
+
+    if (!isCurrentUserManager) {
+      desc = status === 'approved'
+        ? notifText('notifications.yourLeaveApproved', 'Your leave was approved')
+        : notifText('notifications.yourLeaveRejected', 'Your leave was rejected');
+    } else {
+      desc = `${statusLabel} · ${leaveTypeLabel}`;
+    }
+
+    const dateStr = `${leave.dateFrom || '?'} → ${leave.dateTo || '?'}`;
+    const meta = `${dateStr} · ${getTimeAgo(eventTime)}`;
+
+    items.push({
+      id: notificationId,
+      category: 'leave',
+      time: eventTime,
+      isUnread: !isNotificationRead(notificationId, eventTime, 'leave'),
+      icon,
+      title,
+      desc,
+      meta,
+      route: 'leave.html'
+    });
   });
-  
-  notifications.sort((a, b) => b.time - a.time);
-  leaveNotifications = notifications;
-  
-  // 🔽 UPDATE BADGE BASED ON ROLE 🔽
+
+  return items;
+}
+
+/* -----------------------------------------
+Build announcement notifications
+----------------------------------------- */
+function buildAnnouncementNotificationItems() {
+  const items = [];
+  const announcements = unifiedAnnouncementsCache || {};
+
+  Object.entries(announcements).forEach(([announcementId, announcement]) => {
+    if (!announcement) return;
+
+    const time = timestampMs(announcement.createdAt);
+    if (!time) return;
+
+    if (isNotificationCleared(time)) return;
+
+    const notificationId = `announcement:${announcementId}`;
+
+    const title =
+      announcement.title ||
+      notifText('notifications.announcement', 'Announcement');
+
+    const excerpt = makeBulletinExcerpt(
+      bulletinHtmlToPlainText(announcement.html),
+      120
+    );
+
+    const desc =
+      excerpt ||
+      notifText('notifications.newAnnouncement', 'New announcement');
+
+    const author = announcement.createdByName
+      ? `${announcement.createdByName} · `
+      : '';
+
+    const meta = `${author}${getTimeAgo(time)}`;
+
+    items.push({
+      id: notificationId,
+      category: 'announcement',
+      time,
+      isUnread: !isNotificationRead(notificationId, time, 'announcement'),
+      icon: '📣',
+      title,
+      desc,
+      meta,
+      route: `announcements.html#announcement/${encodeURIComponent(announcementId)}`
+    });
+  });
+
+  return items;
+}
+
+/* -----------------------------------------
+Process + render unified notifications
+----------------------------------------- */
+function processUnifiedNotifications() {
+  const leaveItems = buildLeaveNotificationItems();
+  const announcementItems = buildAnnouncementNotificationItems();
+
+  const items = [...leaveItems, ...announcementItems].sort(
+    (a, b) => b.time - a.time
+  );
+
+  unifiedNotifications = items;
+
+  const unreadCount = items.filter((item) => item.isUnread).length;
+
   const badge = document.getElementById('leaveNotifBadge');
   if (badge) {
-    // Managers see pending count; Employees see unread count
-    const countToShow = isCurrentUserManager ? pendingCount : unreadCount;
-    if (countToShow > 0) {
-      badge.textContent = countToShow > 99 ? '99+' : countToShow;
+    if (unreadCount > 0) {
+      badge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
       badge.style.display = 'block';
     } else {
       badge.style.display = 'none';
     }
   }
-  // 🔼 END BADGE UPDATE 🔼
-  
-  renderLeaveNotifications();
+
+  renderUnifiedNotifications();
 }
 
-function renderLeaveNotifications() {
+function renderUnifiedNotifications() {
   const list = document.getElementById('leaveNotifList');
   if (!list) return;
+
   list.innerHTML = '';
-  
-  if (leaveNotifications.length === 0) {
-    list.innerHTML = '<div class="notif-empty">No recent leave notifications</div>';
-    return;
-  }
-  
-  leaveNotifications.forEach(notif => {
-    const item = document.createElement('div');
-    item.className = `notif-item ${notif.isUnread ? 'unread' : ''} ${notif.status}`;
-    
-    let icon = '📝';
-    let statusText = 'New Application';
-    let titleText = notif.empName;
-    
-    if (notif.type === 'approved') { icon = '✅'; statusText = 'Approved'; }
-    if (notif.type === 'rejected') { icon = '❌'; statusText = 'Rejected'; }
-    
-    // 🔽 PERSONALIZE TEXT FOR EMPLOYEES 🔽
-    if (!isCurrentUserManager) {
-        titleText = 'Your Leave';
-        statusText = notif.type === 'approved' ? 'Your leave was approved' : 'Your leave was rejected';
-    }
-    // 🔼 END PERSONALIZE 🔽
-    
-    const dateStr = `${notif.dateFrom || '?'} → ${notif.dateTo || '?'}`;
-    const timeAgo = getTimeAgo(notif.time);
-    
-    item.innerHTML = `
-      <div class="notif-icon">${icon}</div>
-      <div class="notif-content">
-        <div class="notif-title">${titleText}</div>
-        <div class="notif-desc">${statusText} · ${notif.leaveType}</div>
-        <div class="notif-meta">${dateStr} · ${timeAgo}</div>
+
+  if (!unifiedNotifications.length) {
+    list.innerHTML = `
+      <div class="notif-empty">
+        ${escapeNotificationHtml(notifText('notifications.empty', 'No notifications'))}
       </div>
     `;
-    
-    item.onclick = () => {
-      const lastSeen = parseInt(localStorage.getItem('leaveNotifLastSeen') || '0');
-      if (notif.time > lastSeen) {
-        localStorage.setItem('leaveNotifLastSeen', notif.time.toString());
-      }
-      window.location.href = 'leave.html';
-    };
-    
+    return;
+  }
+
+  unifiedNotifications.forEach((notification) => {
+    const item = document.createElement('div');
+    item.className = `notif-item ${notification.isUnread ? 'unread' : ''} ${notification.category}`;
+
+    item.innerHTML = `
+      <div class="notif-icon">${notification.icon}</div>
+      <div class="notif-content">
+        <div class="notif-title">${escapeNotificationHtml(notification.title)}</div>
+        <div class="notif-desc">${escapeNotificationHtml(notification.desc)}</div>
+        <div class="notif-meta">${escapeNotificationHtml(notification.meta)}</div>
+      </div>
+    `;
+
+    item.addEventListener('click', () => {
+      handleNotificationClick(notification);
+    });
+
     list.appendChild(item);
   });
 }
 
-function getTimeAgo(timestamp) {
-  const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  if (seconds < 60) return 'just now';
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+/* -----------------------------------------
+Click behavior
+----------------------------------------- */
+async function handleNotificationClick(notification) {
+  if (notification.isUnread) {
+    await markSingleNotificationRead(
+      notification.id,
+      notification.time,
+      notification.category
+    );
+  }
+
+  if (notification.route) {
+    window.location.href = notification.route;
+  }
 }
 
-function setupLeaveNotifUI() {
+/* -----------------------------------------
+Mark single notification as read
+----------------------------------------- */
+async function markSingleNotificationRead(notificationId, notificationTime, category) {
+  const key = safeNotificationKey(notificationId);
+
+  // If mark-all-read already covers it, no need to store individual read.
+  if (notificationTime <= getNotificationReadAllAt(category)) {
+    return;
+  }
+
+  // Optimistic local update
+  unifiedNotificationState = {
+    ...unifiedNotificationState,
+    read: {
+      ...(unifiedNotificationState?.read || {}),
+      [key]: true
+    }
+  };
+
+  processUnifiedNotifications();
+
+  if (!unifiedCurrentUserUid) return;
+
+  try {
+    await update(
+      ref(db, `users/${unifiedCurrentUserUid}/notificationState`),
+      {
+        [`read/${key}`]: true
+      }
+    );
+  } catch (err) {
+    console.error('Error marking notification as read:', err);
+  }
+}
+
+/* -----------------------------------------
+Mark all as read
+----------------------------------------- */
+async function markAllNotificationsRead() {
+  const now = Date.now();
+
+  const updates = {
+    readAllAt_leave: now,
+    readAllAt_announcement: now
+  };
+
+  // Optimistic local update
+  unifiedNotificationState = {
+    ...unifiedNotificationState,
+    ...updates
+  };
+
+  processUnifiedNotifications();
+
+  if (!unifiedCurrentUserUid) return;
+
+  try {
+    await update(
+      ref(db, `users/${unifiedCurrentUserUid}/notificationState`),
+      updates
+    );
+  } catch (err) {
+    console.error('Error marking all notifications as read:', err);
+  }
+}
+
+/* -----------------------------------------
+Clear all notifications
+----------------------------------------- */
+async function clearAllNotifications() {
+  const now = Date.now();
+
+  const updates = {
+    clearedAt: now,
+    readAllAt_leave: now,
+    readAllAt_announcement: now,
+    read: null
+  };
+
+  // Optimistic local update
+  unifiedNotificationState = {
+    ...unifiedNotificationState,
+    clearedAt: now,
+    readAllAt_leave: now,
+    readAllAt_announcement: now,
+    read: {}
+  };
+
+  processUnifiedNotifications();
+
+  if (!unifiedCurrentUserUid) return;
+
+  try {
+    await update(
+      ref(db, `users/${unifiedCurrentUserUid}/notificationState`),
+      updates
+    );
+  } catch (err) {
+    console.error('Error clearing notifications:', err);
+  }
+}
+
+/* -----------------------------------------
+Notification UI setup
+----------------------------------------- */
+function setupUnifiedNotifUI() {
+  if (unifiedNotifUiBound) return;
+
   const btn = document.getElementById('leaveNotifBtn');
   const dropdown = document.getElementById('leaveNotifDropdown');
-  const markAllBtn = document.getElementById('markAllReadBtn');
-  
+
   if (!btn || !dropdown) return;
-  
+
+  // Update dropdown title
+  const titleEl =
+    document.getElementById('unifiedNotifTitle') ||
+    dropdown.querySelector('.notif-header h4');
+
+  if (titleEl) {
+    titleEl.textContent = notifText('notifications.title', 'Notifications');
+  }
+
+  const markAllBtn = document.getElementById('markAllReadBtn');
+
+  // Inject Clear All button if it does not exist
+  let clearAllBtn = document.getElementById('clearAllNotifsBtn');
+
+  if (markAllBtn) {
+    let actionsWrap = markAllBtn.closest('.notif-header-actions');
+
+    if (!actionsWrap) {
+      actionsWrap = document.createElement('div');
+      actionsWrap.className = 'notif-header-actions';
+
+      markAllBtn.insertAdjacentElement('beforebegin', actionsWrap);
+      actionsWrap.appendChild(markAllBtn);
+    }
+
+    if (!clearAllBtn) {
+      clearAllBtn = document.createElement('button');
+      clearAllBtn.id = 'clearAllNotifsBtn';
+      clearAllBtn.type = 'button';
+      clearAllBtn.className = 'mark-read-btn';
+      actionsWrap.appendChild(clearAllBtn);
+    }
+  }
+
+  if (markAllBtn) {
+    markAllBtn.textContent = notifText('notifications.markAllRead', 'Mark all read');
+    markAllBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      markAllNotificationsRead();
+    });
+  }
+
+  if (clearAllBtn) {
+    clearAllBtn.textContent = notifText('notifications.clearAll', 'Clear all');
+    clearAllBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      clearAllNotifications();
+    });
+  }
+
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
     dropdown.classList.toggle('hidden');
   });
-  
+
   document.addEventListener('click', (e) => {
     if (!dropdown.contains(e.target) && !btn.contains(e.target)) {
       dropdown.classList.add('hidden');
     }
   });
-  
-  if (markAllBtn) {
-    markAllBtn.addEventListener('click', () => {
-      localStorage.setItem('leaveNotifLastSeen', Date.now().toString());
-      // Update UI immediately
-      document.querySelectorAll('.notif-item.unread').forEach(el => el.classList.remove('unread'));
-      const badge = document.getElementById('leaveNotifBadge');
-      if (badge) badge.style.display = 'none';
-    });
-  }
+
+  unifiedNotifUiBound = true;
+}
+
+/* -----------------------------------------
+Initialize unified notifications
+----------------------------------------- */
+function initUnifiedNotifications(user) {
+  if (!user) return;
+
+  unifiedCurrentUserUid = user.uid;
+
+  setupUnifiedNotifUI();
+
+  if (unifiedNotifSubscribed) return;
+  unifiedNotifSubscribed = true;
+
+  // Leaves listener
+  onValue(
+    ref(db, 'leaves'),
+    (snapshot) => {
+      unifiedLeavesCache = snapshot.val() || {};
+      processUnifiedNotifications();
+    },
+    (error) => {
+      console.error('Error loading leaves for notifications:', error);
+    }
+  );
+
+  // Announcements listener
+  onValue(
+    ref(db, 'announcements'),
+    (snapshot) => {
+      unifiedAnnouncementsCache = snapshot.val() || {};
+      processUnifiedNotifications();
+    },
+    (error) => {
+      console.error('Error loading announcements for notifications:', error);
+    }
+  );
+
+  // User notification state listener
+  onValue(
+    ref(db, `users/${user.uid}/notificationState`),
+    (snapshot) => {
+      const existing = snapshot.val() || {};
+      const now = Date.now();
+      const updates = {};
+
+      // One-time bootstrap so old announcements do not flood users
+      if (!snapshot.exists()) {
+        const oldLeaveLastSeen = parseInt(
+          localStorage.getItem('leaveNotifLastSeen') || '0',
+          10
+        );
+
+        updates.readAllAt_leave = oldLeaveLastSeen || now;
+        updates.readAllAt_announcement = now;
+      } else {
+        if (typeof existing.readAllAt_leave !== 'number') {
+          const oldLeaveLastSeen = parseInt(
+            localStorage.getItem('leaveNotifLastSeen') || '0',
+            10
+          );
+
+          updates.readAllAt_leave = oldLeaveLastSeen || now;
+        }
+
+        if (typeof existing.readAllAt_announcement !== 'number') {
+          updates.readAllAt_announcement = now;
+        }
+      }
+
+      if (Object.keys(updates).length > 0) {
+        unifiedNotificationState = {
+          ...existing,
+          ...updates
+        };
+
+        processUnifiedNotifications();
+
+        update(ref(db, `users/${user.uid}/notificationState`), updates)
+          .then(() => {
+            localStorage.removeItem('leaveNotifLastSeen');
+          })
+          .catch((err) => {
+            console.error('Error bootstrapping notification state:', err);
+          });
+      } else {
+        unifiedNotificationState = existing;
+        processUnifiedNotifications();
+      }
+    },
+    (error) => {
+      console.error('Error loading notification state:', error);
+    }
+  );
 }
 
 /* =========================================

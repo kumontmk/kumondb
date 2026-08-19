@@ -819,6 +819,34 @@ Keeps bell and language switch grouped
 }
 
 /* =========================================
+🔔 UNIFIED NOTIFICATIONS — HEADER ACTIONS
+========================================= */
+.notif-header {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.notif-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.notif-header-actions .mark-read-btn {
+  white-space: nowrap;
+}
+
+/* Optional visual distinction */
+.notif-item.announcement .notif-icon {
+  background: #fff7ed;
+}
+
+.notif-item.leave .notif-icon {
+  background: #eff6ff;
+}
+
+/* =========================================
    PENDING MANAGER APPROVALS MODAL
 ========================================= */
 .pending-approvals-modal {
@@ -1241,5 +1269,29 @@ nav {
     margin: 0;
     border-radius: 16px 16px 0 0;
     z-index: 1003;
+  }
+}
+
+/* =========================================
+🔔 MOBILE NOTIFICATION DROPDOWN — below header
+========================================= */
+@media (max-width: 768px) {
+  /* Let the dropdown anchor to the sticky <header> instead of <nav> */
+  header nav {
+    position: static;
+  }
+
+  .notif-dropdown {
+    position: absolute;
+    top: 100%;              /* directly under the nav bar */
+    bottom: auto;
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-height: 70vh;
+    margin: 0;
+    border-radius: 0 0 16px 16px;   /* rounded bottom corners instead of top */
+    z-index: 1003;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
   }
 }
