@@ -39,7 +39,7 @@ let MONTH_NAMES = t('months', { returnObjects: true }) || ['January','February',
 const EMAILJS_SERVICE_ID = 'service_xiorqac';
 const EMAILJS_TEMPLATE_ID = 'template_leave';
 const EMAILJS_PUBLIC_KEY = 'h6ZUxpNW1GViOnq32';
-const EMAIL_NOTIFICATIONS_ENABLED = false;
+const EMAIL_NOTIFICATIONS_ENABLED = true;
 
 const TYPE_META = {
   annual: { label: t('typeAnnual'), cls: 'lv-annual', ledger: 'annualUsed' },
@@ -662,14 +662,25 @@ function addRelieverRow(container, dateStr, empACenter, empAStart, empAEnd) {
   relieverDiv.innerHTML = `<div class="reliever-controls"><select class="reliever-select">${empOptions}</select><span class="orig-shift-display">${escapeHtml(t('origNone'))}</span><span class="arrow-indicator">→</span><select class="new-center-select">${centerOptions}</select><input type="time" class="new-start-time" value="${empAStart}"><input type="time" class="new-end-time" value="${empAEnd}"><button type="button" class="remove-reliever-btn">🗑</button></div>`;
   container.insertBefore(relieverDiv, container.querySelector('.add-reliever-btn'));
   const select = relieverDiv.querySelector('.reliever-select'), origDisplay = relieverDiv.querySelector('.orig-shift-display');
-  select.addEventListener('change', async () => {
-    const rid = select.value; if (!rid) { origDisplay.textContent = t('origNone'); return; }
-    origDisplay.textContent = t('origLoading');
-    const sched = await getEmpScheduleForDate(rid, dateStr);
-    if (sched.shifts.length === 0 && sched.status === 'scheduled') origDisplay.textContent = t('origNoShift');
-    else if (sched.status !== 'scheduled') origDisplay.textContent = t('orig', { text: sched.status });
-    else origDisplay.textContent = t('orig', { text: sched.shifts.map(s => `${getCenterAbbr(s._center || s.center)} ${s.start}-${s.end}`).join(', ') });
-  });
+    select.addEventListener('change', async () => {
+        const rid = select.value; 
+        if (!rid) { 
+            origDisplay.textContent = t('origNone'); 
+            return; 
+        }
+        origDisplay.textContent = t('origLoading');
+        const sched = await getEmpScheduleForDate(rid, dateStr);
+        if (sched.shifts.length === 0 && sched.status === 'scheduled') {
+            origDisplay.textContent = t('origNoShift');
+        } else if (sched.status !== 'scheduled') {
+            // Directly show the status text
+            origDisplay.textContent = sched.status.toUpperCase();
+        } else {
+            // Directly show the shifts
+            const shiftText = sched.shifts.map(s => `${getCenterAbbr(s._center || s.center)} ${s.start}-${s.end}`).join(', ');
+            origDisplay.textContent = shiftText || t('origNoShift');
+        }
+    });
   relieverDiv.querySelector('.remove-reliever-btn').addEventListener('click', () => relieverDiv.remove());
 }
 async function confirmApproval() {
@@ -720,7 +731,7 @@ async function confirmApproval() {
         await update(ref(db, `schedules/${rel.newShift.center}/${rel.relieverId}/${dateStr}`), { status: currentSched.status || 'scheduled', shifts: [...currentShiftsArray, rel.newShift], notes: currentSched.notes || '', updatedBy: currentUser.uid, updatedAt: new Date().toISOString() });
       }
     }
-    notifyManagersLeaveEvent({ ...l, amount, deductDays: deduct }, 'approved');
+    notifyLeaveEvent({ ...l, amount, deductDays: deduct }, 'approved');
     closeModal('approveModal'); alert(t('approved'));
   } catch (err) { console.error(err); alert(t('approveFailed', { message: err.message })); }
   finally { btn.disabled = false; btn.textContent = t('confirmApproval'); }
@@ -730,7 +741,7 @@ async function confirmApproval() {
 async function rejectLeave(id) {
   const l = leaves[id]; if (!l || l.status !== 'pending') return;
   if (!confirm(t('rejectConfirm', { name: l.empName }))) return;
-  try { await update(ref(db, `leaves/${id}`), { status: 'rejected', reviewedBy: currentUser.uid, reviewedAt: new Date().toISOString() }); notifyManagersLeaveEvent(l, 'rejected'); }
+  try { await update(ref(db, `leaves/${id}`), { status: 'rejected', reviewedBy: currentUser.uid, reviewedAt: new Date().toISOString() }); notifyLeaveEvent(l, 'rejected'); }
   catch (err) { console.error(err); alert(t('rejectFailed')); }
 }
 async function cancelLeave(id) {
@@ -1013,19 +1024,57 @@ async function onAttachmentChange(e) {
 
 // ============ EMAILJS ============
 function getManagerEmails() {
-  const tos = new Set([AUTHORIZED_EMAIL.toLowerCase()]);
-  Object.values(employees).forEach(e => { if (e.isDisabled) return; const email = String(e.email || '').trim().toLowerCase(); if (!email) return; const pos = getEmpPositions(e).map(p => String(p || '').trim().toLowerCase()); if (pos.includes('manager') || pos.includes('master admin')) tos.add(email); });
-  return [...tos];
+    const tos = new Set([AUTHORIZED_EMAIL.toLowerCase()]);
+    Object.values(employees).forEach(e => {
+        if (e.isDisabled) return;
+        const email = String(e.email || '').trim().toLowerCase();
+        if (!email) return;
+        const pos = getEmpPositions(e).map(p => String(p || '').trim().toLowerCase());
+        if (pos.includes('manager') || pos.includes('master admin')) tos.add(email);
+    });
+    return [...tos];
 }
+
 function emailjsConfigured() { return typeof emailjs !== 'undefined' && !EMAILJS_SERVICE_ID.startsWith('YOUR_') && !EMAILJS_TEMPLATE_ID.startsWith('YOUR_') && !EMAILJS_PUBLIC_KEY.startsWith('YOUR_'); }
-async function notifyManagersLeaveEvent(leave, eventType) {
-  if (!EMAIL_NOTIFICATIONS_ENABLED || !emailjsConfigured()) return;
-  try {
-    const tos = getManagerEmails(); if (!tos.length) return;
-    const subjects = { new: `🏖️ New Leave Request — ${leave.empName} (${leave.typeLabel})`, approved: `✅ Leave APPROVED — ${leave.empName} (${leave.typeLabel})`, rejected: `❌ Leave REJECTED — ${leave.empName} (${leave.typeLabel})` };
-    const actionLabel = { new: 'New application (PENDING)', approved: 'APPROVED', rejected: 'REJECTED' }[eventType] || eventType;
-    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, { to_email: tos.join(','), subject: subjects[eventType] || subjects.new, action: actionLabel, acted_by: eventType === 'new' ? (leave.appliedByName || '-') : (currentUser?.email || '-'), employee_name: leave.empName || '-', leave_type: leave.typeLabel || leave.type || '-', dates: `${leave.dateFrom} → ${leave.dateTo}`, duration: leave.durationType === 'hours' ? `${leave.amount} hr(s) (${leave.timeFrom}–${leave.timeTo})` : `${leave.amount} day(s)`, reason: leave.reason || '-', applied_by: leave.appliedByName || '-' }, { publicKey: EMAILJS_PUBLIC_KEY });
-  } catch (err) { console.warn('Manager notification failed:', err?.text || err); }
+
+// 🆕 Renamed to notifyLeaveEvent to include the employee
+async function notifyLeaveEvent(leave, eventType) {
+    if (!EMAIL_NOTIFICATIONS_ENABLED || !emailjsConfigured()) return;
+    try {
+        // Use a Set to prevent duplicate emails
+        const tos = new Set(getManagerEmails());
+        
+        // 🆕 Add the employee who applied for the leave to the recipients
+        const empEmail = employees[leave.empId]?.email?.trim().toLowerCase();
+        if (empEmail) {
+            tos.add(empEmail);
+        }
+        
+        const uniqueTos = [...tos];
+        if (!uniqueTos.length) return;
+        
+        const subjects = {
+            new: `🏖️ New Leave Request — ${leave.empName} (${leave.typeLabel})`,
+            approved: `✅ Leave APPROVED — ${leave.empName} (${leave.typeLabel})`,
+            rejected: `❌ Leave REJECTED — ${leave.empName} (${leave.typeLabel})`
+        };
+        const actionLabel = { new: 'New application (PENDING)', approved: 'APPROVED', rejected: 'REJECTED' }[eventType] || eventType;
+        
+        await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+            to_email: uniqueTos.join(','), // 🆕 Send to managers + employee
+            subject: subjects[eventType] || subjects.new,
+            action: actionLabel,
+            acted_by: eventType === 'new' ? (leave.appliedByName || '-') : (currentUser?.email || '-'),
+            employee_name: leave.empName || '-',
+            leave_type: leave.typeLabel || leave.type || '-',
+            dates: `${leave.dateFrom} → ${leave.dateTo}`,
+            duration: leave.durationType === 'hours' ? `${leave.amount} hr(s) (${leave.timeFrom}–${leave.timeTo})` : `${leave.amount} day(s)`,
+            reason: leave.reason || '-',
+            applied_by: leave.appliedByName || '-'
+        }, { publicKey: EMAILJS_PUBLIC_KEY });
+    } catch (err) {
+        console.warn('Leave notification failed:', err?.text || err);
+    }
 }
 
 // ============ SUBMIT LEAVE ============
@@ -1146,7 +1195,7 @@ async function submitLeave() {
     try {
         for (const data of leaveRecordsToPush) {
             await push(ref(db, 'leaves'), data);
-            notifyManagersLeaveEvent(data, 'new');
+            notifyLeaveEvent(data, 'new');
         }
         
         closeModal('applyModal');
