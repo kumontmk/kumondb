@@ -1450,8 +1450,7 @@ function renderSchedule() {
         <td> <input type="time" class="dt-timeslot" value="${data.DTtimeslot || ''}" style="width:100%; padding:0.5rem;"> </td>
         <td> <input type="text" class="dt-test" placeholder="${t('studentForm.dtTestPlaceholder')}" value="${data.test || ''}" required style="width:100%; padding:0.5rem;"> </td>
         <td> <input type="text" class="dt-score" placeholder="${t('studentForm.dtScorePlaceholder')}" value="${data.score || ''}" required style="width:100%; padding:0.5rem;"> </td>
-        <td> <input type="number" class="dt-time" placeholder="${t('studentForm.dtTimePlaceholder')}" value="${data.time || ''}" required style="width:100%; padding:0.5rem;"> </td>
-        <td> <input type="text" class="dt-suggested" placeholder="${t('studentForm.dtLevelPlaceholder')}" value="${data.suggestedStart || ''}" style="width:100%; padding:0.5rem;"> </td>
+        <td> <input type="text" class="dt-time" placeholder="e.g. 20/30" value="${data.time || ''}" required style="width:100%; padding:0.5rem;" title="Format: minutes taken / time limit (e.g. 20/30)"> </td>        <td> <input type="text" class="dt-suggested" placeholder="${t('studentForm.dtLevelPlaceholder')}" value="${data.suggestedStart || ''}" style="width:100%; padding:0.5rem;"> </td>
         <td> <input type="text" class="dt-actual" placeholder="${t('studentForm.dtLevelPlaceholder')}" value="${data.actualStart || ''}" style="width:100%; padding:0.5rem;"> </td>
         <td style="text-align:center;"> <button type="button" class="remove-dt-btn danger" style="padding:0.4rem 0.8rem;">🗑️</button> </td>`;
         tbody.appendChild(tr);
@@ -1484,7 +1483,7 @@ function renderSchedule() {
                 ${isManual ? `<input type="text" class="at-score" placeholder="${t('studentForm.dtScorePlaceholder')}" value="${data.score || ''}" required style="width:100%; padding:0.5rem;">` : `<span>${data.score || '-'}</span>`}
             </td>
             <td>
-                ${isManual ? `<input type="number" class="at-time" placeholder="${t('studentForm.dtTimePlaceholder')}" value="${data.time || ''}" required style="width:100%; padding:0.5rem;">` : `<span>${data.time || '-'}</span>`}
+                ${isManual ? `<input type="text" class="at-time" placeholder="e.g. 20/30" value="${data.time || ''}" required style="width:100%; padding:0.5rem;" title="Format: minutes taken / time limit (e.g. 20/30)">` : `<span>${data.time || '-'}</span>`}
             </td>
             <td>
                 ${isManual ? `<input type="text" class="at-group" placeholder="${t('studentForm.atGroupPlaceholder')}" value="${data.group || ''}" style="width:100%; padding:0.5rem;">` : `<span>${data.group || '-'}</span>`}
