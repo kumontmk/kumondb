@@ -377,7 +377,11 @@ button:disabled {
 
 .announcement-content img,
 .announcement-content video {
-  max-width: 100%;
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    margin: 0.75rem 0;
+    display: block;
 }
 
 .announcement-content blockquote {

@@ -155,6 +155,62 @@ function makeExcerpt(text, maxLen = 130) {
 }
 
 /* =========================================
+IMAGE COMPRESSION HELPER
+========================================= */
+function compressImageBase64(base64, maxKB = 100) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.src = base64;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            
+            // Prevent memory issues with massive images
+            const MAX_DIM = 1920;
+            if (width > MAX_DIM || height > MAX_DIM) {
+                if (width > height) {
+                    height = Math.round(height * MAX_DIM / width);
+                    width = MAX_DIM;
+                } else {
+                    width = Math.round(width * MAX_DIM / height);
+                    height = MAX_DIM;
+                }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            let quality = 0.8;
+            let result = base64;
+            
+            // Iteratively reduce quality until under maxKB
+            while (quality > 0.1) {
+                result = canvas.toDataURL('image/jpeg', quality);
+                const sizeKB = (result.length * 3) / 4 / 1024;
+                if (sizeKB <= maxKB) break;
+                quality -= 0.1;
+            }
+
+            // If still too large, scale down the resolution
+            let sizeKB = (result.length * 3) / 4 / 1024;
+            if (sizeKB > maxKB) {
+                const ratio = Math.sqrt(maxKB / sizeKB) * 0.9;
+                canvas.width = Math.max(1, Math.round(width * ratio));
+                canvas.height = Math.max(1, Math.round(height * ratio));
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                result = canvas.toDataURL('image/jpeg', 0.7);
+            }
+
+            resolve(result);
+        };
+        img.onerror = () => resolve(base64); // Fallback if image fails to load
+    });
+}
+
+/* =========================================
    HASHTAG HELPERS
 ========================================= */
 // Remove "#" and trim. Storage keeps the bare word.
@@ -204,38 +260,20 @@ function renderTagPills(tags) {
 /* =========================================
    SANITIZE RICH TEXT
 ========================================= */
-if (window.DOMPurify) {
-  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
-    if (node.tagName === 'A') {
-      node.setAttribute('target', '_blank');
-      node.setAttribute('rel', 'noopener noreferrer');
-    }
-  });
-  DOMPurify.addHook('uponSanitizeAttribute', (node, data) => {
-    if (data.attrName === 'style') {
-      const value = String(data.attrValue || '');
-      if (/javascript|expression|url\(|behavior|@import|-moz-binding/i.test(value)) data.keepAttr = false;
-    }
-    if (data.attrName === 'href') {
-      const value = String(data.attrValue || '');
-      if (/^\s*javascript:/i.test(value)) data.keepAttr = false;
-    }
-  });
-}
-
 function sanitizeAnnouncementHtml(html) {
-  if (!window.DOMPurify) return escapeHtml(html);
-  return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: [
-      'p','br','b','strong','i','em','u','s','strike',
-      'h1','h2','h3','h4','h5','h6',
-      'ul','ol','li','blockquote','a','span','div','pre','code',
-      'sub','sup','hr','table','thead','tbody','tr','td','th'
-    ],
-    ALLOWED_ATTR: ['href','target','rel','class','style'],
-    FORBID_TAGS: ['style','script','iframe','object','embed','form','input','button','textarea','select'],
-    ALLOW_DATA_ATTR: false
-  });
+    if (!window.DOMPurify) return escapeHtml(html);
+    return DOMPurify.sanitize(html, {
+        ALLOWED_TAGS: [
+            'p','br','b','strong','i','em','u','s','strike',
+            'h1','h2','h3','h4','h5','h6',
+            'ul','ol','li','blockquote','a','span','div','pre','code',
+            'sub','sup','hr','table','thead','tbody','tr','td','th',
+            'img' // <-- ADDED
+        ],
+        ALLOWED_ATTR: ['href','target','rel','class','style','src','alt'], // <-- ADDED src, alt
+        FORBID_TAGS: ['style','script','iframe','object','embed','form','input','button','textarea','select'],
+        ALLOW_DATA_ATTR: false
+    });
 }
 
 /* =========================================
@@ -620,49 +658,68 @@ function renderDetail() {
    CRUD ACTIONS
 ========================================= */
 async function saveAnnouncement(e) {
-  e.preventDefault();
-  if (!canManage || !quill) return;
+    e.preventDefault();
+    if (!canManage || !quill) return;
+    const title = announcementTitleInput.value.trim();
+    commitCurrentToken(); // flush any tag typed but not yet committed
+    const hashtags = modalTags.slice(0, MAX_TAGS);
+    
+    let html = quill.root.innerHTML;
+    const plainText = quill.getText().trim();
 
-  const title = announcementTitleInput.value.trim();
-  commitCurrentToken(); // flush any tag typed but not yet committed
-  const hashtags = modalTags.slice(0, MAX_TAGS);
-
-  const html = sanitizeAnnouncementHtml(quill.root.innerHTML);
-  const plainText = quill.getText().trim();
-
-  if (!title || !plainText) {
-    alert(t('requiredFields'));
-    return;
-  }
-
-  saveAnnouncementBtn.disabled = true;
-  saveAnnouncementBtn.textContent = t('saving');
-  try {
-    if (editingAnnouncementId) {
-      await update(ref(db, `announcements/${editingAnnouncementId}`), {
-        title, html, hashtags,
-        updatedAt: new Date().toISOString(),
-        updatedBy: currentUser.uid,
-        updatedByName: displayName
-      });
-    } else {
-      const newRef = push(ref(db, 'announcements'));
-      await set(newRef, {
-        title, html, hashtags,
-        createdBy: currentUser.uid,
-        createdByName: displayName,
-        createdAt: new Date().toISOString()
-      });
+    if (!title || !plainText) {
+        alert(t('requiredFields'));
+        return;
     }
-    activeTagFilter = null; // show full list so the saved post is visible
-    closeAnnouncementModal();
-  } catch (err) {
-    console.error('Error saving announcement:', err);
-    alert(t('saveFailed'));
-  } finally {
-    saveAnnouncementBtn.disabled = false;
-    saveAnnouncementBtn.textContent = t('save');
-  }
+
+    saveAnnouncementBtn.disabled = true;
+    const originalBtnText = saveAnnouncementBtn.textContent;
+    saveAnnouncementBtn.textContent = 'Processing images...'; // Feedback for user
+
+    try {
+        // 1. Compress Base64 images to <= 100KB
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const images = doc.body.querySelectorAll('img[src^="data:image"]');
+        
+        if (images.length > 0) {
+            for (const img of images) {
+                const originalSrc = img.getAttribute('src');
+                const compressedSrc = await compressImageBase64(originalSrc, 100);
+                img.setAttribute('src', compressedSrc);
+            }
+            html = doc.body.innerHTML;
+        }
+
+        // 2. Sanitize HTML
+        html = sanitizeAnnouncementHtml(html);
+
+        // 3. Save to Database
+        if (editingAnnouncementId) {
+            await update(ref(db, `announcements/${editingAnnouncementId}`), {
+                title, html, hashtags,
+                updatedAt: new Date().toISOString(),
+                updatedBy: currentUser.uid,
+                updatedByName: displayName
+            });
+        } else {
+            const newRef = push(ref(db, 'announcements'));
+            await set(newRef, {
+                title, html, hashtags,
+                createdBy: currentUser.uid,
+                createdByName: displayName,
+                createdAt: new Date().toISOString()
+            });
+        }
+        activeTagFilter = null; // show full list so the saved post is visible
+        closeAnnouncementModal();
+    } catch (err) {
+        console.error('Error saving announcement:', err);
+        alert(t('saveFailed'));
+    } finally {
+        saveAnnouncementBtn.disabled = false;
+        saveAnnouncementBtn.textContent = originalBtnText;
+    }
 }
 
 async function deleteAnnouncement(id) {
