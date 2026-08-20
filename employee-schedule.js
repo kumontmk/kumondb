@@ -39,6 +39,13 @@ function queueLeaveSync() {
     leaveSyncTimer = setTimeout(syncApprovedLeavesToSchedules, 400);
 }
 
+/** Centers to stamp when the employee has no shifts at all */
+function getLeaveStampCenters(empId) {
+    const perms = employees[empId]?.permissions?.centers || {};
+    const ids = Object.keys(perms).filter(k => perms[k] === true);
+    return ids.length ? ids : allCenters.map(c => c.id);
+}
+
 async function syncApprovedLeavesToSchedules() {
     if (!isAdminOrManager || leaveSyncRunning || !schedulesReady) return;
     leaveSyncRunning = true;
@@ -47,39 +54,49 @@ async function syncApprovedLeavesToSchedules() {
         for (const [empId, dateSet] of Object.entries(approvedLeaveDates)) {
             for (const dateStr of dateSet) {
                 const sched = mergedSchedules[empId]?.[dateStr];
+                if (sched && (sched.status || 'scheduled') !== 'scheduled') continue; // already leave/sick/off
 
-                // Already leave / sick / off → nothing to do
-                if (sched && (sched.status || 'scheduled') !== 'scheduled') continue;
-
-                // Don't fight weekly days-off or holidays
-                const tmpl = getTemplateForDate(empId, dateStr);
-                if (tmpl && (tmpl.status || 'scheduled') === 'off') continue;
+                // Don't fight holidays or weekly-off patterns
                 const hol = getHolidayForDate(dateStr);
                 if (hol && !hol.muc) continue;
+                const tmpl = getTemplateForDate(empId, dateStr);
+                if (tmpl && (tmpl.status || 'scheduled') === 'off') continue;
 
-                // Shifts to carry: existing record first, else weekly template
+                // Shifts to carry (so cancelling the leave restores them)
                 let shifts = sched ? (sched._shifts || extractShifts(sched)) : [];
-                let target = sched?._sourceCenter || null;
-                if (!hasValidShifts(shifts)) {
-                    const tmplShifts = tmpl ? (tmpl._shifts || extractShifts(tmpl)) : [];
-                    if (!hasValidShifts(tmplShifts)) continue; // truly nothing scheduled → leave empty
-                    shifts = tmplShifts;
-                    const work = shifts.find(s => s.type === 'work' && s.center);
-                    target = work ? work.center : (allCenters[0] || {}).id;
-                }
-                if (!target) target = (shifts.find(s => s.center) || {}).center || (allCenters[0] || {}).id;
-                if (!target) continue;
+                let targets = [];
 
-                await set(ref(db, `schedules/${target}/${empId}/${dateStr}`), {
-                    status: 'leave',
-                    shifts,                                   // kept so cancelling the leave restores them
-                    notes: sched?.notes || '',
-                    autoLeaveSync: true,
-                    updatedAt: new Date().toISOString(),
-                    updatedBy: currentUser.uid
-                });
+                if (hasValidShifts(shifts)) {
+                    // Case 1: explicit schedule exists → flip it in place
+                    const src = sched._sourceCenter || (shifts.find(s => s.center) || {}).center;
+                    targets = src ? [src] : getLeaveStampCenters(empId);
+                } else {
+                    const tmplShifts = tmpl ? (tmpl._shifts || extractShifts(tmpl)) : [];
+                    if (hasValidShifts(tmplShifts)) {
+                        // Case 2: no schedule, but a weekly pattern exists → stamp from pattern
+                        shifts = tmplShifts;
+                        const work = shifts.find(s => s.type === 'work' && s.center);
+                        targets = work ? [work.center] : (allCenters[0] ? [allCenters[0].id] : []);
+                    } else {
+                        // 🆕 Case 3: NO schedule, NO pattern → STILL stamp the leave
+                        shifts = [];
+                        targets = getLeaveStampCenters(empId);
+                    }
+                }
+                if (!targets.length) continue;
+
+                for (const cid of targets) {
+                    await set(ref(db, `schedules/${cid}/${empId}/${dateStr}`), {
+                        status: 'leave',
+                        shifts,
+                        notes: sched?.notes || '',
+                        autoLeaveSync: true,
+                        updatedAt: new Date().toISOString(),
+                        updatedBy: currentUser.uid
+                    });
+                }
                 if (!mergedSchedules[empId]) mergedSchedules[empId] = {};
-                mergedSchedules[empId][dateStr] = { ...(sched || {}), _sourceCenter: target, status: 'leave', shifts };
+                mergedSchedules[empId][dateStr] = { ...(sched || {}), _sourceCenter: targets[0], _sourceCenters: targets, status: 'leave', shifts };
                 changed++;
             }
         }
