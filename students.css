@@ -206,55 +206,41 @@ input:focus, select:focus {
 }
 
 /* =========================================
-🔀 SORT PANEL
+🔀 SORT PANEL – RESPONSIVE (tablet + mobile)
 ========================================= */
-.sort-panel {
-    display: flex;
-    gap: 0.75rem;
-    margin-bottom: 1rem;
-    align-items: center;
-    background: var(--white);
-    padding: 0.75rem;
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-    flex-wrap: nowrap;
-    overflow-x: auto;
-}
+@media (max-width: 1024px) {
+  .sort-panel {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    gap: 0.6rem;
+  }
 
-.sort-group {
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-    background: #f8f9fa;
-    padding: 0.45rem 0.65rem;
-    border-radius: var(--radius);
-    border: 1px solid #e2e8f0;
-    flex-shrink: 0;
-}
+  .sort-group {
+    flex: 1 1 100%;      /* one group per row */
+    min-width: 0;
+    flex-wrap: wrap;     /* allow label + selects to wrap INSIDE the card */
+    row-gap: 0.4rem;
+  }
 
-.sort-group label {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--text-light);
-    white-space: nowrap;
-}
+  .sort-group label {
+    flex: 1 1 100%;      /* label gets its own line */
+  }
 
-.sort-group select {
-    min-width: 125px;
-    padding: 0.35rem 0.5rem;
-    font-size: 0.85rem;
-    border: 1px solid #cbd5e1;
-    border-radius: 4px;
-    background: white;
-    cursor: pointer;
-}
+  .sort-group select {
+    width: auto;         /* overrides global width:100% */
+    min-width: 0;        /* ✅ this was the overflow cause – now selects can shrink */
+    flex: 1 1 auto;      /* field select (and Status/Subject selects) fill the row */
+  }
 
-#clearSortBtn {
-    margin-left: auto;
-    padding: 0.45rem 0.9rem !important;
-    font-size: 0.85rem !important;
-    white-space: nowrap;
-    flex-shrink: 0;
+  .sort-group select[id$="-dir"] {
+    flex: 0 0 4.5rem;    /* ↑/↓ stays compact, fixed width */
+  }
+
+  #clearSortBtn {
+    margin-left: 0;
+    margin-top: 0.25rem;
+    flex: 1 1 100%;
+  }
 }
 
 /* =========================================
@@ -538,4 +524,84 @@ progress::-moz-progress-bar { background-color: var(--primary-dark); border-radi
     #importBtn     { grid-column: 1 / 2; }  /* row 2: left half  */
     #exportBtn     { grid-column: 2 / 3; }  /* row 2: right half */
     #deleteAllBtn  { grid-column: 1 / -1; } /* row 3: full width */
+}
+
+/* =========================================
+🔀 SORT PANEL – FULL FIX (self-contained, keep at end of file)
+========================================= */
+.sort-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  align-items: center;
+  background: var(--white);
+  padding: 0.75rem;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow-x: visible;
+}
+
+.sort-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  row-gap: 0.4rem;
+  background: #f8f9fa;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--radius);
+  border: 1px solid #e2e8f0;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sort-group label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-light);
+  white-space: nowrap;
+}
+
+.sort-group select {
+  width: auto;      /* beats global width:100% */
+  min-width: 0;     /* beats min-width:125px → selects can finally shrink */
+  flex: 1 1 auto;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.9rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: var(--white);
+  cursor: pointer;
+}
+
+.sort-group select[id$="-dir"] {
+  flex: 0 0 4.25rem;   /* ↑/↓ fixed compact width */
+  width: 4.25rem;
+}
+
+#clearSortBtn {
+  margin-left: auto;
+  padding: 0.45rem 0.9rem !important;
+  font-size: 0.85rem !important;
+  white-space: nowrap;
+}
+
+/* Desktop: labels inline, comfortable select widths */
+@media (min-width: 1025px) {
+  .sort-group { flex-wrap: nowrap; }
+  .sort-group select { min-width: 125px; }
+  .sort-group select[id$="-dir"] { flex: 0 0 auto; width: auto; min-width: 4.5rem; }
+}
+
+/* Tablet + mobile: stacked cards, nothing can overflow */
+@media (max-width: 1024px) {
+  .sort-panel {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+  }
+  .sort-group { width: 100%; }
+  .sort-group label { flex: 1 1 100%; }   /* label on its own line */
+  #clearSortBtn { margin-left: 0; width: 100%; }
 }
