@@ -151,30 +151,31 @@
       </div>
     </div>
 
-    <!-- EMPLOYEE VIEW -->
-    <div id="tab-employee" class="tab-content">
-      <div class="schedule-toolbar">
-        <div class="nav-group">
-          <button id="empPrevWeekBtn" class="nav-btn" data-i18n="schedule.prev">Prev</button>
-          <span id="empWeekRangeDisplay" class="week-range" data-i18n="schedule.loading">Loading...</span>
-          <button id="empNextWeekBtn" class="nav-btn" data-i18n="schedule.next">Next</button>
-          <button id="empTodayBtn" class="nav-btn today-btn" data-i18n="schedule.today">Today</button>
-        </div>
-        <div class="employee-selector" id="employeeSelectorWrap">
-          <label data-i18n="schedule.viewScheduleFor">View schedule for:</label>
-          <select id="employeeDropdown"></select>
-        </div>
+  <!-- EMPLOYEE VIEW -->
+  <div id="tab-employee" class="tab-content">
+    <div class="schedule-toolbar">
+      <div class="nav-group">
+        <button id="empPrevMonthBtn" class="nav-btn">‹</button>
+        <span id="empMonthDisplay" class="week-range">Loading...</span>
+        <button id="empNextMonthBtn" class="nav-btn">›</button>
+        <button id="empTodayBtn" class="nav-btn today-btn" data-i18n="schedule.today">Today</button>
       </div>
-      <div id="empEmptyState" class="empty-state hidden" data-i18n="schedule.employeeEmpty">No schedule assigned. Contact your manager.</div>
-      <div class="table-wrapper">
-        <table class="schedule-table">
-          <thead><tr id="empHeaderRow"></tr></thead>
-          <tbody id="empBody"></tbody>
-        </table>
+      <div id="employeeSelectorWrap" class="employee-selector">
+        <label for="employeeDropdown" data-i18n="schedule.viewScheduleFor">View schedule for:</label>
+        <select id="employeeDropdown"></select>
       </div>
-      <div class="employee-mobile-view">
-        <div id="employeeMobileList"></div>
-      </div>
+    </div>
+
+    <!-- 🆕 Desktop: full-month calendar grid (one employee per view) -->
+    <div class="emp-calendar-wrapper">
+      <div id="empCalendarGrid" class="emp-calendar-grid"></div>
+    </div>
+
+    <div id="empEmptyState" class="empty-state hidden" data-i18n="schedule.employeeEmpty">No schedule assigned. Contact your manager.</div>
+
+    <!-- Mobile: scrollable list (unchanged) -->
+    <div class="employee-mobile-view">
+      <div id="employeeMobileList"></div>
     </div>
   </div>
 

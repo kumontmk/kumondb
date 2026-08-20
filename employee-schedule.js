@@ -181,7 +181,7 @@ let mergedSchedules = {};
 let rawSchedulesByCenter = {};
 let templates = {};
 let viewStartDate = getMonday(new Date());
-let empViewStartDate = getMonday(new Date());
+let empViewMonthDate = startOfMonth(new Date());
 let editingEmpId = null;
 let editingDate = null;
 let editingSourceCenter = null;
@@ -540,16 +540,16 @@ function setupAdminNav() {
 }
 
 function setupEmployeeNav() {
-  document.getElementById('empPrevWeekBtn')?.addEventListener('click', () => {
-    empViewStartDate = addDays(empViewStartDate, -7);
+  document.getElementById('empPrevMonthBtn')?.addEventListener('click', () => {
+    empViewMonthDate.setMonth(empViewMonthDate.getMonth() - 1);
     renderEmployeeView();
   });
-  document.getElementById('empNextWeekBtn')?.addEventListener('click', () => {
-    empViewStartDate = addDays(empViewStartDate, 7);
+  document.getElementById('empNextMonthBtn')?.addEventListener('click', () => {
+    empViewMonthDate.setMonth(empViewMonthDate.getMonth() + 1);
     renderEmployeeView();
   });
   document.getElementById('empTodayBtn')?.addEventListener('click', () => {
-    empViewStartDate = getMonday(new Date());
+    empViewMonthDate = startOfMonth(new Date());
     renderEmployeeView();
   });
   document.getElementById('employeeDropdown')?.addEventListener('change', () => {
@@ -855,8 +855,19 @@ function getClosedDaysForCenter(name) {
 }
 
 // ============================================
-// EMPLOYEE VIEW
+// EMPLOYEE VIEW — FULL-MONTH CALENDAR (desktop) + LIST (mobile)
 // ============================================
+function startOfMonth(d) {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+function getMonthDates(viewDate) {
+  const year = viewDate.getFullYear();
+  const month = viewDate.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const dates = [];
+  for (let d = 1; d <= daysInMonth; d++) dates.push(formatDateStr(new Date(year, month, d)));
+  return dates;
+}
 function renderEmployeeView() {
   const selectorWrap = document.getElementById('employeeSelectorWrap');
   const dropdown = document.getElementById('employeeDropdown');
@@ -871,163 +882,159 @@ function renderEmployeeView() {
       opt.textContent = `${emp.englishName} (${getEmpPositions(emp).join(', ')})`;
       dropdown.appendChild(opt);
     });
-    if (!currentVal && employees[currentUser.uid]) {
-      dropdown.value = currentUser.uid;
-    } else if (currentVal && employees[currentVal]) {
-      dropdown.value = currentVal;
-    } else if (sorted.length > 0) {
-      dropdown.value = sorted[0].uid;
-    }
+    if (!currentVal && employees[currentUser.uid]) dropdown.value = currentUser.uid;
+    else if (currentVal && employees[currentVal]) dropdown.value = currentVal;
+    else if (sorted.length > 0) dropdown.value = sorted[0].uid;
   } else {
     selectorWrap.classList.add('hidden');
   }
   const empId = isAdminOrManager ? dropdown.value : currentUser.uid;
+  const emptyState = document.getElementById('empEmptyState');
   if (!empId) {
-    const tbody = document.getElementById('empBody');
-    if (tbody) tbody.innerHTML = '';
-    const emptyState = document.getElementById('empEmptyState');
+    const grid = document.getElementById('empCalendarGrid');
+    if (grid) grid.innerHTML = '';
+    const mobileList = document.getElementById('employeeMobileList');
+    if (mobileList) mobileList.innerHTML = '';
     if (emptyState) emptyState.classList.remove('hidden');
     return;
   }
-  const dates = get21Days(empViewStartDate);
-  updateWeekRange('empWeekRangeDisplay', dates);
-  renderEmployeeHeader(dates);
-  renderEmployeeBody(dates, empId);
+  const monthLabel = document.getElementById('empMonthDisplay');
+  if (monthLabel) monthLabel.textContent = `${MONTH_NAMES[empViewMonthDate.getMonth()]} ${empViewMonthDate.getFullYear()}`;
+  const dates = getMonthDates(empViewMonthDate);
+  const hasAnySchedule = renderEmployeeCalendar(dates, empId);
+  renderEmployeeMobileList(dates, empId);
+  if (emptyState) emptyState.classList.toggle('hidden', hasAnySchedule);
 }
-
-function renderEmployeeHeader(dates) {
-  const row = document.getElementById('empHeaderRow');
-  if (!row) return;
-  row.innerHTML = `<th class="employee-header">${t('pending.date')}</th>`;
+function renderEmployeeCalendar(dates, empId) {
+  const grid = document.getElementById('empCalendarGrid');
+  if (!grid) return false;
+  grid.innerHTML = '';
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  dates.forEach(d => {
-    const dateObj = parseDate(d);
-    const dow = dateObj.getDay();
-    const isWeekend = dow === 0 || dow === 6;
-    const isToday = dateObj.getTime() === today.getTime();
-    const holidayInfo = getHolidayForDate(d);
-    const isHoliday = holidayInfo && !holidayInfo.muc;
-    let cls = 'day-header';
-    if (isHoliday) cls += ' holiday-col';
-    else if (isToday) cls += ' today-col';
-    else if (isWeekend) cls += ' weekend';
-    row.innerHTML += `<th class="${cls}"> ${DAY_NAMES[dow]}<br>${dateObj.getDate()} ${MONTH_NAMES[dateObj.getMonth()].substring(0, 3)} </th>`;
-  });
-}
-
-function renderEmployeeBody(dates, empId) {
-  const tbody = document.getElementById('empBody');
-  const mobileList = document.getElementById('employeeMobileList');
-  const emptyState = document.getElementById('empEmptyState');
-  if (!tbody) return;
-  tbody.innerHTML = '';
-  if (mobileList) mobileList.innerHTML = '';
+  // Weekday header row (Sun–Sat)
+  for (let i = 0; i < 7; i++) {
+    const h = document.createElement('div');
+    h.className = 'emp-cal-header';
+    if (i === 0 || i === 6) h.classList.add('weekend');
+    h.textContent = DAY_SHORT[i];
+    grid.appendChild(h);
+  }
+  // Empty slots before the 1st of the month
+  const firstDay = parseDate(dates[0]).getDay();
+  for (let i = 0; i < firstDay; i++) {
+    const empty = document.createElement('div');
+    empty.className = 'emp-cal-cell empty-slot';
+    grid.appendChild(empty);
+  }
   let hasAnySchedule = false;
-  const tr = document.createElement('tr');
-  const emp = employees[empId];
-  const empLabel = emp ? `${emp.englishName} — ${getEmpPositions(emp).join(', ')}` : t('schedule.scheduleFallback');
-  tr.innerHTML = `<td class="employee-name-cell">${empLabel}</td>`;
   dates.forEach(dateStr => {
-    const td = document.createElement('td');
-    td.className = 'schedule-cell';
+    const dateObj = parseDate(dateStr);
+    const dow = dateObj.getDay();
+    const isToday = dateObj.getTime() === today.getTime();
+    const holidayInfo = getHolidayForDate(dateStr);
+    const isHoliday = holidayInfo && !holidayInfo.muc;
+
+    const cell = document.createElement('div');
+    cell.className = 'emp-cal-cell';
+    if (dow === 0 || dow === 6) cell.classList.add('weekend');
+    if (isHoliday) cell.classList.add('holiday');
+    if (isToday) cell.classList.add('today');
+
+    const num = document.createElement('div');
+    num.className = 'emp-cal-day-num';
+    num.textContent = dateObj.getDate();
+    cell.appendChild(num);
+
     const sched = mergedSchedules[empId]?.[dateStr];
     const tmpl = getTemplateForDate(empId, dateStr);
+    const holder = document.createElement('div');
+    holder.className = 'emp-cal-body';
     if (sched) {
       hasAnySchedule = true;
-      renderMergedScheduleCell(td, sched, empId, dateStr);
+      renderMergedScheduleCell(holder, sched, empId, dateStr); // reuses existing cell renderer (shifts, badges, statuses)
     } else if (tmpl) {
       hasAnySchedule = true;
-      td.classList.add('has-schedule');
-      renderMergedScheduleCell(td, tmpl, empId, dateStr);
+      renderMergedScheduleCell(holder, tmpl, empId, dateStr);
+      holder.classList.add('is-pattern');
+      holder.title = t('schedule.recurringPattern');
     } else {
-      td.classList.add('empty-cell');
-      td.innerHTML = `<div class="cell-content">${t('schedule.noSchedule')}</div>`;
+      holder.classList.add('empty-cell');
+      holder.innerHTML = `<div class="cell-content"><span class="emp-no-sched">${t('schedule.noSchedule')}</span></div>`;
     }
-    tr.appendChild(td);
-  });
-  tbody.appendChild(tr);
-  // Mobile list view
-  if (mobileList && emp) {
-    const mobileCard = document.createElement('div');
-    mobileCard.className = 'employee-mobile-card';
-    mobileCard.innerHTML = `
-        <div class="employee-mobile-header">
-            ${emp.englishName || 'Unknown'}
-            <span class="emp-role">${getEmpPositions(emp).join(', ')}</span>
-        </div>
-        <div class="employee-mobile-schedule" id="mobile-sched-${empId}"></div>
-    `;
-    const scheduleContainer = mobileCard.querySelector(`#mobile-sched-${empId}`);
-    dates.forEach(dateStr => {
-      const dateObj = parseDate(dateStr);
-      const dow = dateObj.getDay();
-      const sched = mergedSchedules[empId]?.[dateStr];
-      const tmpl = getTemplateForDate(empId, dateStr);
-      const item = document.createElement('div');
-      item.className = 'mobile-schedule-item';
-      let detailsHTML = '';
-      if (sched || tmpl) {
-        hasAnySchedule = true;
-        const data = sched || tmpl;
-        const status = data.status || 'scheduled';
-        if (status !== 'scheduled') {
-          const statusLabels = {
-            'other-center': t('schedule.otherCenter'),
-            'leave': t('schedule.leave'),
-            'sick': t('schedule.sick'),
-            'off': t('schedule.off')
-          };
-          const statusClass = status === 'leave' ? 'leave' :
-                             status === 'sick' ? 'sick' :
-                             status === 'off' ? 'off' : 'other';
-          detailsHTML = `<span class="mobile-status ${statusClass}">${statusLabels[status] || status}</span>`;
-        } else {
-          const shifts = data._shifts || extractShifts(data);
-          if (hasValidShifts(shifts)) {
-            const sortedShifts = [...shifts].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
-            sortedShifts.forEach(shift => {
-              if (shift.type === 'break') {
-                detailsHTML += `<div class="mobile-shift break">☕ ${shift.start} - ${shift.end}</div>`;
-                } else {
-                  const badge = getShiftBadgeInfo(shift);
-                  detailsHTML += `
-                    <div class="mobile-shift">
-                      ${shift.start} - ${shift.end}
-                      <span class="mobile-center-badge ${badge.cls}">${badge.label}</span>
-                    </div>
-                  `;
-                }
-            });
-          }
-        }
-        if (data.notes) {
-          detailsHTML += `<div style="font-size: 0.75rem; color: #999; margin-top: 0.25rem;">📝 ${data.notes}</div>`;
-        }
+    // Holiday chip (always visible on holidays)
+    if (isHoliday) {
+      const body = holder.querySelector('.cell-content');
+      if (body && !body.querySelector('.holiday-indicator')) {
+        body.insertAdjacentHTML('beforeend', `<div class="holiday-indicator">🎌 ${holidayInfo.name || t('schedule.holiday')}</div>`);
       }
-      if (!detailsHTML) {
-        detailsHTML = `<span class="mobile-empty">${t('schedule.noSchedule')}</span>`;
+    }
+    // Move background/status classes from the content holder onto the cell
+    ['has-schedule', 'empty-cell', 'status-other', 'status-leave', 'status-sick', 'status-off'].forEach(c => {
+      if (holder.classList.contains(c)) {
+        cell.classList.add(c);
+        holder.classList.remove(c);
       }
-      const dayName = DAY_NAMES[dow];
-      const dateDisplay = `${dateObj.getDate()} ${MONTH_NAMES[dateObj.getMonth()].substring(0, 3)}`;
-      item.innerHTML = `
-          <div class="mobile-date">
-              ${dayName}
-              <span class="day-name">${dateDisplay}</span>
-          </div>
-          <div class="mobile-schedule-details">
-              ${detailsHTML}
-          </div>
-      `;
-      scheduleContainer.appendChild(item);
     });
-    mobileList.appendChild(mobileCard);
-  }
-  if (!hasAnySchedule) {
-    emptyState.classList.remove('hidden');
-  } else {
-    emptyState.classList.add('hidden');
-  }
+    cell.appendChild(holder);
+    grid.appendChild(cell);
+  });
+  return hasAnySchedule;
+}
+function renderEmployeeMobileList(dates, empId) {
+  const mobileList = document.getElementById('employeeMobileList');
+  if (!mobileList) return;
+  mobileList.innerHTML = '';
+  const emp = employees[empId];
+  if (!emp) return;
+  const mobileCard = document.createElement('div');
+  mobileCard.className = 'employee-mobile-card';
+  mobileCard.innerHTML = `
+    <div class="employee-mobile-header">
+      ${emp.englishName || 'Unknown'}
+      <span class="emp-role">${getEmpPositions(emp).join(', ')}</span>
+    </div>
+    <div class="employee-mobile-schedule"></div>`;
+  const scheduleContainer = mobileCard.querySelector('.employee-mobile-schedule');
+  dates.forEach(dateStr => {
+    const dateObj = parseDate(dateStr);
+    const dow = dateObj.getDay();
+    const data = mergedSchedules[empId]?.[dateStr] || getTemplateForDate(empId, dateStr);
+    const item = document.createElement('div');
+    item.className = 'mobile-schedule-item';
+    let detailsHTML = '';
+    if (data) {
+      const status = data.status || 'scheduled';
+      if (status !== 'scheduled') {
+        const statusLabels = {
+          'other-center': t('schedule.otherCenter'),
+          'leave': t('schedule.leave'),
+          'sick': t('schedule.sick'),
+          'off': t('schedule.off')
+        };
+        const statusClass = status === 'leave' ? 'leave' : status === 'sick' ? 'sick' : status === 'off' ? 'off' : 'other';
+        detailsHTML = `<span class="mobile-status ${statusClass}">${statusLabels[status] || status}</span>`;
+      } else {
+        const shifts = data._shifts || extractShifts(data);
+        if (hasValidShifts(shifts)) {
+          [...shifts].sort((a, b) => (a.start || '').localeCompare(b.start || '')).forEach(shift => {
+            if (shift.type === 'break') {
+              detailsHTML += `<div class="mobile-shift break">☕ ${shift.start} - ${shift.end}</div>`;
+            } else {
+              const badge = getShiftBadgeInfo(shift);
+              detailsHTML += `<div class="mobile-shift"> ${shift.start} - ${shift.end} <span class="mobile-center-badge ${badge.cls}">${badge.label}</span> </div>`;
+            }
+          });
+        }
+      }
+      if (data.notes) detailsHTML += `<div style="font-size: 0.75rem; color: #999; margin-top: 0.25rem;">📝 ${data.notes}</div>`;
+    }
+    if (!detailsHTML) detailsHTML = `<span class="mobile-empty">${t('schedule.noSchedule')}</span>`;
+    item.innerHTML = `
+      <div class="mobile-date"> ${DAY_NAMES[dow]} <span class="day-name">${dateObj.getDate()} ${MONTH_NAMES[dateObj.getMonth()].substring(0, 3)}</span> </div>
+      <div class="mobile-schedule-details"> ${detailsHTML} </div>`;
+    scheduleContainer.appendChild(item);
+  });
+  mobileList.appendChild(mobileCard);
 }
 
 // ============================================
