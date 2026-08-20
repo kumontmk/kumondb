@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kumon-db-cache-v5.8.5';
+const CACHE_NAME = 'kumon-db-cache-v5.8.6';
 
 const APP_SHELL = [
   'index.html',
@@ -81,3 +81,4 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+

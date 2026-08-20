@@ -1318,6 +1318,45 @@ button { padding: 0.55rem 1.05rem; font-size: 0.85rem; }
 .form-actions > :first-child { order: 4 !important; }  /* Save stays right, whatever its attributes */
 
 /* =========================================
+📱 FINAL FIX: bar fits on phones + kill sideways page scroll
+========================================= */
+/* 1️⃣ Let bar buttons shrink (removes the 80/100px floors) */
+.form-actions button {
+  min-width: 0 !important;
+  flex: 0 1 auto;
+}
+
+/* 2️⃣ Tabs scroll inside their own row instead of stretching the page */
+.tabs {
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  -webkit-overflow-scrolling: touch;
+}
+.tab-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* 3️⃣ Compact bar on mobile */
+@media (max-width: 768px) {
+  .form-actions {
+    gap: 0.4rem !important;
+    padding: 0.5rem 0.5rem calc(0.5rem + env(safe-area-inset-bottom)) !important;
+  }
+  .form-actions button {
+    padding: 0.45rem 0.55rem !important;
+    font-size: 0.72rem !important;
+  }
+}
+
+/* 4️⃣ Very narrow phones (<420px): wrap to 2 neat rows instead of clipping */
+@media (max-width: 420px) {
+  .form-actions { flex-wrap: wrap !important; }
+  .form-actions button { flex: 1 1 auto; }
+  #cancelBtn { margin-left: auto !important; }
+}
+
+/* =========================================
 🌐 TRADITIONAL CHINESE FONT SUPPORT
 ========================================= */
 :lang(zh-TW) body,
