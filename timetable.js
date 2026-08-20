@@ -486,6 +486,105 @@ function initializeTimetable() {
     }
 
     // ============================================
+// 📱 MOBILE CARD RENDERERS
+// ============================================
+function buildMobileStudentRow(st) {
+    const li = document.createElement('li');
+    li.className = 'mobile-student';
+    if (st.worksheetType === 'Kumon Connect') li.classList.add('kc');
+    const grade = document.createElement('span'); grade.className = 'm-grade'; grade.textContent = st.grade;
+    const name  = document.createElement('span'); name.className  = 'm-name';  name.textContent  = st.name;
+    const level = document.createElement('span'); level.className = 'm-level'; level.textContent = st.level;
+    li.append(grade, name, level);
+    return li;
+}
+function buildMobileGroup(label, cls, students) {
+    if (!students || !students.length) return null;
+    const sec = document.createElement('section');
+    sec.className = 'mobile-group ' + cls;
+    const h = document.createElement('h4'); h.textContent = label;
+    const ul = document.createElement('ul');
+    students.forEach(st => ul.appendChild(buildMobileStudentRow(st)));
+    sec.append(h, ul);
+    return sec;
+}
+function renderDayMobile(containerId, schedule, timeSlots, groupsFn) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = '';
+    const active = timeSlots.filter(t => groupsFn(schedule[t]).some(g => g.students.length > 0));
+    if (!active.length) {
+        container.innerHTML = '<p class="mobile-empty">No students scheduled for this day.</p>';
+        return;
+    }
+    active.forEach(time => {
+        const card = document.createElement('article'); card.className = 'slot-card';
+        const head = document.createElement('div'); head.className = 'slot-time'; head.textContent = time;
+        card.appendChild(head);
+        groupsFn(schedule[time]).forEach(g => {
+            const sec = buildMobileGroup(g.label, g.cls, g.students);
+            if (sec) card.appendChild(sec);
+        });
+        container.appendChild(card);
+    });
+}
+function renderWeekMobile(schedule, days, weekDates) {
+    const chips = document.getElementById('weekMobileChips');
+    const list  = document.getElementById('weekMobileList');
+    if (!chips || !list) return;
+    chips.innerHTML = ''; list.innerHTML = '';
+    const dayEntries = days.map(day =>
+        Object.keys(schedule).sort()
+            .filter(time => schedule[time][day].length > 0)
+            .map(time => ({ time, students: schedule[time][day] }))
+    );
+    let selected = Math.max(0, weekDates.findIndex(w => w.isToday));
+    function renderList() {
+        list.innerHTML = '';
+        const entries = dayEntries[selected];
+        if (!entries.length) { list.innerHTML = '<p class="mobile-empty">No students scheduled for this day.</p>'; return; }
+        entries.forEach(e => {
+            const card = document.createElement('article'); card.className = 'slot-card';
+            const head = document.createElement('div'); head.className = 'slot-time'; head.textContent = e.time;
+            const ul = document.createElement('ul'); ul.className = 'mobile-flat';
+            e.students.forEach(st => ul.appendChild(buildMobileStudentRow(st)));
+            card.append(head, ul);
+            list.appendChild(card);
+        });
+    }
+    days.forEach((day, i) => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'day-chip' + (i === selected ? ' active' : '');
+        if (weekDates[i].isToday) chip.classList.add('today');
+        chip.textContent = DAY_ABBR[i];
+        chip.addEventListener('click', () => {
+            selected = i;
+            chips.querySelectorAll('.day-chip').forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            renderList();
+        });
+        chips.appendChild(chip);
+    });
+    renderList();
+}
+    const dayGroupsFn = (s) => [
+        { label: 'Math (6A–E)', cls: 'g-math',    students: s.mathLow },
+        { label: 'Math (F+)',   cls: 'g-math',    students: s.mathHigh },
+        { label: 'English',     cls: 'g-english', students: s.english },
+        { label: 'Chinese',     cls: 'g-chinese', students: s.chinese }
+    ];
+    const champGroupsFn = (s) => [
+        { label: 'Math (6A–2A)',   cls: 'g-math',    students: s.math6A2A },
+        { label: 'Math (A–F)',     cls: 'g-math',    students: s.mathAF },
+        { label: 'Math (G–I)',     cls: 'g-math',    students: s.mathGI },
+        { label: 'Math (J–O)',     cls: 'g-math',    students: s.mathJO },
+        { label: 'English (K0–K3)',cls: 'g-english', students: s.engK },
+        { label: 'English (P1+)',  cls: 'g-english', students: s.engP1 },
+        { label: 'Chinese',        cls: 'g-chinese', students: s.chinese }
+    ];
+
+    // ============================================
     // DAY VIEW
     // ============================================
     function loadTimetable() {
@@ -1158,3 +1257,145 @@ window.addEventListener('beforeprint', syncPrintActiveToActiveTab);
         if (weekTimetableUnsub) weekTimetableUnsub();
     });
 }
+
+// ============================================
+// 📱 MOBILE RESPONSIVE CARDS (self-contained, table-driven)
+// ============================================
+(function initMobileTimetable() {
+    const DAY_LABELS = ['Math (6A–E)', 'Math (F+)', 'English', 'Chinese'];
+    const DAY_CLASSES = ['g-math', 'g-math', 'g-english', 'g-chinese'];
+    const CHAMP_LABELS = ['Math (6A–2A)', 'Math (A–F)', 'Math (G–I)', 'Math (J–O)', 'English (K0–K3)', 'English (P1+)', 'Chinese'];
+    const CHAMP_CLASSES = ['g-math', 'g-math', 'g-math', 'g-math', 'g-english', 'g-english', 'g-chinese'];
+
+    function ensureContainers() {
+        [{ host: 'dayViewContainer', id: 'dayViewMobile' },
+         { host: 'weekViewContainer', id: 'weekViewMobile', chips: 'weekMobileChips', list: 'weekMobileList' },
+         { host: 'champViewContainer', id: 'champViewMobile' }].forEach(sp => {
+            const host = document.getElementById(sp.host);
+            if (!host || document.getElementById(sp.id)) return;
+            const el = document.createElement('div');
+            el.id = sp.id; el.className = 'mobile-schedule';
+            if (sp.chips) {
+                const c = document.createElement('div'); c.id = sp.chips; c.className = 'mobile-day-chips';
+                const l = document.createElement('div'); l.id = sp.list;
+                el.append(c, l);
+            }
+            const wrapper = host.querySelector('.timetable-wrapper');
+            wrapper ? wrapper.after(el) : host.appendChild(el);
+        });
+    }
+    function studentLi(st) {
+        const li = document.createElement('li');
+        li.className = 'mobile-student' + (st.kc ? ' kc' : '');
+        const g = document.createElement('span'); g.className = 'm-grade'; g.textContent = st.grade;
+        const n = document.createElement('span'); n.className = 'm-name'; n.textContent = st.name;
+        const l = document.createElement('span'); l.className = 'm-level'; l.textContent = st.level;
+        li.append(g, n, l);
+        return li;
+    }
+    function parseDayTable(bodyId, labels) {
+        const body = document.getElementById(bodyId);
+        if (!body) return [];
+        const slots = []; let current = null;
+        body.querySelectorAll('tr').forEach(tr => {
+            const timeCell = tr.querySelector('td.time-cell');
+            if (timeCell) { current = { time: timeCell.textContent.trim(), groups: labels.map(() => []) }; slots.push(current); }
+            if (!current) return;
+            const cells = Array.from(tr.children).filter(td => !td.classList.contains('time-cell'));
+            labels.forEach((_, gi) => {
+                const nameTd = cells[gi * 3 + 1];
+                const name = nameTd?.textContent.trim() || '';
+                if (!name || nameTd.classList.contains('empty-cell')) return;
+                current.groups[gi].push({
+                    grade: cells[gi * 3]?.textContent.trim() || '',
+                    name, level: cells[gi * 3 + 2]?.textContent.trim() || '',
+                    kc: nameTd.classList.contains('kc-cell')
+                });
+            });
+        });
+        return slots.filter(s => s.groups.some(g => g.length));
+    }
+    function renderCards(containerId, slots, labels, classes) {
+        const el = document.getElementById(containerId);
+        if (!el) return;
+        el.innerHTML = '';
+        if (!slots.length) { el.innerHTML = '<p class="mobile-empty">No students scheduled for this day.</p>'; return; }
+        slots.forEach(slot => {
+            const card = document.createElement('article'); card.className = 'slot-card';
+            const head = document.createElement('div'); head.className = 'slot-time'; head.textContent = slot.time;
+            card.appendChild(head);
+            slot.groups.forEach((students, g) => {
+                if (!students.length) return;
+                const sec = document.createElement('section'); sec.className = 'mobile-group ' + classes[g];
+                const h = document.createElement('h4'); h.textContent = labels[g];
+                const ul = document.createElement('ul');
+                students.forEach(st => ul.appendChild(studentLi(st)));
+                sec.append(h, ul); card.appendChild(sec);
+            });
+            el.appendChild(card);
+        });
+    }
+    function renderWeek() {
+        const chips = document.getElementById('weekMobileChips');
+        const list = document.getElementById('weekMobileList');
+        const body = document.getElementById('weekTimetableBody');
+        if (!chips || !list || !body) return;
+        const days = Array.from({ length: 7 }, () => []);
+        body.querySelectorAll('tr').forEach(tr => {
+            const timeCell = tr.querySelector('td.week-time-cell');
+            if (!timeCell) return;
+            const time = timeCell.textContent.trim();
+            Array.from(tr.children).filter(td => td.classList.contains('week-cell')).forEach((td, i) => {
+                const students = [];
+                td.querySelectorAll('.week-student').forEach(div => students.push({
+                    grade: div.querySelector('.ws-grade')?.textContent.trim() || '',
+                    name: div.querySelector('.ws-name')?.textContent.trim() || '',
+                    level: div.querySelector('.ws-level')?.textContent.trim() || '',
+                    kc: div.classList.contains('kc-student')
+                }));
+                if (students.length && days[i]) days[i].push({ time, students });
+            });
+        });
+        const headers = Array.from(document.querySelectorAll('#weekDayRow th'));
+        const labels = headers.length ? headers.map(th => th.textContent.trim()) : ['MON','TUE','WED','THU','FRI','SAT','SUN'];
+        let selected = Math.max(0, headers.findIndex(th => th.classList.contains('week-today-header')));
+        chips.innerHTML = '';
+        const renderList = () => {
+            list.innerHTML = '';
+            const entries = days[selected] || [];
+            if (!entries.length) { list.innerHTML = '<p class="mobile-empty">No students scheduled for this day.</p>'; return; }
+            entries.forEach(e => {
+                const card = document.createElement('article'); card.className = 'slot-card';
+                const head = document.createElement('div'); head.className = 'slot-time'; head.textContent = e.time;
+                const ul = document.createElement('ul'); ul.className = 'mobile-flat';
+                e.students.forEach(st => ul.appendChild(studentLi(st)));
+                card.append(head, ul); list.appendChild(card);
+            });
+        };
+        labels.forEach((label, i) => {
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'day-chip' + (i === selected ? ' active' : '') + (headers[i]?.classList.contains('week-today-header') ? ' today' : '');
+            chip.textContent = label;
+            chip.addEventListener('click', () => {
+                selected = i;
+                chips.querySelectorAll('.day-chip').forEach(c => c.classList.remove('active'));
+                chip.classList.add('active');
+                renderList();
+            });
+            chips.appendChild(chip);
+        });
+        renderList();
+    }
+    function refreshAll() {
+        renderCards('dayViewMobile', parseDayTable('timetableBody', DAY_LABELS), DAY_LABELS, DAY_CLASSES);
+        renderCards('champViewMobile', parseDayTable('champTimetableBody', CHAMP_LABELS), CHAMP_LABELS, CHAMP_CLASSES);
+        renderWeek();
+    }
+    ensureContainers();
+    ['timetableBody', 'champTimetableBody', 'weekTimetableBody'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) new MutationObserver(refreshAll).observe(el, { childList: true, subtree: true });
+    });
+    refreshAll();
+})();

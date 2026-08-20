@@ -250,8 +250,26 @@ td.kc-cell {
 /* === RESPONSIVE === */
 @media (max-width: 768px) {
     :root { --side-padding: 1rem; }
-    header { padding: 1rem var(--side-padding); flex-direction: column; align-items: flex-start; }
-    header nav { width: 100%; justify-content: space-between; margin-top: 0.5rem; }
+    /* ✅ Single-row header: back left, title right */
+    header {
+    padding: .75rem var(--side-padding);
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    gap: .75rem;
+    }
+    header nav { order: -1; width: auto; margin-top: 0; flex-shrink: 0; }
+    header nav a { padding: .45rem .9rem; font-size: .85rem; }
+    header h1 {
+    order: 1;
+    margin-left: auto;
+    font-size: 1.05rem;
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    }
     .main-content { padding: 1rem var(--side-padding) 1.5rem; }
     
     .timetable-controls { justify-content: center; }
@@ -486,6 +504,57 @@ td.kc-cell {
     font-size: 1.5rem; /* Bigger font */
     font-weight: 700;
     color: #dc3545; /* Red color */
+}
+
+/* ============================================
+   📱 MOBILE CARD LAYOUT
+============================================ */
+.mobile-schedule { display: none; }
+.mobile-day-chips { display: flex; gap: .4rem; overflow-x: auto; padding: .6rem .25rem; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.mobile-day-chips::-webkit-scrollbar { display: none; }
+.day-chip { flex: 0 0 auto; padding: .45rem .95rem; border-radius: 999px; border: 1px solid #cbd5e1; background: #fff; font-size: .8rem; font-weight: 700; color: var(--text-light); cursor: pointer; }
+.day-chip.today { border-color: var(--primary-dark); color: var(--primary-dark); }
+.day-chip.active { background: var(--primary-dark); border-color: var(--primary-dark); color: #fff; }
+.slot-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.06); margin-bottom: .75rem; overflow: hidden; }
+.slot-time { padding: .5rem .9rem; background: #f1f5f9; font-weight: 700; font-size: .9rem; color: var(--primary-dark); border-bottom: 1px solid #e2e8f0; }
+.mobile-group { padding: .6rem .9rem; border-left: 4px solid transparent; }
+.mobile-group + .mobile-group { border-top: 1px dashed #e2e8f0; }
+.mobile-group.g-math { border-left-color: #008B8B; }
+.mobile-group.g-english { border-left-color: #DC143C; }
+.mobile-group.g-chinese { border-left-color: #9ACD32; }
+.mobile-group h4 { font-size: .72rem; text-transform: uppercase; letter-spacing: .5px; color: var(--text-light); margin-bottom: .3rem; }
+.mobile-group ul, .mobile-flat { list-style: none; margin: 0; padding: 0; }
+.mobile-flat { padding: .4rem .9rem .6rem; }
+.mobile-student { display: flex; align-items: baseline; gap: .5rem; padding: .3rem 0; font-size: .9rem; border-bottom: 1px solid #f1f5f9; }
+.mobile-student:last-child { border-bottom: none; }
+.mobile-student.kc { background: #fff9c4; border-radius: 6px; padding: .3rem .4rem; margin: 0 -.4rem; }
+.m-grade { font-weight: 700; color: var(--primary-dark); min-width: 2rem; }
+.m-name { flex: 1; word-break: break-word; }
+.m-level { font-weight: 600; color: #555; white-space: nowrap; }
+.mobile-empty { text-align: center; color: var(--text-light); font-style: italic; padding: 2rem 1rem; }
+
+@media (max-width: 768px) {
+  .tab-content .timetable-wrapper { display: none; }
+  .mobile-schedule { display: block; }
+  /* ✅ Fix: aligned, equal-width action buttons */
+  .timetable-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .6rem;
+    align-items: stretch;
+    padding: .9rem 1rem;
+  }
+  .timetable-controls #printTimetable,
+  .timetable-controls #exportExcel {
+    width: 100%; margin: 0; justify-content: center;
+  }
+}
+@media (max-width: 400px) {
+  .timetable-controls { grid-template-columns: 1fr; }
+}
+@media print {
+  .mobile-schedule { display: none !important; }
+  .tab-content .timetable-wrapper { display: block !important; }
 }
 
 /* Print adjustments to ensure red color prints */

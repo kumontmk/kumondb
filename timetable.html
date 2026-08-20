@@ -55,6 +55,7 @@
 
         <!-- Day View Container -->
         <div id="dayViewContainer" class="tab-content active">
+            <div id="dayViewMobile" class="mobile-schedule"></div>
             <!-- ✅ Day Selection moved here so it only shows in Day View -->
             <div class="day-view-controls">
                 <div class="control-group">
@@ -115,6 +116,10 @@
 
         <!-- Week View Container -->
         <div id="weekViewContainer" class="tab-content">
+            <div id="weekViewMobile" class="mobile-schedule">
+                <div id="weekMobileChips" class="mobile-day-chips"></div>
+                <div id="weekMobileList"></div>
+            </div>
             <div class="week-view-info">
                 <span id="weekRangeLabel" class="week-range-label"></span>
             </div>
@@ -144,6 +149,7 @@
      ✅ CHAMP FORMAT VIEW
      ============================================ -->
         <div id="champViewContainer" class="tab-content">
+            <div id="champViewMobile" class="mobile-schedule"></div>
             <div class="champ-view-controls">
                 <div class="control-group">
                     <label class="control-label" for="champDay">Select Day</label>
