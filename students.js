@@ -252,11 +252,11 @@ async function initializePage(isAdmin = false) {
         const loader = document.getElementById('page-loader');
         const tbody = document.getElementById('studentList');
         loader?.classList.remove('hidden');
-        tbody.innerHTML = `<tr><td colspan="9" class="hint" style="text-align:center;">${t('students.loading')}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" class="hint" style="text-align:center;">${t('students.loading')}</td></tr>`;
         try {
             const snapshot = await get(studentsRef);
             if (!snapshot.exists()) {
-                tbody.innerHTML = `<tr><td colspan="9" class="hint" style="text-align:center; padding:1rem;">${t('students.noStudentsFound')}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="10" class="hint" style="text-align:center; padding:1rem;">${t('students.noStudentsFound')}</td></tr>`;
                 allStudentsData = [];
                 filteredStudentsData = [];
                 currentPage = 1;
@@ -343,7 +343,7 @@ async function initializePage(isAdmin = false) {
             renderPagination();
         } catch (error) {
             console.error('Error loading students:', error);
-            tbody.innerHTML = `<tr><td colspan="9" class="error">${t('students.errorPrefix', { message: error.message })}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="10" class="error">${t('students.errorPrefix', { message: error.message })}</td></tr>`;
         } finally {
             if (loader) setTimeout(() => loader.classList.add('hidden'), 300);
         }
@@ -355,25 +355,28 @@ async function initializePage(isAdmin = false) {
         const pageData = allData.slice(startIndex, endIndex);
         tbody.innerHTML = '';
         if (pageData.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="9" class="hint" style="text-align:center; padding:1rem;">${t('students.noMatchingStudents')}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="10" class="hint" style="text-align:center; padding:1rem;">${t('students.noMatchingStudents')}</td></tr>`;
         } else {
             pageData.forEach(row => {
                 const dobDisplay = row.rawDob ? new Date(row.rawDob).toLocaleDateString('en-CA') : '-';
                 const enrolDisplay = row.rawEnrolDate ? new Date(row.rawEnrolDate).toLocaleDateString('en-CA') : '-';
                 const isKC = row.worksheetType === 'Kumon Connect';
                 const kcBadge = isKC ? '<span class="kc-badge" title="Kumon Connect">KC</span>' : '';
+                const status = row.subjectStatus || 'Current';
+                const statusClass = 'status-' + String(status).toLowerCase();
                 const tr = document.createElement('tr');
                 tr.className = 'student-row';
                 tr.innerHTML = `
-                    <td>${row.subjectName} ${kcBadge}</td>
-                    <td>${row.studentNumber || '-'}</td>
-                    <td>${row.namePinyin || '-'}</td>
-                    <td>${row.nameCn || '-'}</td>
-                    <td>${dobDisplay}</td>
-                    <td>${row.grade || '-'}</td>
-                    <td>${row.level}</td>
-                    <td>${enrolDisplay}</td>
-                    <td><button class="secondary" onclick="window.location.href='student-form.html?id=${row.id}'">✏️</button></td>
+                    <td data-label="Name" class="cell-name">${row.namePinyin || '-'}</td>
+                    <td data-label="Chinese" class="cell-name-cn">${row.nameCn || '-'}</td>
+                    <td data-label="Status"><span class="status-pill ${statusClass}">${status}</span></td>
+                    <td data-label="Subject"><span class="subject-chip">${row.subjectName}</span>${kcBadge}</td>
+                    <td data-label="Level"><span class="level-badge">${row.level}</span></td>
+                    <td data-label="ID">${row.studentNumber || '-'}</td>
+                    <td data-label="Grade">${row.grade || '-'}</td>
+                    <td data-label="DOB">${dobDisplay}</td>
+                    <td data-label="Enrol">${enrolDisplay}</td>
+                    <td class="actions-cell"><button class="secondary" onclick="window.location.href='student-form.html?id=${row.id}'">✏️</button></td>
                 `;
                 tr.style.cursor = 'pointer';
                 tr.onclick = (e) => {
@@ -1006,6 +1009,15 @@ async function exportBySubject(subject) {
         currentPage = 1;
         loadStudents(document.getElementById('searchInput')?.value || '');
     });
+
+    const toggleFiltersBtn = document.getElementById('toggleFiltersBtn');
+    const sortPanelEl = document.querySelector('.sort-panel');
+    if (toggleFiltersBtn && sortPanelEl) {
+            toggleFiltersBtn.addEventListener('click', () => {
+                sortPanelEl.classList.toggle('open');
+                toggleFiltersBtn.classList.toggle('active', sortPanelEl.classList.contains('open'));
+        });
+    }
 
     let isComposing = false;
     const searchInput = document.getElementById('searchInput');

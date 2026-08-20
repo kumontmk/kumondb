@@ -50,7 +50,7 @@ export default {
     noMatchingStudents: "找不到符合的學生。",
     itemsOf: "{{start}}-{{end}}，共 {{total}} 筆",
     zeroItems: "0，共 0 筆",
-    searchPlaceholder: "搜尋姓名、編號、年級、學校、科目...",
+    searchPlaceholder: "🔍︎ 搜尋姓名、編號、年級、學校、科目...",
     exportOptions: "匯出選項",
     exportAll: "📊 匯出所有學生（完整資料）",
     selectSubjectPlaceholder: "選擇科目...",

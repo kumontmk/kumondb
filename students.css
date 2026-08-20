@@ -605,3 +605,262 @@ progress::-moz-progress-bar { background-color: var(--primary-dark); border-radi
   .sort-group label { flex: 1 1 100%; }   /* label on its own line */
   #clearSortBtn { margin-left: 0; width: 100%; }
 }
+
+/* =========================================
+✨ MODERN TABLE + MOBILE CARD VIEW
+========================================= */
+.status-pill, .subject-chip, .level-badge, .kc-badge {
+  display: inline-block;
+  vertical-align: middle;
+  line-height: 1;
+}
+.status-pill {
+  padding: 0.22rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.status-current   { background: #dcfce7; color: #15803d; }
+.status-inquiry   { background: #dbeafe; color: #1d4ed8; }
+.status-pause     { background: #fef9c3; color: #a16207; }
+.status-drop      { background: #fee2e2; color: #b91c1c; }
+.status-completer { background: #ede9fe; color: #6d28d9; }
+.subject-chip {
+  background: #e0f2fe; color: #075985; border: 1px solid #bae6fd;
+  padding: 0.18rem 0.55rem; border-radius: 999px;
+  font-size: 0.78rem; font-weight: 600;
+}
+.level-badge {
+  background: #f1f5f9; color: #334155; border: 1px solid #e2e8f0;
+  padding: 0.18rem 0.55rem; border-radius: 6px;
+  font-size: 0.8rem; font-weight: 700; min-width: 2.4rem; text-align: center;
+}
+.kc-badge {
+  background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;
+  font-size: 0.68rem; font-weight: 700; padding: 0.15rem 0.4rem;
+  border-radius: 4px; margin-left: 0.4rem;
+  letter-spacing: 0.5px; text-transform: uppercase;
+}
+
+/* Desktop polish */
+table th {
+  background: var(--primary-dark);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding: 0.7rem 0.75rem;
+}
+.cell-name { font-weight: 600; }
+.actions-cell button { padding: 0.35rem 0.7rem; }
+@media (min-width: 769px) {
+  tbody tr.student-row:nth-child(even) { background: #f8fafc; }
+  tbody tr.student-row:hover { background: #e3f2fd; }
+}
+
+/* ============ MOBILE: table → cards ============ */
+@media (max-width: 768px) {
+  .table-wrapper {
+    max-height: none; overflow: visible;
+    background: transparent; box-shadow: none; border-radius: 0;
+  }
+  table { min-width: 0; width: 100%; }
+  thead { display: none; }
+  table, tbody { display: block; }
+  tbody tr { display: block; }
+
+  /* loading / empty / error rows */
+  tbody tr:not(.student-row) {
+    background: var(--white); border-radius: 12px;
+    box-shadow: var(--shadow); margin-bottom: 0.75rem;
+  }
+  tbody tr:not(.student-row) td {
+    display: block; padding: 1.5rem 1rem;
+    text-align: center; white-space: normal;
+  }
+
+  tr.student-row {
+    position: relative;
+    background: var(--white);
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    padding: 0.9rem 1rem 0.65rem;
+    margin-bottom: 0.75rem;
+  }
+  tr.student-row td {
+    display: flex; align-items: center;
+    justify-content: space-between; gap: 1rem;
+    padding: 0.3rem 0; border-bottom: none; white-space: normal;
+  }
+  tr.student-row td::before {
+    content: attr(data-label);
+    font-size: 0.68rem; font-weight: 700;
+    letter-spacing: 0.5px; text-transform: uppercase;
+    color: #94a3b8;
+  }
+  /* card title = pinyin name, subtitle = chinese name */
+  tr.student-row td.cell-name {
+    justify-content: flex-start;
+    padding: 0 4.5rem 0 0;           /* room for the status pill */
+    font-size: 1.02rem; font-weight: 700;
+  }
+  tr.student-row td.cell-name::before { display: none; }
+  tr.student-row td.cell-name-cn {
+    justify-content: flex-start;
+    color: var(--text-light); font-size: 0.85rem;
+    padding-bottom: 0.5rem; margin-bottom: 0.3rem;
+    border-bottom: 1px solid #eef2f7;
+  }
+  tr.student-row td.cell-name-cn::before { display: none; }
+  /* status pill pinned top-right */
+  tr.student-row td[data-label="Status"] {
+    position: absolute; top: 0.95rem; right: 0.9rem; padding: 0;
+  }
+  tr.student-row td[data-label="Status"]::before { display: none; }
+  /* whole card is tappable → hide edit button */
+  tr.student-row td.actions-cell { display: none; }
+}
+
+/* =========================================
+📄 MOBILE PAGINATION FIX
+========================================= */
+@media (max-width: 768px) {
+  .pagination-container {
+    position: static;            /* sit after the cards, don't float over them */
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.75rem;
+    margin: 0.25rem 0 1rem;
+    border-top: none;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+  }
+  .pagination-info {
+    order: -1;                   /* "1-100 of 196 items" on top, full width */
+    width: 100%;
+    text-align: center;
+    white-space: normal;
+  }
+  .pagination-controls {
+    width: 100%;
+    justify-content: center;     /* buttons centered on one row */
+    flex-wrap: wrap;
+  }
+}
+
+/* =========================================
+📱 MOBILE: compact controls, list first
+========================================= */
+@media (max-width: 768px) {
+  .students-page {
+    display: flex;
+    flex-direction: column;
+    padding: 0.75rem;
+  }
+
+  /* 1) student cards on top → 2) search/buttons → 3) filters */
+  .table-wrapper { order: 1; margin-bottom: 0.9rem; }
+  .controls      { order: 2; margin-bottom: 0.6rem; }
+  .sort-panel    { order: 3; margin-bottom: 0.5rem; }
+
+  /* compact search */
+  .controls { gap: 0.5rem; }
+  .controls input {
+    padding: 0.55rem 0.75rem;
+    font-size: 1rem;   /* kept at 16px on purpose: smaller fonts make iOS zoom in on focus */
+  }
+
+  /* compact action buttons */
+  .action-buttons { gap: 0.5rem; }
+  .action-buttons button {
+    padding: 0.5rem 0.4rem;
+    font-size: 0.78rem;
+  }
+
+  /* compact filter / sort panel */
+  .sort-panel { padding: 0.6rem; gap: 0.5rem; }
+  .sort-group { padding: 0.4rem 0.55rem; row-gap: 0.25rem; }
+  .sort-group label { font-size: 0.72rem; }
+  .sort-group select { padding: 0.3rem 0.45rem; font-size: 0.82rem; }
+  #clearSortBtn {
+    padding: 0.45rem 0.8rem !important;
+    font-size: 0.8rem !important;
+  }
+}
+
+/* =========================================
+📌 FLOATING BOTTOM DOCK
+Desktop: wrapper invisible → layout unchanged
+========================================= */
+.bottom-dock { display: contents; }
+#toggleFiltersBtn { display: none; }
+
+@media (max-width: 768px) {
+  .bottom-dock {
+    display: block;
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 950;
+    background: var(--white);
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -4px 18px rgba(0,0,0,0.16);
+    padding: 0.5rem 0.65rem calc(0.5rem + env(safe-area-inset-bottom));
+    max-height: 60vh;          /* expanded filters never exceed 60% of screen */
+    overflow-y: auto;
+  }
+
+  /* room so the dock never covers the last cards */
+  .students-page { padding: 0.75rem 0.75rem 14rem; }
+
+  /* slim search */
+  .controls { gap: 0.45rem; margin-bottom: 0.45rem; }
+  .controls input { padding: 0.5rem 0.7rem; }
+
+  /* 2×2 slim buttons (~half the old height) */
+  .action-buttons { gap: 0.45rem; }
+  .action-buttons button { padding: 0.45rem 0.3rem; font-size: 0.78rem; }
+  #addStudentBtn, #deleteAllBtn { grid-column: auto; }
+
+  /* filters toggle */
+  #toggleFiltersBtn {
+    display: flex; align-items: center; justify-content: center;
+    width: 100%;
+    padding: 0.4rem;
+    margin-bottom: 0.45rem;
+    font-size: 0.78rem; font-weight: 600;
+    color: var(--primary-dark);
+    background: #eef4fb;
+    border: 1px dashed var(--primary-dark);
+    border-radius: 8px;
+  }
+  #toggleFiltersBtn.active { background: var(--primary-dark); color: #fff; border-style: solid; }
+
+  /* filters hidden until opened */
+  .sort-panel { display: none; margin-bottom: 0.4rem; box-shadow: none; }
+  .sort-panel.open { display: flex; }
+}
+
+/* =========================================
+🔘 MOBILE DOCK: 1 big button + 3 aligned small ones
+========================================= */
+@media (max-width: 768px) {
+  .action-buttons {
+    grid-template-columns: repeat(3, 1fr);   /* 3 equal columns */
+    gap: 0.45rem;
+  }
+  #addStudentBtn {
+    grid-column: 1 / -1;                     /* full-width top row */
+    padding: 0.8rem 0.5rem;                  /* noticeably taller */
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+  #importBtn, #exportBtn, #deleteAllBtn {
+    grid-column: auto;                       /* side by side, equal width */
+    padding: 0.45rem 0.2rem;
+    font-size: 0.72rem;
+    line-height: 1.2;
+  }
+}

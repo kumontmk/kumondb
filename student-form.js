@@ -1445,14 +1445,15 @@ function renderSchedule() {
         if (!tbody) return;
         const tr = document.createElement('tr');
         tr.innerHTML = `
-        <td> <select class="dt-subject" required style="width:100%; padding:0.5rem;"> <option value="">${t('studentForm.selectSubject')}</option>${SUBJECTS.map(s => `<option value="${s}" ${data.subject === s ? 'selected' : ''}>${s}</option>`).join('')}</select> </td>
-        <td> <input type="date" class="dt-date" value="${data.date || ''}" required style="width:100%; padding:0.5rem;"> </td>
-        <td> <input type="time" class="dt-timeslot" value="${data.DTtimeslot || ''}" style="width:100%; padding:0.5rem;"> </td>
-        <td> <input type="text" class="dt-test" placeholder="${t('studentForm.dtTestPlaceholder')}" value="${data.test || ''}" required style="width:100%; padding:0.5rem;"> </td>
-        <td> <input type="text" class="dt-score" placeholder="${t('studentForm.dtScorePlaceholder')}" value="${data.score || ''}" required style="width:100%; padding:0.5rem;"> </td>
-        <td> <input type="text" class="dt-time" placeholder="e.g. 20/30" value="${data.time || ''}" required style="width:100%; padding:0.5rem;" title="Format: minutes taken / time limit (e.g. 20/30)"> </td>        <td> <input type="text" class="dt-suggested" placeholder="${t('studentForm.dtLevelPlaceholder')}" value="${data.suggestedStart || ''}" style="width:100%; padding:0.5rem;"> </td>
-        <td> <input type="text" class="dt-actual" placeholder="${t('studentForm.dtLevelPlaceholder')}" value="${data.actualStart || ''}" style="width:100%; padding:0.5rem;"> </td>
-        <td style="text-align:center;"> <button type="button" class="remove-dt-btn danger" style="padding:0.4rem 0.8rem;">🗑️</button> </td>`;
+        <td data-label="Subject"> <select class="dt-subject" required style="width:100%; padding:0.5rem;"> <option value="">${t('studentForm.selectSubject')}</option>${SUBJECTS.map(s => `<option value="${s}" ${data.subject === s ? 'selected' : ''}>${s}</option>`).join('')}</select> </td>
+        <td data-label="Date"> <input type="date" class="dt-date" value="${data.date || ''}" required style="width:100%; padding:0.5rem;"> </td>
+        <td data-label="Timeslot"> <input type="time" class="dt-timeslot" value="${data.DTtimeslot || ''}" style="width:100%; padding:0.5rem;"> </td>
+        <td data-label="Test"> <input type="text" class="dt-test" placeholder="${t('studentForm.dtTestPlaceholder')}" value="${data.test || ''}" required style="width:100%; padding:0.5rem;"> </td>
+        <td data-label="Score"> <input type="text" class="dt-score" placeholder="${t('studentForm.dtScorePlaceholder')}" value="${data.score || ''}" required style="width:100%; padding:0.5rem;"> </td>
+        <td data-label="Time"> <input type="text" class="dt-time" placeholder="e.g. 20/30" value="${data.time || ''}" required style="width:100%; padding:0.5rem;" title="Format: minutes taken / time limit (e.g. 20/30)"> </td>
+        <td data-label="Suggested"> <input type="text" class="dt-suggested" placeholder="${t('studentForm.dtLevelPlaceholder')}" value="${data.suggestedStart || ''}" style="width:100%; padding:0.5rem;"> </td>
+        <td data-label="Actual"> <input type="text" class="dt-actual" placeholder="${t('studentForm.dtLevelPlaceholder')}" value="${data.actualStart || ''}" style="width:100%; padding:0.5rem;"> </td>
+        <td class="row-action" style="text-align:center;"> <button type="button" class="remove-dt-btn danger" style="padding:0.4rem 0.8rem;">🗑️</button> </td>`;
         tbody.appendChild(tr);
         tr.querySelector('.remove-dt-btn').onclick = () => tr.remove();
     }
@@ -1468,28 +1469,28 @@ function renderSchedule() {
         if (isManual) tr.classList.add('manual-at-row');
         const subjectOptions = SUBJECTS.map(s => `<option value="${s}" ${data.subject === s ? 'selected' : ''}>${s}</option>`).join('');
         tr.innerHTML = `
-            <td>
+            <td data-label="Subject">
                 ${isManual ? `<select class="at-subject" required style="width:100%; padding:0.5rem;">
                     <option value="">${t('studentForm.selectSubject')}</option>${subjectOptions}
                 </select>` : `<span>${data.subject || t('studentForm.unknown')}</span>`}
             </td>
-            <td>
+            <td data-label="Level">
                 ${isManual ? `<input type="text" class="at-level" placeholder="${t('studentForm.dtLevelPlaceholder')}" value="${data.level || ''}" required style="width:100%; padding:0.5rem;">` : `<span>${data.level || '-'}</span>`}
             </td>
-            <td>
+            <td data-label="Date">
                 ${isManual ? `<input type="date" class="at-date" value="${data.date || ''}" required style="width:100%; padding:0.5rem;">` : `<span>${data.date || '-'}</span>`}
             </td>
-            <td>
+            <td data-label="Score">
                 ${isManual ? `<input type="text" class="at-score" placeholder="${t('studentForm.dtScorePlaceholder')}" value="${data.score || ''}" required style="width:100%; padding:0.5rem;">` : `<span>${data.score || '-'}</span>`}
             </td>
-            <td>
+            <td data-label="Time">
                 ${isManual ? `<input type="text" class="at-time" placeholder="e.g. 20/30" value="${data.time || ''}" required style="width:100%; padding:0.5rem;" title="Format: minutes taken / time limit (e.g. 20/30)">` : `<span>${data.time || '-'}</span>`}
             </td>
-            <td>
+            <td data-label="Group">
                 ${isManual ? `<input type="text" class="at-group" placeholder="${t('studentForm.atGroupPlaceholder')}" value="${data.group || ''}" style="width:100%; padding:0.5rem;">` : `<span>${data.group || '-'}</span>`}
             </td>
-            <td><span style="font-size:0.8rem; color:${isManual ? '#FF8C00' : '#008B8B'}; font-weight:600;">${isManual ? t('studentForm.manual') : t('studentForm.auto')}</span></td>
-            <td style="text-align:center;">
+            <td data-label="Source"><span style="font-size:0.8rem; color:${isManual ? '#FF8C00' : '#008B8B'}; font-weight:600;">${isManual ? t('studentForm.manual') : t('studentForm.auto')}</span></td>
+            <td class="row-action" style="text-align:center;">
                 ${isManual ? `<button type="button" class="remove-at-btn danger" style="padding:0.4rem 0.8rem;">🗑️</button>` : `-`}
             </td>`;
         if (isManual) {
@@ -1641,7 +1642,19 @@ function renderSchedule() {
     }
 
     const deleteBtn = document.getElementById('deleteBtn');
-    if(isEdit && deleteBtn) {
+    const transferBtnTmp = document.getElementById('transferBtn');
+    const saveBtnTmp = document.querySelector('#studentForm button[type="submit"]') || document.getElementById('cancelBtn');
+
+    // 🧷 FIX: Save/Cancel and Transfer/Delete live in TWO different wrapper divs.
+    // Move all four buttons into ONE wrapper so the floating bar contains them all.
+    const actionBar = saveBtnTmp?.parentElement;
+    if (actionBar) {
+        [transferBtnTmp, deleteBtn].forEach(b => {
+            if (b && b.parentElement !== actionBar) actionBar.appendChild(b);
+        });
+        actionBar.classList.add('form-actions');
+    }
+    if (isEdit && deleteBtn) {
         deleteBtn.style.display = '';
         deleteBtn.onclick = async () => {
             if(confirm(t('studentForm.confirmDelete'))) {

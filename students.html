@@ -38,8 +38,9 @@
     </header>
 
     <div class="students-page">
+      <div class="bottom-dock">
       <div class="controls">
-        <input type="text" id="searchInput" data-i18n-placeholder="students.searchPlaceholder" placeholder="Search name, ID, grade, school, subject...">
+        <input type="text" id="searchInput" data-i18n-placeholder="students.searchPlaceholder" placeholder="🔍︎ Search name, ID, grade, school, subject...">
         <div class="action-buttons">
           <button id="addStudentBtn" class="primary" data-i18n="students.addStudent">+ Add Student</button>
           <button id="importBtn" class="secondary" data-i18n="students.importExcel">📥 Import Excel</button>
@@ -74,38 +75,39 @@
           </select>
         </div>
         <div class="sort-group">
-          <label data-i18n="students.primaryLabel">Primary:</label>
-          <select id="sort1-field">
-            <option value="" data-i18n="students.none">None</option>
-            <option value="subjectName" data-i18n="students.sortSubject">Subject</option>
-            <option value="studentNumber" data-i18n="students.sortStudentId">Student ID</option>
-            <option value="namePinyin" data-i18n="students.sortNameAlpha">Chinese Name (Alphabet)</option>
-            <option value="nameCn" data-i18n="students.sortNameCn">Chinese Name</option>
-            <option value="rawDob" data-i18n="students.sortDob">DOB</option>
-            <option value="grade" data-i18n="students.sortGrade">Grade</option>
-            <option value="level" data-i18n="students.sortLevel">Level</option>
-            <option value="rawEnrolDate" data-i18n="students.sortEnrolDate">Enrol Date</option>
-            <option value="nickname" data-i18n="students.sortNickname">Nickname</option>
-          </select>
-          <select id="sort1-dir"><option value="asc">↑</option><option value="desc">↓</option></select>
+            <label data-i18n="students.primaryLabel">Primary:</label>
+            <select id="sort1-field">
+              <option value="" data-i18n="students.none">None</option>
+              <option value="subjectName" data-i18n="students.sortSubject">Subject</option>
+              <option value="studentNumber" data-i18n="students.sortStudentId">Student ID</option>
+              <option value="namePinyin" data-i18n="students.sortNameAlpha">Chinese Name (Alphabet)</option>
+              <option value="nameCn" data-i18n="students.sortNameCn">Chinese Name</option>
+              <option value="rawDob" data-i18n="students.sortDob">DOB</option>
+              <option value="grade" data-i18n="students.sortGrade">Grade</option>
+              <option value="level" data-i18n="students.sortLevel">Level</option>
+              <option value="rawEnrolDate" data-i18n="students.sortEnrolDate">Enrol Date</option>
+              <option value="nickname" data-i18n="students.sortNickname">Nickname</option>
+            </select>
+            <select id="sort1-dir"><option value="asc">↑</option><option value="desc">↓</option></select>
+          </div>
+          <div class="sort-group">
+            <label data-i18n="students.secondaryLabel">Secondary:</label>
+            <select id="sort2-field">
+              <option value="" data-i18n="students.none">None</option>
+              <option value="subjectName" data-i18n="students.sortSubject">Subject</option>
+              <option value="studentNumber" data-i18n="students.sortStudentId">Student ID</option>
+              <option value="namePinyin" data-i18n="students.sortNameAlpha">Chinese Name (Alphabet)</option>
+              <option value="nameCn" data-i18n="students.sortNameCn">Chinese Name</option>
+              <option value="rawDob" data-i18n="students.sortDob">DOB</option>
+              <option value="grade" data-i18n="students.sortGrade">Grade</option>
+              <option value="level" data-i18n="students.sortLevel">Level</option>
+              <option value="rawEnrolDate" data-i18n="students.sortEnrolDate">Enrol Date</option>
+              <option value="nickname" data-i18n="students.sortNickname">Nickname</option>
+            </select>
+            <select id="sort2-dir"><option value="asc">↑</option><option value="desc">↓</option></select>
+          </div>
+          <button id="clearSortBtn" class="secondary" data-i18n="students.reset">Reset</button>
         </div>
-        <div class="sort-group">
-          <label data-i18n="students.secondaryLabel">Secondary:</label>
-          <select id="sort2-field">
-            <option value="" data-i18n="students.none">None</option>
-            <option value="subjectName" data-i18n="students.sortSubject">Subject</option>
-            <option value="studentNumber" data-i18n="students.sortStudentId">Student ID</option>
-            <option value="namePinyin" data-i18n="students.sortNameAlpha">Chinese Name (Alphabet)</option>
-            <option value="nameCn" data-i18n="students.sortNameCn">Chinese Name</option>
-            <option value="rawDob" data-i18n="students.sortDob">DOB</option>
-            <option value="grade" data-i18n="students.sortGrade">Grade</option>
-            <option value="level" data-i18n="students.sortLevel">Level</option>
-            <option value="rawEnrolDate" data-i18n="students.sortEnrolDate">Enrol Date</option>
-            <option value="nickname" data-i18n="students.sortNickname">Nickname</option>
-          </select>
-          <select id="sort2-dir"><option value="asc">↑</option><option value="desc">↓</option></select>
-        </div>
-        <button id="clearSortBtn" class="secondary" data-i18n="students.reset">Reset</button>
       </div>
 
       <!-- 📊 TABLE -->
@@ -113,15 +115,16 @@
         <table>
           <thead>
             <tr>
-              <th data-i18n="students.thSubject">Subject</th>
-              <th data-i18n="students.thStudentId">Student ID</th>
-              <th data-i18n="students.thNameAlpha">Chinese Name (Alphabet)</th>
-              <th data-i18n="students.thNameCn">Chinese Name</th>
-              <th data-i18n="students.thDob">DOB</th>
-              <th data-i18n="students.thGrade">Grade</th>
-              <th data-i18n="students.thLevel">Level</th>
-              <th data-i18n="students.thEnrolDate">Enrol Date</th>
-              <th data-i18n="students.thActions">Actions</th>
+              <th>Name</th>
+              <th>Chinese Name</th>
+              <th>Status</th>
+              <th>Subject</th>
+              <th>Level</th>
+              <th>Student ID</th>
+              <th>Grade</th>
+              <th>DOB</th>
+              <th>Enrol Date</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody id="studentList">

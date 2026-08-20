@@ -50,7 +50,7 @@ export default {
     noMatchingStudents: "No matching students found.",
     itemsOf: "{{start}}-{{end}} of {{total}} items",
     zeroItems: "0 of 0 items",
-    searchPlaceholder: "Search name, ID, grade, school, subject...",
+    searchPlaceholder: "🔍︎ Search name, ID, grade, school, subject...",
     exportOptions: "Export Options",
     exportAll: "📊 Export All Students (Full Details)",
     selectSubjectPlaceholder: "Select Subject...",

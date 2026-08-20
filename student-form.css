@@ -1005,6 +1005,319 @@ input[type="month"]::-webkit-calendar-picker-indicator:hover {
 }
 
 /* =========================================
+🧭 NAV BAR: one line, never stacks
+========================================= */
+.nav-bar-container { flex-wrap: nowrap; gap: 0.5rem; padding: 0.5rem 0.75rem; }
+.search-container { min-width: 0; flex: 1; }
+#studentPositionIndicator { white-space: nowrap; font-size: 0.85rem; flex-shrink: 0; }
+
+/* =========================================
+🔘 SMALLER BUTTONS (global)
+========================================= */
+button { padding: 0.55rem 1.05rem; font-size: 0.85rem; }
+.nav-btn { padding: 0.4rem 0.8rem; font-size: 0.85rem; }
+.tab-btn { padding: 0.5rem 0.9rem; font-size: 0.85rem; }
+
+/* =========================================
+💾 FLOATING ACTION BAR (desktop + mobile)
+   Delete | Transfer ……… Cancel | Save
+========================================= */
+.form-actions {
+  position: fixed !important;
+  left: 0; right: 0; bottom: 0;
+  z-index: 950;
+  margin: 0;
+  padding: 0.55rem 0.75rem calc(0.55rem + env(safe-area-inset-bottom));
+  background: var(--white);
+  border-top: 2px solid #e2e8f0;
+  box-shadow: 0 -4px 14px rgba(0,0,0,0.12);
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 0.5rem;
+}
+.form-actions button {
+  min-width: 0 !important;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+#deleteBtn  { order: 1; }
+#transferBtn{ order: 2; }
+#cancelBtn  { order: 3; margin-left: auto; }
+.form-actions button[type="submit"] { order: 4; }
+.form-container { padding-bottom: 6rem; }   /* so the bar never covers content */
+
+/* =========================================
+📱 MOBILE ONLY
+========================================= */
+@media (max-width: 768px) {
+  /* 4 actions fit on one line */
+  .form-actions { gap: 0.4rem; padding: 0.5rem 0.6rem calc(0.5rem + env(safe-area-inset-bottom)); }
+  .form-actions button { padding: 0.45rem 0.6rem; font-size: 0.75rem; }
+
+  /* Remove Subject + Drop/Pause side-by-side, no overlap */
+  .subject-entry { display: flex; flex-wrap: wrap; padding-bottom: 1rem; }
+  .subject-entry > * { flex: 0 0 100%; }
+  .subject-entry > button { flex: 0 0 auto; width: auto; }
+  .subject-entry .add-pr-btn {
+    order: 98;
+    position: static !important;
+    flex: 1 1 auto !important;
+    margin: 0.75rem 0.5rem 0 0 !important;
+  }
+  .subject-entry .remove-subject {
+    order: 99;
+    position: static !important;
+    flex: 1 1 auto !important;
+    margin: 0.75rem 0 0 !important;
+  }
+  .subject-entry .remove-subject,
+  .subject-entry .add-pr-btn {
+    padding: 0.5rem 0.6rem !important;
+    font-size: 0.75rem !important;
+  }
+
+  /* DT & AT tables → editable cards (desktop unchanged) */
+  #dtTable, #atTable { min-width: 0; width: 100%; }
+  #dtTable thead, #atTable thead { display: none; }
+  #dtTable, #atTable, #dtTable tbody, #atTable tbody { display: block; }
+  #dtTable tr, #atTable tr {
+    display: block;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 0.7rem 0.75rem;
+    margin-bottom: 0.75rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  #dtTable td, #atTable td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.28rem 0;
+    border: none;
+    white-space: normal;
+  }
+  #dtTable td::before, #atTable td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: #94a3b8;
+  }
+  #dtTable td input, #dtTable td select,
+  #atTable td input, #atTable td select {
+    width: auto !important;      /* beats the inline width:100% */
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0.35rem 0.4rem !important;
+    font-size: 0.85rem;
+  }
+  #dtTable td.row-action, #atTable td.row-action { justify-content: flex-end; }
+  #dtTable td.row-action::before, #atTable td.row-action::before { display: none; }
+  #atTable td span { text-align: right; }
+}
+
+/* =========================================
+🔧 v2: ACTION BAR ORDER + DT/AT OVERFLOW
+========================================= */
+.form-actions {
+  position: fixed !important;
+  left: 0; right: 0; bottom: 0;
+  z-index: 950;
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  justify-content: flex-start !important;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 !important;
+  padding: 0.55rem 0.75rem calc(0.55rem + env(safe-area-inset-bottom));
+  background: var(--white);
+  border-top: 2px solid #e2e8f0;
+  box-shadow: 0 -4px 14px rgba(0,0,0,0.12);
+}
+.form-actions button {
+  min-width: 0 !important;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+/* Delete | Transfer …………… Cancel | Save */
+#deleteBtn   { order: 1 !important; }
+#transferBtn { order: 2 !important; }
+#cancelBtn   { order: 3 !important; margin-left: auto !important; }
+.form-actions button[type="submit"],
+.form-actions button.primary,
+.form-actions > :first-child { order: 4 !important; }   /* Save, however it's written */
+.form-container { padding-bottom: 6rem; }
+
+@media (max-width: 768px) {
+  .form-actions { gap: 0.4rem; padding: 0.5rem 0.6rem calc(0.5rem + env(safe-area-inset-bottom)); }
+  .form-actions button { padding: 0.45rem 0.6rem; font-size: 0.75rem; }
+
+  /* DT/AT cards: contain every width so nothing can overflow */
+  #tab-dt-at { min-width: 0; overflow-x: hidden; }
+  #dtTable, #atTable,
+  #dtTable tbody, #atTable tbody {
+    display: block;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  #dtTable tr, #atTable tr { width: 100%; max-width: 100%; }
+  #dtTable td, #atTable td { width: 100%; max-width: 100%; min-width: 0; }
+  #dtTable td input, #dtTable td select,
+  #atTable td input, #atTable td select {
+    flex: 1 1 0 !important;
+    width: 0 !important;        /* size comes ONLY from flex → overflow impossible */
+    min-width: 0 !important;
+    max-width: 100% !important;
+    padding: 0.35rem 0.4rem !important;
+    font-size: 0.85rem;
+  }
+}
+
+/* =========================================
+🔧 DEFINITIVE FIX: ACTION BAR + DT/AT CARDS
+========================================= */
+
+/* 1. Force floating action bar with correct order */
+.form-actions {
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    z-index: 9999 !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    justify-content: flex-start !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+    margin: 0 !important;
+    padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom)) !important;
+    background: var(--white) !important;
+    border-top: 2px solid #e2e8f0 !important;
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.15) !important;
+}
+
+.form-actions button {
+    position: static !important;
+    min-width: 100px !important;
+    margin: 0 !important;
+    padding: 0.6rem 1rem !important;
+    font-size: 0.9rem !important;
+    white-space: nowrap !important;
+}
+
+/* Order: Delete | Transfer ... Cancel | Save */
+#deleteBtn {
+    order: 1 !important;
+}
+#transferBtn {
+    order: 2 !important;
+}
+#cancelBtn {
+    order: 3 !important;
+    margin-left: auto !important;
+}
+.form-actions button[type="submit"],
+.form-actions .primary {
+    order: 4 !important;
+}
+
+/* Ensure form content doesn't hide behind the bar */
+.form-container {
+    padding-bottom: 5rem !important;
+}
+
+/* 2. DT & AT cards: prevent overflow on mobile */
+@media (max-width: 768px) {
+    .form-actions {
+        padding: 0.6rem 0.75rem calc(0.6rem + env(safe-area-inset-bottom)) !important;
+        gap: 0.5rem !important;
+    }
+    .form-actions button {
+        padding: 0.5rem 0.7rem !important;
+        font-size: 0.8rem !important;
+        min-width: 80px !important;
+    }
+
+    #tab-dt-at {
+        overflow-x: hidden !important;
+    }
+    #dtTable, #atTable {
+        display: block !important;
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+    #dtTable thead, #atTable thead {
+        display: none !important;
+    }
+    #dtTable tbody, #atTable tbody {
+        display: block !important;
+        width: 100% !important;
+    }
+    #dtTable tr, #atTable tr {
+        display: block !important;
+        background: #fff !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 10px !important;
+        padding: 0.75rem !important;
+        margin-bottom: 0.75rem !important;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06) !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    #dtTable td, #atTable td {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 0.5rem !important;
+        padding: 0.35rem 0 !important;
+        border: none !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    #dtTable td::before, #atTable td::before {
+        content: attr(data-label) !important;
+        flex: 0 0 auto !important;
+        font-size: 0.7rem !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.3px !important;
+        text-transform: uppercase !important;
+        color: #94a3b8 !important;
+        min-width: 80px !important;
+    }
+    #dtTable td input, #dtTable td select,
+    #atTable td input, #atTable td select {
+        flex: 1 1 0 !important;
+        width: 0 !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        padding: 0.4rem 0.5rem !important;
+        font-size: 0.85rem !important;
+        box-sizing: border-box !important;
+    }
+    #dtTable td.row-action, #atTable td.row-action {
+        justify-content: flex-end !important;
+    }
+    #dtTable td.row-action::before, #atTable td.row-action::before {
+        display: none !important;
+    }
+    #atTable td span {
+        text-align: right !important;
+    }
+}
+
+.form-actions > :first-child { order: 4 !important; }  /* Save stays right, whatever its attributes */
+
+/* =========================================
 🌐 TRADITIONAL CHINESE FONT SUPPORT
 ========================================= */
 :lang(zh-TW) body,
