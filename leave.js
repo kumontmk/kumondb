@@ -690,7 +690,10 @@ async function confirmApproval() {
   try {
     const reliefPlan = []; const dates = Object.keys(empASchedulesCache).sort();
     for (const dateStr of dates) {
-      const sched = empASchedulesCache[dateStr]; if (!sched || sched.isDayOff || sched.shifts.length === 0) continue;
+
+      const sched = empASchedulesCache[dateStr]; 
+      if (!sched || sched.isDayOff) continue; 
+      
       const dayPlan = { date: dateStr, empAOrigSchedule: { status: sched.status, shifts: sched.shifts, notes: sched.notes }, relievers: [] };
       document.querySelectorAll(`#approveReliefBody tr[data-date="${dateStr}"]`).forEach(tr => {
         const noRelieverCb = tr.querySelector('.no-reliever-cb'); if (noRelieverCb && noRelieverCb.checked) return;
@@ -720,7 +723,9 @@ async function confirmApproval() {
       const dateStr = dayPlan.date; const centersToUpdate = new Set();
       const origShifts = Array.isArray(dayPlan.empAOrigSchedule.shifts) ? dayPlan.empAOrigSchedule.shifts : Object.values(dayPlan.empAOrigSchedule.shifts || {});
       origShifts.forEach(s => centersToUpdate.add(s._center || s.center));
-      if (centersToUpdate.size === 0) { const perms = employees[l.empId]?.permissions?.centers || {}; Object.keys(perms).forEach(c => { if (perms[c]) centersToUpdate.add(c); }); }
+      if (centersToUpdate.size === 0) { 
+        getEmpCenterIds(l.empId).forEach(c => centersToUpdate.add(c));
+      }
       for (const cid of centersToUpdate) await update(ref(db, `schedules/${cid}/${l.empId}/${dateStr}`), { status: 'leave', shifts: origShifts, notes: dayPlan.empAOrigSchedule.notes || '', updatedBy: currentUser.uid, updatedAt: new Date().toISOString() });
       const relievers = Array.isArray(dayPlan.relievers) ? dayPlan.relievers : [];
       for (const rel of relievers) {

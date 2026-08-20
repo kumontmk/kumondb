@@ -1,6 +1,6 @@
 import { db, logout, requireAuth } from './auth.js';
-import { ref, get, set, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { ref, get, set, remove, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getAuth, onAuthStateChanged} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { i18nReady, t } from './employee-schedule-i18n.js';
 
 // ============================================
@@ -14,6 +14,88 @@ const ROLE_ORDER = ['Master Admin', 'Manager', 'Admin', 'English Teacher', 'Math
 let DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 let DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 let MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+let approvedLeaveDates = {}; // empId -> Set('YYYY-MM-DD')
+
+function rebuildLeaves(leaves) {
+    approvedLeaveDates = {};
+    Object.values(leaves).forEach(l => {
+        if (l?.status !== 'approved' || !l.dateFrom || !l.dateTo) return;
+        const set = approvedLeaveDates[l.empId] || (approvedLeaveDates[l.empId] = new Set());
+        const d = parseDate(l.dateFrom), end = parseDate(l.dateTo);
+        while (d <= end) { set.add(formatDateStr(d)); d.setDate(d.getDate() + 1); }
+    });
+}
+const hasApprovedLeave = (empId, dateStr) => !!approvedLeaveDates[empId]?.has(dateStr);
+
+// ============ AUTO-SYNC: APPROVED LEAVE → SCHEDULE ============
+let schedulesReady = false;
+let leaveSyncRunning = false;
+let leaveSyncTimer = null;
+
+function queueLeaveSync() {
+    if (!isAdminOrManager) return;
+    clearTimeout(leaveSyncTimer);
+    leaveSyncTimer = setTimeout(syncApprovedLeavesToSchedules, 400);
+}
+
+async function syncApprovedLeavesToSchedules() {
+    if (!isAdminOrManager || leaveSyncRunning || !schedulesReady) return;
+    leaveSyncRunning = true;
+    let changed = 0;
+    try {
+        for (const [empId, dateSet] of Object.entries(approvedLeaveDates)) {
+            for (const dateStr of dateSet) {
+                const sched = mergedSchedules[empId]?.[dateStr];
+
+                // Already leave / sick / off → nothing to do
+                if (sched && (sched.status || 'scheduled') !== 'scheduled') continue;
+
+                // Don't fight weekly days-off or holidays
+                const tmpl = getTemplateForDate(empId, dateStr);
+                if (tmpl && (tmpl.status || 'scheduled') === 'off') continue;
+                const hol = getHolidayForDate(dateStr);
+                if (hol && !hol.muc) continue;
+
+                // Shifts to carry: existing record first, else weekly template
+                let shifts = sched ? (sched._shifts || extractShifts(sched)) : [];
+                let target = sched?._sourceCenter || null;
+                if (!hasValidShifts(shifts)) {
+                    const tmplShifts = tmpl ? (tmpl._shifts || extractShifts(tmpl)) : [];
+                    if (!hasValidShifts(tmplShifts)) continue; // truly nothing scheduled → leave empty
+                    shifts = tmplShifts;
+                    const work = shifts.find(s => s.type === 'work' && s.center);
+                    target = work ? work.center : (allCenters[0] || {}).id;
+                }
+                if (!target) target = (shifts.find(s => s.center) || {}).center || (allCenters[0] || {}).id;
+                if (!target) continue;
+
+                await set(ref(db, `schedules/${target}/${empId}/${dateStr}`), {
+                    status: 'leave',
+                    shifts,                                   // kept so cancelling the leave restores them
+                    notes: sched?.notes || '',
+                    autoLeaveSync: true,
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: currentUser.uid
+                });
+                if (!mergedSchedules[empId]) mergedSchedules[empId] = {};
+                mergedSchedules[empId][dateStr] = { ...(sched || {}), _sourceCenter: target, status: 'leave', shifts };
+                changed++;
+            }
+        }
+        if (changed) {
+            console.log(`🔄 Auto-synced ${changed} schedule day(s) to On Leave.`);
+            renderAdminView();
+            renderEmployeeView();
+            renderCenterView();
+            renderSubjectView();
+        }
+    } catch (e) {
+        console.warn('Leave auto-sync failed:', e);
+    } finally {
+        leaveSyncRunning = false;
+    }
+}
 
 function refreshDateNames() {
   DAY_NAMES = t('schedule.daysLong', { returnObjects: true });
@@ -119,51 +201,61 @@ document.addEventListener('DOMContentLoaded', () => {
 // INITIALIZATION (OPTIMIZED)
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
-  onAuthStateChanged(auth, async (user) => {
-    if (!user) {
-      alert(t('schedule.loginFirst'));
-      window.location.href = 'centers.html';
-      return;
-    }
-    await i18nReady.catch(() => {});
-    refreshDateNames();
-    currentUser = user;
-    await checkPermissions(user);
-    await loadAllCenters();
-    if (isAdminOrManager) {
-      await Promise.all([
-        loadAllCalendarEvents(),
-        loadEmployees(),
-        loadAllSchedules(),
-        loadAllTemplates()
-      ]);
-      setupTabs();
-      setupAdminNav();
-      setupEmployeeNav();
-      setupCenterNav();
-      setupSubjectNav();
-      setupModal();
-      applyPermissionUI();
-      renderAdminView();
-      renderEmployeeView();
-      renderCenterView();
-      renderSubjectView();
-    } else {
-      await Promise.all([
-        loadEmployeeOnly(user.uid),
-        loadEmployeeSchedulesOnly(user.uid),
-        loadEmployeeTemplateOnly(user.uid),
-        loadCalendarEventsForEmployee()
-      ]);
-      setupTabs();
-      setupEmployeeNav();
-      applyPermissionUI();
-      renderEmployeeView();
-    }
-    document.getElementById('page-loader').classList.add('hidden');
-    document.getElementById('page-loader').classList.add('hidden');
-    document.querySelector('.schedule-dashboard').classList.add('loaded');
-  });
+    onAuthStateChanged(auth, async (user) => {
+        if (!user) {
+            alert(t('schedule.loginFirst'));
+            window.location.href = 'centers.html';
+            return;
+        }
+        await i18nReady.catch(() => {});
+        refreshDateNames();
+        currentUser = user;
+        await checkPermissions(user);
+        await loadAllCenters();
+        if (isAdminOrManager) {
+            // 🆕 LIVE LEAVE SYNC — keep approvedLeaveDates up to date at all times
+            onValue(ref(db, 'leaves'), (s) => {
+                rebuildLeaves(s.val() || {});
+                // re-render so ⚠️ flags appear as soon as leave data arrives/changes
+                renderAdminView();
+                renderCenterView();
+                renderSubjectView();
+                queueLeaveSync();  
+            });
+            await Promise.all([
+                loadAllCalendarEvents(),
+                loadEmployees(),
+                loadAllSchedules(),
+                loadAllTemplates()
+            ]);
+            schedulesReady = true;         
+            queueLeaveSync(); 
+            setupTabs();
+            setupAdminNav();
+            setupEmployeeNav();
+            setupCenterNav();
+            setupSubjectNav();
+            setupModal();
+            applyPermissionUI();
+            renderAdminView();
+            renderEmployeeView();
+            renderCenterView();
+            renderSubjectView();
+        } else {
+            await Promise.all([
+                loadEmployeeOnly(user.uid),
+                loadEmployeeSchedulesOnly(user.uid),
+                loadEmployeeTemplateOnly(user.uid),
+                loadCalendarEventsForEmployee()
+            ]);
+            setupTabs();
+            setupEmployeeNav();
+            applyPermissionUI();
+            renderEmployeeView();
+        }
+        document.getElementById('page-loader').classList.add('hidden');
+        document.querySelector('.schedule-dashboard').classList.add('loaded');
+    });
 });
 
 // ============================================
@@ -599,49 +691,50 @@ function hasValidShifts(shifts) {
 }
 
 function renderMergedScheduleCell(td, sched, empId, dateStr) {
-  const status = sched.status || 'scheduled';
-  if (status !== 'scheduled') {
-    const statusMap = {
-      'other-center': { cls: 'status-other', label: t('schedule.otherCenter') },
-      'leave': { cls: 'status-leave', label: t('schedule.leave') },
-      'sick': { cls: 'status-sick', label: t('schedule.sick') },
-      'off': { cls: 'status-off', label: t('schedule.off') }
-    };
-    const s = statusMap[status] || { cls: '', label: status };
-    td.classList.add(s.cls);
-    let html = `<div class="cell-content"><span class="status-label">${s.label}</span>`;
-    if (sched.notes) html += `<div class="notes-indicator">📝 ${sched.notes}</div>`;
+    const status = sched.status || 'scheduled';
+    if (status !== 'scheduled') {
+        const statusMap = {
+            'other-center': { cls: 'status-other', label: t('schedule.otherCenter') },
+            'leave': { cls: 'status-leave', label: t('schedule.leave') },
+            'sick': { cls: 'status-sick', label: t('schedule.sick') },
+            'off': { cls: 'status-off', label: t('schedule.off') }
+        };
+        const s = statusMap[status] || { cls: '', label: status };
+        td.classList.add(s.cls);
+        let html = `<div class="cell-content"><span class="status-label">${s.label}</span>`;
+        if (sched.notes) html += `<div class="notes-indicator">📝 ${sched.notes}</div>`;
+        html += '</div>';
+        td.innerHTML = html;
+        return;
+    }
+    const shifts = sched._shifts || extractShifts(sched);
+    if (!hasValidShifts(shifts)) {
+        td.classList.add('empty-cell');
+        td.innerHTML = '<div class="cell-content">—</div>';
+        return;
+    }
+    td.classList.add('has-schedule');
+    let html = '<div class="cell-content">';
+    const sortedShifts = [...shifts].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+    sortedShifts.forEach(shift => {
+        if (shift.type === 'break') {
+            html += `<div class="shift-line break-line">☕ ${shift.start}-${shift.end}</div>`;
+        } else {
+            const badge = getShiftBadgeInfo(shift);
+            html += `<div class="shift-line"><span class="shift-time">${shift.start}-${shift.end}</span> <span class="shift-center ${badge.cls}" title="${badge.title}">${badge.label}</span></div>`;
+        }
+    });
+    const holidayInfo = getHolidayForDate(dateStr);
+    if (holidayInfo && !holidayInfo.muc) {
+        html += `<div class="holiday-indicator">🎌 ${holidayInfo.name || t('schedule.holiday')}</div>`;
+    }
+    // 🆕 CONFLICT FLAG: scheduled shifts on a day with an approved leave
+    if (hasApprovedLeave(empId, dateStr)) {
+        html += `<div class="holiday-indicator">⚠️ ${t('schedule.leave')}</div>`;
+    }
+    if (sched.notes) html += `<div class="notes-indicator">📝</div>`;
     html += '</div>';
     td.innerHTML = html;
-    return;
-  }
-  const shifts = sched._shifts || extractShifts(sched);
-  if (!hasValidShifts(shifts)) {
-    td.classList.add('empty-cell');
-    td.innerHTML = '<div class="cell-content">—</div>';
-    return;
-  }
-  td.classList.add('has-schedule');
-  let html = '<div class="cell-content">';
-  const sortedShifts = [...shifts].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
-  sortedShifts.forEach(shift => {
-    if (shift.type === 'break') {
-      html += `<div class="shift-line break-line">☕ ${shift.start}-${shift.end}</div>`;
-    } else {
-      const badge = getShiftBadgeInfo(shift);
-      html += `<div class="shift-line">
-        <span class="shift-time">${shift.start}-${shift.end}</span>
-        <span class="shift-center ${badge.cls}" title="${badge.title}">${badge.label}</span>
-      </div>`;
-    }
-  });
-  const holidayInfo = getHolidayForDate(dateStr);
-  if (holidayInfo && !holidayInfo.muc) {
-    html += `<div class="holiday-indicator">🎌 ${holidayInfo.name || t('schedule.holiday')}</div>`;
-  }
-  if (sched.notes) html += `<div class="notes-indicator">📝</div>`;
-  html += '</div>';
-  td.innerHTML = html;
 }
 
 
@@ -1457,26 +1550,31 @@ function closeModal() {
 }
 
 function checkModalWarnings(empId, dateStr) {
-  const warningsDiv = document.getElementById('modalWarnings');
-  if (!warningsDiv) return;
-  warningsDiv.innerHTML = '';
-  const dateObj = parseDate(dateStr);
-  const dow = dateObj.getDay();
-  const holidayInfo = getHolidayForDate(dateStr);
-  if (holidayInfo && !holidayInfo.muc) {
-    const type = holidayInfo.type === 'public' ? t('schedule.publicHoliday') : t('schedule.centerHoliday');
-    warningsDiv.innerHTML += `<div class="warning-box">${t('schedule.warnHoliday', { type, name: holidayInfo.name || '' })}</div>`;
-  }
-  const shiftItems = document.querySelectorAll('#shiftsContainer .shift-item');
-  shiftItems.forEach(item => {
-    const centerSelect = item.querySelector('.shift-center');
-    if (centerSelect && centerSelect.value) {
-      if (isCenterClosedOnDay(centerSelect.value, dow)) {
-        const centerName = allCenters.find(c => c.id === centerSelect.value)?.name || centerSelect.value;
-        warningsDiv.innerHTML += `<div class="error-box">${t('schedule.errClosedOn', { centerName, day: DAY_NAMES[dow] })}</div>`;
-      }
+    const warningsDiv = document.getElementById('modalWarnings');
+    if (!warningsDiv) return;
+    warningsDiv.innerHTML = '';
+    const dateObj = parseDate(dateStr);
+    const dow = dateObj.getDay();
+    const holidayInfo = getHolidayForDate(dateStr);
+    if (holidayInfo && !holidayInfo.muc) {
+        const type = holidayInfo.type === 'public' ? t('schedule.publicHoliday') : t('schedule.centerHoliday');
+        warningsDiv.innerHTML += `<div class="warning-box">${t('schedule.warnHoliday', { type, name: holidayInfo.name || '' })}</div>`;
     }
-  });
+    // 🆕 APPROVED-LEAVE CONFLICT WARNING
+    if (hasApprovedLeave(empId, dateStr)) {
+        const empName = employees[empId]?.englishName || 'This employee';
+        warningsDiv.innerHTML += `<div class="warning-box">⚠️ ${empName} has an APPROVED leave on this date. Saving with status “Scheduled” will conflict with the leave.</div>`;
+    }
+    const shiftItems = document.querySelectorAll('#shiftsContainer .shift-item');
+    shiftItems.forEach(item => {
+        const centerSelect = item.querySelector('.shift-center');
+        if (centerSelect && centerSelect.value) {
+            if (isCenterClosedOnDay(centerSelect.value, dow)) {
+                const centerName = allCenters.find(c => c.id === centerSelect.value)?.name || centerSelect.value;
+                warningsDiv.innerHTML += `<div class="error-box">${t('schedule.errClosedOn', { centerName, day: DAY_NAMES[dow] })}</div>`;
+            }
+        }
+    });
 }
 
 document.addEventListener('change', (e) => {
@@ -1742,61 +1840,63 @@ async function checkOverlaps(empId, dateStr, newData, skipCenters = []) {
 // APPLY PATTERNS TO MONTH
 // ============================================
 async function applyPatternsToMonth() {
-  if (!isAdminOrManager) return;
-  const btn = document.getElementById('applyPatternBtn');
-  const originalText = t('schedule.applyPatterns');
-  if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner-small"></span> ${t('schedule.applying')}`; }
-  const midDate = addDays(viewStartDate, 10);
-  const year = midDate.getFullYear();
-  const month = midDate.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const monthName = `${MONTH_NAMES[month]} ${year}`;
-  if (!confirm(t('schedule.confirmApplyPatterns', { month: monthName }))) {
-    if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
-    return;
-  }
-  let count = 0;
-  let skipped = 0;
-  try {
-    for (const [empId, empTemplates] of Object.entries(templates)) {
-      for (let day = 1; day <= daysInMonth; day++) {
-        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const dateObj = new Date(year, month, day);
-        if (isPastDate(dateStr)) continue;
-        const dow = dateObj.getDay();
-        const existingSched = mergedSchedules[empId]?.[dateStr];
-        if (existingSched) {
-          if (existingSched.cleared) { skipped++; continue; }
-          const existingShifts = existingSched._shifts || extractShifts(existingSched);
-          const hasValidExistingShifts = hasValidShifts(existingShifts);
-          const hasSpecialStatus = existingSched.status && existingSched.status !== 'scheduled';
-          if (hasValidExistingShifts || hasSpecialStatus) { skipped++; continue; }
-        }
-        if (!empTemplates[dow]) continue;
-        const tmpl = empTemplates[dow];
-        const schedData = { status: tmpl.status || 'scheduled', shifts: tmpl.shifts || [], notes: tmpl.notes || '', isFromPattern: true, updatedAt: new Date().toISOString(), updatedBy: currentUser.uid };
-        let targetCenter = null;
-        const workShifts = schedData.shifts.filter(s => s.type === 'work' && s.center);
-        if (workShifts.length > 0) targetCenter = workShifts[0].center;
-        if (!targetCenter && allCenters.length > 0) targetCenter = allCenters[0].id;
-        if (targetCenter) {
-          await set(ref(db, `schedules/${targetCenter}/${empId}/${dateStr}`), schedData);
-          count++;
-        }
-      }
+    if (!isAdminOrManager) return;
+    const btn = document.getElementById('applyPatternBtn');
+    const originalText = t('schedule.applyPatterns');
+    if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner-small"></span> ${t('schedule.applying')}`; }
+    const midDate = addDays(viewStartDate, 10);
+    const year = midDate.getFullYear();
+    const month = midDate.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const monthName = `${MONTH_NAMES[month]} ${year}`;
+    if (!confirm(t('schedule.confirmApplyPatterns', { month: monthName }))) {
+        if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
+        return;
     }
-    await loadAllSchedules();
-    alert(t('schedule.appliedPatterns', { count, skipped }));
-    renderAdminView();
-    renderEmployeeView();
-    renderCenterView();
-    renderSubjectView();
-  } catch (err) {
-    console.error('Apply pattern error:', err);
-    alert(t('schedule.errorApplying'));
-  } finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
-  }
+    let count = 0;
+    let skipped = 0;
+    try {
+        for (const [empId, empTemplates] of Object.entries(templates)) {
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const dateObj = new Date(year, month, day);
+                if (isPastDate(dateStr)) continue;
+                // 🆕 NEVER stamp a pattern over an approved leave day
+                if (hasApprovedLeave(empId, dateStr)) { skipped++; continue; }
+                const dow = dateObj.getDay();
+                const existingSched = mergedSchedules[empId]?.[dateStr];
+                if (existingSched) {
+                    if (existingSched.cleared) { skipped++; continue; }
+                    const existingShifts = existingSched._shifts || extractShifts(existingSched);
+                    const hasValidExistingShifts = hasValidShifts(existingShifts);
+                    const hasSpecialStatus = existingSched.status && existingSched.status !== 'scheduled';
+                    if (hasValidExistingShifts || hasSpecialStatus) { skipped++; continue; }
+                }
+                if (!empTemplates[dow]) continue;
+                const tmpl = empTemplates[dow];
+                const schedData = { status: tmpl.status || 'scheduled', shifts: tmpl.shifts || [], notes: tmpl.notes || '', isFromPattern: true, updatedAt: new Date().toISOString(), updatedBy: currentUser.uid };
+                let targetCenter = null;
+                const workShifts = schedData.shifts.filter(s => s.type === 'work' && s.center);
+                if (workShifts.length > 0) targetCenter = workShifts[0].center;
+                if (!targetCenter && allCenters.length > 0) targetCenter = allCenters[0].id;
+                if (targetCenter) {
+                    await set(ref(db, `schedules/${targetCenter}/${empId}/${dateStr}`), schedData);
+                    count++;
+                }
+            }
+        }
+        await loadAllSchedules();
+        alert(t('schedule.appliedPatterns', { count, skipped }));
+        renderAdminView();
+        renderEmployeeView();
+        renderCenterView();
+        renderSubjectView();
+    } catch (err) {
+        console.error('Apply pattern error:', err);
+        alert(t('schedule.errorApplying'));
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
+    }
 }
 
 // ============================================
