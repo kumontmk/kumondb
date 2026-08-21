@@ -9,9 +9,7 @@
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   --radius: 8px;
   --danger: #dc3545;
-  --danger-light: #f8d7da;
   --success: #059669;
-  --warning: #f59e0b;
 }
 
 *,
@@ -35,7 +33,7 @@ body {
   overflow-x: hidden;
 }
 
-/* 🔝 HEADER & NAV - Always One Line */
+/* 🔝 HEADER & NAV */
 header {
   background: var(--primary);
   color: var(--white);
@@ -96,7 +94,7 @@ header button:hover {
   background: rgba(255, 255, 255, 0.3);
 }
 
-/* 🔐 ACCESS DENIED SCREEN */
+/* 🔐 ACCESS DENIED */
 .access-denied {
   position: fixed;
   inset: 0;
@@ -131,11 +129,6 @@ header button:hover {
   font-size: 0.95rem;
 }
 
-.access-denied .primary {
-  margin-top: 1.5rem;
-  width: 100%;
-}
-
 /* 📄 MAIN LAYOUT */
 .students-page {
   padding: 1rem;
@@ -161,7 +154,7 @@ header button:hover {
 
 .controls input {
   flex: 1;
-  min-width: 0;
+  min-width: 200px;
   font-size: 16px;
 }
 
@@ -207,7 +200,7 @@ header button:hover {
   min-height: 40px;
 }
 
-/* 📊 TABLE & WRAPPER - Desktop */
+/* 📊 TABLE & WRAPPER */
 .table-wrapper {
   max-height: calc(100vh - 280px);
   overflow-y: auto;
@@ -221,7 +214,6 @@ header button:hover {
 
 table {
   width: 100%;
-  min-width: 800px;
   border-collapse: collapse;
   table-layout: auto;
   font-size: 0.9rem;
@@ -232,7 +224,6 @@ td {
   padding: 0.75rem 0.6rem;
   text-align: left;
   border-bottom: 1px solid #eee;
-  white-space: nowrap;
   vertical-align: middle;
 }
 
@@ -243,6 +234,7 @@ th {
   position: sticky;
   top: 0;
   z-index: 10;
+  white-space: nowrap;
 }
 
 .student-actions {
@@ -313,7 +305,7 @@ select:focus {
   box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.25);
 }
 
-/* 🪟 MODAL SYSTEM */
+/*  MODAL SYSTEM */
 .modal {
   position: fixed;
   top: 0;
@@ -370,7 +362,7 @@ select:focus {
   display: none !important;
 }
 
-/*  TABS - Pill Switch Style */
+/* 📑 TABS - Pill Switch Style */
 .tabs {
   display: inline-flex;
   gap: 2px;
@@ -437,7 +429,7 @@ select:focus {
   }
 }
 
-/* 📐 FORM GRID & QR */
+/* 📐 FORM GRID */
 .form-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -468,6 +460,7 @@ select:focus {
   display: block;
 }
 
+/* QR Container */
 #qrContainer {
   text-align: center;
   margin: 1rem 0;
@@ -487,48 +480,7 @@ select:focus {
   max-width: 180px;
 }
 
-/*  TIMECLOCK EDIT TABLE */
-.timeclock-edit-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 1rem;
-}
-
-.timeclock-edit-table th,
-.timeclock-edit-table td {
-  padding: 0.6rem;
-  border: 1px solid #e2e8f0;
-  text-align: left;
-}
-
-.timeclock-edit-table th {
-  background: var(--primary);
-  color: white;
-  font-weight: 600;
-}
-
-.timeclock-edit-table input[type="time"] {
-  width: 100%;
-  padding: 0.4rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-}
-
-.tc-input {
-  width: 100%;
-  padding: 0.5rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  font-size: 0.95rem;
-  min-height: 40px;
-}
-
-.tc-input:disabled {
-  background-color: #f8fafc;
-  color: #334155;
-}
-
-/* 🔄 LOADER */
+/*  LOADER */
 #page-loader {
   position: fixed;
   inset: 0;
@@ -872,55 +824,258 @@ tr.disabled-row td:first-child {
   border-color: var(--primary-dark);
 }
 
-/* ✅ ACTION BUTTONS */
+/* ============================================
+⏰ TIMECLOCK TABLE STYLING
+============================================ */
+#timeclockTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+#timeclockTable thead th {
+  background: var(--primary);
+  color: var(--white);
+  padding: 0.7rem 0.5rem;
+  font-weight: 600;
+  text-align: center;
+  border: none;
+  white-space: nowrap;
+}
+
+#timeclockTable thead th:first-child {
+  text-align: left;
+  padding-left: 1rem;
+}
+
+#timeclockTable tbody tr {
+  background: var(--white);
+  transition: background 0.2s;
+}
+
+#timeclockTable tbody tr:hover {
+  background: #f8fafc;
+}
+
+#timeclockTable td {
+  padding: 0.65rem 0.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: center;
+  vertical-align: middle;
+}
+
+#timeclockTable td:first-child {
+  text-align: left;
+  padding-left: 1rem;
+  font-weight: 600;
+  color: var(--primary-dark);
+}
+
+#timeclockTable td:last-child {
+  padding-right: 1rem;
+}
+
+/* Time input styling */
+.tc-input {
+  width: 100%;
+  padding: 0.4rem 0.3rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  text-align: center;
+  background: #f8fafc;
+  min-width: 90px;
+}
+
+.tc-input:disabled {
+  background: #f1f5f9;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
+.tc-input:not(:disabled) {
+  background: #ffffff;
+  border-color: #94a3b8;
+}
+
+.tc-input:not(:disabled):focus {
+  border-color: var(--primary);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.2);
+}
+
+/* Delete button styling */
+.delete-log-btn {
+  padding: 0.35rem;
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  margin-left: 4px;
+}
+
+.delete-log-btn:hover {
+  background: #dc2626;
+  color: white;
+  border-color: #dc2626;
+  transform: scale(1.05);
+}
+
+.delete-log-btn:active {
+  transform: scale(0.95);
+}
+
+/* Time cell container */
+.time-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.time-cell:first-child {
+  justify-content: flex-start;
+}
+
+/* Total hours cell */
+.total-hours-cell {
+  font-weight: 700;
+  color: var(--primary-dark);
+  font-size: 0.9rem;
+  background: #f0f9ff;
+}
+
+/* Action buttons container */
 .action-buttons-container {
   display: flex;
+  flex-direction: column;
   gap: 6px;
   align-items: stretch;
 }
 
 .edit-log-btn,
 .add-log-btn {
-  flex: 1;
-  font-size: 0.85rem;
-  padding: 0.5rem 0.6rem;
+  width: 100%;
+  font-size: 0.8rem;
+  padding: 0.45rem 0.6rem;
   text-align: center;
-  min-height: 36px;
-}
-
-.add-log-btn {
-  background: var(--success) !important;
-  color: white !important;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: 500;
-}
-
-.add-log-btn:hover {
-  background: #047857 !important;
-}
-
-.delete-log-btn {
-  padding: 0.3rem 0.5rem;
-  background: #fee2e2;
-  color: #991b1b;
-  border: 1px solid #fecaca;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.85rem;
+  border-radius: 6px;
+  font-weight: 600;
   transition: all 0.2s;
+  min-height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 32px;
-  min-height: 32px;
 }
 
-.delete-log-btn:hover {
-  background: var(--danger);
+.edit-log-btn {
+  background: #6c757d;
   color: white;
-  border-color: var(--danger);
+  border: none;
+}
+
+.edit-log-btn:hover {
+  background: #5a6268;
+}
+
+.edit-log-btn.primary {
+  background: var(--primary-dark);
+}
+
+.edit-log-btn.primary:hover {
+  background: #3a6f94;
+}
+
+.add-log-btn {
+  background: #059669;
+  color: white;
+  border: none;
+}
+
+.add-log-btn:hover {
+  background: #047857;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(5, 150, 105, 0.3);
+}
+
+.add-log-btn:active {
+  transform: translateY(0);
+}
+
+/* Empty state */
+#timeclockHistoryBody .empty-state {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text-light);
+  font-style: italic;
+}
+
+/* Table wrapper for timeclock */
+#tab-timeclock .table-wrapper {
+  max-height: 50vh;
+  overflow-y: auto;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* Filter controls */
+#tab-timeclock .controls {
+  margin-bottom: 1rem;
+  gap: 0.5rem;
+}
+
+#timeclockDateFilter {
+  flex: 1;
+  min-width: 150px;
+  padding: 0.6rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+#clearTimeclockFilter {
+  padding: 0.6rem 1rem;
+  background: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+#clearTimeclockFilter:hover {
+  background: #5a6268;
+}
+
+/* Scrollbar styling for timeclock table */
+#tab-timeclock .table-wrapper::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+#tab-timeclock .table-wrapper::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+#tab-timeclock .table-wrapper::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+#tab-timeclock .table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 /* ============================================
@@ -1095,24 +1250,44 @@ tr.disabled-row td:first-child {
     min-height: 38px;
   }
 
-  /* Incomplete table cards */
-  #incompleteTable tbody tr {
+  /* Timeclock table mobile cards */
+  #timeclockTable tbody tr {
     padding: 0.85rem;
   }
 
-  #incompleteTable tbody td {
+  #timeclockTable tbody td {
     font-size: 0.85rem;
+    flex-wrap: wrap;
   }
 
-  #incompleteTable tbody td::before {
+  #timeclockTable tbody td::before {
     min-width: 90px;
     font-size: 0.75rem;
   }
 
-  /* Time inputs in incomplete table */
-  #incompleteTable input[type="time"] {
+  /* Time inputs in timeclock table */
+  #timeclockTable input[type="time"] {
     width: 100%;
     max-width: 150px;
+  }
+
+  /* Time cell on mobile */
+  .time-cell {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  /* Action buttons on mobile */
+  .action-buttons-container {
+    flex-direction: row;
+    gap: 0.5rem;
+  }
+
+  .edit-log-btn,
+  .add-log-btn {
+    flex: 1;
+    min-height: 40px;
+    font-size: 0.85rem;
   }
 
   /* Verification buttons stack */
@@ -1221,5 +1396,48 @@ tr.disabled-row td:first-child {
 
   table {
     min-width: 0;
+  }
+}
+
+/* Mobile timeclock table fixes */
+@media (max-width: 768px) {
+  #timeclockTable tbody td {
+    font-size: 0.85rem;
+    flex-wrap: nowrap; /* Don't wrap - keep items on one line */
+    justify-content: flex-start; /* Left-align everything */
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  #timeclockTable tbody td::before {
+    min-width: 80px;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+    text-align: left; /* Left-align the label */
+  }
+
+  /* Time cell - keep input and button on one line */
+  .time-cell {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Time input - don't stretch full width */
+  #timeclockTable input[type="time"] {
+    width: auto;
+    min-width: 110px;
+    max-width: 140px;
+    flex-shrink: 0;
+  }
+
+  /* Delete button - keep compact */
+  .delete-log-btn {
+    flex-shrink: 0;
+    min-width: 36px;
+    min-height: 36px;
   }
 }

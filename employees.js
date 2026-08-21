@@ -761,7 +761,7 @@ function renderTable(filter = '') {
   function loadTimeclock(empId, filterDate = null) {
     currentTimeclockEmpId = empId;
     let fetchPromise;
-
+    
     if (filterDate) {
       if (filterDate.length === 7) {
         const startAtVal = filterDate;
@@ -785,25 +785,26 @@ function renderTable(filter = '') {
     } else {
       fetchPromise = get(ref(db, 'timecards')).then(snap => snap.val() || {});
     }
-
+    
     fetchPromise.then(all => {
       timeclockBody.innerHTML = '';
       const records = [];
       let maxCycles = 3;
-
+      
       Object.entries(all).forEach(([date, dayData]) => {
         if (dayData[empId]?.logs?.length) {
           const rawLogs = dayData[empId].logs;
           const { logs: fixedLogs } = autoFixLogs(rawLogs, employees[empId]?.terms || 'Full-time');
           const sortedLogs = [...fixedLogs].sort((a, b) => a.time.localeCompare(b.time));
           const rows = getLogsRows(sortedLogs);
+          
           if (rows.length > maxCycles) maxCycles = rows.length;
-
+          
           let totalMinutes = 0;
           let hasValidCycle = false;
           let currentIn = null;
           let currentInLocation = null;
-
+          
           for (const log of sortedLogs) {
             if (log.type === 'in') {
               currentIn = timeToMinutes(log.time);
@@ -823,77 +824,79 @@ function renderTable(filter = '') {
               }
             }
           }
+          
           const durationText = hasValidCycle ? formatDuration(totalMinutes) : '-';
           records.push({ date, rows, durationText });
         }
       });
-
+      
       records.sort((a, b) => b.date.localeCompare(a.date));
+      
       if (records.length === 0) {
         timeclockBody.innerHTML = `<tr><td colspan="9" class="empty-state">No records found</td></tr>`;
         return;
       }
-
+      
+      // Simple flat header - no rowspan/colspan
       const table = timeclockBody.parentElement;
-      let theadHtml = `<thead id="timeclockThead"><tr><th rowspan="2">Date</th>`;
+      let theadHtml = `<thead id="timeclockThead"><tr><th>Date</th>`;
       for (let i = 0; i < maxCycles; i++) {
         const ordinal = i + 1;
         const suffix = ordinal === 1 ? 'st' : ordinal === 2 ? 'nd' : ordinal === 3 ? 'rd' : 'th';
-        theadHtml += `<th colspan="2" style="text-align:center;">${ordinal}${suffix} Time</th>`;
+        theadHtml += `<th>${ordinal}${suffix} In</th><th>${ordinal}${suffix} Out</th>`;
       }
-      theadHtml += `<th rowspan="2">Total Hours</th><th rowspan="2">Action</th></tr><tr>`;
-      for (let i = 0; i < maxCycles; i++) {
-        theadHtml += `<th>In</th><th>Out</th>`;
-      }
-      theadHtml += `</tr></thead>`;
-
+      theadHtml += `<th>Total Hours</th><th>Action</th></tr></thead>`;
+      
       const existingThead = table.querySelector('thead');
       if (existingThead) existingThead.outerHTML = theadHtml;
       else table.insertAdjacentHTML('afterbegin', theadHtml);
-
+      
       records.forEach(r => {
         const row = document.createElement('tr');
         row.dataset.editing = 'false';
         row.dataset.date = r.date;
-        let rowHtml = `<td>${r.date}</td>`;
-
+        
+        let rowHtml = `<td data-label="Date">${r.date}</td>`;
+        
         for (let i = 0; i < maxCycles; i++) {
           const cycle = r.rows[i] || { inTime: '', inIndex: -1, outTime: '', outIndex: -1, inLocation: '' };
           const inLoc = cycle.inLocation || '';
-
+          
           if (cycle.inTime === '' && cycle.outTime === '') {
-            rowHtml += `<td style="color:#cbd5e1; text-align:center;">-</td><td style="color:#cbd5e1; text-align:center;">-</td>`;
+            rowHtml += `<td data-label="${i+1}${['st','nd','rd','th','th'][i]} In" style="color:#cbd5e1; text-align:center;">-</td>`;
+            rowHtml += `<td data-label="${i+1}${['st','nd','rd','th','th'][i]} Out" style="color:#cbd5e1; text-align:center;">-</td>`;
           } else {
             rowHtml += `
-              <td>
-                <div style="display:flex; gap:4px; align-items:center;">
+              <td data-label="${i+1}${['st','nd','rd','th','th'][i]} In">
+                <div class="time-cell">
                   <input type="time" value="${cycle.inTime}" disabled class="tc-input" data-type="in" data-location="${inLoc}">
                   ${cycle.inTime ? `<button class="delete-log-btn" data-type="in" data-time="${cycle.inTime}" data-idx="${cycle.inIndex}" title="Delete">🗑️</button>` : ''}
                 </div>
               </td>
-              <td>
-                <div style="display:flex; gap:4px; align-items:center;">
+              <td data-label="${i+1}${['st','nd','rd','th','th'][i]} Out">
+                <div class="time-cell">
                   <input type="time" value="${cycle.outTime}" disabled class="tc-input" data-type="out" data-location="${inLoc}">
-                  ${cycle.outTime ? `<button class="delete-log-btn" data-type="out" data-time="${cycle.outTime}" data-idx="${cycle.outIndex}" title="Delete">🗑️</button>` : ''}
+                  ${cycle.outTime ? `<button class="delete-log-btn" data-type="out" data-time="${cycle.outTime}" data-idx="${cycle.outIndex}" title="Delete">️</button>` : ''}
                 </div>
               </td>
             `;
           }
         }
-
+        
         rowHtml += `
-          <td style="font-weight: 600; color: #4682B4; text-align: center;">${r.durationText}</td>
-          <td>
+          <td data-label="Total" class="total-hours-cell">${r.durationText}</td>
+          <td data-label="">
             <div class="action-buttons-container">
               <button class="edit-log-btn secondary" data-date="${r.date}">Edit</button>
               <button class="add-log-btn" data-date="${r.date}">+ Add</button>
             </div>
           </td>
         `;
+        
         row.innerHTML = rowHtml;
         timeclockBody.appendChild(row);
       });
-
+      
       // Edit Button Logic
       document.querySelectorAll('.edit-log-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
@@ -902,7 +905,7 @@ function renderTable(filter = '') {
           const isEditing = mainRow.dataset.editing === 'true';
           const date = btn.dataset.date;
           const inputs = mainRow.querySelectorAll('.tc-input');
-
+          
           if (!isEditing) {
             mainRow.dataset.editing = 'true';
             inputs.forEach(input => {
@@ -912,7 +915,7 @@ function renderTable(filter = '') {
             btn.textContent = 'Save';
             btn.classList.remove('secondary');
             btn.classList.add('primary');
-
+            
             const modalContent = document.querySelector('#employeeModal .modal-content');
             let dropdownContainer = modalContent?.querySelector('.center-selector-container');
             if (!dropdownContainer) {
@@ -943,24 +946,23 @@ function renderTable(filter = '') {
                   });
                 }
               });
-
               newLogs.sort((a, b) => a.time.localeCompare(b.time));
               await update(ref(db, `timecards/${date}/${empId}`), { logs: newLogs });
-
+              
               mainRow.dataset.editing = 'false';
               inputs.forEach(input => {
                 input.disabled = true;
                 input.style.borderColor = '#cbd5e1';
               });
-
+              
               const dropdown = document.querySelector('#employeeModal .modal-content .center-selector-container');
               if (dropdown) dropdown.remove();
-
+              
               btn.textContent = 'Edit';
               btn.classList.remove('primary');
               btn.classList.add('secondary');
               btn.disabled = false;
-
+              
               loadTimeclock(empId, timeclockDateFilter?.value || null);
             } catch (err) {
               console.error("Error saving timeclock:", err);
@@ -971,8 +973,8 @@ function renderTable(filter = '') {
           }
         });
       });
-
-      // Delete Button Logic (FIXED: Passes exact index to prevent deleting wrong/multiple records)
+      
+      // Delete Button Logic
       document.querySelectorAll('.delete-log-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
           e.preventDefault();
@@ -984,7 +986,7 @@ function renderTable(filter = '') {
           showDeleteConfirmation(date, empId, type, time, idx);
         });
       });
-
+      
       // Add Button Logic
       document.querySelectorAll('.add-log-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -993,7 +995,6 @@ function renderTable(filter = '') {
           showAddEntryModal(date, empId);
         });
       });
-
     }).catch(err => {
       console.error("Error loading timeclock:", err);
       timeclockBody.innerHTML = '<tr><td colspan="9" class="empty-state">Error loading records</td></tr>';
