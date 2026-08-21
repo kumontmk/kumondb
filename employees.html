@@ -1,57 +1,63 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!-- Shows the logo in the browser tab -->
-  <link rel="icon" type="image/svg+xml" href="favicon.svg">
-
-  <!-- Optional: PNG fallback for older browsers -->
-  <link rel="icon" type="image/png" sizes="512x512" href="dblogo-maskable-512.png">
-
-  <!-- Optional: icon when saved to iOS home screen -->
-  <link rel="apple-touch-icon" href="dblogo-maskable-512.png">
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <meta name="theme-color" content="#87CEEB">
   <title>Employees - Kumon DB</title>
   <link rel="stylesheet" href="employees.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
+  <div id="page-loader"><div class="spinner"></div></div>
+
   <header>
     <nav>
       <a href="centers.html">← Centers</a>
     </nav>
-    <h2>👥 Employee Management</h2>
+    <h1>👥 Employee Management</h1>
   </header>
 
   <div id="accessDenied" class="access-denied hidden">
     <div class="access-denied-content">
       <h2>🔐 Access Restricted</h2>
       <p>This page is only accessible to Administrators and Managers.</p>
-      <p>Please log in with an authorized account or contact your administrator.</p>
+      <p>Please log in with an authorized account.</p>
     </div>
   </div>
 
-  <main id="mainContent" class="students-page hidden" style="opacity:0; pointer-events:none; transition: opacity 0.3s;">
+  <div id="mainContent" class="students-page hidden" style="opacity:0;pointer-events:none;">
+
+    <!-- Export Section -->
     <div class="export-container">
-      <label>📊 Export Timecards to Excel:</label>
+      <label for="exportMonthPicker">📅 Export Month:</label>
       <input type="month" id="exportMonthPicker">
-      <button id="exportExcelBtn" class="primary">Export</button>
+      <button id="exportExcelBtn" class="primary">⬇ Export Excel</button>
     </div>
 
-    <div class="tabs">
-      <button class="tab-btn active" data-main-tab="employees">Employees <span id="employeesBadge" class="tab-badge hidden">0</span></button>
-      <button class="tab-btn" data-main-tab="verifications">Pending Verifications <span id="verificationsBadge" class="tab-badge hidden">0</span></button>
-      <button class="tab-btn" data-main-tab="incomplete">Incomplete Timecards <span id="incompleteBadge" class="tab-badge hidden">0</span></button>
+    <!-- Main Tabs -->
+    <div class="tabs" role="tablist">
+      <button class="tab-btn active" data-main-tab="employees">
+        👥 Employees <span id="employeesBadge" class="tab-badge hidden">0</span>
+      </button>
+      <button class="tab-btn" data-main-tab="verifications">
+        ✅ Verifications <span id="verificationsBadge" class="tab-badge hidden">0</span>
+      </button>
+      <button class="tab-btn" data-main-tab="incomplete">
+        ⚠️ Incomplete <span id="incompleteBadge" class="tab-badge hidden">0</span>
+      </button>
     </div>
 
+    <!-- EMPLOYEES TAB -->
     <div id="main-tab-employees" class="tab-content active">
-    <div class="controls">
-      <input type="text" id="searchEmployee" placeholder="🔍 Search employees...">
-      <button id="addEmployeeBtn" class="primary">+ Add Employee</button>
-    </div>
+      <div class="controls">
+        <input type="text" id="searchEmployee" placeholder="🔍 Search by name, email, or position...">
+        <button id="addEmployeeBtn" class="primary">➕ Add Employee</button>
+      </div>
+
       <div class="table-wrapper">
-        <table>
+        <table id="employeeTable">
           <thead>
             <tr>
               <th>English Name</th>
@@ -69,8 +75,9 @@
       </div>
     </div>
 
+    <!-- VERIFICATIONS TAB -->
     <div id="main-tab-verifications" class="tab-content">
-      <h3 style="margin-bottom:1rem; color:#4682B4;">Pending Account Verifications</h3>
+      <h3 style="margin-bottom:1rem;color:#4682B4;">Pending Account Verifications</h3>
       <div class="table-wrapper">
         <table>
           <thead>
@@ -89,14 +96,17 @@
       </div>
     </div>
 
+    <!-- INCOMPLETE TAB -->
     <div id="main-tab-incomplete" class="tab-content">
-      <h3 style="margin-bottom:0.5rem; color:#4682B4;">⚠️ Incomplete Timecards & Verifications</h3>
-      <p style="color:#666; margin-bottom:1rem; font-size:0.9rem;">Shows all unpaired clock-in/out records and employee-submitted verification requests.</p>
+      <h3 style="margin-bottom:0.5rem;color:#4682B4;">⚠️ Incomplete Timecards & Verifications</h3>
+      <p style="color:#666;font-size:0.85rem;margin-bottom:1rem;">
+        Shows all unpaired clock-in/out records and employee-submitted verification requests.
+      </p>
       <div class="table-wrapper">
-        <table>
+        <table id="incompleteTable">
           <thead>
             <tr>
-              <th>Employee Name</th>
+              <th>Employee</th>
               <th>Position</th>
               <th>Terms</th>
               <th>Date</th>
@@ -112,39 +122,41 @@
         </table>
       </div>
     </div>
-  </main>
+  </div>
 
-  <!-- Employee Modal -->
+  <!-- EMPLOYEE MODAL -->
   <div id="employeeModal" class="modal hidden">
     <div class="modal-content wide">
       <button class="close-btn" id="closeModal">&times;</button>
-      <h2 id="modalTitle" style="text-align:center; margin-bottom:1.5rem; color:#4682B4;">Add Employee</h2>
-      
-      <div class="tabs" style="margin-bottom:1.5rem;">
-        <button class="tab-btn active" data-tab="details">Details & QR</button>
-        <button class="tab-btn" data-tab="timeclock">Timeclock Records</button>
-        <button class="tab-btn" data-tab="permissions">Permissions</button>
-        <button class="tab-btn" data-tab="leave">Leave Entitlement</button>
+      <h2 id="modalTitle" style="color:#4682B4;margin-bottom:1rem;font-size:1.2rem;">Add Employee</h2>
+
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="details">📋 Details & QR</button>
+        <button class="tab-btn" data-tab="timeclock">⏰ Timeclock</button>
+        <button class="tab-btn" data-tab="permissions">🔒 Permissions</button>
+        <button class="tab-btn" data-tab="leave">🏖️ Leave</button>
       </div>
 
+      <!-- DETAILS TAB -->
       <div id="tab-details" class="tab-content active">
         <form id="employeeForm">
           <input type="hidden" id="empId">
+
           <div class="form-grid">
             <div>
-              <label>English Name *</label>
+              <label for="empEnglish">English Name *</label>
               <input type="text" id="empEnglish" required>
             </div>
             <div>
-              <label>Chinese Name</label>
+              <label for="empChinese">Chinese Name</label>
               <input type="text" id="empChinese">
             </div>
             <div>
-              <label>Email Address *</label>
+              <label for="empEmail">Email Address *</label>
               <input type="email" id="empEmail" required>
             </div>
             <div>
-              <label>Nationality *</label>
+              <label for="empNationality">Nationality *</label>
               <select id="empNationality" required>
                 <option value="">Select...</option>
                 <option value="Filipino">Filipino</option>
@@ -154,9 +166,27 @@
               </select>
               <input type="text" id="empNationalityOther" class="other-input" placeholder="Specify nationality">
             </div>
+            <div>
+              <label for="empDate">Employment Date *</label>
+              <input type="date" id="empDate" required>
+            </div>
+            <div>
+              <label for="empTerms">Employment Terms *</label>
+              <select id="empTerms" required>
+                <option value="Full-time">Full-time</option>
+                <option value="Part-time">Part-time</option>
+              </select>
+            </div>
+            <div id="passwordFieldContainer">
+              <label for="empPassword">Initial Password</label>
+              <input type="text" id="empPassword" value="Kumon123">
+            </div>
+          </div>
+
+          <div class="form-grid">
             <div style="grid-column: 1 / -1;">
               <label>Positions *</label>
-              <div id="empPositionsGroup" class="checkbox-group">
+              <div class="checkbox-group" id="empPositionsGroup">
                 <label><input type="checkbox" value="English Teacher"> English Teacher</label>
                 <label><input type="checkbox" value="Math Teacher"> Math Teacher</label>
                 <label><input type="checkbox" value="Chinese Teacher"> Chinese Teacher</label>
@@ -167,44 +197,30 @@
                 <label><input type="checkbox" value="Custodian"> Custodian</label>
               </div>
             </div>
-            <div>
-              <label>Employment Date *</label>
-              <input type="date" id="empDate" required>
-            </div>
-            <div>
-              <label>Employment Terms *</label>
-              <select id="empTerms" required>
-                <option value="Full-time">Full-time</option>
-                <option value="Part-time">Part-time</option>
-              </select>
-            </div>
-            <div id="passwordFieldContainer">
-              <label>Initial Password</label>
-              <input type="text" id="empPassword" value="Kumon123" readonly style="background:#f8f9fa;">
-            </div>
           </div>
-          
+
           <div id="qrContainer">
-            <h4 style="margin-bottom:1rem; color:#4682B4;">QR Code</h4>
-            <img id="empQrImg" alt="QR Code" style="max-width:200px; margin-bottom:0.5rem;">
-            <br>
-            <button type="button" id="downloadQrBtn" class="secondary" style="margin-top:0.5rem;">⬇ Download QR Code</button>
+            <h4 style="color:#4682B4;margin-bottom:0.75rem;">📱 QR Code</h4>
+            <img id="empQrImg" alt="QR Code" style="max-width:180px;margin:0 auto;display:block;">
+            <button type="button" id="downloadQrBtn" class="secondary" style="margin-top:0.75rem;">
+              ⬇ Download QR Code
+            </button>
           </div>
         </form>
       </div>
 
+      <!-- TIMECLOCK TAB -->
       <div id="tab-timeclock" class="tab-content">
-        <p style="color:#666; margin-bottom:1rem; font-size:0.9rem;">Edit time in/out records manually. Changes apply immediately.</p>
-        <div style="margin-bottom:1rem; display:flex; gap:1rem; align-items:center;">
-          <label style="font-weight:600; color:#4682B4;">Filter by Date:</label>
-          <input type="month" id="timeclockDateFilter" style="max-width:200px;">
-          <button id="clearTimeclockFilter" class="secondary" style="padding:0.5rem 1rem;">Show All</button>
+        <p style="color:#666;font-size:0.85rem;margin-bottom:0.75rem;">
+          Edit time in/out records manually. Changes apply immediately.
+        </p>
+        <div class="controls" style="margin-bottom:0.75rem;">
+          <input type="date" id="timeclockDateFilter" placeholder="Filter by date">
+          <button id="clearTimeclockFilter" class="secondary">Show All</button>
         </div>
-        <div class="table-wrapper" style="max-height: 400px;">
-          <table class="timeclock-edit-table">
-            <thead id="timeclockThead">
-              <tr><th colspan="9" class="empty-state">No records found</th></tr>
-            </thead>
+        <div class="table-wrapper" style="max-height:60vh;">
+          <table id="timeclockTable">
+            <thead id="timeclockThead"></thead>
             <tbody id="timeclockHistoryBody">
               <tr><td colspan="9" class="empty-state">No records found</td></tr>
             </tbody>
@@ -212,16 +228,21 @@
         </div>
       </div>
 
+      <!-- PERMISSIONS TAB -->
       <div id="tab-permissions" class="tab-content">
-        <p style="color:#666; margin-bottom:1rem; font-size:0.9rem;">Configure access rights for this employee.</p>
-        <h4>Center Access</h4>
-        <div id="centerPermissions" class="form-grid"></div>
-        
-        <h4>Dashboard Cards Access</h4>
-        <div id="dashboardPermissions" class="form-grid">
+        <p style="color:#666;font-size:0.85rem;margin-bottom:0.75rem;">
+          Configure access rights for this employee.
+        </p>
+
+        <h4>🏢 Center Access</h4>
+        <div class="form-grid" id="centerPermissions"></div>
+
+        <h4>📊 Dashboard Cards Access</h4>
+        <div class="form-grid" id="dashboardPermissions">
           <label><input type="checkbox" value="studentManagement"> Student Management</label>
-          <label><input type="checkbox" value="newStudentList"> New Student List</label>
-          <label><input type="checkbox" value="editStudentDetails"> Edit Student Details</label>
+          <label><input type="checkbox" value="newStudent"> New Student</label>
+          <label><input type="checkbox" value="studentList"> Student List</label>
+          <label><input type="checkbox" value="editStudent"> Edit Student Details</label>
           <label><input type="checkbox" value="timetable"> Timetable</label>
           <label><input type="checkbox" value="monthlyReports"> Monthly Reports</label>
           <label><input type="checkbox" value="progressCharts"> Progress Charts</label>
@@ -231,97 +252,111 @@
           <label><input type="checkbox" value="centreBulletin"> Centre Bulletin</label>
           <label><input type="checkbox" value="labelEditor"> Label Editor</label>
         </div>
-        <div id="permissionsLockedMsg" class="hidden">🔒 Only kumonchamps@gmail.com can edit permissions.</div>
+
+        <div id="permissionsLockedMsg" style="display:none;">
+          🔒 Only kumonchamps@gmail.com can edit permissions.
+        </div>
       </div>
 
-      <!--Leave -->
+      <!-- LEAVE TAB -->
       <div id="tab-leave" class="tab-content">
-                  <p style="font-size: 0.9rem; color: #666; margin-bottom: 1.5rem;">
-              Manage leave credits for this employee.
-          </p>          
-          <!-- Full-Time Employee Leave Section -->
-          <div id="fullTimeLeaveSection">
-              <!-- Annual Leave -->
-              <div class="leave-credit-card">
-                  <div class="leave-header">
-                      <span class="leave-type">📅 Annual Leave</span>
-                      <button class="secondary edit-entitled-btn" data-leave-type="annual" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">✏️ Edit</button>
-                  </div>
-                  <div class="leave-stats-grid">
-                      <div class="stat-item">
-                          <label>Balance</label>
-                          <div class="stat-value" id="annualBalance">0</div>
-                      </div>
-                      <div class="stat-item">
-                          <label>Entitled</label>
-                          <div class="stat-value editable" id="annualEntitled">0</div>
-                      </div>
-                      <div class="stat-item">
-                          <label>Used Credits</label>
-                          <div class="stat-value" id="annualUsed">0</div>
-                      </div>
-                  </div>
-              </div>
+        <p style="color:#666;font-size:0.85rem;margin-bottom:1rem;">
+          Manage leave credits for this employee.
+        </p>
 
-              <!-- Sick Leave -->
-              <div class="leave-credit-card">
-                  <div class="leave-header">
-                      <span class="leave-type">🏥 Sick Leave</span>
-                      <button class="secondary edit-entitled-btn" data-leave-type="sick" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">✏️ Edit</button>
-                  </div>
-                  <div class="leave-stats-grid">
-                      <div class="stat-item">
-                          <label>Balance</label>
-                          <div class="stat-value" id="sickBalance">0</div>
-                      </div>
-                      <div class="stat-item">
-                          <label>Entitled</label>
-                          <div class="stat-value editable" id="sickEntitled">0</div>
-                      </div>
-                      <div class="stat-item">
-                          <label>Used Credits</label>
-                          <div class="stat-value" id="sickUsed">0</div>
-                      </div>
-                  </div>
+        <div id="fullTimeLeaveSection">
+          <div class="leave-credit-card">
+            <div class="leave-header">
+              <span class="leave-type">📅 Annual Leave</span>
+              <button type="button" class="edit-entitled-btn secondary" data-leave-type="annual" style="padding:0.4rem 0.8rem;font-size:0.85rem;">
+                ✏️ Edit
+              </button>
+            </div>
+            <div class="leave-stats-grid">
+              <div class="stat-item">
+                <label>Entitled</label>
+                <div class="stat-value" id="annualEntitled">0</div>
               </div>
+              <div class="stat-item">
+                <label>Used</label>
+                <div class="stat-value" id="annualUsed">0</div>
+              </div>
+              <div class="stat-item">
+                <label>Balance</label>
+                <div class="stat-value" id="annualBalance">0</div>
+              </div>
+            </div>
           </div>
 
-          <!-- Part-Time Employee Leave Section -->
-          <div id="partTimeLeaveSection" style="display: none;">
-              <div class="leave-credit-card">
-                  <div class="leave-header">
-                      <span class="leave-type">⏱️ Time Off Credits</span>
-                  </div>
-                  <div class="leave-stats-grid" style="grid-template-columns: 1fr; max-width: 200px;">
-                      <div class="stat-item">
-                          <label>Used Credits</label>
-                          <div class="stat-value" id="partTimeUsed">0</div>
-                      </div>
-                  </div>
-                  <p style="font-size: 0.85rem; color: #666; margin-top: 1rem; font-style: italic;">
-                      Part-time employees do not have leave entitlement. Time off is tracked separately.
-                  </p>
+          <div class="leave-credit-card">
+            <div class="leave-header">
+              <span class="leave-type">🏥 Sick Leave</span>
+              <button type="button" class="edit-entitled-btn secondary" data-leave-type="sick" style="padding:0.4rem 0.8rem;font-size:0.85rem;">
+                ✏️ Edit
+              </button>
+            </div>
+            <div class="leave-stats-grid">
+              <div class="stat-item">
+                <label>Entitled</label>
+                <div class="stat-value" id="sickEntitled">0</div>
               </div>
+              <div class="stat-item">
+                <label>Used</label>
+                <div class="stat-value" id="sickUsed">0</div>
+              </div>
+              <div class="stat-item">
+                <label>Balance</label>
+                <div class="stat-value" id="sickBalance">0</div>
+              </div>
+            </div>
           </div>
+        </div>
 
-          <!-- Hidden inputs to hold values during form submission -->
-          <input type="number" id="empAnnualLeave" min="0" step="1" style="display:none;">
-          <input type="number" id="empSickLeave" min="0" step="1" style="display:none;">
-          <input type="number" id="empTimeOff" min="0" step="1" style="display:none;">
+        <div id="partTimeLeaveSection" style="display:none;">
+          <div class="leave-credit-card">
+            <div class="leave-header">
+              <span class="leave-type">⏱️ Time Off Credits</span>
+            </div>
+            <div class="leave-stats-grid" style="grid-template-columns:1fr;">
+              <div class="stat-item">
+                <label>Used Credits</label>
+                <div class="stat-value" id="partTimeUsed">0</div>
+              </div>
+            </div>
+            <p style="margin-top:0.75rem;color:#666;font-size:0.85rem;text-align:center;">
+              Part-time employees do not have leave entitlement. Time off is tracked separately.
+            </p>
+          </div>
+        </div>
+
+        <div class="form-grid" style="margin-top:1rem;">
+          <div>
+            <label for="empAnnualLeave">Annual Leave Entitled</label>
+            <input type="number" id="empAnnualLeave" min="0">
+          </div>
+          <div>
+            <label for="empSickLeave">Sick Leave Entitled</label>
+            <input type="number" id="empSickLeave" min="0">
+          </div>
+          <div>
+            <label for="empTimeOff">Time Off Credits</label>
+            <input type="number" id="empTimeOff" min="0">
+          </div>
+        </div>
       </div>
 
-      <div style="display:flex; gap:1rem; justify-content:flex-end; margin-top:2rem; padding-top:1rem; border-top:1px solid #e2e8f0;">
-        <button id="cancelModal" class="secondary">Cancel</button>
-        <button id="saveEmployee" class="primary">Save Employee</button>
+      <div style="display:flex;gap:0.75rem;margin-top:1.5rem;flex-wrap:wrap;">
+        <button type="button" id="cancelModal" class="secondary" style="flex:1;min-width:120px;">Cancel</button>
+        <button type="button" id="saveEmployee" class="primary" style="flex:1;min-width:120px;">💾 Save Employee</button>
       </div>
     </div>
   </div>
 
-  <div id="page-loader" class="hidden">
-    <div class="spinner"></div>
-  </div>
-
   <script type="module" src="employees.js"></script>
-  <script type="module" src="./activity-logger-init.js"></script>
+  <script>
+    window.addEventListener('load', () => {
+      document.getElementById('page-loader').classList.add('hidden');
+    });
+  </script>
 </body>
 </html>
