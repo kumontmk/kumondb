@@ -1898,6 +1898,12 @@ function renderSchedule() {
                     return newSub;
                 });
                 if (existingData.poNote) studentData.poNote = existingData.poNote;
+
+                // ✅ FIX: Preserve lastGradeUpdateYear so manual grade edits
+                //         don't get re-bumped on the next form load
+                if (existingData.lastGradeUpdateYear) {
+                    studentData.lastGradeUpdateYear = existingData.lastGradeUpdateYear;
+                }
             }
         }
         try {

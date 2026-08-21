@@ -1,16 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-      <!-- Shows the logo in the browser tab -->
-  <link rel="icon" type="image/svg+xml" href="favicon.svg">
-
-  <!-- Optional: PNG fallback for older browsers -->
-  <link rel="icon" type="image/png" sizes="512x512" href="dblogo-maskable-512.png">
-
-  <!-- Optional: icon when saved to iOS home screen -->
-  <link rel="apple-touch-icon" href="dblogo-maskable-512.png">
+    <!-- Shows the logo in the browser tab -->
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <!-- Optional: PNG fallback for older browsers -->
+    <link rel="icon" type="image/png" sizes="512x512" href="dblogo-maskable-512.png">
+    <!-- Optional: icon when saved to iOS home screen -->
+    <link rel="apple-touch-icon" href="dblogo-maskable-512.png">
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title data-i18n="dropbook.title">Drop Book - Kumon Management</title>
     <link rel="stylesheet" href="dropbook.css">
 </head>
@@ -23,7 +21,7 @@
         <nav>
             <a href="dashboard.html" data-i18n="dropbook.backToDashboard">← Dashboard</a>
         </nav>
-                <h2 data-i18n="dropbook.pageTitle">📉 Drop Book</h>
+        <h2 data-i18n="dropbook.pageTitle">📉 Drop Book</h2>
     </header>
 
     <div id="accessDenied" class="access-denied hidden">
@@ -36,24 +34,30 @@
 
     <div id="mainContent" class="form-container hidden">
         <div class="controls">
-            <select id="filterStatus">
-                <option value="all" data-i18n="dropbook.allDropPause">All (Drop & Pause)</option>
-                <option value="drop" data-i18n="dropbook.dropOnly">Drop Only</option>
-                <option value="pause" data-i18n="dropbook.pauseOnly">Pause Only</option>
+            <!-- 📱 Segmented status filter (drives the hidden select used by existing JS) -->
+            <div class="segmented" id="statusSegmented" aria-label="Status filter">
+                <button type="button" class="segment active" data-value="all" data-i18n="dropbook.allDropPause">All (Drop &amp; Pause)</button>
+                <button type="button" class="segment" data-value="drop" data-i18n="dropbook.dropOnly">Drop Only</button>
+                <button type="button" class="segment" data-value="pause" data-i18n="dropbook.pauseOnly">Pause Only</button>
+            </div>
+            <select id="filterStatus" class="hidden" aria-hidden="true">
+                <option value="all">All</option>
+                <option value="drop">Drop</option>
+                <option value="pause">Pause</option>
             </select>
 
             <!-- View Mode Controls -->
             <div class="view-mode-controls">
-                <label for="viewMode" data-i18n="dropbook.viewMode">📅 View Mode:</label>
+                <label for="viewMode" class="vm-label" data-i18n="dropbook.viewMode">📅 View Mode:</label>
                 <select id="viewMode">
                     <option value="single" data-i18n="dropbook.singleMonth">Single Month</option>
-                    <option value="year" selected data-i18n="dropbook.currentYear">Current Year</option> 
+                    <option value="year" selected data-i18n="dropbook.currentYear">Current Year</option>
                     <option value="range" data-i18n="dropbook.range12">12-Month Range</option>
                 </select>
             </div>
 
             <!-- Single Month Controls -->
-            <div id="singleMonthControls" class="single-month-controls">
+            <div id="singleMonthControls" class="single-month-controls hidden">
                 <select id="filterMonth"></select>
                 <select id="filterYear"></select>
             </div>
@@ -66,8 +70,11 @@
                 <span id="rangeEndLabel" class="range-end-label"></span>
             </div>
 
-            <!-- Add Request Button -->
-            <button id="addRequestBtn" class="add-request-btn" data-i18n="dropbook.addRequest">➕ Add Request</button>
+            <!-- Add Request Button (desktop pill / mobile FAB) -->
+            <button id="addRequestBtn" class="add-request-btn" aria-label="Add Request">
+                <span class="fab-icon" aria-hidden="true">＋</span>
+                <span class="fab-text" data-i18n="dropbook.addRequest">➕ Add Request</span>
+            </button>
         </div>
 
         <!-- Tabs Container -->
@@ -76,6 +83,7 @@
             <div id="subjectTabs" class="subject-tabs"></div>
         </div>
 
+        <!-- 🖥️ Desktop: Table -->
         <div class="table-wrapper">
             <table id="dropBookTable">
                 <thead>
@@ -98,6 +106,9 @@
                 </tbody>
             </table>
         </div>
+
+        <!-- 📱 Mobile: Cards (rendered by dropbook.js below ≤1024px) -->
+        <div id="dropBookCards" class="cards-container"></div>
     </div>
 
     <!-- Detail Modal -->
@@ -105,7 +116,7 @@
         <div class="modal-content dropbook-modal-content">
             <span id="closeModal" class="close-modal">&times;</span>
             <h2 data-i18n="dropbook.detailTitle">Student Drop/Pause Details</h2>
-            
+
             <div class="modal-grid">
                 <div class="info-group">
                     <label data-i18n="dropbook.lblStudentCN">Student Name (CN)</label>
@@ -182,17 +193,17 @@
                 </div>
             </div>
 
-            <div id="resumeSection" style="display:none; margin-bottom:1rem; padding:1rem; background:#e8f5e9; border-radius:8px; border-left:4px solid #4caf50;">
-                <label style="color:#2e7d32; font-weight:600; margin-bottom:0.5rem; display:block;" data-i18n="dropbook.returnMonth">📅 Return Month</label>
-                <input type="month" id="mResumeMonthYear" style="width:100%; padding:0.6rem; border:1px solid #ddd; border-radius:6px; font-size:1rem; font-family:inherit;">
-                <button id="cancelResumeBtn" type="button" style="margin-top:0.5rem; font-size:0.85rem; padding:0.4rem 0.8rem; background:#fff; border:1px solid #ccc; border-radius:6px; cursor:pointer;" data-i18n="dropbook.cancel">Cancel</button>
+            <div id="resumeSection" class="resume-section" style="display:none;">
+                <label class="resume-label" data-i18n="dropbook.returnMonth">📅 Return Month</label>
+                <input type="month" id="mResumeMonthYear">
+                <button id="cancelResumeBtn" type="button" class="resume-cancel-btn" data-i18n="dropbook.cancel">Cancel</button>
             </div>
 
             <div class="modal-actions">
-                <button id="reinstateRequestBtn" class="reinstate-request-btn" style="display: none; background: #0d6efd; color: white; margin-right: auto;" data-i18n="dropbook.reinstateRequest">🔄 Reinstate Request</button>
-                <button id="cancelRequestBtn" class="cancel-request-btn" style="display: none; background: #dc3545; color: white; margin-right: auto;" data-i18n="dropbook.cancelRequest">❌ Cancel Request</button>
-                <button id="resumeBtn" style="display:none; background:#4caf50; color:white; padding:0.6rem 1.2rem; font-weight:600; border:none; border-radius:6px; cursor:pointer;" data-i18n="dropbook.resume">🔄 Resume</button>
-                <button id="cancelResumeRequestBtn" style="display:none; background:#ff9800; color:white; padding:0.6rem 1.2rem; font-weight:600; border:none; border-radius:6px; cursor:pointer;" data-i18n="dropbook.cancelResume">❌ Cancel Resume</button>
+                <button id="reinstateRequestBtn" class="reinstate-request-btn modal-left-btn" style="display: none;" data-i18n="dropbook.reinstateRequest">🔄 Reinstate Request</button>
+                <button id="cancelRequestBtn" class="cancel-request-btn modal-left-btn" style="display: none;" data-i18n="dropbook.cancelRequest">❌ Cancel Request</button>
+                <button id="resumeBtn" class="resume-btn" style="display:none;" data-i18n="dropbook.resume">🔄 Resume</button>
+                <button id="cancelResumeRequestBtn" class="cancel-resume-btn" style="display:none;" data-i18n="dropbook.cancelResume">❌ Cancel Resume</button>
                 <button id="confirmDropBtn" class="confirm-drop-btn" data-i18n="dropbook.confirmDropPause">✔️ Confirm Drop/Pause</button>
                 <button id="cancelModalBtn" class="secondary" data-i18n="dropbook.cancel">Cancel</button>
                 <button id="saveModalBtn" class="primary" data-i18n="dropbook.saveChanges">💾 Save Changes</button>
@@ -205,10 +216,10 @@
         <div class="modal-content search-modal-content">
             <span id="closeSearchModal" class="close-modal">&times;</span>
             <h2 data-i18n="dropbook.addRequestTitle">➕ Add Drop/Pause Request</h2>
-            
+
             <!-- Step 1: Search -->
             <div id="searchStep">
-                <input type="text" id="searchStudentInput" placeholder="Search by Name (CN), Nickname or Pinyin..." data-i18n-placeholder="dropbook.phSearchStudent">
+                <input type="text" id="searchStudentInput" placeholder="Search by Name (CN), Nickname or Pinyin..." data-i18n-placeholder="dropbook.phSearchStudent" autocomplete="off">
                 <div id="searchResults" class="search-results">
                     <div class="search-result-item" style="color:#999; text-align:center;" data-i18n="dropbook.typeToSearch">Type to search...</div>
                 </div>
@@ -218,9 +229,9 @@
             <div id="detailsStep" class="hidden">
                 <div class="selected-student-info">
                     <h3 id="selectedStudentName"></h3>
-                    <button id="backToSearchBtn" class="secondary" style="width:auto; padding:0.3rem 0.8rem; font-size:0.8rem;" data-i18n="dropbook.changeStudent">← Change Student</button>
+                    <button id="backToSearchBtn" class="secondary change-student-btn" data-i18n="dropbook.changeStudent">← Change Student</button>
                 </div>
-                
+
                 <div class="modal-grid">
                     <div class="info-group full-width">
                         <label data-i18n="dropbook.subject">Subject</label>
@@ -239,8 +250,8 @@
                     </div>
                 </div>
 
-                <!-- Pause Fields: REMOVE "hidden" class (visible by default since Pause is default) -->
-                <div id="reqPauseFields" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                <!-- Pause Fields (visible by default since Pause is default) -->
+                <div id="reqPauseFields" class="pause-fields-grid">
                     <div class="info-group">
                         <label data-i18n="dropbook.pauseFromReq">Pause From *</label>
                         <input type="month" id="reqPauseFrom" required>
@@ -251,7 +262,7 @@
                     </div>
                 </div>
 
-                <!-- Drop Fields: ADD "hidden" class (hidden by default) -->
+                <!-- Drop Fields (hidden by default) -->
                 <div id="reqDropFields" class="hidden" style="margin-bottom: 1rem;">
                     <div class="info-group">
                         <label data-i18n="dropbook.dropMonthReq">Drop Month/Year *</label>
@@ -267,11 +278,11 @@
         </div>
     </div>
 
-    <!-- NEW: Confirmation Action Modal -->
+    <!-- Confirmation Action Modal -->
     <div id="confirmActionModal" class="modal hidden">
-        <div class="modal-content" style="max-width: 400px; text-align: center;">
-            <h3 id="confirmTitle" style="margin-bottom: 1rem;" data-i18n="dropbook.confirmActionTitle">Confirm Action</h3>
-            <p id="confirmMessage" style="margin-bottom: 1.5rem; color: var(--text-light);" data-i18n="dropbook.areYouSure">Are you sure?</p>
+        <div class="modal-content confirm-modal-content">
+            <h3 id="confirmTitle" data-i18n="dropbook.confirmActionTitle">Confirm Action</h3>
+            <p id="confirmMessage" class="confirm-message" data-i18n="dropbook.areYouSure">Are you sure?</p>
             <div class="modal-actions" style="justify-content: center;">
                 <button id="cancelConfirmBtn" class="secondary" data-i18n="dropbook.cancel">Cancel</button>
                 <button id="proceedConfirmBtn" class="primary" data-i18n="dropbook.proceed">Proceed</button>

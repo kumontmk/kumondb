@@ -47,6 +47,7 @@ onAuthStateChanged(auth, async (user) => {
         const isAdmin = user.email?.toLowerCase() === 'kumonchamps@gmail.com';
         const dashPerms = userData.permissions?.dashboardCards || {};
         const hasAccess = isAdmin || dashPerms[REQUIRED_PERMISSION] === true;
+
         if (hasAccess) {
             document.getElementById('accessDenied')?.classList.add('hidden');
             document.getElementById('mainContent')?.classList.remove('hidden');
@@ -76,6 +77,7 @@ function initApp() {
     const monthTabs = document.getElementById('monthTabs');
     const subjectTabs = document.getElementById('subjectTabs');
     const tbody = document.getElementById('dropBookBody');
+    const cardsContainer = document.getElementById('dropBookCards'); // ✱ MOBILE: card list
     const modal = document.getElementById('detailModal');
     const callStatusBtn = document.getElementById('mCallStatusBtn');
     const resumeBtn = document.getElementById('resumeBtn');
@@ -101,6 +103,7 @@ function initApp() {
     const now = new Date();
     filterMonth.value = String(now.getMonth() + 1).padStart(2, '0');
     filterYear.value = now.getFullYear();
+
     let nextMonth = now.getMonth() + 2;
     let nextYear = now.getFullYear();
     if (nextMonth > 12) { nextMonth = 1; nextYear += 1; }
@@ -108,6 +111,17 @@ function initApp() {
     rangeStartMonthSel.value = nextMonthStr;
     rangeStartYearSel.value = nextYear;
     viewModeSelect.value = 'year';
+
+    // ✱ MOBILE: segmented status filter → syncs hidden select used by existing logic
+    const statusSegments = document.querySelectorAll('#statusSegmented .segment');
+    statusSegments.forEach(btn => {
+        btn.addEventListener('click', () => {
+            statusSegments.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            filterStatus.value = btn.dataset.value;
+            filterStatus.dispatchEvent(new Event('change'));
+        });
+    });
 
     function generateSubjectTabs() {
         subjectTabs.innerHTML = '';
@@ -169,6 +183,7 @@ function initApp() {
             let defaultYear = currentYear;
             if (defaultMonth > 12) { defaultMonth = 1; defaultYear += 1; }
             if (defaultYear !== currentYear) { defaultMonth = now.getMonth() + 1; defaultYear = currentYear; }
+
             for (let m = 1; m <= 12; m++) {
                 const tab = document.createElement('button');
                 tab.className = 'tab-btn';
@@ -229,6 +244,7 @@ function initApp() {
                 renderTable();
             } else {
                 tbody.innerHTML = `<tr><td colspan="12" class="empty-state">${t('dropbook.noStudentsFound')}</td></tr>`;
+                if (cardsContainer) cardsContainer.innerHTML = `<div class="empty-state cards-empty">${t('dropbook.noStudentsFound')}</div>`;
             }
         } catch (err) {
             console.error("Error loading students: ", err);
@@ -340,19 +356,42 @@ function initApp() {
         return p.mom || p.dad || p.own || '-';
     }
 
+    // ✱ MOBILE: shared action-button click handler for table rows AND cards
+    function handleRowAction(e) {
+        const btn = e.target.closest('.confirm-row-btn');
+        if (btn && !btn.disabled) {
+            e.stopPropagation();
+            const studentId = btn.dataset.studentId;
+            const subjectIndex = parseInt(btn.dataset.subIndex);
+            const action = btn.dataset.action;
+            if (action === 'cancel') triggerCancelAction(studentId, subjectIndex);
+            else if (action === 'cancel-resume') triggerCancelResumeAction(studentId, subjectIndex);
+            else if (action === 'reinstate') triggerReinstateAction(studentId, subjectIndex);
+            else triggerConfirmAction(studentId, subjectIndex);
+        }
+    }
+    tbody.addEventListener('click', handleRowAction);
+    cardsContainer?.addEventListener('click', handleRowAction);
+
+    // ✱ MOBILE: renders BOTH the desktop table and the mobile card list
     function renderTable() {
         const entries = getFilteredEntries();
         tbody.innerHTML = '';
+        if (cardsContainer) cardsContainer.innerHTML = '';
+
         if (entries.length === 0) {
             tbody.innerHTML = `<tr><td colspan="12" class="empty-state">${t('dropbook.noRecords')}</td></tr>`;
+            if (cardsContainer) cardsContainer.innerHTML = `<div class="empty-state cards-empty">${t('dropbook.noRecords')}</div>`;
             return;
         }
+
         entries.forEach((entry, idx) => {
             const { student, subject, isPending, type, isCancelled, isResume, isResumed } = entry;
             const sub = entry.subject;
             const tMonth = entry.targetMonth;
             const tYear = entry.targetYear;
             const dateStr = tMonth && tYear ? `${MONTH_NAMES[parseInt(tMonth) - 1]} ${tYear}` : '-';
+
             const callStatus = sub.dropBook?.callStatus || false;
             const callBadge = callStatus ? '<span class="call-badge green">✔</span>' : '<span class="call-badge red">✖</span>';
             const statusText = type === 'drop' ? t('dropbook.statusDrop') : t('dropbook.statusPause');
@@ -360,6 +399,8 @@ function initApp() {
             const reason = entry.reason || '-';
             const isConfirmed = sub.dropBook?.confirmed;
             const pendingBadge = (isPending && !isConfirmed && !isCancelled && !isResumed) ? `<span class="status-badge-pending">${t('dropbook.pendingBadge')}</span>` : '';
+            const resumeBadge = isResume ? `<span class="status-badge-resume">${t('dropbook.resumePendingBadge')}</span>` : '';
+            const resumedBadge = isResumed ? `<span class="status-badge-resumed">${t('dropbook.resumedBadge')}</span>` : '';
 
             let actionBtn = '';
             if (isResumed) {
@@ -392,15 +433,13 @@ function initApp() {
                 `;
             }
 
+            // ── 🖥️ Desktop table row ──
             const tr = document.createElement('tr');
             if (isCancelled) tr.classList.add('cancelled-row');
             if (isResumed) tr.classList.add('resumed-row');
-            const resumeBadge = isResume ? ` <span class="status-badge-resume">${t('dropbook.resumePendingBadge')}</span>` : '';
-            const resumedBadge = isResumed ? ` <span class="status-badge-resumed">${t('dropbook.resumedBadge')}</span>` : '';
-
             tr.innerHTML = `
                 <td>${idx + 1}</td>
-                <td>${student.nameCn || '-'}${resumeBadge}${resumedBadge}</td>
+                <td>${student.nameCn || '-'} ${resumeBadge}${resumedBadge}</td>
                 <td>${student.nickname || '-'}</td>
                 <td>${dateStr} <span class="${statusClass}">${statusText}</span>${pendingBadge}</td>
                 <td>${student.grade || '-'}</td>
@@ -414,22 +453,44 @@ function initApp() {
             `;
             tr.addEventListener('click', () => openModal(entry));
             tbody.appendChild(tr);
+
+            // ── 📱 Mobile card ──
+            if (cardsContainer) {
+                const card = document.createElement('div');
+                card.className = `db-card ${type === 'drop' ? 'card-drop' : 'card-pause'}`;
+                if (isCancelled) card.classList.add('cancelled-row');
+                if (isResumed) card.classList.add('resumed-row');
+                card.innerHTML = `
+                    <div class="db-card-top">
+                        <div class="db-card-name-row">
+                            <span class="db-card-name">${student.nameCn || '-'}</span>
+                            ${student.nickname ? `<span class="db-card-nick">(${student.nickname})</span>` : ''}
+                            ${resumeBadge}${resumedBadge}
+                        </div>
+                        ${callBadge}
+                    </div>
+                    <div class="db-card-badges">
+                        <span class="db-card-date">${dateStr}</span>
+                        <span class="${statusClass}">${statusText}</span>
+                        ${pendingBadge}
+                    </div>
+                    <div class="db-card-meta">
+                        <span>📚 ${sub.name || '-'}</span>
+                        <span>🎓 ${student.grade || '-'}</span>
+                        <span>📈 ${sub.currentLevel || sub.startLevel || '-'}</span>
+                    </div>
+                    <div class="db-card-meta secondary-meta">
+                        <span>🕒 ${formatSchedule(sub.timeslots)}</span>
+                        <span>📞 ${getPhone(student)}</span>
+                    </div>
+                    ${reason && reason !== '-' ? `<div class="db-card-reason">💬 ${reason}</div>` : ''}
+                    <div class="db-card-actions">${actionBtn}</div>
+                `;
+                card.addEventListener('click', () => openModal(entry));
+                cardsContainer.appendChild(card);
+            }
         });
     }
-
-    tbody.addEventListener('click', (e) => {
-        const btn = e.target.closest('.confirm-row-btn');
-        if (btn && !btn.disabled) {
-            e.stopPropagation();
-            const studentId = btn.dataset.studentId;
-            const subjectIndex = parseInt(btn.dataset.subIndex);
-            const action = btn.dataset.action;
-            if (action === 'cancel') triggerCancelAction(studentId, subjectIndex);
-            else if (action === 'cancel-resume') triggerCancelResumeAction(studentId, subjectIndex);
-            else if (action === 'reinstate') triggerReinstateAction(studentId, subjectIndex);
-            else triggerConfirmAction(studentId, subjectIndex);
-        }
-    });
 
     async function triggerCancelAction(studentId, subjectIndex) {
         const student = allStudentsData.find(s => s.id === studentId);
@@ -437,17 +498,21 @@ function initApp() {
         const subjects = Array.isArray(student.subjects) ? student.subjects : Object.values(student.subjects || {});
         const sub = subjects[subjectIndex];
         if (!sub) return;
+
         const hasActivePending = sub.pendingRequest && !sub.pendingRequest.cancelled && sub.pendingRequest.type;
         const isDirectDropPause = sub.status === 'drop' || sub.status === 'pause';
+
         let confirmMsg = t('dropbook.cancelPendingMsg');
         if (isDirectDropPause && !hasActivePending) confirmMsg = t('dropbook.cancelDropPauseMsg');
         if (!confirm(confirmMsg)) return;
+
         try {
             const studentRef = ref(db, `centers/${centerId}/students/${studentId}`);
             const snap = await get(studentRef);
             if (!snap.exists()) throw new Error("Student not found");
             const studentData = snap.val();
             let subjectsData = Array.isArray(studentData.subjects) ? studentData.subjects : Object.values(studentData.subjects || {});
+
             if (subjectsData[subjectIndex]) {
                 if (hasActivePending) {
                     subjectsData[subjectIndex].pendingRequest.cancelled = true;
@@ -467,8 +532,10 @@ function initApp() {
                     if (subjectsData[subjectIndex].dropBook) delete subjectsData[subjectIndex].dropBook;
                 }
             }
+
             studentData.subjects = subjectsData;
             await set(studentRef, studentData);
+
             const localStudent = allStudentsData.find(s => s.id === studentId);
             if (localStudent) localStudent.subjects = subjectsData;
             renderTable();
@@ -491,6 +558,7 @@ function initApp() {
             studentData.subjects = subjectsData;
             studentData.updatedAt = new Date().toISOString();
             await set(studentRef, studentData);
+
             const localStudent = allStudentsData.find(s => s.id === studentId);
             if (localStudent) localStudent.subjects = subjectsData;
             renderTable();
@@ -515,6 +583,7 @@ function initApp() {
             }
             studentData.subjects = subjects;
             await set(studentRef, studentData);
+
             const localStudent = allStudentsData.find(s => s.id === studentId);
             if (localStudent) localStudent.subjects = subjects;
             renderTable();
@@ -528,6 +597,7 @@ function initApp() {
     function openModal(entry) {
         const { student, subject, studentId, subjectIndex, isPending } = entry;
         currentEditContext = { studentId, subjectIndex, isPending };
+
         document.getElementById('mNameCn').value = student.nameCn || '-';
         document.getElementById('mNickname').value = student.nickname || '-';
         document.getElementById('mGrade').value = student.grade || '-';
@@ -541,6 +611,7 @@ function initApp() {
         let expectedReturnMonth = '', expectedReturnYear = '';
         let pauseFromMonth = '', pauseFromYear = '';
         let isPause = false;
+
         if (isPending && subject.pendingRequest.type) {
             const pr = subject.pendingRequest;
             reason = pr.reason || '';
@@ -557,6 +628,7 @@ function initApp() {
                 expectedReturnMonth = subject.pauseToMonth; expectedReturnYear = subject.pauseToYear;
             }
         }
+
         document.getElementById('mReason').value = reason;
 
         const pauseFromGroup = document.getElementById('mPauseFromGroup');
@@ -587,6 +659,7 @@ function initApp() {
         const cancelRequestBtn = document.getElementById('cancelRequestBtn');
         const reinstateRequestBtn = document.getElementById('reinstateRequestBtn');
         const isDirectDropPause = (subject.status === 'drop' || subject.status === 'pause') && !isPending;
+
         if (isPending && !subject.pendingRequest.cancelled) {
             cancelRequestBtn.style.display = 'inline-block';
             cancelRequestBtn.textContent = t('dropbook.cancelRequest');
@@ -605,6 +678,7 @@ function initApp() {
 
         const isDroppedOrPaused = subject.status === 'drop' || subject.status === 'pause';
         const hasActiveResume = subject.resumeRequest && !subject.resumeRequest.processed;
+
         if (isDroppedOrPaused && !hasActiveResume) {
             if (resumeBtn) resumeBtn.style.display = 'inline-block';
             if (cancelResumeRequestBtn) cancelResumeRequestBtn.style.display = 'none';
@@ -645,7 +719,6 @@ function initApp() {
         modal.style.display = 'none';
         currentEditContext = null;
     }
-
     document.getElementById('closeModal').addEventListener('click', closeModal);
     document.getElementById('cancelModalBtn').addEventListener('click', closeModal);
     modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
@@ -654,6 +727,7 @@ function initApp() {
         if (!currentEditContext) return;
         const { studentId, subjectIndex, isPending } = currentEditContext;
         const saveBtn = document.getElementById('saveModalBtn');
+
         const isCalled = callStatusBtn.classList.contains('green');
         const calledBy = document.getElementById('mCalledBy').value.trim();
         const notes = document.getElementById('mNotes').value.trim();
@@ -661,8 +735,10 @@ function initApp() {
             if (!calledBy) { alert(t('dropbook.calledByRequired')); return; }
             if (!notes) { alert(t('dropbook.callNotesRequired')); return; }
         }
+
         saveBtn.disabled = true;
         saveBtn.textContent = t('dropbook.saving');
+
         try {
             const studentSnap = await get(ref(db, `centers/${centerId}/students/${studentId}`));
             if (!studentSnap.exists()) throw new Error("Student not found");
@@ -670,6 +746,7 @@ function initApp() {
             let subjects = Array.isArray(studentData.subjects) ? studentData.subjects : Object.values(studentData.subjects || {});
             if (!subjects[subjectIndex]) throw new Error("Subject not found");
             const sub = subjects[subjectIndex];
+
             const newReason = document.getElementById('mReason').value.trim();
 
             if (resumeSection && resumeSection.style.display !== 'none') {
@@ -700,9 +777,11 @@ function initApp() {
                 accounts: document.getElementById('mAccounts').value.trim(),
                 updatedAt: new Date().toISOString()
             };
+
             studentData.subjects = subjects;
             studentData.updatedAt = new Date().toISOString();
             await set(ref(db, `centers/${centerId}/students/${studentId}`), studentData);
+
             const localStudent = allStudentsData.find(s => s.id === studentId);
             if (localStudent) localStudent.subjects = subjects;
             renderTable();
@@ -725,8 +804,10 @@ function initApp() {
         const subjects = Array.isArray(student.subjects) ? student.subjects : Object.values(student.subjects || {});
         const sub = subjects[subjectIndex];
         if (!sub) return;
+
         const hasActivePending = sub.pendingRequest && !sub.pendingRequest.cancelled && sub.pendingRequest.type;
         const isDirectDropPause = sub.status === 'drop' || sub.status === 'pause';
+
         let confirmMsg = t('dropbook.cancelPendingMsg');
         if (isDirectDropPause && !hasActivePending) confirmMsg = t('dropbook.cancelDropPauseMsg');
         if (!confirm(confirmMsg)) return;
@@ -735,12 +816,14 @@ function initApp() {
         btn.disabled = true;
         const originalText = btn.textContent;
         btn.textContent = t('dropbook.cancelling');
+
         try {
             const studentRef = ref(db, `centers/${centerId}/students/${studentId}`);
             const snap = await get(studentRef);
             if (!snap.exists()) throw new Error("Student not found");
             const studentData = snap.val();
             let subjectsData = Array.isArray(studentData.subjects) ? studentData.subjects : Object.values(studentData.subjects || {});
+
             if (subjectsData[subjectIndex]) {
                 if (hasActivePending) {
                     subjectsData[subjectIndex].pendingRequest.cancelled = true;
@@ -760,8 +843,10 @@ function initApp() {
                     if (subjectsData[subjectIndex].dropBook) delete subjectsData[subjectIndex].dropBook;
                 }
             }
+
             studentData.subjects = subjectsData;
             await set(studentRef, studentData);
+
             const localStudent = allStudentsData.find(s => s.id === studentId);
             if (localStudent) localStudent.subjects = subjectsData;
             renderTable();
@@ -783,6 +868,7 @@ function initApp() {
         const btn = document.getElementById('reinstateRequestBtn');
         btn.disabled = true;
         btn.textContent = t('dropbook.reinstating');
+
         try {
             const studentRef = ref(db, `centers/${centerId}/students/${studentId}`);
             const snap = await get(studentRef);
@@ -795,6 +881,7 @@ function initApp() {
             }
             studentData.subjects = subjects;
             await set(studentRef, studentData);
+
             const localStudent = allStudentsData.find(s => s.id === studentId);
             if (localStudent) localStudent.subjects = subjects;
             renderTable();
@@ -832,6 +919,7 @@ function initApp() {
         const btn = cancelResumeRequestBtn;
         btn.disabled = true;
         btn.textContent = t('dropbook.cancelling');
+
         try {
             const studentRef = ref(db, `centers/${centerId}/students/${studentId}`);
             const snap = await get(studentRef);
@@ -842,6 +930,7 @@ function initApp() {
             studentData.subjects = subjects;
             studentData.updatedAt = new Date().toISOString();
             await set(studentRef, studentData);
+
             const localStudent = allStudentsData.find(s => s.id === studentId);
             if (localStudent) localStudent.subjects = subjects;
             renderTable();
@@ -878,6 +967,7 @@ function initApp() {
         const subjects = Array.isArray(student.subjects) ? student.subjects : Object.values(student.subjects || {});
         const sub = subjects[subjectIndex];
         if (!sub || sub.dropBook?.confirmed) return;
+
         const isCalled = sub.dropBook?.callStatus || false;
         if (!isCalled) {
             confirmTitle.textContent = t('dropbook.parentsNotCalledTitle');
@@ -890,8 +980,10 @@ function initApp() {
             proceedConfirmBtn.style.background = '';
             proceedConfirmBtn.style.color = '';
         }
+
         confirmActionModal.classList.remove('hidden');
         confirmActionModal.style.display = 'flex';
+
         const newProceedBtn = proceedConfirmBtn.cloneNode(true);
         proceedConfirmBtn.parentNode.replaceChild(newProceedBtn, proceedConfirmBtn);
         proceedConfirmBtn = newProceedBtn;
@@ -942,9 +1034,11 @@ function initApp() {
                 let triggerMonth = '', triggerYear = '';
                 if (pr.type === 'drop') { triggerMonth = pr.dropMonth; triggerYear = pr.dropYear; }
                 else if (pr.type === 'pause') { triggerMonth = pr.pauseFromMonth; triggerYear = pr.pauseFromYear; }
+
                 const now = new Date();
                 const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
                 const currentYear = String(now.getFullYear());
+
                 if (triggerYear && triggerMonth) {
                     if (triggerYear < currentYear || (triggerYear === currentYear && triggerMonth <= currentMonth)) {
                         sub.status = pr.type;
@@ -958,9 +1052,11 @@ function initApp() {
             studentData.subjects = subjects;
             studentData.updatedAt = new Date().toISOString();
             await set(studentRef, studentData);
+
             const localStudent = allStudentsData.find(s => s.id === studentId);
             if (localStudent) localStudent.subjects = subjects;
             renderTable();
+
             const detailModal = document.getElementById('detailModal');
             if (!detailModal.classList.contains('hidden')) closeModal();
             alert(t('dropbook.confirmedSuccess'));
@@ -986,6 +1082,7 @@ function initApp() {
         searchModal.classList.remove('hidden');
         searchModal.style.display = 'flex';
         searchInput.focus();
+
         reqTypeSelect.value = 'pause';
         document.getElementById('reqPauseFields').classList.remove('hidden');
         document.getElementById('reqDropFields').classList.add('hidden');
@@ -993,6 +1090,7 @@ function initApp() {
         document.getElementById('reqPauseFrom').value = '';
         document.getElementById('reqPauseTo').value = '';
         document.getElementById('reqDrop').value = '';
+
         const now = new Date();
         const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         document.getElementById('reqPauseFrom').min = currentMonth;
@@ -1004,7 +1102,6 @@ function initApp() {
         searchModal.classList.add('hidden');
         searchModal.style.display = 'none';
     }
-
     document.getElementById('closeSearchModal').addEventListener('click', closeSearchModal);
     document.getElementById('cancelReqBtn').addEventListener('click', closeSearchModal);
     searchModal.addEventListener('click', (e) => { if (e.target === searchModal) closeSearchModal(); });
@@ -1024,16 +1121,19 @@ function initApp() {
             const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
             return subjects.some(sub => sub.status === 'current');
         });
+
         if (matches.length === 0) {
             searchResults.innerHTML = `<div class="search-result-item" style="color:#999; text-align:center;">${t('dropbook.noCurrentStudents')}</div>`;
             return;
         }
+
         searchResults.innerHTML = matches.map(s => `
             <div class="search-result-item" data-id="${s.id}">
                 <strong>${s.nameCn || '-'}</strong> (${s.nickname || '-'})
                 <div style="font-size:0.8rem; color:#666;">${t('dropbook.grade')}: ${s.grade || '-'}</div>
             </div>
         `).join('');
+
         searchResults.querySelectorAll('.search-result-item').forEach(item => {
             item.addEventListener('click', () => {
                 const studentId = item.dataset.id;
@@ -1046,9 +1146,11 @@ function initApp() {
     function selectStudentForRequest(student) {
         selectedStudent = student;
         document.getElementById('selectedStudentName').textContent = `${student.nameCn || '-'} (${student.nickname || '-'})`;
+
         const subjects = Array.isArray(student.subjects) ? student.subjects : Object.values(student.subjects || {});
         const availableSubjects = subjects.map((sub, idx) => ({ ...sub, originalIndex: idx }))
             .filter(sub => sub.status === 'current' && !sub.pendingRequest);
+
         const subjectSelect = document.getElementById('reqSubjectSelect');
         if (availableSubjects.length === 0) {
             subjectSelect.innerHTML = `<option value="">${t('dropbook.noAvailableSubjects')}</option>`;
@@ -1059,6 +1161,7 @@ function initApp() {
             ).join('');
             subjectSelect.disabled = false;
         }
+
         searchStep.classList.add('hidden');
         detailsStep.classList.remove('hidden');
     }
@@ -1079,6 +1182,7 @@ function initApp() {
         const subjectIndex = parseInt(document.getElementById('reqSubjectSelect').value);
         const type = reqTypeSelect.value;
         const reason = document.getElementById('reqReason').value.trim();
+
         if (isNaN(subjectIndex)) return alert(t('dropbook.selectValidSubject'));
         if (!reason) return alert(t('dropbook.reasonRequired'));
 
@@ -1101,6 +1205,7 @@ function initApp() {
         const saveBtn = document.getElementById('saveReqBtn');
         saveBtn.disabled = true;
         saveBtn.textContent = t('dropbook.saving');
+
         try {
             const studentRef = ref(db, `centers/${centerId}/students/${selectedStudent.id}`);
             const snap = await get(studentRef);
@@ -1109,10 +1214,12 @@ function initApp() {
             let subjects = Array.isArray(studentData.subjects) ? studentData.subjects : Object.values(studentData.subjects || {});
             if (!subjects[subjectIndex]) throw new Error("Subject not found");
             if (subjects[subjectIndex].pendingRequest) throw new Error(t('dropbook.pendingRequestExists'));
+
             subjects[subjectIndex].pendingRequest = pendingRequest;
             studentData.subjects = subjects;
             studentData.updatedAt = new Date().toISOString();
             await set(studentRef, studentData);
+
             const localStudent = allStudentsData.find(s => s.id === selectedStudent.id);
             if (localStudent) localStudent.subjects = subjects;
             renderTable();
