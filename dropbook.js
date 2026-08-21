@@ -720,7 +720,7 @@ function initApp() {
         currentEditContext = null;
     }
     document.getElementById('closeModal').addEventListener('click', closeModal);
-    document.getElementById('cancelModalBtn').addEventListener('click', closeModal);
+    document.getElementById('cancelModalBtn')?.addEventListener('click', closeModal);
     modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
 
     document.getElementById('saveModalBtn').addEventListener('click', async () => {
