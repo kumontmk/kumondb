@@ -16,17 +16,40 @@ let DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 let MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 let approvedLeaveDates = {}; // empId -> Set('YYYY-MM-DD')
+let hourlyLeaveByDate = {};    // empId -> { dateStr: {timeFrom,timeTo,hours,type} } (HOURLY approved leaves)
 
 function rebuildLeaves(leaves) {
-    approvedLeaveDates = {};
-    Object.values(leaves).forEach(l => {
-        if (l?.status !== 'approved' || !l.dateFrom || !l.dateTo) return;
-        const set = approvedLeaveDates[l.empId] || (approvedLeaveDates[l.empId] = new Set());
-        const d = parseDate(l.dateFrom), end = parseDate(l.dateTo);
-        while (d <= end) { set.add(formatDateStr(d)); d.setDate(d.getDate() + 1); }
-    });
+  approvedLeaveDates = {};
+  hourlyLeaveByDate = {};
+  Object.values(leaves).forEach(l => {
+    if (l?.status !== 'approved' || !l.dateFrom || !l.dateTo) return;
+
+    // ---- HOURLY leave: single date, keep the time range ----
+    if (l.durationType === 'hours') {
+      const dateStr = l.dateFrom;
+      const byDate = hourlyLeaveByDate[l.empId] || (hourlyLeaveByDate[l.empId] = {});
+      if (!byDate[dateStr]) {
+        byDate[dateStr] = {
+          timeFrom: l.timeFrom || '',
+          timeTo: l.timeTo || '',
+          hours: Number(l.amount || 0),
+          type: l.type
+        };
+      }
+      return;
+    }
+
+    // ---- FULL-DAY leave: expand the range as before ----
+    const set = approvedLeaveDates[l.empId] || (approvedLeaveDates[l.empId] = new Set());
+    const d = parseDate(l.dateFrom), end = parseDate(l.dateTo);
+    while (d <= end) { set.add(formatDateStr(d)); d.setDate(d.getDate() + 1); }
+  });
 }
-const hasApprovedLeave = (empId, dateStr) => !!approvedLeaveDates[empId]?.has(dateStr);
+
+const hasApprovedLeave = (empId, dateStr) =>
+  !!approvedLeaveDates[empId]?.has(dateStr) || !!hourlyLeaveByDate[empId]?.[dateStr];
+
+const getHourlyLeave = (empId, dateStr) => hourlyLeaveByDate[empId]?.[dateStr] || null;
 
 // ============ AUTO-SYNC: APPROVED LEAVE → SCHEDULE ============
 let schedulesReady = false;
@@ -46,11 +69,46 @@ function getLeaveStampCenters(empId) {
     return ids.length ? ids : allCenters.map(c => c.id);
 }
 
+async function cleanupHourlyLeaveStamps() {
+  let healed = 0;
+  for (const [empId, byDate] of Object.entries(hourlyLeaveByDate)) {
+    for (const dateStr of Object.keys(byDate)) {
+      const sched = mergedSchedules[empId]?.[dateStr];
+      // 🆕 Revert ANY full-day "leave" stamp on an hourly-leave day
+      // (covers old autoLeaveSync stamps AND stamps written by leave.js approval)
+      if (sched && sched.status === 'leave') {
+        const shifts = sched._shifts || extractShifts(sched);
+        const targets = sched._sourceCenters?.length
+          ? sched._sourceCenters
+          : (sched._sourceCenter ? [sched._sourceCenter] : getLeaveStampCenters(empId));
+        for (const cid of targets) {
+          await set(ref(db, `schedules/${cid}/${empId}/${dateStr}`), {
+            status: 'scheduled',
+            shifts,
+            notes: sched.notes || '',
+            autoLeaveSync: false,
+            updatedAt: new Date().toISOString(),
+            updatedBy: currentUser.uid
+          });
+        }
+        if (mergedSchedules[empId]) {
+          mergedSchedules[empId][dateStr] = { ...sched, status: 'scheduled', shifts };
+        }
+        healed++;
+      }
+    }
+  }
+  return healed;
+}
+
 async function syncApprovedLeavesToSchedules() {
     if (!isAdminOrManager || leaveSyncRunning || !schedulesReady) return;
     leaveSyncRunning = true;
+
     let changed = 0;
     try {
+        const healed = await cleanupHourlyLeaveStamps();   
+        changed += healed;                                 
         for (const [empId, dateSet] of Object.entries(approvedLeaveDates)) {
             for (const dateStr of dateSet) {
                 const sched = mergedSchedules[empId]?.[dateStr];
@@ -724,12 +782,24 @@ function renderMergedScheduleCell(td, sched, empId, dateStr) {
         td.innerHTML = html;
         return;
     }
+
+    const hLeave = getHourlyLeave(empId, dateStr);
+    const hasFullDayLeave = !!approvedLeaveDates[empId]?.has(dateStr);
     const shifts = sched._shifts || extractShifts(sched);
+
+    // Hourly leave on an otherwise-empty day → still show it
     if (!hasValidShifts(shifts)) {
-        td.classList.add('empty-cell');
-        td.innerHTML = '<div class="cell-content">—</div>';
+        if (hLeave) {
+            td.classList.add('has-schedule');
+            td.innerHTML = `<div class="cell-content"><span class="hourly-leave-label" title="${hLeave.timeFrom || ''}–${hLeave.timeTo || ''}">⏱ ${hLeave.hours}h ${t('schedule.leave')}</span></div>`;
+            appendLeaveStrip(td, hLeave);
+        } else {
+            td.classList.add('empty-cell');
+            td.innerHTML = '<div class="cell-content">—</div>';
+        }
         return;
     }
+
     td.classList.add('has-schedule');
     let html = '<div class="cell-content">';
     const sortedShifts = [...shifts].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
@@ -745,13 +815,17 @@ function renderMergedScheduleCell(td, sched, empId, dateStr) {
     if (holidayInfo && !holidayInfo.muc) {
         html += `<div class="holiday-indicator">🎌 ${holidayInfo.name || t('schedule.holiday')}</div>`;
     }
-    // 🆕 CONFLICT FLAG: scheduled shifts on a day with an approved leave
-    if (hasApprovedLeave(empId, dateStr)) {
+    // Leave indicators: hourly chip OR full-day conflict flag
+    if (hLeave) {
+        html += `<div class="hourly-leave-label" title="${hLeave.timeFrom || ''}–${hLeave.timeTo || ''}">⏱ ${hLeave.hours}h ${t('schedule.leave')}</div>`;
+    } else if (hasFullDayLeave) {
         html += `<div class="holiday-indicator">⚠️ ${t('schedule.leave')}</div>`;
     }
     if (sched.notes) html += `<div class="notes-indicator">📝</div>`;
     html += '</div>';
     td.innerHTML = html;
+
+    if (hLeave) appendLeaveStrip(td, hLeave);
 }
 
 
@@ -813,6 +887,60 @@ function isHolidayEvent(event) {
   // Only real holidays should be treated as holidays.
   // "Other" events/reminders should not trigger holiday styling.
   return event.type === 'public' || event.type === 'center';
+}
+
+// ── Hourly leave: map time-of-day → vertical position, duration → height ──
+const LEAVE_DAY_START_MIN = 8 * 60;   // 08:00 = top of the cell   (tune if needed)
+const LEAVE_DAY_END_MIN   = 20 * 60;  // 20:00 = bottom of the cell (tune if needed)
+
+function computeLeaveStrip(hLeave) {
+  const hours = Number(hLeave.hours || 0);
+  // Stepped rule: ≤2h = 25%, ≤4h = 50%, ≤6h = 75%, >6h = 100%
+  let heightPct = hours <= 2 ? 25 : hours <= 4 ? 50 : hours <= 6 ? 75 : 100;
+  const startMin = timeToMin(hLeave.timeFrom);
+  const windowMin = LEAVE_DAY_END_MIN - LEAVE_DAY_START_MIN;
+  let topPct = (startMin == null) ? 0 : ((startMin - LEAVE_DAY_START_MIN) / windowMin) * 100;
+  topPct = Math.max(0, Math.min(topPct, 100));
+  if (topPct + heightPct > 100) heightPct = Math.max(0, 100 - topPct);
+  return { top: topPct, height: heightPct };
+}
+
+function appendLeaveStrip(cellEl, hLeave) {
+  const { top, height } = computeLeaveStrip(hLeave);
+  const strip = document.createElement('div');
+  strip.className = 'hourly-leave-strip';
+  strip.style.top = top + '%';
+  strip.style.height = height + '%';
+  strip.title = `${hLeave.timeFrom || ''}–${hLeave.timeTo || ''} (${hLeave.hours}h)`;
+  cellEl.appendChild(strip);
+}
+
+// Adds BOTH the chip and the strip (used by center view + mobile)
+function addHourlyLeaveToCell(cellEl, empId, dateStr) {
+  const hLeave = getHourlyLeave(empId, dateStr);
+  if (!hLeave) return;
+  const content = cellEl.querySelector('.cell-content');
+  if (content) {
+    const lbl = document.createElement('div');
+    lbl.className = 'hourly-leave-label';
+    lbl.title = `${hLeave.timeFrom || ''}–${hLeave.timeTo || ''}`;
+    lbl.textContent = `⏱ ${hLeave.hours}h ${t('schedule.leave')}`;
+    content.appendChild(lbl);
+  }
+  appendLeaveStrip(cellEl, hLeave);
+}
+
+// Compact chip only (mobile mini-calendars)
+function addHourlyLeaveChip(cellEl, empId, dateStr) {
+  const hLeave = getHourlyLeave(empId, dateStr);
+  if (!hLeave) return;
+  const content = cellEl.querySelector('.admin-mobile-cal-content');
+  if (!content) return;
+  const chip = document.createElement('span');
+  chip.className = 'mini-status status-hourly-leave';
+  chip.textContent = `⏱ ${hLeave.hours}h`;
+  chip.title = `${hLeave.timeFrom || ''}–${hLeave.timeTo || ''}`;
+  content.appendChild(chip);
 }
 
 function getHolidayForDate(dateStr) {
@@ -1577,18 +1705,26 @@ function checkModalWarnings(empId, dateStr) {
     const warningsDiv = document.getElementById('modalWarnings');
     if (!warningsDiv) return;
     warningsDiv.innerHTML = '';
+    
     const dateObj = parseDate(dateStr);
     const dow = dateObj.getDay();
+    
     const holidayInfo = getHolidayForDate(dateStr);
     if (holidayInfo && !holidayInfo.muc) {
         const type = holidayInfo.type === 'public' ? t('schedule.publicHoliday') : t('schedule.centerHoliday');
         warningsDiv.innerHTML += `<div class="warning-box">${t('schedule.warnHoliday', { type, name: holidayInfo.name || '' })}</div>`;
     }
-    // 🆕 APPROVED-LEAVE CONFLICT WARNING
-    if (hasApprovedLeave(empId, dateStr)) {
-        const empName = employees[empId]?.englishName || 'This employee';
-        warningsDiv.innerHTML += `<div class="warning-box">⚠️ ${empName} has an APPROVED leave on this date. Saving with status “Scheduled” will conflict with the leave.</div>`;
+    
+    // 🆕 APPROVED-LEAVE CONFLICT WARNING (Hourly vs Full-Day)
+    const hLeave = getHourlyLeave(empId, dateStr);
+    const empName = employees[empId]?.englishName || 'This employee';
+    
+    if (hLeave) {
+        warningsDiv.innerHTML += `<div class="warning-box">⏱ ${empName} has an approved ${hLeave.hours}h leave (${hLeave.timeFrom}–${hLeave.timeTo}) on this day.</div>`;
+    } else if (approvedLeaveDates[empId]?.has(dateStr)) {
+        warningsDiv.innerHTML += `<div class="warning-box">⚠️ ${empName} has an APPROVED full-day leave on this date. Saving with status “Scheduled” will conflict with the leave.</div>`;
     }
+    
     const shiftItems = document.querySelectorAll('#shiftsContainer .shift-item');
     shiftItems.forEach(item => {
         const centerSelect = item.querySelector('.shift-center');
@@ -2106,6 +2242,7 @@ function renderCenterEmployeeRow(emp, dates, tbody, dailyCounts, centerCalEvents
         hasShiftToday = true;
         renderCenterShiftCell(td, centerShifts, isHoliday, event);
         if (isTemplate) td.style.opacity = '0.5';
+          addHourlyLeaveToCell(td, emp.uid, dateStr);   
       } else if (isClosed) {
         td.classList.add('is-closed');
         td.innerHTML = `<div class="cell-content"><span class="status-label">${t('schedule.closed')}</span></div>`;
@@ -2533,16 +2670,22 @@ function printCenterSchedule() {
 // ============================================
 // 📱 MODAL MINI CALENDAR (center badges inside dates)
 // ============================================
+// ============================================
+// 📱 MODAL MINI CALENDAR
+// ============================================
 function renderModalMiniCalendar() {
     const grid = document.getElementById('modalMiniCalGrid');
     const monthLabel = document.getElementById('modalMiniCalMonth');
+
     if (!grid || !monthLabel || !editingEmpId) return;
 
     const year = modalMiniCalDate.getFullYear();
     const month = modalMiniCalDate.getMonth();
+
     monthLabel.textContent = `${MONTH_NAMES[month]} ${year}`;
     grid.innerHTML = '';
 
+    // Day headers
     DAY_SHORT.forEach(d => {
         const h = document.createElement('div');
         h.className = 'admin-mobile-cal-header';
@@ -2552,15 +2695,18 @@ function renderModalMiniCalendar() {
 
     const firstDay = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    // Empty cells before 1st of month
     for (let i = 0; i < firstDay; i++) {
         const empty = document.createElement('div');
         empty.className = 'admin-mobile-cal-cell empty';
         grid.appendChild(empty);
     }
 
+    // Days of month
     for (let day = 1; day <= daysInMonth; day++) {
         const dateObj = new Date(year, month, day);
         const dateStr = formatDateStr(dateObj);
@@ -2568,9 +2714,14 @@ function renderModalMiniCalendar() {
 
         const cell = document.createElement('div');
         cell.className = 'admin-mobile-cal-cell';
+
         if (dow === 0 || dow === 6) cell.classList.add('weekend');
         if (dateObj.getTime() === today.getTime()) cell.classList.add('today');
-        if (dateStr === editingDate) cell.classList.add('mini-cal-selected');
+
+        // Highlight the date currently loaded in the modal
+        if (dateStr === editingDate) {
+            cell.classList.add('mini-cal-selected');
+        }
 
         const dayNum = document.createElement('div');
         dayNum.className = 'admin-mobile-cal-day-num';
@@ -2580,9 +2731,13 @@ function renderModalMiniCalendar() {
         const contentWrap = document.createElement('div');
         contentWrap.className = 'admin-mobile-cal-content';
 
-        const data = mergedSchedules[editingEmpId]?.[dateStr] || getTemplateForDate(editingEmpId, dateStr);
+        const data =
+            mergedSchedules[editingEmpId]?.[dateStr] ||
+            getTemplateForDate(editingEmpId, dateStr);
+
         if (data) {
             const status = data.status || 'scheduled';
+
             if (status !== 'scheduled') {
                 const statusMap = {
                     'other-center': { cls: 'status-other', label: t('schedule.otherCenter') },
@@ -2590,24 +2745,44 @@ function renderModalMiniCalendar() {
                     'sick': { cls: 'status-sick', label: t('schedule.sick') },
                     'off': { cls: 'status-off', label: t('schedule.off') }
                 };
+
                 const s = statusMap[status] || { cls: '', label: status };
                 contentWrap.innerHTML = `<span class="mini-status ${s.cls}">${s.label}</span>`;
             } else {
                 const shifts = data._shifts || extractShifts(data);
+
                 if (hasValidShifts(shifts)) {
-                    const sortedShifts = [...shifts].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+                    const sortedShifts = [...shifts].sort((a, b) =>
+                        (a.start || '').localeCompare(b.start || '')
+                    );
+
                     contentWrap.innerHTML = sortedShifts.map(shift => {
-                        if (shift.type === 'break') return `<div class="mini-shift break">☕</div>`;
-                        const badge = getShiftBadgeInfo(shift); // handles MK/PT/… + "Other" desc
-                        return `<div class="mini-shift"><span class="shift-center ${badge.cls}">${badge.label}</span></div>`;
+                        if (shift.type === 'break') {
+                            return `<div class="mini-shift break">☕</div>`;
+                        }
+
+                        const badge = getShiftBadgeInfo(shift);
+
+                        return `
+                            <div class="mini-shift">
+                                <span class="shift-center ${badge.cls}">${badge.label}</span>
+                            </div>
+                        `;
                     }).join('');
                 }
             }
         }
 
         cell.appendChild(contentWrap);
-        // ✅ Tap a date → modal reloads with that day's schedule
+
+        // 🆕 Hourly leave chip — only when not replaced by a full-day status
+        if (!data || (data.status || 'scheduled') === 'scheduled') {
+            addHourlyLeaveChip(cell, editingEmpId, dateStr);
+        }
+
+        // Tap a date → modal reloads with that day's schedule
         cell.addEventListener('click', () => openEditModal(editingEmpId, dateStr));
+
         grid.appendChild(cell);
     }
 }
@@ -2703,17 +2878,21 @@ function closeAdminMobileDetail() {
     }
 }
 
+// ============================================
+// 📱 ADMIN MOBILE CALENDAR
+// ============================================
 function renderAdminMobileCalendar() {
     const grid = document.getElementById('adminMobileCalendarGrid');
     const monthLabel = document.getElementById('adminMobileCalMonth');
+
     if (!grid || !adminMobileCurrentEmpId) return;
-    
+
     const year = adminMobileCalDate.getFullYear();
     const month = adminMobileCalDate.getMonth();
+
     monthLabel.textContent = `${MONTH_NAMES[month]} ${year}`;
-    
     grid.innerHTML = '';
-    
+
     // Day headers (Sun, Mon, etc.)
     DAY_SHORT.forEach(d => {
         const h = document.createElement('div');
@@ -2721,46 +2900,50 @@ function renderAdminMobileCalendar() {
         h.textContent = d;
         grid.appendChild(h);
     });
-    
+
     const firstDay = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     // Empty cells before 1st of month
     for (let i = 0; i < firstDay; i++) {
         const empty = document.createElement('div');
         empty.className = 'admin-mobile-cal-cell empty';
         grid.appendChild(empty);
     }
-    
+
     // Days of the month
     for (let day = 1; day <= daysInMonth; day++) {
         const dateObj = new Date(year, month, day);
         const dateStr = formatDateStr(dateObj);
         const dow = dateObj.getDay();
+
         const isWeekend = dow === 0 || dow === 6;
         const isToday = dateObj.getTime() === today.getTime();
-        
+
         const cell = document.createElement('div');
         cell.className = 'admin-mobile-cal-cell';
+
         if (isWeekend) cell.classList.add('weekend');
         if (isToday) cell.classList.add('today');
-        
+
         const dayNum = document.createElement('div');
         dayNum.className = 'admin-mobile-cal-day-num';
         dayNum.textContent = day;
         cell.appendChild(dayNum);
-        
+
         const sched = mergedSchedules[adminMobileCurrentEmpId]?.[dateStr];
         const tmpl = getTemplateForDate(adminMobileCurrentEmpId, dateStr);
         const data = sched || tmpl;
-        
+
         const contentWrap = document.createElement('div');
         contentWrap.className = 'admin-mobile-cal-content';
-        
+
         if (data) {
             const status = data.status || 'scheduled';
+
             if (status !== 'scheduled') {
                 const statusMap = {
                     'other-center': { cls: 'status-other', label: t('schedule.otherCenter') },
@@ -2768,31 +2951,50 @@ function renderAdminMobileCalendar() {
                     'sick': { cls: 'status-sick', label: t('schedule.sick') },
                     'off': { cls: 'status-off', label: t('schedule.off') }
                 };
+
                 const s = statusMap[status] || { cls: '', label: status };
                 contentWrap.innerHTML = `<span class="mini-status ${s.cls}">${s.label}</span>`;
             } else {
                 const shifts = data._shifts || extractShifts(data);
+
                 if (hasValidShifts(shifts)) {
-                    const sortedShifts = [...shifts].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+                    const sortedShifts = [...shifts].sort((a, b) =>
+                        (a.start || '').localeCompare(b.start || '')
+                    );
+
                     let html = '';
+
                     sortedShifts.forEach(shift => {
                         if (shift.type === 'break') {
                             html += `<div class="mini-shift break">☕ ${shift.start}-${shift.end}</div>`;
                         } else {
-                            const badge = getShiftBadgeInfo(shift); // Automatically handles "Other" descriptions!
-                            html += `<div class="mini-shift">
-                                <span class="shift-center ${badge.cls}">${badge.label}</span>
-                                <span class="mini-time">${shift.start}-${shift.end}</span>
-                            </div>`;
+                            const badge = getShiftBadgeInfo(shift);
+
+                            html += `
+                                <div class="mini-shift">
+                                    <span class="shift-center ${badge.cls}">${badge.label}</span>
+                                    <span class="mini-time">${shift.start}-${shift.end}</span>
+                                </div>
+                            `;
                         }
                     });
+
                     contentWrap.innerHTML = html;
                 }
             }
         }
-        
+
         cell.appendChild(contentWrap);
-        cell.addEventListener('click', () => openEditModal(adminMobileCurrentEmpId, dateStr));
+
+        // 🆕 Hourly leave chip — only when the day is not a full-day status
+        if (!data || (data.status || 'scheduled') === 'scheduled') {
+            addHourlyLeaveChip(cell, adminMobileCurrentEmpId, dateStr);
+        }
+
+        cell.addEventListener('click', () =>
+            openEditModal(adminMobileCurrentEmpId, dateStr)
+        );
+
         grid.appendChild(cell);
     }
 }
@@ -2934,16 +3136,23 @@ function closeCenterMobileDetail() {
 }
 
 /** Mini calendar filtered to the SELECTED CENTER (statuses + holidays + closed days included) */
+// ============================================
+// 📱 CENTER MOBILE CALENDAR
+// ============================================
 function renderCenterMobileCalendar() {
     const grid = document.getElementById('centerMobileCalendarGrid');
     const monthLabel = document.getElementById('centerMobileCalMonth');
+
     if (!grid || !centerMobileCurrentEmpId) return;
+    if (!selectedCenterForView) return;
 
     const year = centerMobileCalDate.getFullYear();
     const month = centerMobileCalDate.getMonth();
+
     monthLabel.textContent = `${MONTH_NAMES[month]} ${year}`;
     grid.innerHTML = '';
 
+    // Day headers
     DAY_SHORT.forEach(d => {
         const h = document.createElement('div');
         h.className = 'admin-mobile-cal-header';
@@ -2953,24 +3162,30 @@ function renderCenterMobileCalendar() {
 
     const firstDay = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const today = new Date(); today.setHours(0, 0, 0, 0);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
     const centerCalEvents = calendarEvents[selectedCenterForView] || {};
     const centerObj = allCenters.find(c => c.id === selectedCenterForView);
     const closedDays = getClosedDaysForCenter(centerObj?.name || '');
 
+    // Empty cells before 1st of month
     for (let i = 0; i < firstDay; i++) {
         const empty = document.createElement('div');
         empty.className = 'admin-mobile-cal-cell empty';
         grid.appendChild(empty);
     }
 
+    // Days of month
     for (let day = 1; day <= daysInMonth; day++) {
         const dateObj = new Date(year, month, day);
         const dateStr = formatDateStr(dateObj);
         const dow = dateObj.getDay();
+
         const cell = document.createElement('div');
         cell.className = 'admin-mobile-cal-cell';
+
         if (dow === 0 || dow === 6) cell.classList.add('weekend');
         if (dateObj.getTime() === today.getTime()) cell.classList.add('today');
 
@@ -2986,11 +3201,15 @@ function renderCenterMobileCalendar() {
         const isHoliday = isHolidayEvent(event);
         const isClosed = closedDays.includes(dow) && !isHoliday;
 
-        const data = mergedSchedules[centerMobileCurrentEmpId]?.[dateStr] || getTemplateForDate(centerMobileCurrentEmpId, dateStr);
+        const data =
+            mergedSchedules[centerMobileCurrentEmpId]?.[dateStr] ||
+            getTemplateForDate(centerMobileCurrentEmpId, dateStr);
+
         let rendered = false;
 
         if (data) {
             const status = data.status || 'scheduled';
+
             if (status !== 'scheduled') {
                 const statusMap = {
                     'other-center': { cls: 'status-other', label: t('schedule.otherCenter') },
@@ -2998,6 +3217,7 @@ function renderCenterMobileCalendar() {
                     'sick': { cls: 'status-sick', label: t('schedule.sick') },
                     'off': { cls: 'status-off', label: t('schedule.off') }
                 };
+
                 const s = statusMap[status] || { cls: '', label: status };
                 contentWrap.innerHTML = `<span class="mini-status ${s.cls}">${s.label}</span>`;
                 rendered = true;
@@ -3005,23 +3225,60 @@ function renderCenterMobileCalendar() {
                 const shifts = (data._shifts || extractShifts(data))
                     .filter(s => s.center === selectedCenterForView)
                     .sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+
                 if (shifts.length > 0) {
                     contentWrap.innerHTML = shifts.map(shift => {
-                        if (shift.type === 'break') return `<div class="mini-shift break">☕ ${shift.start}-${shift.end}</div>`;
+                        if (shift.type === 'break') {
+                            return `<div class="mini-shift break">☕ ${shift.start}-${shift.end}</div>`;
+                        }
+
                         const badge = getShiftBadgeInfo(shift);
-                        return `<div class="mini-shift"><span class="shift-center ${badge.cls}">${badge.label}</span><span class="mini-time">${shift.start}-${shift.end}</span></div>`;
+
+                        return `
+                            <div class="mini-shift">
+                                <span class="shift-center ${badge.cls}">${badge.label}</span>
+                                <span class="mini-time">${shift.start}-${shift.end}</span>
+                            </div>
+                        `;
                     }).join('');
+
                     rendered = true;
                 }
             }
         }
+
+        // If nothing was rendered, show holiday/closed indicator
         if (!rendered) {
-            if (isHoliday) contentWrap.innerHTML = `<span class="mini-status status-holiday">🎌 ${event.name || t('schedule.holiday')}</span>`;
-            else if (isClosed) contentWrap.innerHTML = `<span class="mini-status status-closed">${t('schedule.closed')}</span>`;
+            if (isHoliday) {
+                contentWrap.innerHTML = `
+                    <span class="mini-status status-holiday">
+                        🎌 ${event.name || t('schedule.holiday')}
+                    </span>
+                `;
+            } else if (isClosed) {
+                contentWrap.innerHTML = `
+                    <span class="mini-status status-closed">
+                        ${t('schedule.closed')}
+                    </span>
+                `;
+            }
         }
 
         cell.appendChild(contentWrap);
-        cell.addEventListener('click', () => openEditModal(centerMobileCurrentEmpId, dateStr));
+
+        // 🆕 Hourly leave chip — only for scheduled/normal days
+        if (
+            !isHoliday &&
+            !isClosed &&
+            (!data || (data.status || 'scheduled') === 'scheduled')
+        ) {
+            addHourlyLeaveChip(cell, centerMobileCurrentEmpId, dateStr);
+        }
+
+        cell.addEventListener('click', () =>
+            openEditModal(centerMobileCurrentEmpId, dateStr)
+        );
+
         grid.appendChild(cell);
     }
 }

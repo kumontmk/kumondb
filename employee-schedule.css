@@ -1701,6 +1701,51 @@ textarea {
 }
 
 /* =========================================
+⏱ HOURLY LEAVE — proportional time-of-day strip
+========================================= */
+/* Make the cell (and the employee-calendar body) a positioning context */
+.schedule-cell,
+.emp-cal-body {
+  position: relative;
+}
+
+/* Keep shift text above the translucent band */
+.schedule-cell > .cell-content,
+.emp-cal-body > .cell-content {
+  position: relative;
+  z-index: 2;
+}
+
+/* The colored band: positioned by start time, height = duration */
+.hourly-leave-strip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: rgba(70, 130, 180, 0.20);   /* translucent leave-blue */
+  border-left: 4px solid #4682B4;         /* solid accent edge */
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Compact "⏱ 2h Leave" chip inside the cell */
+.hourly-leave-label {
+  display: inline-block;
+  background: #4682B4;
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 0 4px;
+  border-radius: 3px;
+  margin-top: 2px;
+}
+
+/* Mobile mini-calendar chip */
+.mini-status.status-hourly-leave {
+  background: #4682B4;
+  color: #fff;
+}
+
+/* =========================================
    🌐 TRADITIONAL CHINESE FONT SUPPORT
 ========================================= */
 :lang(zh-TW) body,

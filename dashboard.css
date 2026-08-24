@@ -1880,6 +1880,50 @@ header button:hover {
     }
 }
 
+
+
+/* =========================================
+📅 CALENDAR LEGEND STYLES
+========================================= */
+.calendar-legend {
+  font-size: 0.9rem;
+  color: var(--text-light);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+/* Match these colors to your calendar day styles */
+.legend-dot.blue   { background-color: #1565c0; } /* Parent Orientation */
+.legend-dot.green  { background-color: #2e7d32; } /* Center Holiday */
+.legend-dot.red    { background-color: #c62828; } /* Public Holiday */
+.legend-dot.orange { background-color: #e65100; } /* Diagnostic Test */
+.legend-dot.pink   { background-color: #f472b6; } /* Other */
+
+@media (max-width: 768px) {
+  .calendar-legend {
+    font-size: 0.8rem;
+    justify-content: center;
+  }
+}
+
 /* =========================================
 🌐 TRADITIONAL CHINESE FONT SUPPORT
 ========================================= */

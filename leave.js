@@ -726,7 +726,17 @@ async function confirmApproval() {
       if (centersToUpdate.size === 0) { 
         getEmpCenterIds(l.empId).forEach(c => centersToUpdate.add(c));
       }
-      for (const cid of centersToUpdate) await update(ref(db, `schedules/${cid}/${l.empId}/${dateStr}`), { status: 'leave', shifts: origShifts, notes: dayPlan.empAOrigSchedule.notes || '', updatedBy: currentUser.uid, updatedAt: new Date().toISOString() });
+      for (const cid of centersToUpdate) {
+        await update(ref(db, `schedules/${cid}/${l.empId}/${dateStr}`), {
+          // 🆕 Hourly leave keeps the day "scheduled" (shifts intact);
+          // the schedule page draws the proportional strip from the leave record.
+          status: l.durationType === 'hours' ? 'scheduled' : 'leave',
+          shifts: origShifts,
+          notes: dayPlan.empAOrigSchedule.notes || '',
+          updatedBy: currentUser.uid,
+          updatedAt: new Date().toISOString()
+        });
+      }     
       const relievers = Array.isArray(dayPlan.relievers) ? dayPlan.relievers : [];
       for (const rel of relievers) {
         if (!rel.relieverId || !rel.newShift) continue;
