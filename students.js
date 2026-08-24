@@ -490,120 +490,162 @@ async function initializePage(isAdmin = false) {
         });
     }
 
-    // ==========================================
-    // 📤 EXCEL EXPORT LOGIC
-    // ==========================================
-    async function fetchAllStudents() {
-        const loader = document.getElementById('page-loader');
-        loader?.classList.remove('hidden');
-        try {
-            const snapshot = await get(studentsRef);
-            if (!snapshot.exists()) return [];
-            const students = [];
-            snapshot.forEach(child => {
-                students.push({ id: child.key, ...child.val() });
+// ==========================================
+// 📤 EXCEL EXPORT LOGIC
+// ==========================================
+async function fetchAllStudents() {
+    const loader = document.getElementById('page-loader');
+    loader?.classList.remove('hidden');
+    try {
+        const snapshot = await get(studentsRef);
+        if (!snapshot.exists()) return [];
+        const students = [];
+        snapshot.forEach(child => {
+            students.push({ id: child.key, ...child.val() });
+        });
+        return students;
+    } catch (err) {
+        console.error("❌ Fetch failed: ", err);
+        alert(t('students.failedFetch'));
+        return [];
+    } finally {
+        loader?.classList.add('hidden');
+    }
+}
+
+// 🆕 Helper function to map Teacher UIDs to Names
+async function getTeachersMap() {
+    try {
+        const empSnap = await get(ref(db, 'employees'));
+        if (empSnap.exists()) {
+            const emps = empSnap.val();
+            const map = {};
+            Object.entries(emps).forEach(([uid, emp]) => {
+                // Fallback to UID if no name is found
+                map[uid] = emp.englishName || emp.chineseName || 'Unknown'; 
             });
-            return students;
-        } catch (err) {
-            console.error("❌ Fetch failed: ", err);
-            alert(t('students.failedFetch'));
-            return [];
-        } finally {
-            loader?.classList.add('hidden');
+            return map;
         }
+    } catch (err) {
+        console.error("Error fetching teachers for export:", err);
+    }
+    return {};
+}
+
+// 🔄 Updated Export Function
+async function exportFilteredStudents(filterFn, filenameSuffix) {
+    const students = await fetchAllStudents();
+    if (students.length === 0) {
+        alert(t('students.noStudentsExport'));
+        return;
+    }
+    const filtered = students.filter(filterFn);
+    if (filtered.length === 0) {
+        alert(t('students.noMatchExport'));
+        return;
     }
 
-    async function exportFilteredStudents(filterFn, filenameSuffix) {
-        const students = await fetchAllStudents();
-        if (students.length === 0) {
-            alert(t('students.noStudentsExport'));
-            return;
+    // Fetch teacher names mapping
+    const teachersMap = await getTeachersMap();
+
+    const rows = filtered.map(s => {
+        const subs = s.subjects || [];
+        const getSubj = (name) => subs.find(sub => sub.name === name) || {};
+        const math = getSubj('Math');
+        const eng = getSubj('English ERP');
+        const efl = getSubj('English EFL');
+        const chi = getSubj('Chinese (Trad)');
+        const chiSimp = getSubj('Chinese (Simp)');
+
+        // 🆕 Build the Teachers string
+        let teachersStr = '';
+        if (s.assignedTeachers && typeof s.assignedTeachers === 'object') {
+            const teacherNames = new Set();
+            Object.values(s.assignedTeachers).forEach(uids => {
+                if (Array.isArray(uids)) {
+                    uids.forEach(uid => {
+                        if (teachersMap[uid]) teacherNames.add(teachersMap[uid]);
+                    });
+                }
+            });
+            // Join unique teacher names with a comma
+            teachersStr = Array.from(teacherNames).join(', ');
         }
-        const filtered = students.filter(filterFn);
-        if (filtered.length === 0) {
-            alert(t('students.noMatchExport'));
-            return;
-        }
-        const rows = filtered.map(s => {
-            const subs = s.subjects || [];
-            const getSubj = (name) => subs.find(sub => sub.name === name) || {};
-            const math = getSubj('Math');
-            const eng = getSubj('English ERP');
-            const efl = getSubj('English EFL');
-            const chi = getSubj('Chinese (Trad)');
-            const chiSimp = getSubj('Chinese (Simp)');
-            return {
-                'StudentNo': s.studentNumber || '',
-                'Chinese Name (Alphabet)': s.namePinyin || '',
-                'Chinese Name': s.nameCn || '',
-                'Nickname': s.nickname || '',
-                'SchoolGrade': s.grade || '',
-                'SchoolName': s.school || '',
-                'DateOfBirth': s.birthday || '',
-                'Nationality': s.nationality || '',
-                'Email': s.email || '',
-                'Phone (Emergency_M)': s.phone?.mom || '',
-                'Phone (Emergency_D)': s.phone?.dad || '',
-                'Phone (Emergency_Self)': s.phone?.own || '',
-                'Ship Address': s.address || '',
-                'Overall Status': s.overallStatus || 'Current',
-                'Maths': math.name ? '1' : '',
-                'MStarting': math.startLevel || '',
-                'MStartingNo': math.startWS || '',
-                'MEnrollmentDate': math.enrolDate || '',
-                'MClassDay': math.timeslots?.[0]?.day || '',
-                'MClassTime': math.timeslots?.[0]?.time || '',
-                'MClassDay2': math.timeslots?.[1]?.day || '',
-                'MClassTime2': math.timeslots?.[1]?.time || '',
-                'CurrentMath': math.currentLevel || '',
-                'MathNo': math.currentWS || '',
-                'English': eng.name ? '1' : '',
-                'EStarting': eng.startLevel || '',
-                'EStartingNo': eng.startWS || '',
-                'EEnrollmentDate': eng.enrolDate || '',
-                'EClassDay': eng.timeslots?.[0]?.day || '',
-                'EClassTime': eng.timeslots?.[0]?.time || '',
-                'EClassDay2': eng.timeslots?.[1]?.day || '',
-                'EClassTime2': eng.timeslots?.[1]?.time || '',
-                'CurrentEng': eng.currentLevel || '',
-                'EngNo': eng.currentWS || '',
-                'EFL': efl.name ? '1' : '',
-                'EFLStarting': efl.startLevel || '',
-                'EFLStartingNo': efl.startWS || '',
-                'EFLEnrollmentDate': efl.enrolDate || '',
-                'EFLClassDay': efl.timeslots?.[0]?.day || '',
-                'EFLClassTime': efl.timeslots?.[0]?.time || '',
-                'EFLClassDay2': efl.timeslots?.[1]?.day || '',
-                'EFLClassTime2': efl.timeslots?.[1]?.time || '',
-                'CurrentEFL': efl.currentLevel || '',
-                'EFLNo': efl.currentWS || '',
-                'Chinese': chi.name ? '1' : '',
-                'CStarting': chi.startLevel || '',
-                'CStartingNo': chi.startWS || '',
-                'CEnrollmentDate': chi.enrolDate || '',
-                'CClassDay': chi.timeslots?.[0]?.day || '',
-                'CClassTime': chi.timeslots?.[0]?.time || '',
-                'CClassDay2': chi.timeslots?.[1]?.day || '',
-                'CClassTime2': chi.timeslots?.[1]?.time || '',
-                'CurrentChinese': chi.currentLevel || '',
-                'ChiNo': chi.currentWS || '',
-                'Chinese (Simp)': chiSimp.name ? '1' : '',
-                'CSStarting': chiSimp.startLevel || '',
-                'CSStartingNo': chiSimp.startWS || '',
-                'CSEnrollmentDate': chiSimp.enrolDate || '',
-                'CSClassDay': chiSimp.timeslots?.[0]?.day || '',
-                'CSClassTime': chiSimp.timeslots?.[0]?.time || '',
-                'CSClassDay2': chiSimp.timeslots?.[1]?.day || '',
-                'CSClassTime2': chiSimp.timeslots?.[1]?.time || '',
-                'CurrentChineseSimp': chiSimp.currentLevel || '',
-                'ChiSimpNo': chiSimp.currentWS || ''
-            };
-        });
-        const ws = XLSX.utils.json_to_sheet(rows);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Students");
-        XLSX.writeFile(wb, `Kumon_Students_${filenameSuffix}_${new Date().toISOString().split('T')[0]}.xlsx`);
-    }
+
+        return {
+            'StudentNo': s.studentNumber || '',
+            'Chinese Name (Alphabet)': s.namePinyin || '',
+            'Chinese Name': s.nameCn || '',
+            'Nickname': s.nickname || '',
+            'SchoolGrade': s.grade || '',
+            'SchoolName': s.school || '',
+            'DateOfBirth': s.birthday || '',
+            'Nationality': s.nationality || '',
+            'Email': s.email || '',
+            'Phone (Emergency_M)': s.phone?.mom || '',
+            'Phone (Emergency_D)': s.phone?.dad || '',
+            'Phone (Emergency_Self)': s.phone?.own || '',
+            'Ship Address': s.address || '',
+            'Overall Status': s.overallStatus || 'Current',
+            'Teachers': teachersStr, // 🆕 Added Teachers Column
+            'Maths': math.name ? '1' : '',
+            'MStarting': math.startLevel || '',
+            'MStartingNo': math.startWS || '',
+            'MEnrollmentDate': math.enrolDate || '',
+            'MClassDay': math.timeslots?.[0]?.day || '',
+            'MClassTime': math.timeslots?.[0]?.time || '',
+            'MClassDay2': math.timeslots?.[1]?.day || '',
+            'MClassTime2': math.timeslots?.[1]?.time || '',
+            'CurrentMath': math.currentLevel || '',
+            'MathNo': math.currentWS || '',
+            'English': eng.name ? '1' : '',
+            'EStarting': eng.startLevel || '',
+            'EStartingNo': eng.startWS || '',
+            'EEnrollmentDate': eng.enrolDate || '',
+            'EClassDay': eng.timeslots?.[0]?.day || '',
+            'EClassTime': eng.timeslots?.[0]?.time || '',
+            'EClassDay2': eng.timeslots?.[1]?.day || '',
+            'EClassTime2': eng.timeslots?.[1]?.time || '',
+            'CurrentEng': eng.currentLevel || '',
+            'EngNo': eng.currentWS || '',
+            'EFL': efl.name ? '1' : '',
+            'EFLStarting': efl.startLevel || '',
+            'EFLStartingNo': efl.startWS || '',
+            'EFLEnrollmentDate': efl.enrolDate || '',
+            'EFLClassDay': efl.timeslots?.[0]?.day || '',
+            'EFLClassTime': efl.timeslots?.[0]?.time || '',
+            'EFLClassDay2': efl.timeslots?.[1]?.day || '',
+            'EFLClassTime2': efl.timeslots?.[1]?.time || '',
+            'CurrentEFL': efl.currentLevel || '',
+            'EFLNo': efl.currentWS || '',
+            'Chinese': chi.name ? '1' : '',
+            'CStarting': chi.startLevel || '',
+            'CStartingNo': chi.startWS || '',
+            'CEnrollmentDate': chi.enrolDate || '',
+            'CClassDay': chi.timeslots?.[0]?.day || '',
+            'CClassTime': chi.timeslots?.[0]?.time || '',
+            'CClassDay2': chi.timeslots?.[1]?.day || '',
+            'CClassTime2': chi.timeslots?.[1]?.time || '',
+            'CurrentChinese': chi.currentLevel || '',
+            'ChiNo': chi.currentWS || '',
+            'Chinese (Simp)': chiSimp.name ? '1' : '',
+            'CSStarting': chiSimp.startLevel || '',
+            'CSStartingNo': chiSimp.startWS || '',
+            'CSEnrollmentDate': chiSimp.enrolDate || '',
+            'CSClassDay': chiSimp.timeslots?.[0]?.day || '',
+            'CSClassTime': chiSimp.timeslots?.[0]?.time || '',
+            'CSClassDay2': chiSimp.timeslots?.[1]?.day || '',
+            'CSClassTime2': chiSimp.timeslots?.[1]?.time || '',
+            'CurrentChineseSimp': chiSimp.currentLevel || '',
+            'ChiSimpNo': chiSimp.currentWS || ''
+        };
+    });
+    
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Students");
+    XLSX.writeFile(wb, `Kumon_Students_${filenameSuffix}_${new Date().toISOString().split('T')[0]}.xlsx`);
+}
 
     async function exportStudentsToExcel() {
         await exportFilteredStudents(() => true, "Export_All");
