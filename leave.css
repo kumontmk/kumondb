@@ -1014,14 +1014,27 @@ font-size: 0.85rem;
 padding: 0.9rem;
 }
 /* Inside @media (max-width: 768px) */
-.tabs {
-    justify-content: center; /* Centers the pill group on mobile */
-    width: 100%;
-}
-.tab-btn {
-    padding: 0.6rem 1rem;
-    font-size: 0.85rem;
-}
+    .tabs {
+        gap: 4px;
+        padding: 3px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        flex-wrap: nowrap; /* Prevent wrapping on mobile */
+    }
+    
+    .tabs::-webkit-scrollbar {
+        display: none;
+    }
+    
+    .tab-btn {
+        flex: 0 0 auto; /* Don't grow, don't shrink, auto width */
+        padding: 0.6rem 0.9rem;
+        font-size: 0.85rem;
+        white-space: nowrap; /* Prevent text wrapping */
+        min-width: max-content; /* Ensure full text is visible */
+    }
 .balance-strip {
 flex-wrap: nowrap;
 overflow-x: auto;
