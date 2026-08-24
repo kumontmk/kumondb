@@ -1795,7 +1795,90 @@ header button:hover {
 }
 
 
+/* =========================================
+📅 CALENDAR NAVIGATION CONTROLS
+========================================= */
+.calendar-nav-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
 
+.cal-nav-btn {
+    background: var(--white);
+    color: var(--primary-dark);
+    border: 1px solid #e2e8f0;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    font-size: 1.2rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.cal-nav-btn:hover {
+    background: var(--primary);
+    color: var(--white);
+    border-color: var(--primary);
+    transform: scale(1.05);
+}
+
+.cal-nav-btn:active {
+    transform: scale(0.95);
+}
+
+/* "Today" button styling */
+.cal-today-btn {
+    width: auto;
+    border-radius: 20px;
+    padding: 0 1rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+/* Mobile adjustments for nav controls */
+@media (max-width: 768px) {
+    .calendar-nav-controls {
+        width: 100%;
+        justify-content: center;
+        margin-top: 0.5rem;
+    }
+    .cal-nav-btn {
+        width: 32px;
+        height: 32px;
+        font-size: 1rem;
+    }
+    .cal-today-btn {
+        font-size: 0.8rem;
+        padding: 0 0.75rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .calendar-nav-controls {
+        width: 100%;
+        justify-content: center;
+        margin-top: 0.5rem;
+        gap: 0.4rem;
+    }
+    .cal-nav-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 1rem;
+    }
+    .cal-today-btn {
+        width: auto;
+        border-radius: 18px;
+        padding: 0 0.6rem;
+        font-size: 0.75rem;
+        min-width: 36px;
+    }
+}
 
 /* =========================================
 🌐 TRADITIONAL CHINESE FONT SUPPORT

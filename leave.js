@@ -865,7 +865,17 @@ async function renderOverview() {
     }
     html += `</tr>`;
   }
-  html += `</tbody>`; table.innerHTML = html;
+  html += `</tbody>`; 
+  
+  table.innerHTML = html;
+  
+  table.querySelectorAll('tbody tr').forEach(tr => {
+    tr.addEventListener('click', () => {
+        // Toggles the highlight class on click
+        tr.classList.toggle('row-highlighted');
+      });
+  });
+
   if (listEl) {
     if (visible.length === 0) listEl.innerHTML = `<div class="ov-item" style="justify-content:center;color:var(--text-light);">${escapeHtml(t('noOneOnLeave', { month: monthLabel }))}</div>`;
     else {

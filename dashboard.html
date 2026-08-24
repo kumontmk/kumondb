@@ -43,16 +43,18 @@
          CALENDAR SECTION
     =========================================== -->
     <section class="calendar-section">
-      <div class="calendar-header-main">
-        <h3>📅 <span id="calendar-center-name"></span> <span data-i18n="dashboard.centerCalendar">Center Calendar</span></h3>
-          <p class="calendar-hint">
-            <span style="color: #1565c0; font-weight: 600;" data-i18n="dashboard.hintBlue">● Blue = Parent Orientation</span> |
-            <span style="color: #2e7d32; font-weight: 600;" data-i18n="dashboard.hintGreen">● Green = Center Holiday</span> |
-            <span style="color: #c62828; font-weight: 600;" data-i18n="dashboard.hintRed">● Red = Public Holiday</span> |
-            <span style="color: #e65100; font-weight: 600;" data-i18n="dashboard.hintOrange">● Orange = Diagnostic Test</span> |
-            <span style="color: #e095d4; font-weight: 600;" data-i18n="dashboard.hintPink">● Pink = Other</span>
-          </p>
-      </div>
+        <div class="calendar-header-main">
+          <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 0.5rem;">
+            <h3>📅 Center Calendar</h3>
+            <!-- 📅 NEW: Month Navigation Controls -->
+            <div class="calendar-nav-controls">
+              <button id="calPrevBtn" class="cal-nav-btn" title="Previous Month">&lt;</button>
+              <button id="calTodayBtn" class="cal-nav-btn cal-today-btn" title="Jump to Current Month">Today</button>
+              <button id="calNextBtn" class="cal-nav-btn" title="Next Month">&gt;</button>
+            </div>
+          </div>
+          <p class="calendar-hint">● Blue = Parent Orientation | ● Green = Center Holiday | ● Red = Public Holiday | ● Orange = Diagnostic Test | ● Pink = Other</p>
+        </div>
       <div class="calendar-wrapper">
         <div class="calendar-month">
           <h4 id="currentMonthTitle">Current Month</h4>

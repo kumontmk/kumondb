@@ -181,35 +181,42 @@ font-weight: 600;
 font-size: 0.88rem;
 color: var(--text);
 }
-/* ---------- 5. MAIN TABS ---------- */
+/* ---------- 5. MAIN TABS (PILL SWITCH) ---------- */
 .tabs {
-display: flex;
-gap: 0.25rem;
-margin-bottom: 1.5rem;
-border-bottom: 2px solid var(--border);
-flex-wrap: wrap;
+    display: inline-flex;
+    gap: 2px;
+    background: #dbe4ee;
+    border-radius: 999px;
+    padding: 4px;
+    margin-bottom: 1.5rem;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    border-bottom: none; /* Removes the old underline */
 }
+.tabs::-webkit-scrollbar { display: none; }
+
 .tab-btn {
-background: transparent;
-color: var(--text-light);
-border: none;
-border-bottom: 3px solid transparent;
-padding: 0.85rem 1.5rem;
-font-size: 1rem;
-font-weight: 600;
-cursor: pointer;
-transition: all 0.2s ease;
-border-radius: 0;
-margin-bottom: -2px;
+    border: none;
+    background: transparent;
+    padding: 0.6rem 1.2rem;
+    border-radius: 999px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-light);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+    margin-bottom: 0; /* Removes old negative margin */
 }
 .tab-btn:hover {
-color: var(--primary-dark);
-background: rgba(135, 206, 235, 0.08);
+    background: rgba(255, 255, 255, 0.6);
+    color: var(--primary-dark);
 }
 .tab-btn.active {
-color: var(--primary-dark);
-border-bottom-color: var(--primary-dark);
-background: rgba(135, 206, 235, 0.1);
+    background: var(--white);
+    color: var(--primary-dark);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15);
 }
 .tab-content {
 display: none;
@@ -552,6 +559,12 @@ font-size: 0.68rem;
 height: 32px;
 cursor: help;
 }
+
+/* ---------- OVERVIEW ROW & NAME HIGHLIGHT ---------- */
+#overviewTable tbody tr {
+    transition: background-color
+}
+
 /* ---------- 11. LEAVE TYPE COLORS ---------- */
 .lv-annual {
 --lv: var(--c-annual);
@@ -1000,14 +1013,14 @@ font-size: 0.85rem;
 .leave-page {
 padding: 0.9rem;
 }
+/* Inside @media (max-width: 768px) */
 .tabs {
-gap: 0;
+    justify-content: center; /* Centers the pill group on mobile */
+    width: 100%;
 }
 .tab-btn {
-flex: 1;
-padding: 0.75rem 0.5rem;
-font-size: 0.9rem;
-text-align: center;
+    padding: 0.6rem 1rem;
+    font-size: 0.85rem;
 }
 .balance-strip {
 flex-wrap: nowrap;
@@ -1569,4 +1582,40 @@ background-color: var(--white);
     margin: 0;
     accent-color: #ea580c;
     transform: scale(1.2);
+}
+
+/* ---------- OVERVIEW ROW HOVER & CLICK HIGHLIGHT ---------- */
+#overviewTable tbody tr {
+    transition: background-color 0.15s ease;
+    cursor: pointer;
+}
+
+/* 1. Hover effect for the whole row */
+#overviewTable tbody tr:hover {
+    background-color: #f1f5f9;
+}
+
+/* 2. Hover effect specifically for the sticky name column */
+#overviewTable tbody tr:hover td.name-col {
+    background-color: #e2e8f0;
+    color: var(--primary-dark);
+    font-weight: 600;
+}
+
+/* 3. Click/Active state (toggled via JS) */
+#overviewTable tbody tr.row-highlighted {
+    background-color: #e0f2fe; /* Light blue background */
+}
+#overviewTable tbody tr.row-highlighted td.name-col {
+    background-color: #bae6fd; /* Darker blue for the name column */
+    color: var(--primary-dark);
+    font-weight: 700;
+}
+
+/* Ensure hover overrides the even-row striping correctly */
+#overviewTable tbody tr:nth-child(even):hover td.name-col {
+    background-color: #e2e8f0;
+}
+#overviewTable tbody tr.row-highlighted:hover td.name-col {
+    background-color: #bae6fd;
 }

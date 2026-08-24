@@ -13,6 +13,10 @@ let dtDataMap = {}; // Stores Diagnostic Test events
 let calendarEventsMap = {}; // Stores holiday events
 let centerName = ""; // Stores the center name to determine closed days
 
+// Tracks which month the user is currently viewing in the calendar
+let viewYear = new Date().getFullYear();
+let viewMonth = new Date().getMonth();
+
 let editingCalendarDate = null;
 let pendingOtherEvents = [];
 
@@ -78,6 +82,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 6. Initialize PO Calendar and Hide Loader
   try {
     await initPOCalendar();
+    initCalendarNav();
     initFAB();
     initQuickInquiry();
     setupSchedulePOModalListeners();
@@ -498,19 +503,62 @@ async function initPOCalendar() {
 }
 
 function renderDualCalendar() {
-  const today = new Date();
-  const currentYear = today.getFullYear();
-  const currentMonth = today.getMonth();
-  const nextMonth = currentMonth === 11 ? 0  : currentMonth + 1;
-  const nextYear = currentMonth === 11 ? currentYear + 1 : currentYear;
-  
-  const monthNames = t('dashboard.months', { returnObjects: true });
-  document.getElementById('currentMonthTitle').textContent = `${monthNames[currentMonth]} ${currentYear}`;
-  document.getElementById('nextMonthTitle').textContent = `${monthNames[nextMonth]} ${nextYear}`;
-  
-  renderMonthGrid(currentYear, currentMonth, 'calendarCurrent', today);
-  renderMonthGrid(nextYear, nextMonth, 'calendarNext', today);
-  autoShrinkHolidayNames();
+    const today = new Date(); // Actual current date (used for highlighting "today")
+    
+    // Use the viewed month/year instead of the actual current month
+    const currentYear = viewYear;
+    const currentMonth = viewMonth;
+    
+    const nextMonth = currentMonth === 11 ? 0 : currentMonth + 1;
+    const nextYear = currentMonth === 11 ? currentYear + 1 : currentYear;
+
+    const monthNames = t('dashboard.months', { returnObjects: true });
+    document.getElementById('currentMonthTitle').textContent = `${monthNames[currentMonth]} ${currentYear}`;
+    document.getElementById('nextMonthTitle').textContent = `${monthNames[nextMonth]} ${nextYear}`;
+
+    // Pass the actual 'today' date so the grid knows which day to highlight as "today"
+    renderMonthGrid(currentYear, currentMonth, 'calendarCurrent', today);
+    renderMonthGrid(nextYear, nextMonth, 'calendarNext', today);
+
+    autoShrinkHolidayNames();
+}
+
+
+function initCalendarNav() {
+    const prevBtn = document.getElementById('calPrevBtn');
+    const nextBtn = document.getElementById('calNextBtn');
+    const todayBtn = document.getElementById('calTodayBtn');
+
+    if (prevBtn) {
+        prevBtn.addEventListener('click', () => {
+            viewMonth--;
+            if (viewMonth < 0) {
+                viewMonth = 11;
+                viewYear--;
+            }
+            renderDualCalendar();
+        });
+    }
+
+    if (nextBtn) {
+        nextBtn.addEventListener('click', () => {
+            viewMonth++;
+            if (viewMonth > 11) {
+                viewMonth = 0;
+                viewYear++;
+            }
+            renderDualCalendar();
+        });
+    }
+
+    if (todayBtn) {
+        todayBtn.addEventListener('click', () => {
+            const now = new Date();
+            viewYear = now.getFullYear();
+            viewMonth = now.getMonth();
+            renderDualCalendar();
+        });
+    }
 }
 
 function getClosedDaysForCenter(name) {
