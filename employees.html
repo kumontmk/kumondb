@@ -29,10 +29,9 @@
 
   <div id="mainContent" class="students-page hidden" style="opacity:0;pointer-events:none;">
 
-    <!-- Export Section -->
+    <!-- 📊 EXPORT BUTTON -->
     <div class="export-container">
-      <label for="exportMonthPicker">📅 Export Month:</label>
-      <input type="month" id="exportMonthPicker">
+      <label>📊 Timeclock Export</label>
       <button id="exportExcelBtn" class="primary">⬇ Export Excel</button>
     </div>
 
@@ -351,6 +350,52 @@
       </div>
     </div>
   </div>
+
+  <!-- 📤 EXPORT OPTION MODAL -->
+<div id="exportModal" class="confirmation-modal" style="display: none;">
+  <div class="modal-content" style="text-align: left;">
+    <span class="close-btn" id="closeExportModal">&times;</span>
+
+    <h3>Export Timeclock Records</h3>
+
+    <!-- Option 1: By Month -->
+    <label class="export-option">
+      <input type="radio" name="exportMode" id="exportModeMonth" checked>
+      <span>📅 Export per month</span>
+    </label>
+
+    <div id="exportMonthField" class="export-field active">
+      <label for="exportModalMonthPicker">Select Month</label>
+      <input type="month" id="exportModalMonthPicker">
+    </div>
+
+    <!-- Option 2: Date Range -->
+    <label class="export-option">
+      <input type="radio" name="exportMode" id="exportModeRange">
+      <span>📆 Export from date to date</span>
+    </label>
+
+    <div id="exportDateRangeField" class="export-field">
+      <div class="form-grid">
+        <div>
+          <label for="exportStartDate">Start Date</label>
+          <input type="date" id="exportStartDate">
+        </div>
+
+        <div>
+          <label for="exportEndDate">End Date</label>
+          <input type="date" id="exportEndDate">
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="modal-actions export-modal-actions">
+      <button class="secondary" id="cancelExportBtn">Cancel</button>
+      <button class="primary" id="confirmExportBtn">Export</button>
+    </div>
+  </div>
+</div>
 
   <script type="module" src="employees.js"></script>
   <script>

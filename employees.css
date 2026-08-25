@@ -21,8 +21,9 @@
 }
 
 html {
-  overflow-x: hidden;
+  overflow-x: clip; /* Changed from 'hidden' to 'clip' */
 }
+
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -30,7 +31,7 @@ body {
   color: var(--text);
   line-height: 1.6;
   -webkit-tap-highlight-color: transparent;
-  overflow-x: hidden;
+  overflow-x: clip; /* Changed from 'hidden' to 'clip' */
 }
 
 /* 🔝 HEADER & NAV */
@@ -1439,5 +1440,71 @@ tr.disabled-row td:first-child {
     flex-shrink: 0;
     min-width: 36px;
     min-height: 36px;
+  }
+}
+
+/* ============================================
+📤 EXPORT MODAL
+============================================ */
+.export-option {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem;
+  background: #f8f9fa;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+  color: #333;
+  transition: all 0.2s ease;
+}
+
+.export-option:hover {
+  background: #e8f0fe;
+  border-color: var(--primary-dark);
+}
+
+.export-option input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--primary-dark);
+  cursor: pointer;
+}
+
+.export-field {
+  display: none;
+  margin-bottom: 1rem;
+}
+
+.export-field.active {
+  display: block;
+}
+
+.export-modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.export-modal-actions button {
+  flex: 1;
+  min-height: 44px;
+}
+
+#exportModal .form-grid {
+  margin-bottom: 0;
+}
+
+#exportModal input[type="month"],
+#exportModal input[type="date"] {
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .export-modal-actions {
+    flex-direction: column;
   }
 }
