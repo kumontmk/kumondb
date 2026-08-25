@@ -300,6 +300,11 @@ button:hover {
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
 }
 
+/* Second header row (AT sub-header) must stick below the first row */
+.report-sticky-table thead tr:nth-child(2) th {
+    top: var(--sticky-header-offset, 0px);
+}
+
 .subject-table caption {
     position: static;
     font-weight: 700;
@@ -826,10 +831,6 @@ td {
         justify-content: center;
     }
 
-    #reportOutput {
-        padding-bottom: 110px;
-    }
-
     .save-bar {
         padding-bottom: calc(0.8rem + env(safe-area-inset-bottom));
     }
@@ -852,6 +853,42 @@ td {
 
     .report-card-body {
         grid-template-columns: 1fr;
+    }
+
+    /* 🔍 Fixed search bar above the save button */
+    .controls .search-group {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 101; /* above .save-bar (100) */
+        margin: 0;
+        min-width: 0;
+        max-width: none;
+        padding: 0.6rem 0.75rem calc(0.6rem + env(safe-area-inset-bottom));
+        background: var(--white);
+        box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.12);
+    }
+
+    .controls .search-group .control-label {
+        display: none; /* keep the bar compact; placeholder explains it */
+    }
+
+    /* When the save bar is visible, dock the search right on top of it */
+    body.has-save-bar .controls .search-group {
+        bottom: calc(var(--save-bar-h, 75px) + env(safe-area-inset-bottom));
+        padding-bottom: 0.6rem;
+        box-shadow: none;
+        border-top: 1px solid #e2e8f0;
+    }
+
+    /* Keep report content from hiding behind the fixed bar(s) */
+    #reportOutput {
+        padding-bottom: calc(80px + env(safe-area-inset-bottom));
+    }
+
+    body.has-save-bar #reportOutput {
+        padding-bottom: calc(160px + env(safe-area-inset-bottom));
     }
 }
 
@@ -1110,4 +1147,49 @@ td {
     .print-desktop-container .remove-at-btn {
         display: none !important;
     }
+}
+
+/* 🔍 Student search */
+.search-group {
+    order: 99;          /* last item inside .controls */
+    margin-left: auto;  /* pushes it to the far right on desktop */
+    flex: 0 1 320px;
+    min-width: 220px;
+    max-width: 340px;
+}
+
+.search-wrap {
+    position: relative;
+}
+
+.search-wrap input {
+    padding-right: 2.4rem;
+}
+
+.search-wrap .clear-search-btn {
+    position: absolute;
+    top: 50%;
+    right: 6px;
+    transform: translateY(-50%);
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: #e2e8f0;
+    color: #475569;
+    font-size: 0.8rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.search-wrap .clear-search-btn:hover {
+    background: #cbd5e1;
+}
+
+.clear-search-btn[hidden] {
+    display: none;
 }

@@ -90,9 +90,21 @@ function initializeReports() {
     const reportOutput = document.getElementById('reportOutput');
     const monthlyReportContainer = document.getElementById('monthlyReport');
     const printBtn = document.getElementById('printReport');
+    const searchInput = document.getElementById('studentSearch');
+    const clearSearchBtn = document.getElementById('clearSearchBtn');
+    let searchQuery = '';
+    let searchDebounce = null;
 
     function showLoader() {
         document.getElementById('page-loader')?.classList.remove('hidden');
+    }
+
+    function syncSaveBarState() {
+        const visible = !!saveBar && !saveBar.classList.contains('hidden');
+        document.body.classList.toggle('has-save-bar', visible);
+        if (visible) {
+            document.documentElement.style.setProperty('--save-bar-h', `${saveBar.offsetHeight}px`);
+        }
     }
 
     function hideLoader() {
@@ -102,6 +114,27 @@ function initializeReports() {
     function isMobileLayout() {
         return window.matchMedia('(max-width: 768px)').matches;
     }
+    function escapeHtml(str) {
+        return String(str).replace(/[&<>"']/g, (c) => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]));
+    }
+
+    function studentMatchesQuery(s, query) {
+        const q = query.toLowerCase();
+        return [s.studentNumber, s.nameCn, s.namePinyin, s.nickname, s.grade]
+            .some(field => String(field ?? '').toLowerCase().includes(q));
+    }
+
+    function syncStickyHeaderOffsets() {
+        reportOutput.querySelectorAll('table.report-sticky-table').forEach(table => {
+            const firstRow = table.querySelector('thead tr');
+            if (!firstRow) return;
+            const h = firstRow.getBoundingClientRect().height;
+            if (h > 0) table.style.setProperty('--sticky-header-offset', `${h}px`);
+        });
+    }
+    window.addEventListener('resize', () => requestAnimationFrame(syncStickyHeaderOffsets));
 
     document.querySelectorAll('.subject-card').forEach(card => {
         card.addEventListener('click', () => {
@@ -112,6 +145,39 @@ function initializeReports() {
             if (isDataLoaded) buildReport();
         });
     });
+
+    const searchLabel = document.getElementById('searchLabel');
+    if (searchLabel) searchLabel.textContent = t('reports.searchLabel');
+
+    if (searchInput) {
+        searchInput.placeholder = t('reports.searchPlaceholder');
+        searchInput.addEventListener('input', () => {
+            if (clearSearchBtn) clearSearchBtn.hidden = searchInput.value.length === 0;
+            clearTimeout(searchDebounce);
+            searchDebounce = setTimeout(() => {
+                searchQuery = searchInput.value;
+                if (isDataLoaded) buildReport();
+            }, 250);
+        });
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                clearTimeout(searchDebounce);
+                searchQuery = searchInput.value;
+                if (isDataLoaded) buildReport();
+            }
+        });
+    }
+    if (clearSearchBtn) {
+        clearSearchBtn.title = t('reports.clearSearch');
+        clearSearchBtn.addEventListener('click', () => {
+            if (!searchInput) return;
+            searchInput.value = '';
+            searchQuery = '';
+            clearSearchBtn.hidden = true;
+            searchInput.focus();
+            if (isDataLoaded) buildReport();
+        });
+    }
 
     const now = new Date();
     const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -225,17 +291,17 @@ function initializeReports() {
                     <th rowspan="2">${t('reports.thPrevWS')}</th>
                     <th rowspan="2">${t('reports.thCurrentLevel')}</th>
                     <th rowspan="2">${t('reports.thNoWS')}</th>
-                    <th colspan="5" style="text-align:center; background: rgba(135,206,235,0.3);">
+                    <th colspan="5" style="text-align:center; background-color:#fff; background-image:linear-gradient(rgba(135,206,235,0.3),rgba(135,206,235,0.3));">
                         ${t('reports.thAT')}
                     </th>
-                </tr>
-                <tr>
-                    <th style="background: rgba(135,206,235,0.2);">${t('reports.thDate')}</th>
-                    <th style="background: rgba(135,206,235,0.2);">${t('reports.thLevel')}</th>
-                    <th style="background: rgba(135,206,235,0.2);">${t('reports.thScore')}</th>
-                    <th style="background: rgba(135,206,235,0.2);">${t('reports.thTime')}</th>
-                    <th style="background: rgba(135,206,235,0.2);">${t('reports.thGroup')}</th>
-                </tr>
+                    </tr>
+                    <tr>
+                        <th style="background-color:#fff; background-image:linear-gradient(rgba(135,206,235,0.2),rgba(135,206,235,0.2));">${t('reports.thDate')}</th>
+                        <th style="background-color:#fff; background-image:linear-gradient(rgba(135,206,235,0.2),rgba(135,206,235,0.2));">${t('reports.thLevel')}</th>
+                        <th style="background-color:#fff; background-image:linear-gradient(rgba(135,206,235,0.2),rgba(135,206,235,0.2));">${t('reports.thScore')}</th>
+                        <th style="background-color:#fff; background-image:linear-gradient(rgba(135,206,235,0.2),rgba(135,206,235,0.2));">${t('reports.thTime')}</th>
+                        <th style="background-color:#fff; background-image:linear-gradient(rgba(135,206,235,0.2),rgba(135,206,235,0.2));">${t('reports.thGroup')}</th>
+                    </tr>
             </thead>
         `;
     }
@@ -392,6 +458,7 @@ function initializeReports() {
         monthlyReportContainer?.classList.add('hidden');
 
         if (saveBar) saveBar.classList.add('hidden');
+        syncSaveBarState();
 
         if (saveBtn) {
             saveBtn.disabled = false;
@@ -416,22 +483,37 @@ function initializeReports() {
             return nameA.localeCompare(nameB, 'en', { sensitivity: 'base' });
         });
 
-        let totalRows = 0;
+            // 🔍 Apply search filter (feeds BOTH desktop tables and mobile cards)
+        const query = (searchQuery || '').trim();
+        const visibleStudents = query
+            ? sortedStudents.filter(({ data }) => studentMatchesQuery(data, query))
+            : sortedStudents;
 
+        let totalRows = 0;
         const subjectsToRender = activeSubject === 'all'
             ? ['Math', 'Chinese', 'English ERP', 'English EFL']
             : activeSubject === 'Pencil'
                 ? ['Pencil']
                 : [activeSubject];
-
         if (isMobileLayout()) {
             subjectsToRender.forEach(subName => {
-                totalRows += buildMobileSubjectSection(subName, sortedStudents, month);
+                totalRows += buildMobileSubjectSection(subName, visibleStudents, month);
             });
         } else {
             subjectsToRender.forEach(subName => {
-                totalRows += buildDesktopSubjectTable(subName, sortedStudents, month);
+                totalRows += buildDesktopSubjectTable(subName, visibleStudents, month);
             });
+        }
+        if (totalRows > 0) {
+            monthlyReportContainer?.classList.remove('hidden');
+            if (saveBar) saveBar.classList.remove('hidden');
+            syncSaveBarState();     
+        } else {
+            const msg = query
+                ? t('reports.noSearchResults', { query: escapeHtml(query), month })
+                : t('reports.noMatchingStudents', { month });
+            reportOutput.innerHTML = `<div class="empty-state">${msg}</div>`;
+            monthlyReportContainer?.classList.remove('hidden');
         }
 
         if (totalRows > 0) {
@@ -441,6 +523,7 @@ function initializeReports() {
             reportOutput.innerHTML = `<div class="empty-state">${t('reports.noMatchingStudents', { month })}</div>`;
             monthlyReportContainer?.classList.remove('hidden');
         }
+        syncStickyHeaderOffsets();
     }
 
     function buildDesktopSubjectTable(subName, sortedStudents, month) {

@@ -48,6 +48,14 @@
         </div>
         <button id="generateReport" class="primary" data-i18n="reports.generate">📊 Generate</button>
         <button id="printReport" class="print-btn" data-i18n="reports.print">🖨️ Print</button>
+
+        <div class="control-group search-group">
+          <label class="control-label" for="studentSearch" id="searchLabel">🔍 Search Student</label>
+            <div class="search-wrap">
+                <input type="text" id="studentSearch" autocomplete="off">
+                <button type="button" id="clearSearchBtn" class="clear-search-btn" hidden>✕</button>
+            </div>
+        </div>
       </div>
 
       <div id="reportOutput"></div>

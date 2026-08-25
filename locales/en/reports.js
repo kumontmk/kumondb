@@ -49,6 +49,10 @@ export default {
     phLevel: "Level",
     phScore: "Score",
     phTime: "Time",
-    phGroup: "Group"
+    phGroup: "Group",
+    searchLabel: '🔍 Search Student',
+    searchPlaceholder: 'Name, pinyin or student no…',
+    clearSearch: 'Clear search',
+    noSearchResults: 'No students match “{query}” in {month}.',
   }
 };

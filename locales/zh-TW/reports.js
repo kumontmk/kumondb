@@ -49,6 +49,10 @@ export default {
     phLevel: "級別",
     phScore: "分數",
     phTime: "時間",
-    phGroup: "組別"
+    phGroup: "組別",
+    searchLabel: '🔍 搜尋學生',
+    searchPlaceholder: '姓名、拼音或學生編號…',
+    clearSearch: '清除搜尋',
+    noSearchResults: '{month} 沒有符合「{query}」的學生。',
   }
 };
