@@ -995,3 +995,319 @@ label span { font-weight: 400; font-size: 0.8rem; color: #999; margin-left: 0.25
   height: 16px;
   cursor: pointer;
 }
+
+/* ============================================
+   ✅ UPDATED ATTENDANCE PAGE LAYOUT
+   Separates Search/Sort and Record Attendance
+   Fixes mobile view
+============================================ */
+
+/* Toolbar containing both cards */
+.attendance-toolbar {
+    display: grid;
+    gap: 1rem;
+    margin: 1rem 0 1.25rem;
+}
+
+/* Card sections */
+.attendance-section-card {
+    background: var(--white);
+    border: 1px solid #e2e8f0;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 1rem 1.25rem;
+}
+
+/* Section titles */
+.attendance-section-title {
+    margin: 0 0 0.9rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--primary-dark);
+}
+
+/* Controls row */
+.attendance-controls {
+    display: flex;
+    align-items: flex-end;
+    gap: 1rem;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    box-shadow: none;
+    flex-wrap: wrap;
+}
+
+/* Search / Sort controls */
+.search-sort-controls .control-group {
+    flex: 1 1 220px;
+    min-width: 220px;
+}
+
+.search-sort-controls .search-group {
+    flex: 1 1 280px;
+    min-width: 240px;
+}
+
+/* Record Attendance controls */
+.record-attendance-controls {
+    align-items: flex-end;
+}
+
+.record-attendance-controls .manual-group {
+    flex: 1 1 320px;
+    min-width: 260px;
+    position: relative;
+}
+
+/* Labels */
+.control-label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-light);
+    margin-bottom: 0.4rem;
+}
+
+/* Inputs and selects */
+.attendance-controls input,
+.attendance-controls select,
+.day-select {
+    width: 100%;
+    padding: 0.7rem 0.9rem;
+    font-size: 0.95rem;
+    font-weight: 500;
+    border: 1px solid #cbd5e1;
+    border-radius: var(--radius);
+    background: #fff;
+    color: var(--text);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.attendance-controls input:focus,
+.attendance-controls select:focus,
+.day-select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.25);
+}
+
+/* Search wrapper fix */
+.search-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.search-wrapper .search-icon {
+    position: absolute;
+    left: 0.85rem;
+    font-size: 0.95rem;
+    color: var(--text-light);
+    pointer-events: none;
+}
+
+.search-wrapper input {
+    width: 100%;
+    padding: 0.7rem 2.5rem 0.7rem 2.5rem;
+    font-size: 0.95rem;
+    border: 1px solid #cbd5e1;
+    border-radius: var(--radius);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.search-wrapper input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.25);
+}
+
+/* Clear button */
+.clear-search {
+    position: absolute;
+    right: 0.5rem;
+    background: #f1f5f9;
+    border: none;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    color: var(--text-light);
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: all 0.2s ease;
+}
+
+.clear-search:hover {
+    background: #dc2626;
+    color: white;
+}
+
+/* Manual search dropdown */
+.manual-search-wrapper {
+    position: relative;
+}
+
+.manual-search-results {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 40;
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+    max-height: 280px;
+    overflow: auto;
+    padding: 0.25rem;
+}
+
+.manual-result-item {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
+    background: none;
+    border: 0;
+    border-radius: 6px;
+    padding: 0.6rem 0.65rem;
+    cursor: pointer;
+    text-align: left;
+}
+
+.manual-result-item:hover {
+    background: #eef6fb;
+}
+
+.manual-result-name {
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.manual-result-meta {
+    font-size: 0.82rem;
+    color: #64748b;
+}
+
+.manual-result-empty {
+    padding: 0.75rem;
+    color: #64748b;
+    text-align: center;
+}
+
+/* Modal improvements */
+.modal-content {
+    width: min(92vw, 560px);
+    max-width: 560px;
+    max-height: 90vh;
+    overflow: auto;
+    text-align: left;
+}
+
+#studentInfo {
+    margin-bottom: 1rem;
+}
+
+#subjectCheckboxes {
+    margin: 1rem 0;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-top: 1.25rem;
+}
+
+/* Attendance table wrapper */
+.attendance-table-wrapper {
+    max-height: calc(100vh - 360px);
+}
+
+/* ============================================
+   📱 MOBILE FIXES
+============================================ */
+
+@media (max-width: 900px) {
+    .attendance-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .search-sort-controls .control-group,
+    .search-sort-controls .search-group,
+    .record-attendance-controls .manual-group {
+        width: 100%;
+        min-width: 0;
+        max-width: none;
+        flex: 1 1 auto;
+    }
+
+    .scan-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .modal-actions {
+        flex-direction: column-reverse;
+    }
+
+    .modal-actions button {
+        width: 100%;
+    }
+}
+
+@media (max-width: 640px) {
+    .form-container {
+        padding: 1rem 0.75rem;
+    }
+
+    h1 {
+        font-size: 1.35rem;
+    }
+
+    .attendance-section-card {
+        padding: 0.9rem;
+    }
+
+    .table-wrapper,
+    .attendance-table-wrapper {
+        max-height: none;
+        border-radius: 8px;
+    }
+
+    table {
+        min-width: 860px;
+    }
+
+    th,
+    td {
+        padding: 0.55rem 0.45rem;
+        font-size: 0.82rem;
+    }
+
+    .modal-content {
+        padding: 1.15rem;
+    }
+}
+
+/* Duplicate warning list */
+.duplicate-warning-list {
+    margin: 0.75rem 0 0;
+    padding-left: 1.2rem;
+    text-align: left;
+    max-height: 180px;
+    overflow: auto;
+}
+
+.duplicate-warning-list li {
+    margin: 0.25rem 0;
+}

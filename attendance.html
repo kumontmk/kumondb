@@ -1,118 +1,206 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- Shows the logo in the browser tab -->
-  <link rel="icon" type="image/svg+xml" href="favicon.svg">
-
-  <!-- Optional: PNG fallback for older browsers -->
-  <link rel="icon" type="image/png" sizes="512x512" href="dblogo-maskable-512.png">
-
-  <!-- Optional: icon when saved to iOS home screen -->
-  <link rel="apple-touch-icon" href="dblogo-maskable-512.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Attendance - Kumon DB</title>
+
     <link rel="stylesheet" href="style.css">
-    <!-- html5-qrcode library for QR scanning -->
-    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+    <!-- QR Scanner Library -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
-    <div id="page-loader" class="hidden"><div class="spinner"></div></div>
 
-    <!-- 🔐 ACCESS DENIED OVERLAY -->
+    <!-- Loader -->
+    <div id="page-loader">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Header -->
+    <header>
+        <nav>
+            <a href="dashboard.html">← Dashboard</a>
+        </nav>
+                <h1>📅 Student Attendance</h1>
+
+    </header>
+
+    <!-- Access Denied -->
     <div id="accessDenied" class="access-denied hidden">
         <div class="access-denied-content">
             <h2>🔐 Access Restricted</h2>
             <p>You do not have permission to view Attendance.</p>
-            <button id="backToDashboardBtn" class="primary" style="margin-top:1rem">← Back to Dashboard</button>
+            <button id="backToDashboardBtn" class="primary" type="button">← Back to Dashboard</button>
         </div>
     </div>
 
-    <!-- ✅ MAIN CONTENT WRAPPER (Hidden by default until authorized) -->
-    <div id="mainContent" class="hidden">
-        
-        <header>
-            <nav>
-                <a href="dashboard.html">← Dashboard</a>
-            </nav>
-            <h2>📅 Student Attendance</h2>
-        </header>
+    <!-- Main Content -->
+    <main id="mainContent" class="form-container hidden">
+        <div class="attendance-toolbar">
 
-        <main class="students-page">
-            <div class="attendance-controls">
-                <div class="control-group">
-                    <label class="control-label"> Date</label>
-                    <input type="date" id="attendanceDate" class="day-select">
-                </div>
-                <div class="control-group">
-                    <label class="control-label"> Subject</label>
-                    <select id="attendanceSubject" class="day-select">
-                        <option value="All">All Subjects</option>
-                    </select>
-                </div>
-                <div class="search-group">
-                    <label class="control-label">🔍 Search Student</label>
-                    <div class="search-wrapper">
-                        <span class="search-icon">🔍</span>
-                        <input type="text" id="searchStudent" placeholder="Search name, ID, grade...">
-                        <button class="clear-search" id="clearSearchBtn" style="display:none;">×</button>
+            <!-- Record Attendance -->
+            <section class="attendance-section-card">
+                <h2 class="attendance-section-title">✍️ Record Attendance</h2>
+
+                <div class="attendance-controls record-attendance-controls">
+
+                    <!-- Manual Student Attendance -->
+                    <div class="control-group manual-group">
+                        <label class="control-label" for="manualAttendanceInput">
+                            Manual Student Attendance
+                        </label>
+
+                        <div class="search-wrapper manual-search-wrapper">
+                            <span class="search-icon">🧑‍🎓</span>
+
+                            <input
+                                type="text"
+                                id="manualAttendanceInput"
+                                placeholder="Type student name / nickname / number..."
+                                autocomplete="off"
+                            >
+
+                            <button type="button" id="clearManualSearch" class="clear-search">×</button>
+
+                            <!-- Manual Search Dropdown -->
+                            <div id="manualSearchResults" class="manual-search-results hidden"></div>
+                        </div>
                     </div>
+
+                    <!-- Scan QR Button -->
+                    <button id="scanQrBtn" class="scan-btn" type="button">
+                        <span class="scan-icon">📷</span>
+                        <span>Scan QR</span>
+                    </button>
+
                 </div>
-                <button id="scanQrBtn" class="scan-btn">
-                    <span class="scan-icon">📷</span>
-                    <span>Scan QR</span>
+            </section>
+
+            <!-- Search / Sort -->
+            <section class="attendance-section-card">
+                <h2 class="attendance-section-title">🔎 Search / Sort</h2>
+
+                <div class="attendance-controls search-sort-controls">
+
+                    <!-- Date -->
+                    <div class="control-group">
+                        <label class="control-label" for="attendanceDate">Date</label>
+                        <input type="date" id="attendanceDate" class="day-select">
+                    </div>
+
+                    <!-- Subject -->
+                    <div class="control-group">
+                        <label class="control-label" for="attendanceSubject">Subject</label>
+                        <select id="attendanceSubject" class="day-select">
+                            <option value="All">All Subjects</option>
+                        </select>
+                    </div>
+
+                    <!-- Search -->
+                    <div class="control-group search-group">
+                        <label class="control-label" for="searchStudent">Search</label>
+                        <div class="search-wrapper">
+                            <span class="search-icon">🔍</span>
+                            <input
+                                type="text"
+                                id="searchStudent"
+                                placeholder="Search student..."
+                                autocomplete="off"
+                            >
+                            <button type="button" id="clearSearchStudent" class="clear-search">×</button>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+        </div>
+
+        <!-- Attendance Table -->
+        <div class="table-wrapper attendance-table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Subject</th>
+                        <th>Chinese Name</th>
+                        <th>Nickname</th>
+                        <th>Grade</th>
+                        <th>School</th>
+                        <th>Scheduled Time</th>
+                        <th>Check-in Time</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="attendanceBody">
+                    <tr>
+                        <td colspan="9" style="text-align:center; padding:1rem; color:#666;">
+                            Loading attendance...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+    </main>
+
+    <!-- Scan QR Modal -->
+    <div id="scanModal" class="modal hidden">
+        <div class="modal-content">
+            <span id="closeScanModal">×</span>
+            <h2>📷 Scan Student QR</h2>
+            <p id="qr-status">Point camera at QR code...</p>
+            <div id="qr-reader"></div>
+        </div>
+    </div>
+
+    <!-- Confirm Attendance Modal -->
+    <div id="confirmModal" class="modal hidden">
+        <div class="modal-content">
+            <span id="closeConfirmModal">×</span>
+
+            <h2>✅ Confirm Attendance</h2>
+
+            <div id="studentInfo"></div>
+            <div id="subjectCheckboxes"></div>
+
+            <div class="modal-actions">
+                <button id="cancelConfirmBtn" class="secondary" type="button">
+                    Cancel
+                </button>
+
+                <button id="confirmAttendanceBtn" class="primary" type="button" disabled>
+                    Confirm Attendance
                 </button>
             </div>
+        </div>
+    </div>
 
-            <div class="table-wrapper">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Subject</th>
-                            <th>Chinese Name</th>
-                            <th>Nickname</th>
-                            <th>Grade</th>
-                            <th>School</th>
-                            <th>Scheduled Time</th>
-                            <th>Check-in Time</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="attendanceBody">
-                        <tr><td colspan="9" style="text-align:center; padding:1rem;">Loading attendance...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </main>
+    <!-- Duplicate Attendance Warning Modal -->
+    <div id="duplicateWarningModal" class="modal hidden">
+        <div class="modal-content">
+            <span id="closeDuplicateWarningModal">×</span>
 
-        <!-- 📷 Scan Modal -->
-        <div id="scanModal" class="modal hidden">
-            <div class="modal-content">
-                <span id="closeScanModal" style="cursor:pointer;">&times;</span>
-                <h3>📷 Scan Student QR</h3>
-                <div id="qr-reader" style="width: 100%; max-width: 400px; margin: 1rem auto;"></div>
-                <p id="qr-status" style="margin-top:1rem; font-weight:600;">Point camera at QR code...</p>
+            <h2 id="duplicateWarningTitle">⚠️ Duplicate Attendance</h2>
+
+            <p id="duplicateWarningText"></p>
+
+            <div id="duplicateWarningList"></div>
+
+            <div class="modal-actions">
+                <button id="cancelDuplicateBtn" class="secondary" type="button">
+                    Cancel
+                </button>
+
+                <button id="proceedDuplicateBtn" class="primary" type="button">
+                    Proceed Anyway
+                </button>
             </div>
         </div>
-
-        <!-- ✅ Confirm Modal -->
-        <div id="confirmModal" class="modal hidden">
-            <div class="modal-content" style="max-width: 500px; text-align: left;">
-                <span id="closeConfirmModal" style="cursor:pointer;">&times;</span>
-                <h3>✅ Confirm Attendance</h3>
-                <div id="studentInfo" style="margin: 1rem 0;"></div>
-                <div id="subjectCheckboxes" style="margin: 1rem 0;"></div>
-                <div style="display:flex; gap:1rem; justify-content:flex-end; margin-top:1.5rem;">
-                    <button id="cancelConfirmBtn" class="secondary">Cancel</button>
-                    <button id="confirmAttendanceBtn" class="primary" style="display:none;">Confirm Attendance</button>
-                </div>
-            </div>
-        </div>
-
-    </div> <!-- ✅ End of mainContent wrapper -->
+    </div>
 
     <script type="module" src="attendance.js"></script>
-    <script type="module" src="./activity-logger-init.js"></script>
+
 </body>
 </html>
