@@ -1153,9 +1153,9 @@ td {
 .search-group {
     order: 99;          /* last item inside .controls */
     margin-left: auto;  /* pushes it to the far right on desktop */
-    flex: 0 1 320px;
-    min-width: 220px;
-    max-width: 340px;
+    flex: 0 1 600px;
+    min-width: 300px;
+    max-width: 600px;
 }
 
 .search-wrap {
