@@ -650,8 +650,11 @@ function renderSchedule() {
                     { facingMode: "environment" },
                     { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
                     (decodedText) => {
-                        if (qrInput) qrInput.value = decodedText;
-                        qrStatus.innerHTML = `<span style="color:#28a745;">${t('studentForm.scanned')}<strong>${decodedText}</strong></span>`;
+                    if (qrInput) {
+                        qrInput.value = decodedText;
+                        qrInput.dispatchEvent(new Event('input'));
+                    }                        
+                    qrStatus.innerHTML = `<span style="color:#28a745;">${t('studentForm.scanned')}<strong>${decodedText}</strong></span>`;
                         stopScanner();
                     },
                     () => {}
@@ -677,6 +680,273 @@ function renderSchedule() {
         qrModal?.addEventListener('click', (e) => { if (e.target === qrModal) stopScanner(); });
     }
     window.addEventListener('beforeunload', async () => { if (html5QrCode && scannerActive) await html5QrCode.stop(); });
+
+    // ============================================
+    // 📷 QR TAB - REGISTERED / GENERATED QR
+    // ============================================
+
+    const qrModeRadios = document.querySelectorAll('input[name="studentQrMode"]');
+    const registeredQrCard = document.getElementById('registeredQrCard');
+    const generatedQrCard = document.getElementById('generatedQrCard');
+
+    function getQrMode() {
+        return document.querySelector('input[name="studentQrMode"]:checked')?.value || 'registered';
+    }
+
+    function getStudentNumberForQr() {
+        return (document.getElementById('studentNumber')?.value || '')
+            .trim()
+            .toUpperCase()
+            .replace(/\s+/g, '');
+    }
+
+    function buildGeneratedStudentQr(studentNumber) {
+        return studentNumber ? `STU_${studentNumber}` : '';
+    }
+
+    function makeQrDataUrl(text) {
+        return new Promise((resolve, reject) => {
+            if (!text) {
+                reject(new Error('No QR value'));
+                return;
+            }
+
+            if (typeof window.QRCode === 'undefined') {
+                reject(new Error('QRCode library not loaded'));
+                return;
+            }
+
+            try {
+                const tempDiv = document.createElement('div');
+                tempDiv.style.cssText = 'position:absolute;left:-9999px;top:-9999px;visibility:hidden;';
+                document.body.appendChild(tempDiv);
+
+                new window.QRCode(tempDiv, {
+                    text: text,
+                    width: 200,
+                    height: 200,
+                    correctLevel: window.QRCode.CorrectLevel.H
+                });
+
+                setTimeout(() => {
+                    const generated = tempDiv.querySelector('canvas') || tempDiv.querySelector('img');
+
+                    let dataUrl = '';
+
+                    if (generated) {
+                        dataUrl = generated.tagName === 'CANVAS'
+                            ? generated.toDataURL('image/png')
+                            : generated.src;
+                    }
+
+                    tempDiv.remove();
+
+                    if (dataUrl) {
+                        resolve(dataUrl);
+                    } else {
+                        reject(new Error('QR not generated'));
+                    }
+                }, 100);
+            } catch (err) {
+                reject(err);
+            }
+        });
+    }
+
+    async function renderQrImage(imgEl, text) {
+        if (!imgEl) return;
+
+        if (!text) {
+            imgEl.removeAttribute('src');
+            return;
+        }
+
+        try {
+            const dataUrl = await makeQrDataUrl(text);
+            imgEl.src = dataUrl;
+        } catch (err) {
+            console.error('QR preview error:', err);
+        }
+    }
+
+    async function updateStudentQrUI() {
+    const generatedInput = document.getElementById('generatedQrCodeInput');
+    const generated = generatedInput?.value?.trim() || '';
+    const mode = getQrMode();
+
+    // ✅ Show ONLY the card matching the current selection / saved mode
+    if (registeredQrCard) {
+        registeredQrCard.classList.toggle('hidden', mode !== 'registered');
+        registeredQrCard.classList.toggle('active-mode', mode === 'registered');
+    }
+
+    if (generatedQrCard) {
+        generatedQrCard.classList.toggle('hidden', mode !== 'generated');
+        generatedQrCard.classList.toggle('active-mode', mode === 'generated');
+    }
+
+    qrModeRadios.forEach(radio => {
+        const label = radio.closest('.qr-mode-label');
+        if (label) {
+            label.classList.toggle('checked', radio.checked);
+        }
+        // ⚠️ NOTE: generated radio is intentionally NOT disabled anymore,
+        // so the user can open the Generate card before a QR exists.
+    });
+
+    // Registered QR preview
+    const registered = qrInput?.value?.trim() || '';
+    const registeredPreview = document.getElementById('registeredQrPreviewContainer');
+    const registeredImg = document.getElementById('registeredQrImg');
+    const registeredValue = document.getElementById('registeredQrValue');
+
+    if (registered) {
+        registeredPreview?.classList.remove('hidden');
+        if (registeredValue) registeredValue.textContent = registered;
+        if (registeredImg) await renderQrImage(registeredImg, registered);
+    } else {
+        registeredPreview?.classList.add('hidden');
+        if (registeredImg) registeredImg.removeAttribute('src');
+        if (registeredValue) registeredValue.textContent = '';
+    }
+
+    // Generated QR preview
+    const generatedPreview = document.getElementById('generatedQrPreviewContainer');
+    const generatedImg = document.getElementById('generatedQrImg');
+    const generatedDisplay = document.getElementById('generatedQrDisplay');
+    const generateBtn = document.getElementById('generateStudentQrBtn');
+    const downloadBtn = document.getElementById('downloadStudentQrBtn');
+
+    if (generated) {
+        generatedPreview?.classList.remove('hidden');
+        if (generatedDisplay) generatedDisplay.value = generated;
+        if (generateBtn) generateBtn.disabled = true;
+        if (downloadBtn) downloadBtn.classList.remove('hidden');
+        if (generatedImg) await renderQrImage(generatedImg, generated);
+    } else {
+        generatedPreview?.classList.add('hidden');
+        if (generatedDisplay) generatedDisplay.value = '';
+        if (generateBtn) generateBtn.disabled = false;
+        if (downloadBtn) downloadBtn.classList.add('hidden');
+        if (generatedImg) generatedImg.removeAttribute('src');
+    }
+
+    const activeHint = document.getElementById('qrActiveHint');
+    if (activeHint) {
+        if (mode === 'generated' && !generated) {
+            activeHint.textContent = t('studentForm.qrGeneratedPendingHint');
+        } else if (mode === 'generated') {
+            activeHint.textContent = t('studentForm.qrGeneratedActiveHint');
+        } else {
+            activeHint.textContent = t('studentForm.qrRegisteredActiveHint');
+        }
+    }
+}
+
+    async function isGeneratedQrAlreadyUsedInCenter(proposed) {
+        if (!proposed) return false;
+
+        try {
+            const centersSnap = await get(ref(db, 'centers'));
+            if (!centersSnap.exists()) return false;
+
+            const centers = centersSnap.val() || {};
+
+            for (const [cId, center] of Object.entries(centers)) {
+                const students = center.students || {};
+
+                for (const [sId, s] of Object.entries(students)) {
+                    if (cId === centerId && sId === studentId) continue;
+
+                    if (s.generatedQrCode === proposed || s.qrCode === proposed) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        } catch (err) {
+            console.error('Global QR duplicate check error:', err);
+            return false;
+        }
+    }
+
+    qrModeRadios.forEach(radio => {
+        radio.addEventListener('change', () => {
+            updateStudentQrUI().catch(console.error);
+        });
+    });
+
+    qrInput?.addEventListener('input', () => {
+        updateStudentQrUI().catch(console.error);
+    });
+
+    document.getElementById('generateStudentQrBtn')?.addEventListener('click', async () => {
+        const generatedInput = document.getElementById('generatedQrCodeInput');
+        const statusEl = document.getElementById('generatedQrStatus');
+
+        if (!generatedInput) return;
+
+        if (generatedInput.value.trim()) {
+            showError(t('studentForm.qrAlreadyGenerated'));
+            return;
+        }
+
+        const studentNumber = getStudentNumberForQr();
+
+        if (!studentNumber) {
+            showError(t('studentForm.qrGenerateStudentNumberRequired'));
+            return;
+        }
+
+        const proposed = buildGeneratedStudentQr(studentNumber);
+        const registered = qrInput?.value?.trim() || '';
+
+        if (registered && registered === proposed) {
+            showError(t('studentForm.qrConflictSame'));
+            return;
+        }
+
+        const alreadyUsed = await isGeneratedQrAlreadyUsedInCenter(proposed);
+        if (alreadyUsed) {
+            showError(t('studentForm.qrGeneratedDuplicate'));
+            return;
+        }
+
+        generatedInput.value = proposed;
+
+        const generatedRadio = document.querySelector('input[name="studentQrMode"][value="generated"]');
+        if (generatedRadio) generatedRadio.checked = true;
+
+        if (statusEl) {
+            statusEl.innerHTML = `<span style="color:#28a745;">${t('studentForm.qrGeneratedSuccess')}</span>`;
+        }
+
+        await updateStudentQrUI();
+    });
+
+    document.getElementById('downloadStudentQrBtn')?.addEventListener('click', async () => {
+        const generated = document.getElementById('generatedQrCodeInput')?.value?.trim();
+
+        if (!generated) {
+            showError(t('studentForm.qrGeneratedNotReady'));
+            return;
+        }
+
+        try {
+            const dataUrl = await makeQrDataUrl(generated);
+
+            const link = document.createElement('a');
+            link.download = `student_qr_${encodeURIComponent(generated)}.png`;
+            link.href = dataUrl;
+            link.click();
+        } catch (err) {
+            console.error(err);
+            showError(t('studentForm.qrPreviewError'));
+        }
+    });
+
+    updateStudentQrUI().catch(console.error);
 
     function getLevelOptions(subject, currentValue = '') {
         let levels = [];
@@ -1013,6 +1283,12 @@ function renderSchedule() {
             if (!assignedTeachers[subj]) assignedTeachers[subj] = [];
             assignedTeachers[subj].push(uid);
         });
+
+        const qrMode = document.querySelector('input[name="studentQrMode"]:checked')?.value || 'registered';
+        const registeredQrCode = document.getElementById('qrCodeInput')?.value?.trim() || '';
+        const generatedQrCode = document.getElementById('generatedQrCodeInput')?.value?.trim() || '';
+        const activeQrCode = qrMode === 'generated' ? generatedQrCode : registeredQrCode;
+
         return {
             gender: document.getElementById('gender')?.value || '',
             studentNumber: document.getElementById('studentNumber')?.value?.trim() || '',
@@ -1033,7 +1309,10 @@ function renderSchedule() {
                 dad: document.getElementById('phoneDad')?.value?.trim() || '',
                 own: document.getElementById('phoneOwn')?.value?.trim() || ''
             },
-            qrCode: document.getElementById('qrCodeInput')?.value?.trim() || '',
+            qrCode: activeQrCode,
+            registeredQrCode,
+            generatedQrCode,
+            qrCodeMode: qrMode,
             kcNo: document.getElementById('kcNo')?.value?.trim() || '',
             subjects,
             diagnosticTests,
@@ -1595,7 +1874,23 @@ function renderSchedule() {
                 if (s.nationality) setFieldWithOther('nationality', s.nationality);
                 setVal('birthday', s.birthday);
                 updateAgeDisplay();
-                if (s.qrCode && qrInput) qrInput.value = s.qrCode;
+                // QR Code migration + load
+                const legacyRegisteredQr = s.registeredQrCode ?? ((s.qrCodeMode || 'registered') === 'registered' ? (s.qrCode || '') : '');
+                const loadedGeneratedQr = s.generatedQrCode || '';
+                const loadedQrMode = s.qrCodeMode || (loadedGeneratedQr && !legacyRegisteredQr ? 'generated' : 'registered');
+
+                if (qrInput) qrInput.value = legacyRegisteredQr || '';
+
+                const generatedInput = document.getElementById('generatedQrCodeInput');
+                if (generatedInput) generatedInput.value = loadedGeneratedQr;
+
+                const loadedModeRadio = document.querySelector(`input[name="studentQrMode"][value="${loadedQrMode}"]`);
+                if (loadedModeRadio) loadedModeRadio.checked = true;
+                try {
+                    await updateStudentQrUI();
+                } catch (err) {
+                    console.error('QR UI update error:', err);
+                }
                 if (s.phone) {
                     ['mom','dad','own'].forEach(k => {
                         const el = document.getElementById(`phone${k.charAt(0).toUpperCase()+k.slice(1)}`);
@@ -1756,10 +2051,27 @@ function renderSchedule() {
                 break;
             }
         }
+
+
+        
         const globalKcNo = document.getElementById('kcNo')?.value?.trim();
         if (hasKCSubject && !globalKcNo) {
             return showError(t('studentForm.kcNoRequiredTop'));
         }
+
+        // QR Code validation
+        const qrMode = document.querySelector('input[name="studentQrMode"]:checked')?.value || 'registered';
+        const registeredQrCode = document.getElementById('qrCodeInput')?.value?.trim() || '';
+        const generatedQrCode = document.getElementById('generatedQrCodeInput')?.value?.trim() || '';
+
+        if (registeredQrCode && generatedQrCode && registeredQrCode === generatedQrCode) {
+            return showError(t('studentForm.qrConflictSame'));
+        }
+
+        if (qrMode === 'generated' && !generatedQrCode) {
+            return showError(t('studentForm.qrGeneratedNotReady'));
+        }
+
         const pencilCount = Array.from(document.querySelectorAll('.pencil-skill-entry')).filter(el => el.style.display !== 'none').length;
         if (pencilCount > 1) return showError(t('studentForm.onePencilSkill'));
         let activeSubjectsCount = 0;

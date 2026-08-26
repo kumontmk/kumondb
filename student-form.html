@@ -188,33 +188,12 @@
             </div>
         </section>
 
-        <!-- 2. QR Code -->
-        <div style="margin: 1rem 0;">
-          <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: #2c3e50; font-size: 0.95rem;" data-i18n="studentForm.qrCodeTitle">📷 Student QR Code</label>
-          <div style="display: flex; gap: 0.5rem; align-items: center;">
-            <button type="button" id="startScannerBtn" class="secondary" style="flex-shrink: 0; padding: 0 1rem; height: 40px; border: 1px solid #d1d5db; border-radius: 6px; background: #f8f9fa; color: #374151; cursor: pointer; font-size: 0.9rem; font-weight: 500; white-space: nowrap;" data-i18n="studentForm.scanQR">📷 Scan QR</button>
-            <input type="text" id="qrCodeInput" data-i18n-placeholder="studentForm.pasteQR" placeholder="Or paste QR code manually..." style="flex: 1; padding: 0 0.75rem; height: 40px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.95rem; box-sizing: border-box; background: #fff;">
-          </div>
-        </div>
-
-        <style>
-          #qr-reader video, #qr-reader canvas { width: 100% !important; height: 100% !important; object-fit: cover; border-radius: 8px; }
-          #qr-reader div[style*="position: absolute"] { display: none !important; }
-        </style>
-        <div id="qrModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.65); z-index: 10000; justify-content: center; align-items: center; backdrop-filter: blur(2px);">
-          <div style="background: #fff; padding: 1.5rem; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.25); text-align: center; max-width: 380px; width: 90%; position: relative; box-sizing: border-box;">
-            <button id="closeQrModal" style="position: absolute; top: 12px; right: 14px; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #888; line-height: 1; padding: 0;">&times;</button>
-            <h3 style="margin: 0 0 1rem; color: #222; font-size: 1.2rem;" data-i18n="studentForm.scanQRTitle">📷 Scan QR Code</h3>
-            <div id="qr-reader" style="width: 100%; max-width: 300px; height: 300px; margin: 0 auto; background: #111; border-radius: 8px; overflow: hidden;"></div>
-            <div id="qr-status" style="margin: 0.75rem 0 0; color: #555; font-size: 0.9rem; min-height: 1.3rem;" data-i18n="studentForm.pointCamera">Point camera at QR code...</div>
-          </div>
-        </div>
-
         <div class="tabs">
           <button type="button" class="tab-btn active" data-tab="contact" data-i18n="studentForm.contactInfo">📞 Contact Info</button>
           <button type="button" class="tab-btn" data-tab="subjects" data-i18n="studentForm.subjectsTitle">📚 Subjects (Max 3)</button>
           <button type="button" class="tab-btn" data-tab="schedule" data-i18n="studentForm.scheduleTab">📅 Schedule</button>
           <button type="button" class="tab-btn" data-tab="dt-at" data-i18n="studentForm.dtAtTab">📝 DT & AT</button>
+          <button type="button" class="tab-btn" data-tab="qr" data-i18n="studentForm.qrTab">📷 QR Code</button>
         </div>
 
         <!-- 4. Tab Content: Contact -->
@@ -299,7 +278,100 @@
               <!-- Button placed BELOW the table with proper margin-top, matching DT layout -->
               <button type="button" id="addATBtn" class="secondary" style="margin-top: 0.5rem; padding: 0.5rem 1rem; font-size: 0.9rem; width: auto;" data-i18n="studentForm.addAT">+ Add Achievement Test</button>
           </div>
-        </div> <!-- ✅ CLOSE #tab-dt-at HERE -->
+        </div> <!-- ✅ CLOSE #tab-dt-at -->
+
+
+        <!-- QR CODE -->
+        <div id="tab-qr" class="tab-content">
+          <h3 data-i18n="studentForm.qrCodeTitle">📷 Student QR Code</h3>
+          <p class="hint" data-i18n="studentForm.qrTabHint">
+              Choose the active QR code for scanning. The inactive QR code remains saved.
+          </p>
+
+          <div class="qr-mode-selector">
+              <label class="qr-mode-label checked">
+                  <input type="radio" name="studentQrMode" value="registered" checked>
+                  <span data-i18n="studentForm.qrModeRegistered">Registered QR</span>
+              </label>
+
+              <label class="qr-mode-label">
+                  <input type="radio" name="studentQrMode" value="generated">
+                  <span data-i18n="studentForm.qrModeGenerated">Generated QR</span>
+              </label>
+          </div>
+
+          <!-- ⚠️ No data-i18n here: JS sets this dynamically -->
+          <p class="hint" id="qrActiveHint"></p>
+
+          <div class="qr-tab-grid">
+
+              <!-- REGISTER OWN QR -->
+              <div class="qr-option-card active-mode" id="registeredQrCard">
+                  <h4 data-i18n="studentForm.qrRegisteredTitle">Register Own QR</h4>
+                  <p class="hint" data-i18n="studentForm.qrRegisteredHint">
+                      Scan or paste a QR code. This can be changed later.
+                  </p>
+
+                  <label for="qrCodeInput" data-i18n="studentForm.qrRegisteredLabel">Registered QR Code</label>
+
+                  <div class="qr-input-row">
+                      <input
+                          type="text"
+                          id="qrCodeInput"
+                          data-i18n-placeholder="studentForm.pasteQR"
+                          placeholder="Or paste QR code manually..."
+                      >
+
+                      <button type="button" id="startScannerBtn" class="secondary" data-i18n="studentForm.scanQR">
+                          📷 Scan QR
+                      </button>
+                  </div>
+
+                  <!-- ⚠️ No data-i18n here: scanner JS writes into this -->
+                  <div class="qr-status" id="qr-status"></div>
+
+                  <div id="registeredQrPreviewContainer" class="qr-preview hidden">
+                      <img id="registeredQrImg" alt="Registered QR preview">
+                      <div class="qr-value" id="registeredQrValue"></div>
+                  </div>
+              </div>
+
+              <!-- GENERATE QR -->
+              <div class="qr-option-card hidden" id="generatedQrCard">
+                  <h4 data-i18n="studentForm.qrGeneratedTitle">Generate Student QR</h4>
+                  <p class="hint" data-i18n="studentForm.qrGeneratedHint">
+                      Uses Student Number. Once generated, it cannot be regenerated.
+                  </p>
+
+                  <div class="qr-generated-controls">
+                      <button type="button" id="generateStudentQrBtn" class="primary" data-i18n="studentForm.generateQr">
+                          ⚙️ Generate QR
+                      </button>
+
+                      <button type="button" id="downloadStudentQrBtn" class="secondary hidden" data-i18n="studentForm.downloadQr">
+                          ⬇ Download QR Code
+                      </button>
+                  </div>
+
+                  <!-- ⚠️ No data-i18n here: JS writes status messages -->
+                  <div class="qr-status" id="generatedQrStatus"></div>
+
+                  <input type="hidden" id="generatedQrCodeInput">
+
+                  <div id="generatedQrPreviewContainer" class="qr-preview hidden">
+                      <img id="generatedQrImg" alt="Generated QR preview">
+                      <input
+                          type="text"
+                          id="generatedQrDisplay"
+                          class="qr-value-input"
+                          readonly
+                          data-i18n-placeholder="studentForm.qrGeneratedValue"
+                          placeholder="Generated QR value"
+                      >
+                  </div>
+              </div>
+          </div>
+        </div>
 
         <!-- ✅ ACTIONS (MOVED OUTSIDE ALL TABS) -->
         <div class="form-actions">
@@ -415,6 +487,7 @@
         </div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script type="module" src="student-form-i18n.js"></script>
     <script type="module" src="student-form.js"></script>
