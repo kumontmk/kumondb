@@ -5,6 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Attendance - Kumon DB</title>
 
+    <!-- ===== PWA ===== -->
+    <link rel="manifest" href="./manifest.webmanifest">
+    <meta name="theme-color" content="#87CEEB">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Kumon DB">
+
+    <!-- ===== Icons ===== -->
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png">
     <link rel="stylesheet" href="style.css">
 
     <!-- QR Scanner Library -->
@@ -20,18 +31,17 @@
     <!-- Header -->
     <header>
         <nav>
-            <a href="dashboard.html">← Dashboard</a>
+            <a href="dashboard.html" data-i18n="attendance.backToDashboard">← Dashboard</a>
         </nav>
-                <h1>📅 Student Attendance</h1>
-
+        <h1 data-i18n="attendance.pageTitle">📅 Student Attendance</h1>
     </header>
 
     <!-- Access Denied -->
     <div id="accessDenied" class="access-denied hidden">
         <div class="access-denied-content">
-            <h2>🔐 Access Restricted</h2>
-            <p>You do not have permission to view Attendance.</p>
-            <button id="backToDashboardBtn" class="primary" type="button">← Back to Dashboard</button>
+            <h2 data-i18n="attendance.accessRestricted">🔐 Access Restricted</h2>
+            <p data-i18n="attendance.accessDeniedBody">You do not have permission to view Attendance.</p>
+            <button id="backToDashboardBtn" class="primary" type="button" data-i18n="attendance.backToDashboardBtn">← Back to Dashboard</button>
         </div>
     </div>
 
@@ -41,13 +51,13 @@
 
             <!-- Record Attendance -->
             <section class="attendance-section-card">
-                <h2 class="attendance-section-title">✍️ Record Attendance</h2>
+                <h2 class="attendance-section-title" data-i18n="attendance.recordAttendance">✍️ Record Attendance</h2>
 
                 <div class="attendance-controls record-attendance-controls">
 
                     <!-- Manual Student Attendance -->
                     <div class="control-group manual-group">
-                        <label class="control-label" for="manualAttendanceInput">
+                        <label class="control-label" for="manualAttendanceInput" data-i18n="attendance.manualTab">
                             Manual Student Attendance
                         </label>
 
@@ -57,6 +67,7 @@
                             <input
                                 type="text"
                                 id="manualAttendanceInput"
+                                data-i18n-placeholder="attendance.search"
                                 placeholder="Type student name / nickname / number..."
                                 autocomplete="off"
                             >
@@ -70,8 +81,7 @@
 
                     <!-- Scan QR Button -->
                     <button id="scanQrBtn" class="scan-btn" type="button">
-                        <span class="scan-icon">📷</span>
-                        <span>Scan QR</span>
+                        <span data-i18n="attendance.scanTab">📷 Scan QR</span>
                     </button>
 
                 </div>
@@ -79,32 +89,33 @@
 
             <!-- Search / Sort -->
             <section class="attendance-section-card">
-                <h2 class="attendance-section-title">🔎 Search / Sort</h2>
+                <h2 class="attendance-section-title" data-i18n="attendance.searchSort">🔎 Search / Sort</h2>
 
                 <div class="attendance-controls search-sort-controls">
 
                     <!-- Date -->
                     <div class="control-group">
-                        <label class="control-label" for="attendanceDate">Date</label>
+                        <label class="control-label" for="attendanceDate" data-i18n="attendance.date">Date</label>
                         <input type="date" id="attendanceDate" class="day-select">
                     </div>
 
                     <!-- Subject -->
                     <div class="control-group">
-                        <label class="control-label" for="attendanceSubject">Subject</label>
+                        <label class="control-label" for="attendanceSubject" data-i18n="attendance.subject">Subject</label>
                         <select id="attendanceSubject" class="day-select">
-                            <option value="All">All Subjects</option>
+                            <option value="All" data-i18n="attendance.allSubjects">All Subjects</option>
                         </select>
                     </div>
 
                     <!-- Search -->
                     <div class="control-group search-group">
-                        <label class="control-label" for="searchStudent">Search</label>
+                        <label class="control-label" for="searchStudent" data-i18n="attendance.search">Search</label>
                         <div class="search-wrapper">
                             <span class="search-icon">🔍</span>
                             <input
                                 type="text"
                                 id="searchStudent"
+                                data-i18n-placeholder="attendance.search"
                                 placeholder="Search student..."
                                 autocomplete="off"
                             >
@@ -122,20 +133,20 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Subject</th>
-                        <th>Chinese Name</th>
-                        <th>Nickname</th>
-                        <th>Grade</th>
-                        <th>School</th>
-                        <th>Scheduled Time</th>
-                        <th>Check-in Time</th>
-                        <th>Status</th>
-                        <th>Actions</th>
+                        <th data-i18n="attendance.thSubject">Subject</th>
+                        <th data-i18n="attendance.thChineseName">Chinese Name</th>
+                        <th data-i18n="attendance.thNickname">Nickname</th>
+                        <th data-i18n="attendance.thGrade">Grade</th>
+                        <th data-i18n="attendance.thSchool">School</th>
+                        <th data-i18n="attendance.thScheduledTime">Scheduled Time</th>
+                        <th data-i18n="attendance.thCheckInTime">Check-in Time</th>
+                        <th data-i18n="attendance.thStatus">Status</th>
+                        <th data-i18n="attendance.thActions">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="attendanceBody">
                     <tr>
-                        <td colspan="9" style="text-align:center; padding:1rem; color:#666;">
+                        <td colspan="9" style="text-align:center; padding:1rem; color:#666;" data-i18n="attendance.loadingAttendance">
                             Loading attendance...
                         </td>
                     </tr>
@@ -149,8 +160,8 @@
     <div id="scanModal" class="modal hidden">
         <div class="modal-content">
             <span id="closeScanModal">×</span>
-            <h2>📷 Scan Student QR</h2>
-            <p id="qr-status">Point camera at QR code...</p>
+            <h2 data-i18n="attendance.scanTitle">📷 Scan Student QR</h2>
+            <p id="qr-status" data-i18n="attendance.scanHint">Point camera at QR code...</p>
             <div id="qr-reader"></div>
         </div>
     </div>
@@ -160,17 +171,17 @@
         <div class="modal-content">
             <span id="closeConfirmModal">×</span>
 
-            <h2>✅ Confirm Attendance</h2>
+            <h2 data-i18n="attendance.confirmTitle">✅ Confirm Attendance</h2>
 
             <div id="studentInfo"></div>
             <div id="subjectCheckboxes"></div>
 
             <div class="modal-actions">
-                <button id="cancelConfirmBtn" class="secondary" type="button">
+                <button id="cancelConfirmBtn" class="secondary" type="button" data-i18n="attendance.cancel">
                     Cancel
                 </button>
 
-                <button id="confirmAttendanceBtn" class="primary" type="button" disabled>
+                <button id="confirmAttendanceBtn" class="primary" type="button" disabled data-i18n="attendance.confirmAttendance">
                     Confirm Attendance
                 </button>
             </div>
@@ -182,24 +193,28 @@
         <div class="modal-content">
             <span id="closeDuplicateWarningModal">×</span>
 
-            <h2 id="duplicateWarningTitle">⚠️ Duplicate Attendance</h2>
+            <h2 id="duplicateWarningTitle" data-i18n="attendance.duplicateTitle">⚠️ Duplicate Attendance</h2>
 
             <p id="duplicateWarningText"></p>
 
             <div id="duplicateWarningList"></div>
 
             <div class="modal-actions">
-                <button id="cancelDuplicateBtn" class="secondary" type="button">
+                <button id="cancelDuplicateBtn" class="secondary" type="button" data-i18n="attendance.cancel">
                     Cancel
                 </button>
 
-                <button id="proceedDuplicateBtn" class="primary" type="button">
+                <button id="proceedDuplicateBtn" class="primary" type="button" data-i18n="attendance.proceedAnyway">
                     Proceed Anyway
                 </button>
             </div>
         </div>
     </div>
 
+    <!-- i18n Wrapper -->
+    <script type="module" src="attendance-i18n.js"></script>
+    
+    <!-- Main Logic -->
     <script type="module" src="attendance.js"></script>
 
 </body>

@@ -74,5 +74,7 @@ export default {
     tapLogIn: "Log In",
     tapLogOut: "Log Out",
     tapLoginRequired: "🚫 You must be logged in as a registered employee to use the tap button.",
+    loadingRecords: "Loading attendance records...",
+    failedToLoadRecords: "Failed to load attendance records.",
   }
 };

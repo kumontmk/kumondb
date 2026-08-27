@@ -34,12 +34,18 @@ let hasFullAccess = false;
 let nfcAbortController = null;
 let authInitialized = false;
 
+
 // ==========================================
 // 🚀 LOCAL CACHE FOR INSTANT STARTUP
 // ==========================================
 const CACHE_EMP_PREFIX = 'tc_emp_';
 const CACHE_LOGS_PREFIX = 'tc_logs_';
 let isDataReady = false;
+
+let employeesLoaded = false;
+let timecardLoading = true;
+let timecardLoadError = null;
+let activeTimecardKey = null;
 
 function getAuthUid() {
   if (auth.currentUser?.uid) return auth.currentUser.uid;
@@ -150,31 +156,82 @@ function populateAdminSelects() {
 }
 
 function updateAdminStatusLine() {
-  if (!isMasterAdmin) return;
-  const empId = adminEmpSelect ? adminEmpSelect.value : null;
-  const date = datePicker ? datePicker.value : '';
+    if (!isMasterAdmin) return;
 
-  let lastType = null;
-  if (empId) {
-    const logs = (currentDayLogs[empId] && currentDayLogs[empId].logs) || [];
-    if (logs.length > 0) {
-      const sorted = [...logs].sort((a, b) => a.time.localeCompare(b.time));
-      const last = sorted[sorted.length - 1];
-      lastType = last.type;
-      if (adminStatusLine) {
-        adminStatusLine.textContent = `📅 ${date} — status: ${last.type.toUpperCase()} (last at ${last.time} @ ${last.location || '-'})`;
-      }
-    } else if (adminStatusLine) {
-      adminStatusLine.textContent = `📅 ${date}: no logs — status: OUT`;
+    const empId = adminEmpSelect ? adminEmpSelect.value : null;
+    const date = datePicker ? datePicker.value : '';
+
+    const loading = !employeesLoaded || timecardLoading;
+    const blocked = loading || !!timecardLoadError;
+
+    const loadingMsg = getI18nText(
+        'timecard.loadingRecords',
+        'Loading attendance records...'
+    );
+
+    const errorMsg = getI18nText(
+        'timecard.failedToLoadRecords',
+        'Failed to load attendance records.'
+    );
+
+    let lastType = null;
+
+    if (empId) {
+        const logs = (currentDayLogs[empId] && currentDayLogs[empId].logs) || [];
+
+        if (logs.length > 0) {
+            const sorted = [...logs].sort((a, b) => a.time.localeCompare(b.time));
+            const last = sorted[sorted.length - 1];
+            lastType = last.type;
+
+            if (adminStatusLine) {
+                adminStatusLine.textContent =
+                    `📅 ${date} — status: ${last.type.toUpperCase()} (last at ${last.time} @ ${last.location || '-'})`;
+            }
+
+        } else if (loading) {
+            if (adminStatusLine) {
+                adminStatusLine.textContent = `📅 ${date} — ${loadingMsg}`;
+            }
+
+        } else if (timecardLoadError) {
+            if (adminStatusLine) {
+                adminStatusLine.textContent = `📅 ${date} — ${errorMsg}`;
+            }
+
+        } else {
+            if (adminStatusLine) {
+                adminStatusLine.textContent = `📅 ${date}: no logs — status: OUT`;
+            }
+        }
+
+    } else {
+        if (loading) {
+            if (adminStatusLine) {
+                adminStatusLine.textContent = loadingMsg;
+            }
+
+        } else if (timecardLoadError) {
+            if (adminStatusLine) {
+                adminStatusLine.textContent = errorMsg;
+            }
+
+        } else {
+            if (adminStatusLine) {
+                adminStatusLine.textContent = '—';
+            }
+        }
     }
-  } else if (adminStatusLine) {
-    adminStatusLine.textContent = '—';
-  }
 
-  // 🔘 STATUS RULE: IN → block Clock In | OUT/none → block Clock Out
-  const isIn = lastType === 'in';
-  if (adminClockInBtn)  adminClockInBtn.disabled  = isIn;
-  if (adminClockOutBtn) adminClockOutBtn.disabled = !isIn;
+    const isIn = lastType === 'in';
+
+    if (adminClockInBtn) {
+        adminClockInBtn.disabled = blocked || !empId || isIn;
+    }
+
+    if (adminClockOutBtn) {
+        adminClockOutBtn.disabled = blocked || !empId || !isIn;
+    }
 }
 
 async function adminSaveAttendance(empId, locationName, type) {
@@ -251,6 +308,46 @@ function setDataReady() {
     if (tapLogBtn) tapLogBtn.classList.remove('is-loading');
 }
 
+function getI18nText(key, fallback) {
+    try {
+        const value = t(key);
+        if (!value || value === key) return fallback;
+        return value;
+    } catch (err) {
+        return fallback;
+    }
+}
+
+function getTimecardListenerKey(date) {
+    return `${date}|${hasFullAccess ? 'all' : (currentEmployeeId || 'anonymous')}`;
+}
+
+function renderTimecardLoading(tbody, cardContainer) {
+    const msg = getI18nText('timecard.loadingRecords', 'Loading attendance records...');
+
+    const spinner = '<span class="timecard-spinner" aria-hidden="true"></span>';
+
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="6" class="empty-state">
+                <span class="timecard-loading-inline" role="status" aria-live="polite">
+                    ${spinner}
+                    <span>${msg}</span>
+                </span>
+            </td>
+        </tr>
+    `;
+
+    cardContainer.innerHTML = `
+        <div class="tc-empty-msg">
+            <span class="timecard-loading-inline" role="status" aria-live="polite">
+                ${spinner}
+                <span>${msg}</span>
+            </span>
+        </div>
+    `;
+}
+
 onAuthStateChanged(auth, () => {
   authInitialized = true;
   if (Object.keys(employees).length > 0) {
@@ -296,13 +393,23 @@ function loadFirebaseCenters() {
 }
 
 function loadEmployees() {
-  onValue(ref(db, 'employees'), snapshot => {
-    employees = snapshot.val() || {};
-    identifyCurrentUser();
-    applyViewMode();
-    renderTimecardTable();
-    setDataReady(); 
-  });
+    onValue(ref(db, 'employees'), snapshot => {
+        employees = snapshot.val() || {};
+        employeesLoaded = true;
+
+        identifyCurrentUser();
+        applyViewMode();
+        renderTimecardTable();
+        setDataReady();
+    }, (error) => {
+        console.error('❌ Failed to load employees:', error);
+
+        // Prevent the UI from staying in a permanent loading state
+        employeesLoaded = true;
+
+        renderTimecardTable();
+        setDataReady();
+    });
 }
 
 // 🔒 PERMISSION CONTROL
@@ -356,6 +463,16 @@ function identifyCurrentUser() {
   applyAdminMode();
   updateTapButton();
   setDataReady(); 
+
+  if (datePicker) {
+      const date = datePicker.value || getTodayStr();
+      const desiredKey = getTimecardListenerKey(date);
+
+      if (desiredKey !== activeTimecardKey) {
+          setupTimecardListener(date);
+      }
+  }
+
 }
 
 function applyControlVisibility() {
@@ -371,40 +488,78 @@ function applyViewMode() {
 }
 
 function setupTimecardListener(date) {
-  if (timecardUnsubscribe) {
-    timecardUnsubscribe();
-    timecardUnsubscribe = null;
-  }
-  currentDayLogs = {};
-  
-  if (currentEmployeeId) {
-    const cachedLogs = getCachedUserLogs(date);
-    if (cachedLogs) currentDayLogs[currentEmployeeId] = { logs: cachedLogs };
-  }
-  
-  renderTimecardTable();
+    date = date || getTodayStr();
 
-  if (hasFullAccess) {
-    timecardUnsubscribe = onValue(ref(db, `timecards/${date}`), snapshot => {
-      currentDayLogs = snapshot.val() || {};
-      if (currentEmployeeId && currentDayLogs[currentEmployeeId]) {
-        cacheUserLogs(currentEmployeeId, date, currentDayLogs[currentEmployeeId].logs || []);
-      }
-      renderTimecardTable();
-    });
-  } else if (currentEmployeeId) {
-    timecardUnsubscribe = onValue(ref(db, `timecards/${date}/${currentEmployeeId}`), snapshot => {
-      const logs = snapshot.val()?.logs || [];
-      currentDayLogs[currentEmployeeId] = { logs };
-      cacheUserLogs(currentEmployeeId, date, logs);
-      renderTimecardTable();
-    });
-  } else {
-    timecardUnsubscribe = onValue(ref(db, `timecards/${date}`), snapshot => {
-      currentDayLogs = snapshot.val() || {};
-      renderTimecardTable();
-    });
-  }
+    if (timecardUnsubscribe) {
+        timecardUnsubscribe();
+        timecardUnsubscribe = null;
+    }
+
+    currentDayLogs = {};
+
+    timecardLoading = true;
+    timecardLoadError = null;
+    activeTimecardKey = getTimecardListenerKey(date);
+
+    // If we have cached logs for this user/date, show them immediately.
+    // This prevents unnecessary blank/loading flicker when cache exists.
+    if (currentEmployeeId) {
+        const cachedLogs = getCachedUserLogs(date);
+        if (cachedLogs) {
+            currentDayLogs[currentEmployeeId] = { logs: cachedLogs };
+        }
+    }
+
+    renderTimecardTable();
+
+    const handleSuccess = () => {
+        timecardLoading = false;
+        timecardLoadError = null;
+        renderTimecardTable();
+        updateAdminStatusLine();
+    };
+
+    const handleError = (error) => {
+        console.error('❌ Timecard listener error:', error);
+        timecardLoading = false;
+        timecardLoadError = error;
+        renderTimecardTable();
+        updateAdminStatusLine();
+    };
+
+    if (hasFullAccess) {
+        timecardUnsubscribe = onValue(ref(db, `timecards/${date}`), snapshot => {
+            currentDayLogs = snapshot.val() || {};
+
+            if (currentEmployeeId && currentDayLogs[currentEmployeeId]) {
+                cacheUserLogs(
+                    currentEmployeeId,
+                    date,
+                    currentDayLogs[currentEmployeeId].logs || []
+                );
+            }
+
+            handleSuccess();
+        }, handleError);
+
+    } else if (currentEmployeeId) {
+        timecardUnsubscribe = onValue(ref(db, `timecards/${date}/${currentEmployeeId}`), snapshot => {
+            const logs = snapshot.val()?.logs || [];
+
+            currentDayLogs = {};
+            currentDayLogs[currentEmployeeId] = { logs };
+
+            cacheUserLogs(currentEmployeeId, date, logs);
+
+            handleSuccess();
+        }, handleError);
+
+    } else {
+        timecardUnsubscribe = onValue(ref(db, `timecards/${date}`), snapshot => {
+            currentDayLogs = snapshot.val() || {};
+            handleSuccess();
+        }, handleError);
+    }
 }
 
 function renderTimecardTable() {
@@ -451,16 +606,42 @@ function renderTimecardTable() {
     });
   });
 
-  allLogs.sort((a, b) => b.time.localeCompare(a.time));
-  tbody.innerHTML = '';
-  cardContainer.innerHTML = '';
+allLogs.sort((a, b) => b.time.localeCompare(a.time));
 
-  if (allLogs.length === 0) {
-    const msg = !hasFullAccess ? t('timecard.noRecordsPersonal') : t('timecard.noRecords');
+tbody.innerHTML = '';
+cardContainer.innerHTML = '';
+
+if (allLogs.length === 0) {
+    // Still loading employees or timecards? Show loading state first.
+    if (!employeesLoaded || timecardLoading) {
+        renderTimecardLoading(tbody, cardContainer);
+        updateAdminStatusLine();
+        return;
+    }
+
+    // If Firebase failed to load timecards, show a failure message instead of
+    // falsely telling the user there are no records.
+    if (timecardLoadError) {
+        const errorMsg = getI18nText(
+            'timecard.failedToLoadRecords',
+            'Failed to load attendance records.'
+        );
+
+        tbody.innerHTML = `<tr><td colspan="6" class="empty-state">${errorMsg}</td></tr>`;
+        cardContainer.innerHTML = `<div class="tc-empty-msg">${errorMsg}</div>`;
+
+        return;
+    }
+
+    const msg = !hasFullAccess
+        ? t('timecard.noRecordsPersonal')
+        : t('timecard.noRecords');
+
     tbody.innerHTML = `<tr><td colspan="6" class="empty-state">${msg}</td></tr>`;
     cardContainer.innerHTML = `<div class="tc-empty-msg">${msg}</div>`;
+
     return;
-  }
+}
 
   allLogs.forEach(log => {
     const statusClass = log.type === 'in' ? 'status-in' : log.type === 'out' ? 'status-out' : 'status-none';

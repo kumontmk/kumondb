@@ -74,5 +74,7 @@ export default {
     tapLogIn: "上班打卡",
     tapLogOut: "下班打卡",
     tapLoginRequired: "🚫 您必須以註冊員工身份登入才能使用輕觸打卡按鈕。",
+    loadingRecords: "正在載入考勤記錄...",
+    failedToLoadRecords: "載入考勤記錄失敗。",
   }
 };

@@ -919,6 +919,45 @@ input[type="date"]::-webkit-datetime-edit {
 .acp-btn:disabled { opacity: .45; cursor: not-allowed; }
 
 /* =========================================
+   TIMECARD LOADING STATE
+========================================= */
+.timecard-loading-inline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    min-height: 2rem;
+}
+
+.tc-empty-msg .timecard-loading-inline {
+    display: inline-flex;
+}
+
+.timecard-spinner {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid rgba(70, 130, 180, 0.25);
+    border-top-color: var(--primary-dark);
+    display: inline-block;
+    animation: timecardSpinnerSpin 0.8s linear infinite;
+}
+
+@keyframes timecardSpinnerSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.table-wrapper .empty-state .timecard-loading-inline {
+    min-height: 90px;
+}
+
+.tc-empty-msg .timecard-loading-inline {
+    min-height: 90px;
+}
+
+/* =========================================
 🌐 TRADITIONAL CHINESE FONT SUPPORT
 ========================================= */
 :lang(zh-TW) body,
