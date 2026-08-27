@@ -1,8 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!-- Shows the logo in the browser tab -->
+  <!-- Shows the logo in the browser tab -->
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+  <!-- QR Scanner for Dashboard Attendance -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
   <!-- Optional: PNG fallback for older browsers -->
   <link rel="icon" type="image/png" sizes="512x512" href="dblogo-maskable-512.png">
@@ -411,6 +414,10 @@
   <div id="fabOverlay" class="fab-overlay hidden"></div>
   <div class="fab-container">
     <div id="fabMenu" class="fab-menu hidden">
+      <button type="button" class="fab-menu-item" id="fabAttendance" style="display:none;">
+        <span class="fab-icon">🕒</span>
+        <span data-i18n="dashboard.fab.attendance">New Attendance</span>
+      </button>
       <button id="fabAddInquiry" class="fab-menu-item">
         <span class="fab-icon">📋</span>
         <span data-i18n="dashboard.fab.addInquiry">Add New Inquiry</span>
@@ -434,6 +441,117 @@
     </div>
     <button id="fabBtn" class="fab-btn"><span class="fab-icon-plus">+</span></button>
   </div>
+
+  <!-- ============================================
+     🕒 DASHBOARD ATTENDANCE MODALS
+============================================ -->
+
+<!-- Toast -->
+<div id="dashboardToast" class="dashboard-toast hidden"></div>
+
+<!-- Attendance Method Choice Modal -->
+<div class="modal-overlay hidden" id="dashAttendanceChoiceModal">
+  <div class="modal-content schedule-dt-modal-content">
+    <span class="close-modal" id="closeDashAttendanceChoiceModal">×</span>
+
+    <h3 data-i18n="dashboard.attendance.title">🕒 New Attendance</h3>
+    <p style="margin-bottom: 1.25rem;" data-i18n="dashboard.attendance.chooseMethod">
+      Choose how you want to record attendance:
+    </p>
+
+    <div class="dt-choice-buttons">
+      <button type="button" class="primary" id="dashAttendanceManualOption">
+        🔍 <span data-i18n="dashboard.attendance.manualSearch">Manual Student Search</span>
+      </button>
+
+      <button type="button" class="primary" id="dashAttendanceScanOption">
+        📷 <span data-i18n="dashboard.attendance.scanQR">Scan QR Code</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Manual Student Search Modal -->
+<div class="modal-overlay hidden" id="dashAttendanceManualModal">
+  <div class="modal-content">
+    <span class="close-modal" id="closeDashAttendanceManualModal">×</span>
+
+    <h3 data-i18n="dashboard.attendance.manualTitle">✍️ Manual Student Attendance</h3>
+
+    <div class="form-group" style="margin-top: 1rem;">
+      <label for="dashAttendanceManualSearch" data-i18n="dashboard.attendance.manualSearch">
+        Manual Student Search
+      </label>
+
+      <input
+        type="text"
+        id="dashAttendanceManualSearch"
+        autocomplete="off"
+        placeholder="Search current students..."
+      >
+    </div>
+
+    <div id="dashAttendanceManualResults" class="dash-attendance-results hidden"></div>
+  </div>
+</div>
+
+<!-- Confirm Attendance Modal -->
+<div class="modal-overlay hidden" id="dashAttendanceConfirmModal">
+  <div class="modal-content">
+    <span class="close-modal" id="closeDashAttendanceConfirmModal">×</span>
+
+    <h3 data-i18n="dashboard.attendance.confirmTitle">✅ Confirm Attendance</h3>
+
+    <div id="dashAttendanceStudentInfo" style="margin-top: 1rem;"></div>
+    <div id="dashAttendanceSubjectCheckboxes" style="margin-top: 1rem;"></div>
+
+    <div class="modal-actions">
+      <button type="button" class="secondary" id="dashAttendanceCancelBtn">
+        Cancel
+      </button>
+
+      <button type="button" class="primary" id="dashAttendanceConfirmBtn" style="display:none;">
+        Confirm Attendance
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Duplicate / Warning Modal -->
+<div class="modal-overlay hidden" id="dashAttendanceWarningModal">
+  <div class="modal-content">
+    <span class="close-modal" id="closeDashAttendanceWarningModal">×</span>
+
+    <h3 id="dashAttendanceWarningTitle">⚠️ Duplicate Attendance</h3>
+    <p id="dashAttendanceWarningText" style="margin-top: 0.75rem;"></p>
+    <div id="dashAttendanceWarningList"></div>
+
+    <div class="modal-actions">
+      <button type="button" class="secondary" id="dashAttendanceWarningCancelBtn">
+        Cancel
+      </button>
+
+      <button type="button" class="primary" id="dashAttendanceWarningProceedBtn">
+        Proceed Anyway
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- QR Scan Modal -->
+<div class="modal-overlay hidden" id="dashAttendanceScanModal">
+  <div class="modal-content">
+    <span class="close-modal" id="closeDashAttendanceScanModal">×</span>
+
+    <h3 data-i18n="dashboard.attendance.scanQR">📷 Scan QR Code</h3>
+
+    <div id="dashAttendanceQrReader" style="width:100%; margin-top:1rem;"></div>
+
+    <p id="dashAttendanceScanStatus" class="hint text-center" style="margin-top:1rem;">
+      Point camera at QR code...
+    </p>
+  </div>
+</div>
 
   <script type="module" src="dashboard-i18n.js"></script>
   <script type="module" src="dashboard.js"></script>

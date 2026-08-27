@@ -32,10 +32,23 @@
     <!-- 🛠️ MASTER ADMIN PANEL (kumonchamps only) -->
     <div id="adminClockPanel" class="admin-clock-panel hidden">
       <div class="acp-title">🛠️ Clock In / Out an Employee</div>
-      <div class="acp-row">
-        <label class="control-label" for="adminEmpSelect">Employee</label>
-        <select id="adminEmpSelect" class="day-select"></select>
-      </div>
+        <div class="acp-row">
+          <label class="control-label" for="adminEmpSearch">Employee</label>
+
+          <div class="admin-search-wrapper">
+            <input
+              type="search"
+              id="adminEmpSearch"
+              class="day-select"
+              placeholder="Search active employee..."
+              autocomplete="off"
+            >
+
+            <input type="hidden" id="adminEmpId">
+
+            <div id="adminEmpResults" class="admin-search-results hidden"></div>
+          </div>
+        </div>
       <div class="acp-row">
         <label class="control-label" for="adminCenterSelect">Center</label>
         <select id="adminCenterSelect" class="day-select"></select>

@@ -2,7 +2,7 @@
 import './dashboard-i18n.js';
 import { i18nReady, t, currentLanguage } from './i18n-core.js';
 import { auth, requireAuth, logout, db, syncPendingRequests } from './auth.js';
-import { ref, get, update, remove, push } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { ref, get, update, remove, push, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 // ============================================
 // GLOBAL STATE
@@ -24,6 +24,24 @@ const centerId = sessionStorage.getItem('selectedCenter');
 
 // Locale-aware date formatting
 const dateLocale = () => (currentLanguage() === 'zh-TW' ? 'zh-TW' : 'en-US');
+
+// ============================================
+// 🕒 DASHBOARD ATTENDANCE STATE
+// ============================================
+let allStudentsForAttendance = [];
+let attendanceStudentsLoaded = false;
+let attendanceStudentById = new Map();
+let attendanceStudentByNumber = new Map();
+let attendanceStudentByQr = new Map();
+
+let attendanceRecordsCache = [];
+let attendanceRecordsLoaded = false;
+
+let attendanceSelectedStudent = null;
+let attendanceLastMethod = 'manual';
+
+let attendanceHtml5QrCode = null;
+let dashAttendanceRestartTimer = null;
 
 // ============================================
 // DASHBOARD INITIALIZATION
@@ -87,6 +105,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     initQuickInquiry();
     setupSchedulePOModalListeners();
     setupSearchStudentModalListeners();
+    setupDashboardAttendanceModals();
   } catch (err) {
     console.error("Error initializing dashboard:", err);
   } finally {
@@ -109,6 +128,7 @@ function initFAB() {
   const fabSchedulePO = document.getElementById('fabSchedulePO');
   const fabSearchStudent = document.getElementById('fabSearchStudent');
   const fabScheduleDT = document.getElementById('fabScheduleDT');
+  const fabAttendance = document.getElementById('fabAttendance');
   if (!fabBtn || !fabMenu || !fabOverlay) return;
 
   function closeFAB() {
@@ -139,6 +159,12 @@ function initFAB() {
     fabScheduleDT.addEventListener('click', () => {
       closeFAB();
       openScheduleDTModalDash();
+    });
+  }
+  if (fabAttendance) {
+    fabAttendance.addEventListener('click', async () => {
+      closeFAB();
+      await openDashboardAttendanceEntry();
     });
   }
   document.addEventListener('keydown', (e) => {
@@ -429,6 +455,15 @@ async function applyDashboardPermissions(user) {
         } else {
           card.style.display = 'none';
         }
+      }
+    }
+    // 🕒 Show/hide New Attendance FAB item
+    const fabAttendance = document.getElementById('fabAttendance');
+    if (fabAttendance) {
+      if (isAdmin || dashPerms.attendance === true) {
+        fabAttendance.style.display = 'flex';
+      } else {
+        fabAttendance.style.display = 'none';
       }
     }
   } catch (err) {
@@ -2425,5 +2460,1209 @@ async function saveQuickInquiry() {
   } finally {
     saveBtn.disabled = false;
     saveBtn.textContent = t('dashboard.inquiry.saveBtn');
+  }
+}
+
+// ============================================
+// 🕒 DASHBOARD ATTENDANCE
+// ============================================
+
+function dashAttendanceTodayISO() {
+  return new Date().toISOString().split('T')[0];
+}
+
+function dashAttendanceEscapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (match) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[match]));
+}
+
+function dashAttendanceNormalizeText(value) {
+  return String(value ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function dashAttendanceToSearchPart(value) {
+  if (value === null || value === undefined) return '';
+
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+
+  if (typeof value === 'object') {
+    const possible = value.full || value.name || value.text || value.pinyin || '';
+    return typeof possible === 'string' ? possible.trim() : '';
+  }
+
+  return '';
+}
+
+function getDashAttendancePinyin(student = {}) {
+  const candidates = [
+    student.pinyin,
+    student.pinyinName,
+    student.namePinyin,
+    student.pinYin,
+    student.pinYinName,
+    student.py,
+    student.pinyin_name,
+    student.romanized,
+    student.romanization,
+    student.romanName
+  ];
+
+  for (const candidate of candidates) {
+    const text = dashAttendanceToSearchPart(candidate);
+    if (text) return text;
+  }
+
+  return '';
+}
+
+function getDashAttendanceSearchText(student = {}) {
+  const parts = [
+    dashAttendanceToSearchPart(student.nameCn),
+    dashAttendanceToSearchPart(student.name),
+    dashAttendanceToSearchPart(student.chineseName),
+    dashAttendanceToSearchPart(student.fullName),
+    dashAttendanceToSearchPart(student.nameEn),
+    dashAttendanceToSearchPart(student.englishName),
+    dashAttendanceToSearchPart(student.engName),
+    getDashAttendancePinyin(student),
+    dashAttendanceToSearchPart(student.nickname),
+    dashAttendanceToSearchPart(student.studentNumber),
+    dashAttendanceToSearchPart(student.school),
+    dashAttendanceToSearchPart(student.grade),
+    dashAttendanceToSearchPart(student.phone?.mom),
+    dashAttendanceToSearchPart(student.phone?.dad),
+    dashAttendanceToSearchPart(student.phone?.own)
+  ].filter(Boolean);
+
+  return dashAttendanceNormalizeText(parts.join(' '));
+}
+
+function normalizeDashAttendanceSubjects(student = {}) {
+  const raw = student.subjects;
+
+  if (Array.isArray(raw)) {
+    return raw;
+  }
+
+  if (raw && typeof raw === 'object') {
+    return Object.values(raw);
+  }
+
+  return [];
+}
+
+function getDashAttendanceCurrentSubjects(student = {}) {
+  return normalizeDashAttendanceSubjects(student).filter((subject) => {
+    return subject && subject.status === 'current' && subject.name;
+  });
+}
+
+function hasCurrentDashAttendanceSubjects(student = {}) {
+  return getDashAttendanceCurrentSubjects(student).length > 0;
+}
+
+function rebuildDashAttendanceIndexes() {
+  attendanceStudentById = new Map();
+  attendanceStudentByNumber = new Map();
+  attendanceStudentByQr = new Map();
+
+  allStudentsForAttendance.forEach((student) => {
+    if (student.id) {
+      attendanceStudentById.set(String(student.id), student);
+    }
+
+    if (
+      student.studentNumber !== undefined &&
+      student.studentNumber !== null &&
+      String(student.studentNumber).trim() !== ''
+    ) {
+      attendanceStudentByNumber.set(String(student.studentNumber), student);
+    }
+
+    if (
+      student.qrCode !== undefined &&
+      student.qrCode !== null &&
+      String(student.qrCode).trim() !== ''
+    ) {
+      attendanceStudentByQr.set(String(student.qrCode), student);
+    }
+  });
+}
+
+async function loadDashboardAttendanceStudents(force = false) {
+  if (!centerId) return [];
+
+  if (attendanceStudentsLoaded && !force) {
+    return allStudentsForAttendance;
+  }
+
+  const snap = await get(ref(db, `centers/${centerId}/students`));
+  allStudentsForAttendance = [];
+
+  if (snap.exists()) {
+    snap.forEach((child) => {
+      allStudentsForAttendance.push({
+        ...child.val(),
+        id: child.key
+      });
+    });
+  }
+
+  attendanceStudentsLoaded = true;
+  rebuildDashAttendanceIndexes();
+
+  return allStudentsForAttendance;
+}
+
+async function loadDashboardAttendanceRecords(force = false) {
+  if (!centerId) return [];
+
+  if (attendanceRecordsLoaded && !force) {
+    return attendanceRecordsCache;
+  }
+
+  const snap = await get(ref(db, `centers/${centerId}/attendance`));
+  attendanceRecordsCache = [];
+
+  if (snap.exists()) {
+    snap.forEach((child) => {
+      attendanceRecordsCache.push({
+        ...child.val(),
+        id: child.key
+      });
+    });
+  }
+
+  attendanceRecordsLoaded = true;
+
+  return attendanceRecordsCache;
+}
+
+function getDashAttendanceExistingTodayFromCache(student = {}) {
+  const today = dashAttendanceTodayISO();
+
+  const studentId = String(student.id || '');
+  const studentNumber = String(student.studentNumber || '');
+  const studentName = dashAttendanceNormalizeText(student.nameCn || student.name || '');
+
+  return attendanceRecordsCache.filter((record) => {
+    if (record.date !== today) return false;
+
+    const recordStudentId = String(record.studentId || '');
+    const recordStudentNumber = String(record.studentNumber || '');
+    const recordName = dashAttendanceNormalizeText(record.nameCn || '');
+
+    if (studentId && recordStudentId && recordStudentId === studentId) {
+      return true;
+    }
+
+    if (studentNumber && recordStudentNumber && recordStudentNumber === studentNumber) {
+      return true;
+    }
+
+    if (studentName && recordName && recordName === studentName) {
+      return true;
+    }
+
+    return false;
+  });
+}
+
+function formatDashAttendanceTime(isoString) {
+  try {
+    return new Date(isoString).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch {
+    return '-';
+  }
+}
+
+function formatDashAttendanceRecordLabel(record = {}) {
+  const subject = record.subject || 'Subject';
+  const time = formatDashAttendanceTime(record.checkInTime);
+  const status = record.status || '-';
+
+  return `${subject} • ${time} • ${status}`;
+}
+
+function calculateDashAttendanceStatus(timeStr, now) {
+  if (!timeStr || timeStr === 'N/A' || timeStr === 'No schedule set') {
+    return 'Not Today';
+  }
+
+  const parts = timeStr.split(':');
+  if (parts.length < 2) {
+    return 'Not Today';
+  }
+
+  const h = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+
+  if (isNaN(h) || isNaN(m)) {
+    return 'Not Today';
+  }
+
+  const scheduled = new Date(now);
+  scheduled.setHours(h, m, 0, 0);
+
+  const diff = (now - scheduled) / 60000;
+
+  if (diff < -15) return 'Early';
+  if (diff > 15) return 'Late';
+
+  return 'On Time';
+}
+
+function getDashAttendanceStatusColor(status) {
+  return {
+    'On Time': '#10b981',
+    'Early': '#f59e0b',
+    'Late': '#ef4444',
+    'Not Today': '#6b7280'
+  }[status] || '#666';
+}
+
+function getDashAttendanceDateWarnings(dateStr) {
+  const warnings = [];
+
+  if (!dateStr) return warnings;
+
+  const event = calendarEventsMap[dateStr];
+  const nameSuffix = event?.name ? `: ${event.name}` : '';
+
+  if (event?.type === 'public') {
+    warnings.push(t('dashboard.dtWarning.publicHoliday', {
+      date: dateStr,
+      name: nameSuffix
+    }));
+  }
+
+  if (event?.type === 'center') {
+    warnings.push(t('dashboard.dtWarning.centerHoliday', {
+      date: dateStr,
+      name: nameSuffix
+    }));
+  }
+
+  const otherEvents = getOtherEventsFromCalendarEvent(event);
+  if (otherEvents.length > 0) {
+    warnings.push(
+      `${t('dashboard.holidayOther')}: ${otherEvents.map(o => o.name).join(', ')}`
+    );
+  }
+
+  const dateObj = new Date(`${dateStr}T00:00:00`);
+  if (!isNaN(dateObj.getTime())) {
+    const closedDays = getClosedDaysForCenter(centerName);
+    if (closedDays.includes(dateObj.getDay())) {
+      warnings.push(t('dashboard.dtWarning.closedDay', { date: dateStr }));
+    }
+  }
+
+  return warnings;
+}
+
+async function confirmDashAttendanceDateWarnings() {
+  const today = dashAttendanceTodayISO();
+  const warnings = getDashAttendanceDateWarnings(today);
+
+  if (warnings.length === 0) return true;
+
+  return confirm(
+    `${t('dashboard.attendance.holidayContinue')}\n\n${warnings.join('\n')}`
+  );
+}
+
+function showDashboardToast(message, isError = false) {
+  const toast = document.getElementById('dashboardToast');
+
+  if (!toast) {
+    alert(message);
+    return;
+  }
+
+  toast.textContent = message;
+  toast.className = `dashboard-toast${isError ? ' error' : ''}`;
+
+  clearTimeout(toast._timer);
+
+  toast._timer = setTimeout(() => {
+    toast.classList.add('hidden');
+  }, 3500);
+}
+
+function showDashModal(id) {
+  document.getElementById(id)?.classList.remove('hidden');
+}
+
+function hideDashModal(id) {
+  document.getElementById(id)?.classList.add('hidden');
+}
+
+function isDashModalHidden(id) {
+  const el = document.getElementById(id);
+  return !el || el.classList.contains('hidden');
+}
+
+function setupDashboardAttendanceModals() {
+  // Choice modal
+  document.getElementById('closeDashAttendanceChoiceModal')?.addEventListener('click', () => {
+    hideDashModal('dashAttendanceChoiceModal');
+  });
+
+  document.getElementById('dashAttendanceChoiceModal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'dashAttendanceChoiceModal') {
+      hideDashModal('dashAttendanceChoiceModal');
+    }
+  });
+
+  // Manual modal
+  document.getElementById('closeDashAttendanceManualModal')?.addEventListener('click', () => {
+    hideDashModal('dashAttendanceManualModal');
+  });
+
+  document.getElementById('dashAttendanceManualModal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'dashAttendanceManualModal') {
+      hideDashModal('dashAttendanceManualModal');
+    }
+  });
+
+  // Confirm modal
+  document.getElementById('closeDashAttendanceConfirmModal')?.addEventListener('click', () => {
+    hideDashModal('dashAttendanceConfirmModal');
+    attendanceSelectedStudent = null;
+  });
+
+  document.getElementById('dashAttendanceConfirmModal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'dashAttendanceConfirmModal') {
+      hideDashModal('dashAttendanceConfirmModal');
+      attendanceSelectedStudent = null;
+    }
+  });
+
+  // Scan modal
+  document.getElementById('closeDashAttendanceScanModal')?.addEventListener('click', async () => {
+    await stopDashboardAttendanceScanner();
+  });
+
+  document.getElementById('dashAttendanceScanModal')?.addEventListener('click', async (e) => {
+    if (e.target.id === 'dashAttendanceScanModal') {
+      await stopDashboardAttendanceScanner();
+    }
+  });
+
+  // Attendance method options
+  document.getElementById('dashAttendanceManualOption')?.addEventListener('click', () => {
+    hideDashModal('dashAttendanceChoiceModal');
+    openDashboardAttendanceManualModal();
+  });
+
+  document.getElementById('dashAttendanceScanOption')?.addEventListener('click', async () => {
+    hideDashModal('dashAttendanceChoiceModal');
+    await startDashboardAttendanceScanner();
+  });
+
+  // Manual search
+  const manualSearch = document.getElementById('dashAttendanceManualSearch');
+
+  if (manualSearch) {
+    manualSearch.addEventListener('input', handleDashboardAttendanceManualSearch);
+    manualSearch.addEventListener('focus', handleDashboardAttendanceManualSearch);
+  }
+
+  // Close manual results when clicking outside
+  document.addEventListener('click', (event) => {
+    const results = document.getElementById('dashAttendanceManualResults');
+    const manualModal = document.getElementById('dashAttendanceManualModal');
+
+    if (
+      results &&
+      manualModal &&
+      !manualModal.classList.contains('hidden') &&
+      !event.target.closest('#dashAttendanceManualSearch') &&
+      !event.target.closest('#dashAttendanceManualResults')
+    ) {
+      results.classList.add('hidden');
+    }
+  });
+
+  // Confirm attendance
+  document.getElementById('dashAttendanceCancelBtn')?.addEventListener('click', () => {
+    hideDashModal('dashAttendanceConfirmModal');
+    attendanceSelectedStudent = null;
+  });
+
+  document.getElementById('dashAttendanceConfirmBtn')?.addEventListener('click', recordDashboardAttendance);
+
+  // Escape handling
+  document.addEventListener('keydown', async (e) => {
+    if (e.key !== 'Escape') return;
+
+    // Warning modal handles its own Escape inside the Promise
+    if (!isDashModalHidden('dashAttendanceWarningModal')) return;
+
+    if (!isDashModalHidden('dashAttendanceScanModal')) {
+      await stopDashboardAttendanceScanner();
+      return;
+    }
+
+    hideDashModal('dashAttendanceChoiceModal');
+    hideDashModal('dashAttendanceManualModal');
+    hideDashModal('dashAttendanceConfirmModal');
+    attendanceSelectedStudent = null;
+  });
+}
+
+function showDashAttendanceWarning({
+  title = '⚠️ Warning',
+  message = '',
+  items = [],
+  proceedText = 'Proceed Anyway',
+  cancelText = 'Cancel'
+}) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('dashAttendanceWarningModal');
+    const titleEl = document.getElementById('dashAttendanceWarningTitle');
+    const textEl = document.getElementById('dashAttendanceWarningText');
+    const listEl = document.getElementById('dashAttendanceWarningList');
+    const proceedBtn = document.getElementById('dashAttendanceWarningProceedBtn');
+    const cancelBtn = document.getElementById('dashAttendanceWarningCancelBtn');
+    const closeBtn = document.getElementById('closeDashAttendanceWarningModal');
+
+    if (!modal || !proceedBtn || !cancelBtn) {
+      const fullMessage = items.length
+        ? `${message}\n\n${items.join('\n')}`
+        : message;
+
+      resolve(window.confirm(fullMessage));
+      return;
+    }
+
+    if (titleEl) titleEl.textContent = title;
+    if (textEl) textEl.textContent = message;
+
+    if (listEl) {
+      listEl.innerHTML = '';
+
+      if (items.length) {
+        const ul = document.createElement('ul');
+        ul.className = 'duplicate-warning-list';
+
+        items.forEach((item) => {
+          const li = document.createElement('li');
+          li.textContent = item;
+          ul.appendChild(li);
+        });
+
+        listEl.appendChild(ul);
+      }
+    }
+
+    proceedBtn.textContent = proceedText;
+    cancelBtn.textContent = cancelText;
+
+    const cleanup = () => {
+      hideDashModal('dashAttendanceWarningModal');
+
+      proceedBtn.onclick = null;
+      cancelBtn.onclick = null;
+
+      if (closeBtn) closeBtn.onclick = null;
+
+      modal.onclick = null;
+
+      document.removeEventListener('keydown', keyHandler, true);
+    };
+
+    const keyHandler = (event) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        event.preventDefault();
+
+        cleanup();
+        resolve(false);
+      }
+    };
+
+    proceedBtn.onclick = () => {
+      cleanup();
+      resolve(true);
+    };
+
+    cancelBtn.onclick = () => {
+      cleanup();
+      resolve(false);
+    };
+
+    if (closeBtn) {
+      closeBtn.onclick = () => {
+        cleanup();
+        resolve(false);
+      };
+    }
+
+    modal.onclick = (event) => {
+      if (event.target === modal) {
+        cleanup();
+        resolve(false);
+      }
+    };
+
+    document.addEventListener('keydown', keyHandler, true);
+
+    showDashModal('dashAttendanceWarningModal');
+  });
+}
+
+async function openDashboardAttendanceEntry() {
+  if (!centerId) {
+    alert('No center selected.');
+    return;
+  }
+
+  const canContinue = await confirmDashAttendanceDateWarnings();
+  if (!canContinue) return;
+
+  // Preload in background
+  loadDashboardAttendanceStudents().catch(console.error);
+  loadDashboardAttendanceRecords().catch(console.error);
+
+  showDashModal('dashAttendanceChoiceModal');
+}
+
+async function openDashboardAttendanceManualModal() {
+  const input = document.getElementById('dashAttendanceManualSearch');
+  const results = document.getElementById('dashAttendanceManualResults');
+
+  if (input) {
+    input.value = '';
+    input.placeholder = t('dashboard.attendance.manualPlaceholder');
+  }
+
+  if (results) {
+    results.innerHTML = '';
+    results.classList.add('hidden');
+  }
+
+  showDashModal('dashAttendanceManualModal');
+
+  setTimeout(() => {
+    input?.focus();
+  }, 100);
+}
+
+async function handleDashboardAttendanceManualSearch() {
+  const input = document.getElementById('dashAttendanceManualSearch');
+  const results = document.getElementById('dashAttendanceManualResults');
+
+  if (!input || !results) return;
+
+  const query = dashAttendanceNormalizeText(input.value);
+
+  if (!query) {
+    results.innerHTML = '';
+    results.classList.add('hidden');
+    return;
+  }
+
+  try {
+    await loadDashboardAttendanceStudents();
+
+    const matches = allStudentsForAttendance
+      .filter((student) => {
+        return hasCurrentDashAttendanceSubjects(student) &&
+          getDashAttendanceSearchText(student).includes(query);
+      })
+      .slice(0, 20);
+
+    renderDashboardAttendanceManualResults(matches);
+  } catch (err) {
+    console.error('Dashboard attendance manual search failed:', err);
+    renderDashboardAttendanceManualResults([]);
+  }
+}
+
+function renderDashboardAttendanceManualResults(matches) {
+  const results = document.getElementById('dashAttendanceManualResults');
+  if (!results) return;
+
+  results.innerHTML = '';
+
+  if (!matches.length) {
+    results.innerHTML = `
+      <div class="dash-attendance-result-empty">
+        No matching current students found.
+      </div>
+    `;
+    results.classList.remove('hidden');
+    return;
+  }
+
+  matches.forEach((student) => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'dash-attendance-result-item';
+
+    const pinyin = getDashAttendancePinyin(student);
+
+    const displayName =
+      student.nameCn ||
+      student.name ||
+      pinyin ||
+      student.nickname ||
+      'Unknown Student';
+
+    const metaParts = [];
+
+    if (pinyin) metaParts.push(pinyin);
+    if (student.nickname) metaParts.push(`Nickname: ${student.nickname}`);
+    if (student.studentNumber) metaParts.push(`No: ${student.studentNumber}`);
+    if (student.grade) metaParts.push(`Grade: ${student.grade}`);
+    if (student.school) metaParts.push(student.school);
+
+    item.innerHTML = `
+      <span class="dash-attendance-result-name">
+        ${dashAttendanceEscapeHtml(displayName)}
+      </span>
+      <span class="dash-attendance-result-meta">
+        ${dashAttendanceEscapeHtml(metaParts.join(' • '))}
+      </span>
+    `;
+
+    item.addEventListener('click', async () => {
+      await selectDashboardAttendanceStudent(student, 'manual');
+    });
+
+    results.appendChild(item);
+  });
+
+  results.classList.remove('hidden');
+}
+
+async function selectDashboardAttendanceStudent(student, method = 'manual') {
+  attendanceLastMethod = method;
+
+  hideDashModal('dashAttendanceChoiceModal');
+  hideDashModal('dashAttendanceManualModal');
+
+  if (!student || !student.id) {
+    showDashboardToast(t('dashboard.attendance.studentNotFound'), true);
+
+    if (method === 'qr') {
+      dashAttendanceRestartTimer = setTimeout(async () => {
+        await startDashboardAttendanceScanner();
+      }, 1200);
+    }
+
+    return;
+  }
+
+  if (!hasCurrentDashAttendanceSubjects(student)) {
+    showDashboardToast(t('dashboard.attendance.noActiveSubjects'), true);
+
+    if (method === 'qr') {
+      dashAttendanceRestartTimer = setTimeout(async () => {
+        await startDashboardAttendanceScanner();
+      }, 1600);
+    }
+
+    return;
+  }
+
+  try {
+    await loadDashboardAttendanceRecords();
+
+    const existingRecords = getDashAttendanceExistingTodayFromCache(student);
+
+    if (existingRecords.length > 0) {
+      const studentDisplayName =
+        student.nameCn ||
+        student.name ||
+        getDashAttendancePinyin(student) ||
+        student.nickname ||
+        'This student';
+
+      const proceed = await showDashAttendanceWarning({
+        title: t('dashboard.attendance.duplicateStudentTitle'),
+        message: t('dashboard.attendance.duplicateStudentText', {
+          name: studentDisplayName
+        }),
+        items: existingRecords.map(formatDashAttendanceRecordLabel),
+        proceedText: t('dashboard.attendance.proceed'),
+        cancelText: t('dashboard.attendance.cancel')
+      });
+
+      if (!proceed) {
+        if (method === 'qr') {
+          dashAttendanceRestartTimer = setTimeout(async () => {
+            await startDashboardAttendanceScanner();
+          }, 700);
+        }
+
+        return;
+      }
+    }
+
+    attendanceSelectedStudent = student;
+    openDashboardAttendanceConfirmModal(existingRecords);
+  } catch (err) {
+    console.error('Dashboard attendance selection failed:', err);
+    showDashboardToast(err.message || 'Attendance error', true);
+
+    if (method === 'qr') {
+      dashAttendanceRestartTimer = setTimeout(async () => {
+        await startDashboardAttendanceScanner();
+      }, 1200);
+    }
+  }
+}
+
+function openDashboardAttendanceConfirmModal(existingRecords = []) {
+  renderDashboardAttendanceConfirm(existingRecords);
+  showDashModal('dashAttendanceConfirmModal');
+}
+
+function renderDashboardAttendanceConfirm(existingRecords = []) {
+  const infoDiv = document.getElementById('dashAttendanceStudentInfo');
+  const subDiv = document.getElementById('dashAttendanceSubjectCheckboxes');
+  const confirmBtn = document.getElementById('dashAttendanceConfirmBtn');
+
+  if (!infoDiv || !subDiv || !confirmBtn) return;
+
+  const student = attendanceSelectedStudent;
+
+  if (!student) {
+    infoDiv.innerHTML = `<span style="color:#dc3545;">❌ No student selected.</span>`;
+    subDiv.innerHTML = '';
+    confirmBtn.style.display = 'none';
+    return;
+  }
+
+  const currentSubjects = getDashAttendanceCurrentSubjects(student);
+
+  if (!currentSubjects.length) {
+    infoDiv.innerHTML = `
+      <span style="color:#dc3545;">
+        ❌ ${dashAttendanceEscapeHtml(t('dashboard.attendance.noActiveSubjects'))}
+      </span>
+    `;
+    subDiv.innerHTML = '';
+    confirmBtn.style.display = 'none';
+    return;
+  }
+
+  const now = new Date();
+
+  const dayNames = [
+    'Sunday',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday'
+  ];
+
+  const todayDay = dayNames[now.getDay()];
+  const pinyin = getDashAttendancePinyin(student);
+
+  const existingSubjects = new Set(
+    existingRecords
+      .map((record) => dashAttendanceNormalizeText(record.subject))
+      .filter(Boolean)
+  );
+
+  const existingSubjectsText = existingRecords
+    .map((record) => record.subject)
+    .filter(Boolean)
+    .join(', ');
+
+  const existingWarningHtml = existingRecords.length > 0
+    ? `
+      <div style="margin-top:0.5rem; color:#b45309; font-size:0.8rem; font-weight:700;">
+        ⚠️ Already recorded today: ${dashAttendanceEscapeHtml(existingSubjectsText)}
+      </div>
+    `
+    : '';
+
+  infoDiv.innerHTML = `
+    <div style="background:#f8fafc; padding:0.75rem; border-radius:10px; border:1px solid #e2e8f0;">
+      <h3 style="margin:0 0 0.3rem; font-size:1.1rem; font-weight:800;">
+        ${dashAttendanceEscapeHtml(student.nameCn || student.name || pinyin || 'N/A')}
+      </h3>
+
+      <div style="display:flex; flex-wrap:wrap; gap:0.25rem 0.75rem; font-size:0.85rem; color:#475569;">
+        <span><strong>Pinyin:</strong> ${dashAttendanceEscapeHtml(pinyin || '-')}</span>
+        <span><strong>Nickname:</strong> ${dashAttendanceEscapeHtml(student.nickname || '-')}</span>
+        <span><strong>Grade:</strong> ${dashAttendanceEscapeHtml(student.grade || '-')}</span>
+        <span><strong>School:</strong> ${dashAttendanceEscapeHtml(student.school || '-')}</span>
+      </div>
+
+      ${existingWarningHtml}
+    </div>
+  `;
+
+  let html = '';
+
+  currentSubjects.forEach((subject, index) => {
+    const slots = Array.isArray(subject.timeslots) ? subject.timeslots : [];
+
+    const fullSchedule = slots.length > 0
+      ? slots.map((slot) => {
+          return `${String(slot.day || '').substring(0, 3)} ${slot.time || '--:--'}`;
+        }).join(', ')
+      : t('dashboard.attendance.noSchedule');
+
+    const todaySlot = slots.find((slot) => {
+      return String(slot.day || '').toLowerCase() === todayDay.toLowerCase();
+    });
+
+    const todayTime = todaySlot?.time || 'N/A';
+    const status = calculateDashAttendanceStatus(todayTime, now);
+    const color = getDashAttendanceStatusColor(status);
+
+    const subjectKey = dashAttendanceNormalizeText(subject.name);
+    const alreadyRecorded = existingSubjects.has(subjectKey);
+
+    const alreadyBadge = alreadyRecorded
+      ? `<span class="dash-attendance-already">${t('dashboard.attendance.alreadyRecordedBadge')}</span>`
+      : '';
+
+    const isLast = index === currentSubjects.length - 1;
+
+    html += `
+      <label class="dash-attendance-subject-label" style="border-bottom:${isLast ? 'none' : '1px solid #f1f5f9'};">
+        <input
+          type="checkbox"
+          class="att-subject-check"
+          value="${dashAttendanceEscapeHtml(subject.name.trim())}"
+          data-status="${dashAttendanceEscapeHtml(status)}"
+          data-scheduled="${dashAttendanceEscapeHtml(fullSchedule)}"
+          data-already-recorded="${alreadyRecorded ? 'true' : 'false'}"
+          ${alreadyRecorded ? '' : 'checked'}
+        >
+
+        <div class="dash-attendance-subject-body">
+          <div class="dash-attendance-subject-name">
+            ${dashAttendanceEscapeHtml(subject.name)}
+            <span class="dash-attendance-subject-level">
+              (${dashAttendanceEscapeHtml(subject.currentLevel || subject.startLevel || '?')})
+            </span>
+            ${alreadyBadge}
+          </div>
+
+          <div class="dash-attendance-subject-meta">
+            🕒 ${dashAttendanceEscapeHtml(fullSchedule)}<br>
+            ${t('dashboard.attendance.today')}: ${dashAttendanceEscapeHtml(todayDay)} ${dashAttendanceEscapeHtml(todayTime)} |
+            ${t('dashboard.attendance.status')}:
+            <span style="color:${color}; font-weight:700;">
+              ${dashAttendanceEscapeHtml(status)}
+            </span>
+          </div>
+        </div>
+      </label>
+    `;
+  });
+
+  subDiv.innerHTML = html;
+
+  confirmBtn.disabled = false;
+  confirmBtn.style.display = 'inline-flex';
+  confirmBtn.textContent = t('dashboard.attendance.confirm');
+}
+
+async function recordDashboardAttendance() {
+  const checks = document.querySelectorAll('#dashAttendanceSubjectCheckboxes .att-subject-check:checked');
+
+  if (!attendanceSelectedStudent) {
+    showDashboardToast('No student selected.', true);
+    return;
+  }
+
+  if (checks.length === 0) {
+    showDashboardToast(t('dashboard.attendance.selectSubject'), true);
+    return;
+  }
+
+  const alreadyRecordedSelected = Array.from(checks)
+    .filter((checkbox) => checkbox.dataset.alreadyRecorded === 'true')
+    .map((checkbox) => checkbox.value);
+
+  if (alreadyRecordedSelected.length > 0) {
+    const proceed = await showDashAttendanceWarning({
+      title: t('dashboard.attendance.duplicateSubjectTitle'),
+      message: t('dashboard.attendance.duplicateSubjectText'),
+      items: alreadyRecordedSelected,
+      proceedText: t('dashboard.attendance.proceed'),
+      cancelText: t('dashboard.attendance.cancel')
+    });
+
+    if (!proceed) return;
+  }
+
+  const btn = document.getElementById('dashAttendanceConfirmBtn');
+  const originalText = btn?.textContent || 'Confirm';
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Saving...';
+  }
+
+  const now = new Date();
+  const dateStr = dashAttendanceTodayISO();
+  const checkInTime = now.toISOString();
+
+  try {
+    const attendanceRef = ref(db, `centers/${centerId}/attendance`);
+
+    const saves = Array.from(checks).map(async (checkbox) => {
+      const payload = {
+        studentId: String(attendanceSelectedStudent.id || ''),
+        studentNumber: String(attendanceSelectedStudent.studentNumber || ''),
+        nameCn: String(attendanceSelectedStudent.nameCn || attendanceSelectedStudent.name || '-'),
+        nickname: String(attendanceSelectedStudent.nickname || '-'),
+        grade: String(attendanceSelectedStudent.grade || '-'),
+        school: String(attendanceSelectedStudent.school || '-'),
+        pinyin: String(getDashAttendancePinyin(attendanceSelectedStudent) || ''),
+        nameEn: String(attendanceSelectedStudent.nameEn || attendanceSelectedStudent.englishName || ''),
+        subject: String(checkbox.value.trim()),
+        scheduledTime: String(checkbox.dataset.scheduled || t('dashboard.attendance.noSchedule')),
+        checkInTime: String(checkInTime),
+        date: String(dateStr),
+        status: String(checkbox.dataset.status || ''),
+        timestamp: serverTimestamp()
+      };
+
+      const newRef = push(attendanceRef, payload);
+      await newRef;
+
+      attendanceRecordsCache.push({
+        ...payload,
+        id: newRef.key
+      });
+    });
+
+    await Promise.all(saves);
+
+    hideDashModal('dashAttendanceConfirmModal');
+
+    const studentName =
+      attendanceSelectedStudent.nameCn ||
+      attendanceSelectedStudent.name ||
+      getDashAttendancePinyin(attendanceSelectedStudent) ||
+      attendanceSelectedStudent.nickname ||
+      'student';
+
+    showDashboardToast(t('dashboard.attendance.saveSuccess', {
+      name: studentName
+    }));
+
+    const method = attendanceLastMethod;
+
+    attendanceSelectedStudent = null;
+
+    if (method === 'qr') {
+      dashAttendanceRestartTimer = setTimeout(async () => {
+        await startDashboardAttendanceScanner();
+      }, 700);
+    } else {
+      setTimeout(() => {
+        openDashboardAttendanceManualModal();
+      }, 700);
+    }
+  } catch (err) {
+    console.error('Dashboard attendance save failed:', err);
+    showDashboardToast(t('dashboard.attendance.saveFailed'), true);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  }
+}
+
+async function cleanupDashboardAttendanceScanner() {
+  if (dashAttendanceRestartTimer) {
+    clearTimeout(dashAttendanceRestartTimer);
+    dashAttendanceRestartTimer = null;
+  }
+
+  if (attendanceHtml5QrCode) {
+    try {
+      await attendanceHtml5QrCode.stop();
+    } catch (err) {
+      console.warn('Dashboard attendance scanner stop warning:', err);
+    }
+
+    try {
+      attendanceHtml5QrCode.clear();
+    } catch (err) {
+      console.warn('Dashboard attendance scanner clear warning:', err);
+    }
+
+    attendanceHtml5QrCode = null;
+  }
+
+  const readerDiv = document.getElementById('dashAttendanceQrReader');
+  if (readerDiv) {
+    readerDiv.innerHTML = '';
+  }
+}
+
+async function stopDashboardAttendanceScanner() {
+  await cleanupDashboardAttendanceScanner();
+  hideDashModal('dashAttendanceScanModal');
+}
+
+function findDashboardAttendanceStudentByScan(scannedValue) {
+  let value = String(scannedValue || '').trim();
+
+  if (!value) return null;
+
+  // Optional: support QR codes that are URLs with query params
+  try {
+    const url = new URL(value);
+    const possible =
+      url.searchParams.get('studentNumber') ||
+      url.searchParams.get('student') ||
+      url.searchParams.get('id') ||
+      url.searchParams.get('qr') ||
+      url.searchParams.get('qrCode');
+
+    if (possible) {
+      value = possible.trim();
+    }
+  } catch {
+    // Not a URL, use raw value
+  }
+
+  if (attendanceStudentById.has(value)) {
+    return attendanceStudentById.get(value);
+  }
+
+  if (attendanceStudentByNumber.has(value)) {
+    return attendanceStudentByNumber.get(value);
+  }
+
+  if (attendanceStudentByQr.has(value)) {
+    return attendanceStudentByQr.get(value);
+  }
+
+  return allStudentsForAttendance.find((student) => {
+    return (
+      String(student.id || '') === value ||
+      String(student.studentNumber || '') === value ||
+      String(student.qrCode || '') === value
+    );
+  }) || null;
+}
+
+async function startDashboardAttendanceScanner() {
+  const modal = document.getElementById('dashAttendanceScanModal');
+  const status = document.getElementById('dashAttendanceScanStatus');
+  const readerDiv = document.getElementById('dashAttendanceQrReader');
+
+  if (!modal || !status || !readerDiv) {
+    console.error('Missing dashboard attendance scanner elements.');
+    return;
+  }
+
+  if (typeof Html5Qrcode === 'undefined') {
+    showDashModal('dashAttendanceScanModal');
+    status.textContent = t('dashboard.attendance.libraryMissing');
+    return;
+  }
+
+  await cleanupDashboardAttendanceScanner();
+
+  showDashModal('dashAttendanceScanModal');
+  status.textContent = t('dashboard.attendance.cameraStarting');
+
+  try {
+    attendanceHtml5QrCode = new Html5Qrcode('dashAttendanceQrReader');
+
+    await attendanceHtml5QrCode.start(
+      { facingMode: 'environment' },
+      {
+        fps: 10,
+        qrbox: {
+          width: 250,
+          height: 250
+        },
+        aspectRatio: 1.0
+      },
+      async (decodedText) => {
+        const cleanValue = decodedText.trim();
+
+        await cleanupDashboardAttendanceScanner();
+        hideDashModal('dashAttendanceScanModal');
+
+        try {
+          await loadDashboardAttendanceStudents();
+
+          let student = findDashboardAttendanceStudentByScan(cleanValue);
+
+          if (!student) {
+            await loadDashboardAttendanceStudents(true);
+            student = findDashboardAttendanceStudentByScan(cleanValue);
+          }
+
+          if (!student) {
+            throw new Error(t('dashboard.attendance.studentNotFound'));
+          }
+
+          await selectDashboardAttendanceStudent(student, 'qr');
+        } catch (err) {
+          console.error('Dashboard attendance scan processing failed:', err);
+          showDashboardToast(err.message || 'Scan error', true);
+
+          // Continue scanning automatically after invalid QR / error
+          dashAttendanceRestartTimer = setTimeout(async () => {
+            await startDashboardAttendanceScanner();
+          }, 1200);
+        }
+      },
+      () => {
+        // Ignore QR decode frame errors
+      }
+    );
+
+    status.textContent = t('dashboard.attendance.cameraReady');
+  } catch (err) {
+    console.error('Dashboard attendance scanner init failed:', err);
+
+    let message = err.message || String(err);
+
+    if (err.name === 'NotAllowedError') {
+      message = 'Camera permission denied.';
+    } else if (err.name === 'NotFoundError') {
+      message = 'No camera found.';
+    } else if (err.name === 'NotReadableError') {
+      message = 'Camera is being used by another application.';
+    }
+
+    status.textContent = t('dashboard.attendance.cameraError', {
+      message
+    });
+
+    attendanceHtml5QrCode = null;
   }
 }

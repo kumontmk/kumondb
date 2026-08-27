@@ -958,6 +958,52 @@ input[type="date"]::-webkit-datetime-edit {
 }
 
 /* =========================================
+🛠️ MASTER ADMIN EMPLOYEE SEARCH
+========================================= */
+.admin-search-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.admin-search-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.admin-search-option {
+  padding: 0.65rem 0.8rem;
+  font-size: 0.92rem;
+  cursor: pointer;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.admin-search-option:last-child {
+  border-bottom: none;
+}
+
+.admin-search-option:hover {
+  background: #e3f2fd;
+}
+
+.admin-search-option.disabled {
+  color: #94a3b8;
+  cursor: default;
+}
+
+.admin-search-option.disabled:hover {
+  background: transparent;
+}
+
+/* =========================================
 🌐 TRADITIONAL CHINESE FONT SUPPORT
 ========================================= */
 :lang(zh-TW) body,

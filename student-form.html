@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!-- Shows the logo in the browser tab -->
+  <!-- Shows the logo in the browser tab -->
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
   <!-- Optional: PNG fallback for older browsers -->
@@ -196,182 +196,186 @@
           <button type="button" class="tab-btn" data-tab="qr" data-i18n="studentForm.qrTab">📷 QR Code</button>
         </div>
 
-        <!-- 4. Tab Content: Contact -->
-        <div id="tab-contact" class="tab-content active">
-          <div class="form-grid">
-            <div><label data-i18n="studentForm.email">Email</label><input type="email" id="email"></div>
-            <div><label data-i18n="studentForm.phoneMom">Phone (Mom)</label><input type="tel" id="phoneMom"></div>
-            <div><label data-i18n="studentForm.phoneDad">Phone (Dad)</label><input type="tel" id="phoneDad"></div>
-            <div><label data-i18n="studentForm.phoneOwn">Phone (Student)</label><input type="tel" id="phoneOwn"></div>
-            <div style="grid-column: 1 / -1;"><label data-i18n="studentForm.address">Address</label><textarea id="address" rows="2"></textarea></div>
+        <!-- ✅ WRAPPER FOR ALL TAB CONTENTS (Creates the unified folder effect) -->
+        <div class="tab-contents-wrapper">
+          
+          <!-- 4. Tab Content: Contact -->
+          <div id="tab-contact" class="tab-content active">
+            <div class="form-grid">
+              <div><label data-i18n="studentForm.email">Email</label><input type="email" id="email"></div>
+              <div><label data-i18n="studentForm.phoneMom">Phone (Mom)</label><input type="tel" id="phoneMom"></div>
+              <div><label data-i18n="studentForm.phoneDad">Phone (Dad)</label><input type="tel" id="phoneDad"></div>
+              <div><label data-i18n="studentForm.phoneOwn">Phone (Student)</label><input type="tel" id="phoneOwn"></div>
+              <div style="grid-column: 1 / -1;"><label data-i18n="studentForm.address">Address</label><textarea id="address" rows="2"></textarea></div>
+            </div>
           </div>
-        </div>
 
-        <!-- 5. Tab Content: Subjects -->
-        <div id="tab-subjects" class="tab-content">
-          <p class="hint" data-i18n="studentForm.subjectsHint">⚠️ English ERP & EFL cannot be together unless one is Dropped. Max 6 timeslots per subject.</p>
-          <div id="subjectsContainer"></div>
-          <button type="button" id="addSubjectBtn" class="secondary" style="margin-top:0.5rem;" data-i18n="studentForm.addSubject">+ Add Subject</button>
-        </div>
+          <!-- 5. Tab Content: Subjects -->
+          <div id="tab-subjects" class="tab-content">
+            <p class="hint" data-i18n="studentForm.subjectsHint">⚠️ English ERP & EFL cannot be together unless one is Dropped. Max 6 timeslots per subject.</p>
+            <div id="subjectsContainer"></div>
+            <button type="button" id="addSubjectBtn" class="secondary" style="margin-top:0.5rem;" data-i18n="studentForm.addSubject">+ Add Subject</button>
+          </div>
 
-        <!-- 6. Tab Content: Schedule -->
-        <div id="tab-schedule" class="tab-content">
-          <p class="hint" data-i18n="studentForm.scheduleHint">📅 Schedule auto-generates from subject timeslots. Dropped subjects are hidden.</p>
-          <table class="schedule-table" id="scheduleTable">
-            <thead>
-              <tr id="scheduleHeader"></tr>
-            </thead>
-            <tbody id="scheduleBody">
-              <tr><td colspan="7" style="text-align:center; padding:1.5rem; color:#666;" data-i18n="studentForm.addSubjectsToView">Add subjects & timeslots to view schedule</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- ✅ NEW TAB CONTENT: DT & AT -->
-        <div id="tab-dt-at" class="tab-content">
-          <h3 style="margin-bottom: 1rem; color: var(--primary-dark);" data-i18n="studentForm.dtTitle">Diagnostic Tests (DT) - Manual Entry</h3>
-          <div class="table-wrapper" style="overflow-x: auto; margin-bottom: 1.5rem;">
-            <table class="schedule-table" id="dtTable" style="min-width: 900px;">
-                <thead>
-                  <tr>
-                    <th data-i18n="studentForm.subject">Subject *</th>
-                    <th data-i18n="studentForm.dtDate">Diagnostic Date *</th>
-                    <th data-i18n="studentForm.dtTimeslot">Timeslot</th>
-                    <th data-i18n="studentForm.testName">Test Name/Level *</th>
-                    <th data-i18n="studentForm.score">Score *</th>
-                    <th data-i18n="studentForm.timeMins">Time (mins) *</th>
-                    <th data-i18n="studentForm.suggestedStart">Suggested Start</th>
-                    <th data-i18n="studentForm.actualStart">Actual Start</th>
-                    <th data-i18n="studentForm.action">Action</th>
-                  </tr>
-                </thead>
-              <tbody id="dtTableBody">
-                <!-- Rows injected via JS -->
+          <!-- 6. Tab Content: Schedule -->
+          <div id="tab-schedule" class="tab-content">
+            <p class="hint" data-i18n="studentForm.scheduleHint">📅 Schedule auto-generates from subject timeslots. Dropped subjects are hidden.</p>
+            <table class="schedule-table" id="scheduleTable">
+              <thead>
+                <tr id="scheduleHeader"></tr>
+              </thead>
+              <tbody id="scheduleBody">
+                <tr><td colspan="7" style="text-align:center; padding:1.5rem; color:#666;" data-i18n="studentForm.addSubjectsToView">Add subjects & timeslots to view schedule</td></tr>
               </tbody>
             </table>
           </div>
-          <button type="button" class="secondary" id="addDTBtn" style="padding: 0.5rem 1rem; font-size: 0.9rem;" data-i18n="studentForm.addDT">+ Add Diagnostic Test</button>
 
-          <!-- ✅ ACHIEVEMENT TESTS (AT) SECTION (Restructured to match DT) -->
-          <div style="margin-top: 2rem;">
-              <h3 style="font-size:1.1rem; color: var(--primary-dark); margin-bottom:0.5rem;" data-i18n="studentForm.atTitle">Achievement Tests (AT)</h3>
-              <p class="hint" style="margin-bottom:0.75rem;" data-i18n="studentForm.atHint">Auto-filled from monthly reports. You can also add manual entries below.</p>
-              <div style="overflow-x: auto; margin-bottom: 1rem;">
-                  <table id="atTable" class="schedule-table" style="min-width:600px;">
-                      <thead>
-                          <tr>
-                              <th data-i18n="studentForm.subject">Subject *</th>
-                              <th data-i18n="studentForm.atLevel">AT Level *</th>
-                              <th data-i18n="studentForm.date">Date *</th>
-                              <th data-i18n="studentForm.score">Score *</th>
-                              <th data-i18n="studentForm.timeMins">Time (mins) *</th>
-                              <th data-i18n="studentForm.group">Group</th>
-                              <th data-i18n="studentForm.source">Source</th>
-                              <th data-i18n="studentForm.action">Action</th>
-                          </tr>
-                      </thead>
-                      <tbody id="atTableBody">
-                          <!-- Rows injected by JS -->
-                      </tbody>
-                  </table>
-              </div>
-              <!-- Button placed BELOW the table with proper margin-top, matching DT layout -->
-              <button type="button" id="addATBtn" class="secondary" style="margin-top: 0.5rem; padding: 0.5rem 1rem; font-size: 0.9rem; width: auto;" data-i18n="studentForm.addAT">+ Add Achievement Test</button>
+          <!-- ✅ NEW TAB CONTENT: DT & AT -->
+          <div id="tab-dt-at" class="tab-content">
+            <h3 style="margin-bottom: 1rem; color: var(--primary-dark);" data-i18n="studentForm.dtTitle">Diagnostic Tests (DT) - Manual Entry</h3>
+            <div class="table-wrapper" style="overflow-x: auto; margin-bottom: 1.5rem;">
+              <table class="schedule-table" id="dtTable" style="min-width: 900px;">
+                  <thead>
+                    <tr>
+                      <th data-i18n="studentForm.subject">Subject *</th>
+                      <th data-i18n="studentForm.dtDate">Diagnostic Date *</th>
+                      <th data-i18n="studentForm.dtTimeslot">Timeslot</th>
+                      <th data-i18n="studentForm.testName">Test Name/Level *</th>
+                      <th data-i18n="studentForm.score">Score *</th>
+                      <th data-i18n="studentForm.timeMins">Time (mins) *</th>
+                      <th data-i18n="studentForm.suggestedStart">Suggested Start</th>
+                      <th data-i18n="studentForm.actualStart">Actual Start</th>
+                      <th data-i18n="studentForm.action">Action</th>
+                    </tr>
+                  </thead>
+                <tbody id="dtTableBody">
+                  <!-- Rows injected via JS -->
+                </tbody>
+              </table>
+            </div>
+            <button type="button" class="secondary" id="addDTBtn" style="padding: 0.5rem 1rem; font-size: 0.9rem;" data-i18n="studentForm.addDT">+ Add Diagnostic Test</button>
+
+            <!-- ✅ ACHIEVEMENT TESTS (AT) SECTION (Restructured to match DT) -->
+            <div style="margin-top: 2rem;">
+                <h3 style="font-size:1.1rem; color: var(--primary-dark); margin-bottom:0.5rem;" data-i18n="studentForm.atTitle">Achievement Tests (AT)</h3>
+                <p class="hint" style="margin-bottom:0.75rem;" data-i18n="studentForm.atHint">Auto-filled from monthly reports. You can also add manual entries below.</p>
+                <div style="overflow-x: auto; margin-bottom: 1rem;">
+                    <table id="atTable" class="schedule-table" style="min-width:600px;">
+                        <thead>
+                            <tr>
+                                <th data-i18n="studentForm.subject">Subject *</th>
+                                <th data-i18n="studentForm.atLevel">AT Level *</th>
+                                <th data-i18n="studentForm.date">Date *</th>
+                                <th data-i18n="studentForm.score">Score *</th>
+                                <th data-i18n="studentForm.timeMins">Time (mins) *</th>
+                                <th data-i18n="studentForm.group">Group</th>
+                                <th data-i18n="studentForm.source">Source</th>
+                                <th data-i18n="studentForm.action">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="atTableBody">
+                            <!-- Rows injected by JS -->
+                        </tbody>
+                    </table>
+                </div>
+                <!-- Button placed BELOW the table with proper margin-top, matching DT layout -->
+                <button type="button" id="addATBtn" class="secondary" style="margin-top: 0.5rem; padding: 0.5rem 1rem; font-size: 0.9rem; width: auto;" data-i18n="studentForm.addAT">+ Add Achievement Test</button>
+            </div>
+          </div> <!-- ✅ CLOSE #tab-dt-at -->
+
+          <!-- QR CODE -->
+          <div id="tab-qr" class="tab-content">
+            <h3 data-i18n="studentForm.qrCodeTitle">📷 Student QR Code</h3>
+            <p class="hint" data-i18n="studentForm.qrTabHint">
+                Choose the active QR code for scanning. The inactive QR code remains saved.
+            </p>
+
+            <div class="qr-mode-selector">
+                <label class="qr-mode-label checked">
+                    <input type="radio" name="studentQrMode" value="registered" checked>
+                    <span data-i18n="studentForm.qrModeRegistered">Registered QR</span>
+                </label>
+
+                <label class="qr-mode-label">
+                    <input type="radio" name="studentQrMode" value="generated">
+                    <span data-i18n="studentForm.qrModeGenerated">Generated QR</span>
+                </label>
+            </div>
+
+            <!-- ⚠️ No data-i18n here: JS sets this dynamically -->
+            <p class="hint" id="qrActiveHint"></p>
+
+            <div class="qr-tab-grid">
+
+                <!-- REGISTER OWN QR -->
+                <div class="qr-option-card active-mode" id="registeredQrCard">
+                    <h4 data-i18n="studentForm.qrRegisteredTitle">Register Own QR</h4>
+                    <p class="hint" data-i18n="studentForm.qrRegisteredHint">
+                        Scan or paste a QR code. This can be changed later.
+                    </p>
+
+                    <label for="qrCodeInput" data-i18n="studentForm.qrRegisteredLabel">Registered QR Code</label>
+
+                    <div class="qr-input-row">
+                        <input
+                            type="text"
+                            id="qrCodeInput"
+                            data-i18n-placeholder="studentForm.pasteQR"
+                            placeholder="Or paste QR code manually..."
+                        >
+
+                        <button type="button" id="startScannerBtn" class="secondary" data-i18n="studentForm.scanQR">
+                            📷 Scan QR
+                        </button>
+                    </div>
+
+                    <!-- ⚠️ No data-i18n here: scanner JS writes into this -->
+                    <div class="qr-status" id="qr-status"></div>
+
+                    <div id="registeredQrPreviewContainer" class="qr-preview hidden">
+                        <img id="registeredQrImg" alt="Registered QR preview">
+                        <div class="qr-value" id="registeredQrValue"></div>
+                    </div>
+                </div>
+
+                <!-- GENERATE QR -->
+                <div class="qr-option-card hidden" id="generatedQrCard">
+                    <h4 data-i18n="studentForm.qrGeneratedTitle">Generate Student QR</h4>
+                    <p class="hint" data-i18n="studentForm.qrGeneratedHint">
+                        Uses Student Number. Once generated, it cannot be regenerated.
+                    </p>
+
+                    <div class="qr-generated-controls">
+                        <button type="button" id="generateStudentQrBtn" class="primary" data-i18n="studentForm.generateQr">
+                            ⚙️ Generate QR
+                        </button>
+
+                        <button type="button" id="downloadStudentQrBtn" class="secondary hidden" data-i18n="studentForm.downloadQr">
+                            ⬇ Download QR Code
+                        </button>
+                    </div>
+
+                    <!-- ⚠️ No data-i18n here: JS writes status messages -->
+                    <div class="qr-status" id="generatedQrStatus"></div>
+
+                    <input type="hidden" id="generatedQrCodeInput">
+
+                    <div id="generatedQrPreviewContainer" class="qr-preview hidden">
+                        <img id="generatedQrImg" alt="Generated QR preview">
+                        <input
+                            type="text"
+                            id="generatedQrDisplay"
+                            class="qr-value-input"
+                            readonly
+                            data-i18n-placeholder="studentForm.qrGeneratedValue"
+                            placeholder="Generated QR value"
+                        >
+                    </div>
+                </div>
+            </div>
           </div>
-        </div> <!-- ✅ CLOSE #tab-dt-at -->
 
-
-        <!-- QR CODE -->
-        <div id="tab-qr" class="tab-content">
-          <h3 data-i18n="studentForm.qrCodeTitle">📷 Student QR Code</h3>
-          <p class="hint" data-i18n="studentForm.qrTabHint">
-              Choose the active QR code for scanning. The inactive QR code remains saved.
-          </p>
-
-          <div class="qr-mode-selector">
-              <label class="qr-mode-label checked">
-                  <input type="radio" name="studentQrMode" value="registered" checked>
-                  <span data-i18n="studentForm.qrModeRegistered">Registered QR</span>
-              </label>
-
-              <label class="qr-mode-label">
-                  <input type="radio" name="studentQrMode" value="generated">
-                  <span data-i18n="studentForm.qrModeGenerated">Generated QR</span>
-              </label>
-          </div>
-
-          <!-- ⚠️ No data-i18n here: JS sets this dynamically -->
-          <p class="hint" id="qrActiveHint"></p>
-
-          <div class="qr-tab-grid">
-
-              <!-- REGISTER OWN QR -->
-              <div class="qr-option-card active-mode" id="registeredQrCard">
-                  <h4 data-i18n="studentForm.qrRegisteredTitle">Register Own QR</h4>
-                  <p class="hint" data-i18n="studentForm.qrRegisteredHint">
-                      Scan or paste a QR code. This can be changed later.
-                  </p>
-
-                  <label for="qrCodeInput" data-i18n="studentForm.qrRegisteredLabel">Registered QR Code</label>
-
-                  <div class="qr-input-row">
-                      <input
-                          type="text"
-                          id="qrCodeInput"
-                          data-i18n-placeholder="studentForm.pasteQR"
-                          placeholder="Or paste QR code manually..."
-                      >
-
-                      <button type="button" id="startScannerBtn" class="secondary" data-i18n="studentForm.scanQR">
-                          📷 Scan QR
-                      </button>
-                  </div>
-
-                  <!-- ⚠️ No data-i18n here: scanner JS writes into this -->
-                  <div class="qr-status" id="qr-status"></div>
-
-                  <div id="registeredQrPreviewContainer" class="qr-preview hidden">
-                      <img id="registeredQrImg" alt="Registered QR preview">
-                      <div class="qr-value" id="registeredQrValue"></div>
-                  </div>
-              </div>
-
-              <!-- GENERATE QR -->
-              <div class="qr-option-card hidden" id="generatedQrCard">
-                  <h4 data-i18n="studentForm.qrGeneratedTitle">Generate Student QR</h4>
-                  <p class="hint" data-i18n="studentForm.qrGeneratedHint">
-                      Uses Student Number. Once generated, it cannot be regenerated.
-                  </p>
-
-                  <div class="qr-generated-controls">
-                      <button type="button" id="generateStudentQrBtn" class="primary" data-i18n="studentForm.generateQr">
-                          ⚙️ Generate QR
-                      </button>
-
-                      <button type="button" id="downloadStudentQrBtn" class="secondary hidden" data-i18n="studentForm.downloadQr">
-                          ⬇ Download QR Code
-                      </button>
-                  </div>
-
-                  <!-- ⚠️ No data-i18n here: JS writes status messages -->
-                  <div class="qr-status" id="generatedQrStatus"></div>
-
-                  <input type="hidden" id="generatedQrCodeInput">
-
-                  <div id="generatedQrPreviewContainer" class="qr-preview hidden">
-                      <img id="generatedQrImg" alt="Generated QR preview">
-                      <input
-                          type="text"
-                          id="generatedQrDisplay"
-                          class="qr-value-input"
-                          readonly
-                          data-i18n-placeholder="studentForm.qrGeneratedValue"
-                          placeholder="Generated QR value"
-                      >
-                  </div>
-              </div>
-          </div>
-        </div>
+        </div> <!-- ✅ CLOSE .tab-contents-wrapper -->
 
         <!-- ✅ ACTIONS (MOVED OUTSIDE ALL TABS) -->
         <div class="form-actions">

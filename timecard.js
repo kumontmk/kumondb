@@ -116,6 +116,13 @@ const adminStatusLine = document.getElementById('adminStatusLine');
 const adminClockInBtn = document.getElementById('adminClockInBtn');
 const adminClockOutBtn = document.getElementById('adminClockOutBtn');
 
+const adminEmpSearch = document.getElementById('adminEmpSearch');
+const adminEmpResults = document.getElementById('adminEmpResults');
+const adminEmpId = document.getElementById('adminEmpId');
+
+let adminSelectedEmployeeId = '';
+let adminEmployeeList = [];
+
 function applyAdminMode() {
   const tapWrapper = tapLogBtn ? tapLogBtn.closest('.tap-button-wrapper') : null;
   if (isMasterAdmin) {
@@ -131,19 +138,146 @@ function applyAdminMode() {
   }
 }
 
-function populateAdminSelects() {
-  if (!adminEmpSelect) return;
-  const prev = adminEmpSelect.value;
-  adminEmpSelect.innerHTML = '';
-  Object.entries(employees)
-    .sort((a, b) => (a[1].englishName || '').localeCompare(b[1].englishName || ''))
-    .forEach(([id, e]) => {
-      const opt = document.createElement('option');
-      opt.value = id;
-      opt.textContent = `${e.englishName || '-'}${e.chineseName ? ' (' + e.chineseName + ')' : ''} — ${e.position || ''}`;
-      adminEmpSelect.appendChild(opt);
+function isEmployeeActive(emp) {
+  if (!emp) return false;
+
+  // Your employees.js inactive flag:
+  // employees/${uid}/isDisabled = true
+  if (emp.isDisabled === true) return false;
+
+  // Safety in case the value is stored as a string.
+  if (String(emp.isDisabled).trim().toLowerCase() === 'true') return false;
+
+  // Optional compatibility if you later use other inactive flags.
+  // Based on your current employees.js code, isDisabled is the main one.
+  if (emp.active === false) return false;
+  if (emp.isActive === false) return false;
+
+  const status = String(emp.status || '').trim().toLowerCase();
+  if ([
+    'inactive',
+    'disabled',
+    'terminated',
+    'resigned',
+    'left',
+    'archived'
+  ].includes(status)) {
+    return false;
+  }
+
+  // If no inactive flag exists, treat employee as active.
+  return true;
+}
+
+function formatAdminEmployeeLabel(emp) {
+  const positions = Array.isArray(emp.positions)
+    ? emp.positions.join(', ')
+    : (emp.position || '');
+
+  return `${emp.englishName || '-'}${emp.chineseName ? ' (' + emp.chineseName + ')' : ''} — ${positions || 'Employee'}`;
+}
+
+function getAdminEmployeeSearchText(emp) {
+  const positions = Array.isArray(emp.positions)
+    ? emp.positions.join(' ')
+    : (emp.position || '');
+
+  return [
+    emp.englishName,
+    emp.chineseName,
+    emp.email,
+    positions,
+    emp.center,
+    emp.branch,
+    emp.location,
+    emp.centerName
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+}
+
+function getAdminSelectedEmployeeId() {
+  return adminSelectedEmployeeId || (adminEmpId ? adminEmpId.value : '');
+}
+
+function setAdminSelectedEmployeeId(empId) {
+  adminSelectedEmployeeId = empId || '';
+
+  if (adminEmpId) {
+    adminEmpId.value = adminSelectedEmployeeId;
+  }
+
+  if (adminEmpSearch) {
+    if (adminSelectedEmployeeId && employees[adminSelectedEmployeeId]) {
+      adminEmpSearch.value = formatAdminEmployeeLabel(employees[adminSelectedEmployeeId]);
+    } else {
+      adminEmpSearch.value = '';
+    }
+  }
+
+  hideAdminEmployeeResults();
+  updateAdminStatusLine();
+}
+
+function hideAdminEmployeeResults() {
+  if (adminEmpResults) {
+    adminEmpResults.classList.add('hidden');
+  }
+}
+
+function renderAdminEmployeeResults(filterText = '') {
+  if (!adminEmpResults) return;
+
+  const q = String(filterText || '').trim().toLowerCase();
+
+  const matches = adminEmployeeList.filter(([id, emp]) => {
+    if (!q) return true;
+    return getAdminEmployeeSearchText(emp).includes(q);
+  });
+
+  adminEmpResults.innerHTML = '';
+
+  if (!matches.length) {
+    const empty = document.createElement('div');
+    empty.className = 'admin-search-option disabled';
+    empty.textContent = 'No active employees found';
+    adminEmpResults.appendChild(empty);
+  } else {
+    matches.slice(0, 50).forEach(([id, emp]) => {
+      const option = document.createElement('div');
+      option.className = 'admin-search-option';
+      option.textContent = formatAdminEmployeeLabel(emp);
+
+      option.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        setAdminSelectedEmployeeId(id);
+      });
+
+      adminEmpResults.appendChild(option);
     });
-  if (prev && employees[prev]) adminEmpSelect.value = prev;
+  }
+
+  adminEmpResults.classList.remove('hidden');
+}
+
+function populateAdminSelects() {
+  adminEmployeeList = Object.entries(employees || {})
+    .filter(([id, emp]) => isEmployeeActive(emp))
+    .sort((a, b) => {
+      return (a[1].englishName || '').localeCompare(b[1].englishName || '');
+    });
+
+  const currentlySelected = getAdminSelectedEmployeeId();
+
+  if (
+    currentlySelected &&
+    (!employees[currentlySelected] || !isEmployeeActive(employees[currentlySelected]))
+  ) {
+    setAdminSelectedEmployeeId('');
+  } else if (currentlySelected) {
+    setAdminSelectedEmployeeId(currentlySelected);
+  }
 
   if (adminCenterSelect && adminCenterSelect.options.length === 0) {
     CENTERS.forEach(c => {
@@ -158,7 +292,7 @@ function populateAdminSelects() {
 function updateAdminStatusLine() {
     if (!isMasterAdmin) return;
 
-    const empId = adminEmpSelect ? adminEmpSelect.value : null;
+    const empId = getAdminSelectedEmployeeId() || null;
     const date = datePicker ? datePicker.value : '';
 
     const loading = !employeesLoaded || timecardLoading;
@@ -257,19 +391,57 @@ async function adminSaveAttendance(empId, locationName, type) {
   }
 }
 
-if (adminEmpSelect) adminEmpSelect.addEventListener('change', updateAdminStatusLine);
+if (adminEmpSearch) {
+  adminEmpSearch.addEventListener('input', () => {
+    // Clear selection while typing so admin must choose a valid result.
+    adminSelectedEmployeeId = '';
+
+    if (adminEmpId) {
+      adminEmpId.value = '';
+    }
+
+    renderAdminEmployeeResults(adminEmpSearch.value);
+    updateAdminStatusLine();
+  });
+
+  adminEmpSearch.addEventListener('focus', () => {
+    adminEmpSearch.select();
+    renderAdminEmployeeResults('');
+  });
+
+  adminEmpSearch.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+
+      const firstResult = adminEmpResults
+        ? adminEmpResults.querySelector('.admin-search-option:not(.disabled)')
+        : null;
+
+      if (firstResult) {
+        firstResult.dispatchEvent(new MouseEvent('mousedown'));
+      }
+    }
+  });
+}
+
+document.addEventListener('click', (e) => {
+  if (adminEmpResults && !e.target.closest('.admin-search-wrapper')) {
+    hideAdminEmployeeResults();
+  }
+});
+
 if (adminClockInBtn) adminClockInBtn.addEventListener('click', async () => {
   if (!isMasterAdmin) return;
   adminClockInBtn.disabled = true;
   adminClockOutBtn.disabled = true;
-  try { await adminSaveAttendance(adminEmpSelect.value, adminCenterSelect.value, 'in'); }
+  try { await adminSaveAttendance(getAdminSelectedEmployeeId(), adminCenterSelect.value, 'in'); }
   finally { updateAdminStatusLine(); } // restores the CORRECT enabled/disabled state
 });
 if (adminClockOutBtn) adminClockOutBtn.addEventListener('click', async () => {
   if (!isMasterAdmin) return;
   adminClockInBtn.disabled = true;
   adminClockOutBtn.disabled = true;
-  try { await adminSaveAttendance(adminEmpSelect.value, adminCenterSelect.value, 'out'); }
+  try { await adminSaveAttendance(getAdminSelectedEmployeeId(), adminCenterSelect.value, 'out'); }
   finally { updateAdminStatusLine(); }
 });
 

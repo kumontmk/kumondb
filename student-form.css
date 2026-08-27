@@ -108,35 +108,78 @@ color: #999;
 margin-left: 0.25rem;
 }
 /* ============================================
-TAB SYSTEM
+📁 FOLDER TAB SYSTEM
 ============================================ */
 .tabs {
-display: flex;
-gap: 0.5rem;
-margin: 1.5rem 0 1rem;
-border-bottom: 2px solid #e2e8f0;
+  display: flex;
+  gap: 4px;
+  margin: 1.5rem 1rem 0;
+  padding: 0 0.5rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  align-items: flex-end;
+  position: relative;
+  z-index: 2;
 }
-.tab-btn {
-padding: 0.75rem 1.2rem;
-background: none;
-border: none;
-cursor: pointer;
-font-weight: 500;
-color: var(--text-light);
-border-bottom: 3px solid transparent;
-transition: all 0.2s;
+.tabs::-webkit-scrollbar { display: none; }
+
+/* Folder tabs (closed) */
+.tabs .tab-btn {
+  padding: 0.6rem 1.2rem;
+  background: linear-gradient(180deg, #eef2f7 0%, #dce3eb 100%);
+  border: 2px solid #cbd5e1;
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.85rem;
+  color: var(--text-light);
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
 }
-.tab-btn:hover { color: var(--primary-dark); }
-.tab-btn.active {
-color: var(--primary-dark);
-border-bottom-color: var(--primary-dark);
-background: rgba(135,206,235,0.1);
+
+.tabs .tab-btn:hover {
+  background: #e6ebf2;
+  color: var(--primary-dark);
 }
-.tab-content { display: none; animation: fadeIn 0.3s ease; }
+
+/* Active tab = open folder (merges into the body below) */
+.tabs .tab-btn.active {
+  background: var(--white);
+  color: var(--primary-dark);
+  font-weight: 600;
+  border-color: #cbd5e1;
+  padding-bottom: 0.85rem;  /* makes active tab taller */
+  margin-bottom: -2px;      /* sinks into the body's top border */
+  position: relative;
+  z-index: 3;
+}
+
+/* Folder body (the open page) — ⚠️ display:none is REQUIRED here */
+.tab-content {
+  display: none;
+  animation: fadeIn 0.3s ease;
+  background: var(--white);
+  border: 2px solid #cbd5e1;
+  border-radius: 0 10px 10px 10px;
+  margin: 0 1rem 1.5rem;
+  padding: 1.5rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  position: relative;
+}
 .tab-content.active { display: block; }
+
 @keyframes fadeIn {
-from { opacity: 0; transform: translateY(5px); }
-to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Compact folder on mobile */
+@media (max-width: 768px) {
+  .tabs { margin: 1rem 0.5rem 0; padding: 0 0.25rem; }
+  .tab-content { margin: 0 0.5rem 1.5rem; padding: 1rem; }
 }
 /* ============================================
 DROPDOWN & "OTHER" INPUTS
@@ -1324,17 +1367,6 @@ button { padding: 0.55rem 1.05rem; font-size: 0.85rem; }
 .form-actions button {
   min-width: 0 !important;
   flex: 0 1 auto;
-}
-
-/* 2️⃣ Tabs scroll inside their own row instead of stretching the page */
-.tabs {
-  overflow-x: auto;
-  flex-wrap: nowrap;
-  -webkit-overflow-scrolling: touch;
-}
-.tab-btn {
-  flex-shrink: 0;
-  white-space: nowrap;
 }
 
 /* 3️⃣ Compact bar on mobile */

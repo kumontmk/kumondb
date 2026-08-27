@@ -19,7 +19,7 @@ export default {
     greetingSuffix: "，您想做什麼？",
     subtitle: "請選擇以下功能以管理您的中心運作並追蹤學生進度。",
     welcome: "歡迎，{{name}}",
-    selectedLabel: "✅ 已選擇:",
+    selectedLabel: "✅ 已選擇：",
     noTime: "無時間",
 
     dtWarning: {
@@ -27,6 +27,47 @@ export default {
       centerHoliday: "{{date}} 是中心假期{{name}}",
       closedDay: "{{date}} 是此中心的休息日",
       continueAnyway: "⚠️ 所選日期可能是假期或休息日。仍要繼續嗎？"
+    },
+
+    fab: {
+      addInquiry: "新增諮詢",
+      addStudent: "新增學生",
+      searchStudent: "搜尋學生",
+      scheduleDT: "安排診斷測試",
+      schedulePO: "安排家長說明會",
+      attendance: "新增出席"
+    },
+
+    attendance: {
+      title: "🕒 新增出席",
+      chooseMethod: "請選擇記錄出席方式：",
+      manualSearch: "手動搜尋學生",
+      scanQR: "掃描 QR 碼",
+      manualTitle: "✍️ 手動學生出席",
+      manualPlaceholder: "搜尋目前學生的姓名、拼音、暱稱、學生編號、學校或年級",
+      confirmTitle: "✅ 確認出席",
+      cancel: "取消",
+      confirm: "確認出席",
+      duplicateStudentTitle: "⚠️ 學生今天已出席",
+      duplicateSubjectTitle: "⚠️ 重複科目出席",
+      duplicateStudentText: "{{name}} 今天已有出席記錄。確定要繼續嗎？",
+      duplicateSubjectText: "以下科目今天已記錄出席：",
+      proceed: "仍然繼續",
+      noActiveSubjects: "此學生沒有目前有效科目。",
+      studentNotFound: "找不到此學生。",
+      selectSubject: "⚠️ 請至少選擇一個科目。",
+      saveSuccess: "✅ 已儲存 {{name}} 的出席記錄",
+      saveFailed: "❌ 儲存出席記錄失敗。",
+      cameraStarting: "📷 正在開啟相機...",
+      cameraReady: "✅ 相機已就緒，請對準 QR 碼...",
+      cameraError: "❌ 相機錯誤：{{message}}",
+      libraryMissing: "❌ 未載入 html5-qrcode 函式庫",
+      holidayContinue: "⚠️ 此日期可能是假期或休息日。確定要繼續嗎？",
+      alreadyRecordedBadge: "今天已記錄",
+      today: "今天",
+      status: "狀態",
+      noSchedule: "未設定時間",
+      notToday: "不是今天"
     },
 
     cards: {
@@ -165,14 +206,6 @@ export default {
     confirmClearEvent: "確定要清除此日曆活動嗎？",
     failedSave: "儲存失敗。請檢查網路連線。",
     failedSaveNote: "備註儲存失敗。請檢查網路連線。",
-
-    fab: {
-      addInquiry: "新增諮詢",
-      addStudent: "新增學生",
-      searchStudent: "搜尋學生",
-      scheduleDT: "安排診斷測試",
-      schedulePO: "安排家長說明會"
-    },
 
     schedulePO: {
       title: "📅 安排家長說明會",

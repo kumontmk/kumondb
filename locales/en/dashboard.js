@@ -29,6 +29,47 @@ export default {
       continueAnyway: "⚠️ The selected date may be a holiday or closed day. Continue anyway?"
     },
 
+    fab: {
+      addInquiry: "Add New Inquiry",
+      addStudent: "Add New Student",
+      searchStudent: "Search Student",
+      scheduleDT: "Schedule Diagnostic Test",
+      schedulePO: "Schedule Parent Orientation",
+      attendance: "New Attendance"
+    },
+
+    attendance: {
+      title: "🕒 New Attendance",
+      chooseMethod: "Choose how you want to record attendance:",
+      manualSearch: "Manual Student Search",
+      scanQR: "Scan QR Code",
+      manualTitle: "✍️ Manual Student Attendance",
+      manualPlaceholder: "Search current students by name, pinyin, nickname, number, school or grade",
+      confirmTitle: "✅ Confirm Attendance",
+      cancel: "Cancel",
+      confirm: "Confirm Attendance",
+      duplicateStudentTitle: "⚠️ Student Already Came Today",
+      duplicateSubjectTitle: "⚠️ Duplicate Subject Attendance",
+      duplicateStudentText: "{{name}} already has attendance recorded today. Do you want to continue?",
+      duplicateSubjectText: "The following subject(s) have already been recorded today for this student:",
+      proceed: "Proceed Anyway",
+      noActiveSubjects: "This student has no current subjects.",
+      studentNotFound: "Student not found in database.",
+      selectSubject: "⚠️ Select at least one subject.",
+      saveSuccess: "✅ Attendance saved for {{name}}",
+      saveFailed: "❌ Failed to save attendance.",
+      cameraStarting: "📷 Starting camera...",
+      cameraReady: "✅ Camera ready. Point at QR...",
+      cameraError: "❌ Camera error: {{message}}",
+      libraryMissing: "❌ html5-qrcode library not loaded",
+      holidayContinue: "⚠️ This date may be a holiday or closed day. Continue anyway?",
+      alreadyRecordedBadge: "Already recorded today",
+      today: "Today",
+      status: "Status",
+      noSchedule: "No schedule set",
+      notToday: "Not Today"
+    },
+
     cards: {
       studentManagement: "Student Management",
       studentManagementDesc: "Add, edit, search students & track progress",
@@ -156,7 +197,7 @@ export default {
     editHolidaysBtn: "📅 Edit Center/Public Holidays for this Date",
     editDateTitle: "Edit Date",
     editCalendarTitle: "Edit Calendar: {{date}}",
-    eventType: "Holiday Type:", 
+    eventType: "Holiday Type:",
     eventNone: "None (Regular Day)",
     eventCenter: "🟢 Center Holiday",
     eventPublic: "🔴 Public Holiday",
@@ -165,14 +206,6 @@ export default {
     confirmClearEvent: "Are you sure you want to clear this calendar event?",
     failedSave: "Failed to save. Please check your connection.",
     failedSaveNote: "Failed to save note. Please check your connection.",
-
-    fab: {
-      addInquiry: "Add New Inquiry",
-      addStudent: "Add New Student",
-      searchStudent: "Search Student",
-      scheduleDT: "Schedule Diagnostic Test",
-      schedulePO: "Schedule Parent Orientation"
-    },
 
     schedulePO: {
       title: "📅 Schedule Parent Orientation",
