@@ -1439,6 +1439,7 @@ async function openSearchStudentModal() {
     const matches = allStudentsForSearch.filter(s => 
       (s.namePinyin || '').toLowerCase().includes(term) ||
       (s.nameCn || '').toLowerCase().includes(term) ||
+      (s.nickname || '').toLowerCase().includes(term) ||
       (s.studentNumber || '').toLowerCase().includes(term) ||
       (s.phoneMom || '').toLowerCase().includes(term) ||
       (s.phoneDad || '').toLowerCase().includes(term) ||
@@ -1453,11 +1454,12 @@ async function openSearchStudentModal() {
         li.style.padding = '0.75rem';
         li.style.cursor = 'pointer';
         li.style.borderBottom = '1px solid #f1f5f9';
-        li.innerHTML = `
-          <div style="font-weight:600; color:var(--text);">${s.nameCn || 'N/A'} <span style="color:var(--text-light); font-weight:400;">(${s.namePinyin || ''})</span></div>
-          <div style="font-size:0.8rem; color:var(--text-light); margin-top:0.25rem;">
-            ${t('dashboard.gradeNo', { grade: s.grade || '-', number: s.studentNumber || '-' })}
-          </div>
+            const nicknameHtml = s.nickname ? `<span style="color:var(--primary-dark); font-weight:500; font-style:italic;">"${s.nickname}"</span> ` : '';
+            li.innerHTML = `
+                <div style="font-weight:600; color:var(--text);">${nicknameHtml}${s.nameCn || 'N/A'} <span style="color:var(--text-light); font-weight:400;">(${s.namePinyin || ''})</span></div>
+                <div style="font-size:0.8rem; color:var(--text-light); margin-top:0.25rem;">
+                    ${t('dashboard.gradeNo', { grade: s.grade || '-', number: s.studentNumber || '-' })}
+                </div>
           ${s.phoneMom || s.phoneDad || s.phoneOwn ? `
           <div style="font-size:0.75rem; color:#666; margin-top:0.25rem;">
             📞 ${s.phoneMom ? t('dashboard.phoneMom', { value: s.phoneMom }) : ''} 
@@ -2093,19 +2095,20 @@ async function fetchStudentsForSearch() {
       return;
     }
     allStudentsForSearch = [];
-    snap.forEach(child => {
-      const val = child.val();
-      allStudentsForSearch.push({
-        id: child.key,
-        nameCn: val.nameCn || '',
-        namePinyin: val.namePinyin || '',
-        grade: val.grade || '',
-        studentNumber: val.studentNumber || '',
-        phoneMom: val.phone?.mom || '',
-        phoneDad: val.phone?.dad || '',
-        phoneOwn: val.phone?.own || ''
-      });
-    });
+        snap.forEach(child => {
+            const val = child.val();
+            allStudentsForSearch.push({
+                id: child.key,
+                nameCn: val.nameCn || '',
+                namePinyin: val.namePinyin || '',
+                nickname: val.nickname || '', 
+                grade: val.grade || '',
+                studentNumber: val.studentNumber || '',
+                phoneMom: val.phone?.mom || '',
+                phoneDad: val.phone?.dad || '',
+                phoneOwn: val.phone?.own || ''
+            });
+        });
     allStudentsForSearch.sort((a, b) => {
       const nameA = (a.namePinyin || a.nameCn || '').toLowerCase();
       const nameB = (b.namePinyin || b.nameCn || '').toLowerCase();
