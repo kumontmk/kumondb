@@ -1632,3 +1632,17 @@ background-color: var(--white);
 #overviewTable tbody tr.row-highlighted:hover td.name-col {
     background-color: #bae6fd;
 }
+
+.reliever-overlap-note { 
+    margin-top: 8px; 
+    font-size: 0.75rem; 
+    color: #856404; 
+    background: #fff8e1; 
+    border: 1px solid #ffc107; 
+    border-radius: 6px; 
+    padding: 6px 10px; 
+    line-height: 1.4; 
+}
+.reliever-overlap-note:empty { 
+    display: none; 
+}

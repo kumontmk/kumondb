@@ -1812,8 +1812,15 @@ async function saveSchedule() {
           return;
         }
       }
+      // ✅ FIX: skip ALL centers that currently hold this day's record,
+      // otherwise the checker compares the new shifts against the very
+      // records this save is about to delete → false "self-overlap".
+      const existingSched = mergedSchedules[editingEmpId]?.[editingDate];
       const skipCenters = [targetCenter];
-      if (editingSourceCenter && editingSourceCenter !== targetCenter) skipCenters.push(editingSourceCenter);
+      (existingSched?._sourceCenters || []).forEach(c => { if (!skipCenters.includes(c)) skipCenters.push(c); });
+      if (existingSched?._sourceCenter && !skipCenters.includes(existingSched._sourceCenter)) skipCenters.push(existingSched._sourceCenter);
+      if (editingSourceCenter && !skipCenters.includes(editingSourceCenter)) skipCenters.push(editingSourceCenter);
+
       const overlapError = await checkOverlaps(editingEmpId, editingDate, data, skipCenters);
       if (overlapError) {
         document.getElementById('modalWarnings').innerHTML = `<div class="error-box">❌ ${overlapError}</div>`;
@@ -1821,7 +1828,6 @@ async function saveSchedule() {
         updateModalLoadingState(false);
         return;
       }
-      const existingSched = mergedSchedules[editingEmpId]?.[editingDate];
       const sourceCenters = new Set();
       if (existingSched) {
         (existingSched._sourceCenters || []).forEach(c => sourceCenters.add(c));

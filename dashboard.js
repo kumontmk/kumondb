@@ -1599,6 +1599,7 @@ function openDTModal(dateStr) {
           <span class="grade-school-badge">${t('dashboard.gradeSchool', { grade: s.grade || 'N/A', school: s.school || 'N/A' })}</span>
         </h4>
         <div class="po-detail-grid">
+          <div class="po-detail-item"><strong>${t('dashboard.birthday')}</strong><div>${s.birthday || s.dob || 'N/A'}</div></div>
           <div class="po-detail-item"><strong>${t('dashboard.contact')}</strong><div>${phone}</div></div>
           <div class="po-detail-item"><strong>${t('dashboard.subjects')}</strong><div>${subjectsHtml}</div></div>
         </div>

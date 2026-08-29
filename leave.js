@@ -86,6 +86,35 @@ function timeRangesOverlap(aS, aE, bS, bE) {
   if (a1 === null || a2 === null || b1 === null || b2 === null) return true;
   return a1 < b2 && b1 < a2;
 }
+
+// 🆕 AUTO-ADJUST RELIEVER SHIFTS
+function trimShiftAround(existing, added) {
+  const es = timeToMinutes(existing.start), ee = timeToMinutes(existing.end);
+  const as = timeToMinutes(added.start),  ae = timeToMinutes(added.end);
+  if (es == null || ee == null || as == null || ae == null) return [{ ...existing }];
+  if (es >= ae || ee <= as) return [{ ...existing }];          // no overlap
+  const parts = [];
+  if (es < as) parts.push({ ...existing, end: added.start });  // keep part before
+  if (ee > ae) parts.push({ ...existing, start: added.end });  // keep part after
+  return parts;                                                // [] = fully covered
+}
+async function computeRelieverAdjustments(relieverId, dateStr, newShift) {
+  const sched = await getEmpScheduleForDate(relieverId, dateStr);
+  const adjustments = [];
+  (sched.shifts || []).forEach(s => {
+    if ((s.type || 'work') !== 'work') return;                 // never trim breaks
+    const parts = trimShiftAround(s, newShift);
+    if (parts.length === 1 && parts[0].start === s.start && parts[0].end === s.end) return;
+    const center = s._center || s.center || newShift.center;
+    adjustments.push({
+      center,
+      before: { type: 'work', start: s.start, end: s.end, center: s.center || center, otherDesc: s.otherDesc || '' },
+      after:  parts.map(p => ({ type: 'work', start: p.start, end: p.end, center: s.center || center, otherDesc: s.otherDesc || '' }))
+    });
+  });
+  return adjustments;
+}
+
 function leaveDateRangeOverlaps(existing, dateFrom, dateTo, durationType, timeFrom, timeTo) {
   if (!existing?.dateFrom || !existing?.dateTo) return false;
   const dateOverlap = existing.dateFrom <= dateTo && existing.dateTo >= dateFrom;
@@ -659,30 +688,56 @@ function addRelieverRow(container, dateStr, empACenter, empAStart, empAEnd) {
   Object.entries(employees).forEach(([uid, e]) => { if (e.isDisabled || uid === currentApproveLeave.empId) return; empOptions += `<option value="${uid}">${escapeHtml(e.englishName || uid)}</option>`; });
   let centerOptions = `<option value="">${escapeHtml(t('none'))}</option>`;
   allCenters.forEach(c => { const sel = c.id === empACenter ? 'selected' : ''; centerOptions += `<option value="${c.id}" ${sel}>${escapeHtml(c.name)}</option>`; });
-  relieverDiv.innerHTML = `<div class="reliever-controls"><select class="reliever-select">${empOptions}</select><span class="orig-shift-display">${escapeHtml(t('origNone'))}</span><span class="arrow-indicator">→</span><select class="new-center-select">${centerOptions}</select><input type="time" class="new-start-time" value="${empAStart}"><input type="time" class="new-end-time" value="${empAEnd}"><button type="button" class="remove-reliever-btn">🗑</button></div>`;
+  
+  // 🆕 PATCH 5.1: Added <div class="reliever-overlap-note"></div> container
+  relieverDiv.innerHTML = `<div class="reliever-controls"><select class="reliever-select">${empOptions}</select><span class="orig-shift-display">${escapeHtml(t('origNone'))}</span><span class="arrow-indicator">→</span><select class="new-center-select">${centerOptions}</select><input type="time" class="new-start-time" value="${empAStart}"><input type="time" class="new-end-time" value="${empAEnd}"><button type="button" class="remove-reliever-btn">🗑</button></div><div class="reliever-overlap-note"></div>`;
+  
   container.insertBefore(relieverDiv, container.querySelector('.add-reliever-btn'));
   const select = relieverDiv.querySelector('.reliever-select'), origDisplay = relieverDiv.querySelector('.orig-shift-display');
-    select.addEventListener('change', async () => {
-        const rid = select.value; 
-        if (!rid) { 
-            origDisplay.textContent = t('origNone'); 
-            return; 
-        }
-        origDisplay.textContent = t('origLoading');
-        const sched = await getEmpScheduleForDate(rid, dateStr);
-        if (sched.shifts.length === 0 && sched.status === 'scheduled') {
-            origDisplay.textContent = t('origNoShift');
-        } else if (sched.status !== 'scheduled') {
-            // Directly show the status text
-            origDisplay.textContent = sched.status.toUpperCase();
-        } else {
-            // Directly show the shifts
-            const shiftText = sched.shifts.map(s => `${getCenterAbbr(s._center || s.center)} ${s.start}-${s.end}`).join(', ');
-            origDisplay.textContent = shiftText || t('origNoShift');
-        }
-    });
+  
+  // 🆕 PATCH 5.2: Trigger overlap note on selection change
+  select.addEventListener('change', async () => {
+      const rid = select.value; 
+      if (!rid) { 
+          origDisplay.textContent = t('origNone'); 
+          refreshRelieverOverlapNote(relieverDiv);
+          return; 
+      }
+      origDisplay.textContent = t('origLoading');
+      const sched = await getEmpScheduleForDate(rid, dateStr);
+      if (sched.shifts.length === 0 && sched.status === 'scheduled') {
+          origDisplay.textContent = t('origNoShift');
+      } else if (sched.status !== 'scheduled') {
+          // Directly show the status text
+          origDisplay.textContent = sched.status.toUpperCase();
+      } else {
+          // Directly show the shifts
+          const shiftText = sched.shifts.map(s => `${getCenterAbbr(s._center || s.center)} ${s.start}-${s.end}`).join(', ');
+          origDisplay.textContent = shiftText || t('origNoShift');
+      }
+      refreshRelieverOverlapNote(relieverDiv);
+  });
+  
   relieverDiv.querySelector('.remove-reliever-btn').addEventListener('click', () => relieverDiv.remove());
+  relieverDiv.querySelector('.new-start-time').addEventListener('change', () => refreshRelieverOverlapNote(relieverDiv));
+  relieverDiv.querySelector('.new-end-time').addEventListener('change', () => refreshRelieverOverlapNote(relieverDiv));
 }
+
+async function refreshRelieverOverlapNote(relieverDiv) {
+  const note = relieverDiv.querySelector('.reliever-overlap-note');
+  if (!note) return;
+  const rid = relieverDiv.querySelector('.reliever-select').value;
+  const start = relieverDiv.querySelector('.new-start-time').value;
+  const end = relieverDiv.querySelector('.new-end-time').value;
+  if (!rid || !isValidTimeString(start) || !isValidTimeString(end) || timeToMinutes(end) <= timeToMinutes(start)) { note.innerHTML = ''; return; }
+  const sched = await getEmpScheduleForDate(rid, relieverDiv.closest('tr')?.dataset.date);
+  const hits = (sched.shifts || []).filter(s => (s.type || 'work') === 'work' && timeRangesOverlap(start, end, s.start, s.end));
+  note.innerHTML = hits.length ? '⚠️ ' + hits.map(s => {
+    const parts = trimShiftAround(s, { start, end });
+    return `${getCenterAbbr(s._center || s.center)} ${s.start}–${s.end} → ${parts.length ? parts.map(p => `${p.start}–${p.end}`).join(' + ') : 'removed'}`;
+  }).join('<br>⚠️ ') : '';
+}
+
 async function confirmApproval() {
   const l = currentApproveLeave;
   if (!l || !l.id) { alert(t('missingRecord')); return; }
@@ -705,6 +760,16 @@ async function confirmApproval() {
       reliefPlan.push(dayPlan);
     }
     let deduct = +(l.deductDays || 0), amount = l.amount, skippedStr = l.restDaysExcluded || '', daysPerYear = l.daysPerYear || null;
+
+     // 🆕 pre-compute how each reliever's own shifts will be auto-trimmed (saved into reliefPlan for cancel/restore)
+    for (const dayPlan of reliefPlan) {
+      for (const rel of dayPlan.relievers) {
+        if (rel.relieverId && rel.newShift) {
+          rel.adjustments = await computeRelieverAdjustments(rel.relieverId, dayPlan.date, rel.newShift);
+        }
+      }
+    }
+
     if (l.durationType !== 'hours') { const c = await countLeaveDays(l.empId, l.dateFrom, l.dateTo); deduct = c.days; amount = c.days; skippedStr = c.skipped.join(', ') || ''; daysPerYear = c.daysPerYear; }
     else if (!daysPerYear) daysPerYear = { [parseInt(l.dateFrom.slice(0, 4), 10)]: deduct };
     const ledgerField = TYPE_META[l.type]?.ledger;
@@ -737,15 +802,47 @@ async function confirmApproval() {
           updatedAt: new Date().toISOString()
         });
       }     
-      const relievers = Array.isArray(dayPlan.relievers) ? dayPlan.relievers : [];
-      for (const rel of relievers) {
-        if (!rel.relieverId || !rel.newShift) continue;
-        const snap = await get(ref(db, `schedules/${rel.newShift.center}/${rel.relieverId}/${dateStr}`));
-        let currentSched = snap.val() || { status: 'scheduled', shifts: [], notes: '' };
-        let currentShiftsArray = Array.isArray(currentSched.shifts) ? currentSched.shifts : Object.values(currentSched.shifts || {});
-        await update(ref(db, `schedules/${rel.newShift.center}/${rel.relieverId}/${dateStr}`), { status: currentSched.status || 'scheduled', shifts: [...currentShiftsArray, rel.newShift], notes: currentSched.notes || '', updatedBy: currentUser.uid, updatedAt: new Date().toISOString() });
+        const relievers = Array.isArray(dayPlan.relievers) ? dayPlan.relievers : [];
+        for (const rel of relievers) {
+          if (!rel.relieverId || !rel.newShift) continue;
+
+          const changesByCenter = {};
+          (rel.adjustments || []).forEach(a => { (changesByCenter[a.center] = changesByCenter[a.center] || []).push(a); });
+          const touchedCenters = new Set(Object.keys(changesByCenter));
+          touchedCenters.add(rel.newShift.center);
+
+          for (const center of touchedCenters) {
+            const snap = await get(ref(db, `schedules/${center}/${rel.relieverId}/${dateStr}`));
+            const rec = snap.val() || { status: 'scheduled', shifts: [], notes: '' };
+            let arr = Array.isArray(rec.shifts) ? rec.shifts : Object.values(rec.shifts || {});
+
+            // No explicit record → seed from weekly pattern so other pattern shifts aren't lost
+            if (!snap.exists()) {
+              const dow = new Date(dateStr + 'T00:00:00').getDay();
+              const tmpl = scheduleTemplates[rel.relieverId]?.[dow];
+              const tShifts = (tmpl && Array.isArray(tmpl.shifts)) ? tmpl.shifts : [];
+              const empCenters = getEmpCenterIds(rel.relieverId);
+              arr = tShifts
+                .map(sh => ({ ...sh, center: sh.center || empCenters[0] || allCenterIds[0] }))
+                .filter(sh => sh.center === center);
+            }
+
+            // Apply trims: remove original shift, add surviving part(s)
+            (changesByCenter[center] || []).forEach(a => {
+              arr = arr.filter(sh => !((sh.type || 'work') === 'work' && sh.start === a.before.start && sh.end === a.before.end));
+              arr = arr.concat(a.after);
+            });
+
+            // Add the relieved shift on its own center
+            if (center === rel.newShift.center) arr = [...arr, rel.newShift];
+
+            await update(ref(db, `schedules/${center}/${rel.relieverId}/${dateStr}`), {
+              status: rec.status || 'scheduled', shifts: arr, notes: rec.notes || '',
+              updatedBy: currentUser.uid, updatedAt: new Date().toISOString()
+            });
+          }
+        }
       }
-    }
     notifyLeaveEvent({ ...l, amount, deductDays: deduct }, 'approved');
     closeModal('approveModal'); alert(t('approved'));
   } catch (err) { console.error(err); alert(t('approveFailed', { message: err.message })); }
@@ -771,6 +868,8 @@ async function cancelLeave(id) {
 async function restoreSchedulesForLeave(l) {
   if (!allCenterIds.length) await loadCenterIds();
   const dates = []; if (l.durationType === 'hours') dates.push(l.dateFrom); else eachDate(l.dateFrom, l.dateTo, d => dates.push(fmtISO(d)));
+
+  // 1) Employee A: flip "leave" days back to scheduled (or remove empty records)
   for (const dateStr of dates) {
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
@@ -785,6 +884,8 @@ async function restoreSchedulesForLeave(l) {
       } catch (e) { if (attempt === 2) throw e; }
     }
   }
+
+  // 2) Relievers: remove added relief shift + undo auto-trim adjustments
   if (l.reliefPlan) {
     const planArray = Array.isArray(l.reliefPlan) ? l.reliefPlan : Object.values(l.reliefPlan);
     for (const dayPlan of planArray) {
@@ -792,12 +893,44 @@ async function restoreSchedulesForLeave(l) {
         const relievers = dayPlan?.relievers ? (Array.isArray(dayPlan.relievers) ? dayPlan.relievers : Object.values(dayPlan.relievers)) : [];
         for (const rel of relievers) {
           if (!rel?.relieverId || !rel?.newShift) continue;
+
+          // 2a) Remove the relief shift that was appended on approval
           const snap = await get(ref(db, `schedules/${rel.newShift.center}/${rel.relieverId}/${dayPlan.date}`));
           const rec = snap.val();
           if (rec?.shifts) {
             const arr = Array.isArray(rec.shifts) ? rec.shifts : Object.values(rec.shifts);
             const filtered = arr.filter(s => !(s.start === rel.newShift.start && s.end === rel.newShift.end && (s.center || rel.newShift.center) === rel.newShift.center));
             await update(ref(db, `schedules/${rel.newShift.center}/${rel.relieverId}/${dayPlan.date}`), { ...rec, shifts: filtered });
+          }
+
+          // 2b) 🆕 Restore original shifts that were auto-trimmed on approval
+          const adjustments = Array.isArray(rel.adjustments) ? rel.adjustments : [];
+          if (!adjustments.length) continue;
+          const adjByCenter = {};
+          adjustments.forEach(a => { (adjByCenter[a.center] = adjByCenter[a.center] || []).push(a); });
+
+          for (const [center, list] of Object.entries(adjByCenter)) {
+            const s2 = await get(ref(db, `schedules/${center}/${rel.relieverId}/${dayPlan.date}`));
+            if (!s2.exists()) continue; // record gone → nothing to heal
+            const r2 = s2.val() || {};
+            let arr2 = Array.isArray(r2.shifts) ? r2.shifts : Object.values(r2.shifts || {});
+
+            list.forEach(a => {
+              // remove the trimmed surviving part(s) (e.g. 18:00-20:00 MK)
+              (a.after || []).forEach(p => {
+                arr2 = arr2.filter(sh => !((sh.type || 'work') === 'work' && sh.start === p.start && sh.end === p.end));
+              });
+              // re-add the original shift (e.g. 15:00-20:00 MK) if not present
+              const hasOrig = arr2.some(sh => (sh.type || 'work') === 'work' && sh.start === a.before.start && sh.end === a.before.end);
+              if (!hasOrig) arr2 = [...arr2, { ...a.before }];
+            });
+
+            await update(ref(db, `schedules/${center}/${rel.relieverId}/${dayPlan.date}`), {
+              ...r2,
+              shifts: arr2,
+              updatedBy: currentUser.uid,
+              updatedAt: new Date().toISOString()
+            });
           }
         }
       } catch (e) { console.warn('reliever restore failed:', e); }
@@ -1486,3 +1619,90 @@ function applyMonthPick(monthOrAll) {
   renderMonthPickerLabel();
   renderLeaveTable();
 }
+
+// ============================================================
+// 🛠️ ONE-TIME HEAL — fixes leaves approved BEFORE the auto-trim fix
+// ============================================================
+async function healLegacyReliefOverlaps() {
+  if (!currentUser?.isAdmin) { alert('Admin only.'); return; }
+  let fixedShifts = 0, touchedLeaves = 0;
+  const approved = Object.entries(leaves).filter(([_, l]) => l.status === 'approved' && l.reliefPlan);
+
+  for (const [leaveId, l] of approved) {
+    const plan = Array.isArray(l.reliefPlan) ? l.reliefPlan : Object.values(l.reliefPlan || {});
+    let planChanged = false;
+
+    for (const dayPlan of plan) {
+      const relievers = Array.isArray(dayPlan?.relievers) ? dayPlan.relievers : Object.values(dayPlan?.relievers || {});
+      for (const rel of relievers) {
+        if (!rel?.relieverId || !rel?.newShift) continue;
+        if (Array.isArray(rel.adjustments)) continue; // processed by new code already → skip
+
+        const ns = rel.newShift;
+        const sched = await getEmpScheduleForDate(rel.relieverId, dayPlan.date);
+
+        const adjustments = [];
+        (sched.shifts || []).forEach(s => {
+          if ((s.type || 'work') !== 'work') return;
+          if (s.start === ns.start && s.end === ns.end && (s._center || s.center) === ns.center) return; // skip the relief shift itself
+          const parts = trimShiftAround(s, ns);
+          if (parts.length === 1 && parts[0].start === s.start && parts[0].end === s.end) return;
+          const center = s._center || s.center || ns.center;
+          adjustments.push({
+            center,
+            before: { type: 'work', start: s.start, end: s.end, center: s.center || center, otherDesc: s.otherDesc || '' },
+            after:  parts.map(p => ({ type: 'work', start: p.start, end: p.end, center: s.center || center, otherDesc: s.otherDesc || '' }))
+          });
+        });
+
+        const byCenter = {};
+        adjustments.forEach(a => { (byCenter[a.center] = byCenter[a.center] || []).push(a); });
+
+        for (const [center, list] of Object.entries(byCenter)) {
+          const snap = await get(ref(db, `schedules/${center}/${rel.relieverId}/${dayPlan.date}`));
+          const rec = snap.val() || { status: 'scheduled', shifts: [], notes: '' };
+          let arr = Array.isArray(rec.shifts) ? rec.shifts : Object.values(rec.shifts || {});
+
+          if (!snap.exists()) {
+            const dow = new Date(dayPlan.date + 'T00:00:00').getDay();
+            const tmpl = scheduleTemplates[rel.relieverId]?.[dow];
+            const tShifts = (tmpl && Array.isArray(tmpl.shifts)) ? tmpl.shifts : [];
+            const empCenters = getEmpCenterIds(rel.relieverId);
+            arr = tShifts
+              .map(sh => ({ ...sh, center: sh.center || empCenters[0] || allCenterIds[0] }))
+              .filter(sh => sh.center === center);
+          }
+
+          let changed = false;
+          list.forEach(a => {
+            const hasBefore = arr.some(sh => (sh.type || 'work') === 'work' && sh.start === a.before.start && sh.end === a.before.end);
+            if (!hasBefore) return; // already fixed by hand → don't touch
+            arr = arr.filter(sh => !((sh.type || 'work') === 'work' && sh.start === a.before.start && sh.end === a.before.end));
+            arr = arr.concat(a.after);
+            changed = true;
+          });
+
+          if (changed) {
+            await update(ref(db, `schedules/${center}/${rel.relieverId}/${dayPlan.date}`), {
+              status: rec.status || 'scheduled', shifts: arr, notes: rec.notes || '',
+              updatedBy: currentUser.uid, updatedAt: new Date().toISOString()
+            });
+            fixedShifts++;
+          }
+        }
+
+        rel.adjustments = adjustments; // backfill so CANCEL restores correctly later
+        planChanged = true;
+      }
+    }
+
+    if (planChanged) {
+      await update(ref(db, `leaves/${leaveId}`), { reliefPlan: plan });
+      touchedLeaves++;
+    }
+  }
+
+  alert(`🛠️ Done. Fixed ${fixedShifts} overlapped shift(s) across ${touchedLeaves} old leave record(s).`);
+  refreshAll();
+}
+window.healLegacyReliefOverlaps = healLegacyReliefOverlaps;

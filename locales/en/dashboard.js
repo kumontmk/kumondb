@@ -193,6 +193,7 @@ export default {
     dtDetails: "Diagnostic Test (DT) Details",
     contact: "Contact",
     subjects: "Subjects",
+    birthday: "Birthday",
 
     editHolidaysBtn: "📅 Edit Center/Public Holidays for this Date",
     editDateTitle: "Edit Date",
