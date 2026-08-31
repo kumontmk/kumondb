@@ -32,6 +32,7 @@
             <button class="tab-btn active" data-main-tab="application" data-i18n="tabApplication">📝 Application</button>
             <button class="tab-btn" data-main-tab="overview" data-i18n="tabOverview">📅 Overview</button>
             <button class="tab-btn" data-main-tab="entitlements" id="tabEntitlements" data-i18n="tabEntitlements">Leave Entitlements</button>
+            <button class="tab-btn" type="button" data-main-tab="weeklyreports" id="tabWeeklyReports" data-i18n="tabWeeklyReports">📋 Weekly Reports</button>
         </div>
 
         <!-- APPLICATION TAB -->
@@ -142,6 +143,36 @@
                 </table>
             </div>
         </div>
+
+
+        <!-- ==================== 📋 WEEKLY REPORTS TAB (Master Admin only) ==================== -->
+        <section id="main-tab-weeklyreports" class="tab-content">
+        <div class="wr-controls">
+            <div class="year-pager">
+            <button class="pager-btn" id="wrPrev" type="button" title="Previous week">‹</button>
+            <span id="wrWeekLabel">—</span>
+            <button class="pager-btn" id="wrNext" type="button" title="Next week">›</button>
+            </div>
+            <button class="secondary" id="wrThisWeekBtn" type="button" data-i18n="wrThisWeekBtn">This Week</button>
+            <button class="primary" id="wrCopyAll" type="button" data-i18n="wrCopyAll">📋 Copy Full Report</button>
+        </div>
+
+        <div class="wr-section">
+            <div class="wr-section-head">
+            <h3 id="wrThisWeekTitle">—</h3>
+            <button class="icon-btn" id="wrCopyThis" type="button" data-i18n="wrCopy">📋 Copy</button>
+            </div>
+            <div id="wrThisWeekList" class="wr-list"></div>
+        </div>
+
+        <div class="wr-section">
+            <div class="wr-section-head">
+            <h3 id="wrNextWeekTitle">—</h3>
+            <button class="icon-btn" id="wrCopyNext" type="button" data-i18n="wrCopy">📋 Copy</button>
+            </div>
+            <div id="wrNextWeekList" class="wr-list"></div>
+        </div>
+        </section>
     </div>
 
     <!-- APPLY MODAL -->

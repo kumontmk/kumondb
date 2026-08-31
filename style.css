@@ -1311,3 +1311,34 @@ label span { font-weight: 400; font-size: 0.8rem; color: #999; margin-left: 0.25
 .duplicate-warning-list li {
     margin: 0.25rem 0;
 }
+
+/* ============================================
+🏫 CROSS-CENTER / VISITING STUDENT INDICATORS
+============================================ */
+
+/* Badge next to student name in attendance table */
+.visiting-badge {
+    display: inline-block;
+    font-size: 0.8rem;
+    margin-left: 0.35rem;
+    vertical-align: middle;
+    cursor: help;
+    filter: saturate(1.2);
+}
+
+/* Subtle highlight on the whole row */
+.visiting-row {
+    background-color: #fffbeb !important;
+}
+.visiting-row:hover {
+    background-color: #fef3c7 !important;
+}
+
+/* Manual search dropdown item for visiting students */
+.manual-result-item.visiting-student {
+    border-left: 3px solid #f59e0b;
+    background: #fffdf5;
+}
+.manual-result-item.visiting-student:hover {
+    background: #fef3c7;
+}

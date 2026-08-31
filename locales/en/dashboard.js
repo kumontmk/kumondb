@@ -40,6 +40,7 @@ export default {
 
     attendance: {
       title: "🕒 New Attendance",
+      expectedTitle: "Students in today's timetable:", 
       chooseMethod: "Choose how you want to record attendance:",
       manualSearch: "Manual Student Search",
       scanQR: "Scan QR Code",

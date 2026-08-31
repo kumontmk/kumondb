@@ -232,6 +232,12 @@ function initApp() {
       if (entTab) entTab.style.display = 'none';
   }
 
+  // 👇 Weekly Reports is Master Admin ONLY
+  if (!currentUser.isMaster) {
+      const wrTab = $('tabWeeklyReports');
+      if (wrTab) wrTab.style.display = 'none';
+  }
+
   setText('entYearLabel', entYear);
 
   $('leaveTable').innerHTML = `<tbody><tr><td class="empty-state">${escapeHtml(t('loadingRecords'))}</td></tr></tbody>`;
@@ -261,6 +267,9 @@ function refreshAll() {
     }
     if ($('main-tab-entitlements')?.classList.contains('active')) {
         renderEntitlementsTab();
+    }
+    if ($('main-tab-weeklyreports')?.classList.contains('active')) {
+    renderWeeklyReports();
     }
 }
 // ============ SCHEDULE + CALENDAR DATA ============
@@ -1508,6 +1517,114 @@ function exportEntitlements() {
     XLSX.writeFile(wb, `Kumon_Entitlements_${year}.xlsx`);
 }
 
+// ============ 📋 WEEKLY REPORTS TAB (Master Admin only) ============
+function getMondayOfWeek(d) {
+    const dt = new Date(d);
+    dt.setHours(0, 0, 0, 0);
+    const dow = dt.getDay(); // 0 = Sunday
+    dt.setDate(dt.getDate() + (dow === 0 ? -6 : 1 - dow)); // rewind to Monday
+    return dt;
+}
+let wrViewMonday = getMondayOfWeek(new Date());
+
+function wrAddDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+function wrFmtShort(d) { return d.toLocaleDateString(uiLocale(), { month: 'short', day: 'numeric' }); }
+
+function wrCenterCodes(empId) {
+    const perms = employees[empId]?.permissions?.centers || {};
+    return Object.keys(perms).filter(k => perms[k] === true).map(getCenterAbbr).join('/');
+}
+
+function wrEmpLabel(l) {
+    const name = [l.empChinese, l.empName].filter(Boolean).join(' ');
+    const c = wrCenterCodes(l.empId);
+    return c ? `${name} ${c}` : name;
+}
+
+function wrDatesText(l) {
+    const dowA = getDowAbbr(new Date(l.dateFrom + 'T00:00:00'));
+    if (l.durationType === 'hours') {
+        const times = (l.timeFrom && l.timeTo) ? ` ${l.timeFrom}–${l.timeTo}` : '';
+        return `${l.dateFrom} (${dowA})${times} · ${l.amount}h`;
+    }
+    if (l.dateFrom === l.dateTo) return `${l.dateFrom} (${dowA})`;
+    const dowB = getDowAbbr(new Date(l.dateTo + 'T00:00:00'));
+    return `${l.dateFrom} (${dowA}) to ${l.dateTo} (${dowB})`;
+}
+
+function getWeekLeaves(monday) {
+    const ws = fmtISO(monday), we = fmtISO(wrAddDays(monday, 6));
+    return Object.values(leaves)
+        .filter(l => (l.status === 'approved' || l.status === 'pending') && l.dateFrom <= we && l.dateTo >= ws)
+        .sort((a, b) => a.dateFrom.localeCompare(b.dateFrom) || (a.empName || '').localeCompare(b.empName || ''));
+}
+
+function wrTitles(monday) {
+    return {
+        this: t('wrThisWeekTitle', { start: wrFmtShort(monday), end: wrFmtShort(wrAddDays(monday, 6)) }),
+        next: t('wrNextWeekTitle', { start: wrFmtShort(wrAddDays(monday, 7)), end: wrFmtShort(wrAddDays(monday, 13)) })
+    };
+}
+
+// Plain-text version (what gets copied)
+function wrSectionText(title, monday) {
+    const lines = getWeekLeaves(monday);
+    let txt = title + '\n';
+    txt += lines.length
+        ? lines.map((l, i) => `${i + 1}. ${wrEmpLabel(l)} ${wrDatesText(l)}${l.status === 'pending' ? ' ' + t('wrPendingTag') : ''}`).join('\n')
+        : t('wrNoLeaves');
+    return txt;
+}
+
+function renderWeeklyReports() {
+    if (!currentUser?.isMaster) return;
+    const monday = wrViewMonday;
+    const titles = wrTitles(monday);
+    setText('wrWeekLabel', `${wrFmtShort(monday)} – ${wrFmtShort(wrAddDays(monday, 6))}, ${monday.getFullYear()}`);
+    setText('wrThisWeekTitle', titles.this);
+    setText('wrNextWeekTitle', titles.next);
+    renderWrList('wrThisWeekList', getWeekLeaves(monday));
+    renderWrList('wrNextWeekList', getWeekLeaves(wrAddDays(monday, 7)));
+}
+
+function renderWrList(elId, list) {
+    const el = $(elId); if (!el) return;
+    if (!list.length) {
+        el.innerHTML = `<div class="wr-empty">${escapeHtml(t('wrNoLeaves'))}</div>`;
+        return;
+    }
+    el.innerHTML = list.map((l, i) => {
+        const badge = l.status === 'pending'
+            ? `<span class="status-badge pending">${escapeHtml(statusLabel('pending'))}</span>` : '';
+        return `<div class="wr-line${l.status === 'pending' ? ' pending' : ''}"><span class="wr-num">${i + 1}.</span><span class="wr-text"><strong>${escapeHtml(wrEmpLabel(l))}</strong> · ${escapeHtml(wrDatesText(l))}</span>${badge}</div>`;
+    }).join('');
+}
+
+async function copyToClipboard(text, btn) {
+    let ok = false;
+    try {
+        if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(text); ok = true; }
+    } catch (e) { /* fall through to legacy method */ }
+    if (!ok) {
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.cssText = 'position:fixed;opacity:0;';
+            document.body.appendChild(ta);
+            ta.select();
+            ok = document.execCommand('copy');
+            ta.remove();
+        } catch (e) { ok = false; }
+    }
+    if (!ok) { alert(t('wrCopyFailed')); return; }
+    if (btn) {
+        const orig = btn.textContent;
+        btn.textContent = t('wrCopied');
+        btn.disabled = true;
+        setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1500);
+    }
+}
+
 // ============ EVENTS ============
 function wireEvents() {
   document.querySelectorAll('[data-main-tab]').forEach(btn => {
@@ -1518,6 +1635,7 @@ function wireEvents() {
       $(`main-tab-${btn.dataset.mainTab}`)?.classList.add('active');
       if (btn.dataset.mainTab === 'overview') renderOverview();
       if (btn.dataset.mainTab === 'entitlements') renderEntitlementsTab();
+      if (btn.dataset.mainTab === 'weeklyreports') renderWeeklyReports();
     });
   });
 
@@ -1577,6 +1695,25 @@ function wireEvents() {
       const btn = e.target.closest('button[data-action="edit-ent"]');
       if (btn) openEditEntitlementModal(btn.dataset.id);
   });
+
+  // 📋 Weekly Reports controls
+  $('wrPrev')?.addEventListener('click', () => { wrViewMonday = wrAddDays(wrViewMonday, -7); renderWeeklyReports(); });
+  $('wrNext')?.addEventListener('click', () => { wrViewMonday = wrAddDays(wrViewMonday, 7); renderWeeklyReports(); });
+  $('wrThisWeekBtn')?.addEventListener('click', () => { wrViewMonday = getMondayOfWeek(new Date()); renderWeeklyReports(); });
+  $('wrCopyThis')?.addEventListener('click', e => {
+      const titles = wrTitles(wrViewMonday);
+      copyToClipboard(wrSectionText(titles.this, wrViewMonday), e.currentTarget);
+  });
+  $('wrCopyNext')?.addEventListener('click', e => {
+      const titles = wrTitles(wrViewMonday);
+      copyToClipboard(wrSectionText(titles.next, wrAddDays(wrViewMonday, 7)), e.currentTarget);
+  });
+  $('wrCopyAll')?.addEventListener('click', e => {
+      const titles = wrTitles(wrViewMonday);
+      const txt = wrSectionText(titles.this, wrViewMonday) + '\n\n' + wrSectionText(titles.next, wrAddDays(wrViewMonday, 7));
+      copyToClipboard(txt, e.currentTarget);
+  });
+
   $('editEntitlementForm')?.addEventListener('submit', saveEntitlement);
   $('closeEditEntModal')?.addEventListener('click', () => closeModal('editEntitlementModal'));
   $('cancelEditEntBtn')?.addEventListener('click', () => closeModal('editEntitlementModal'));

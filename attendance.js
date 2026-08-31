@@ -111,6 +111,9 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
+
+
+
 // ===============================
 // Main Attendance Logic
 // ===============================
@@ -134,6 +137,13 @@ function initializeAttendance() {
     let studentsLoaded = false;
     let studentsById = new Map();
     let studentsByNumber = new Map();
+
+    // === CROSS-CENTER SUPPORT ===
+    let allStudentsGlobal = [];          // All students across ALL centers
+    let allStudentsGlobalLoaded = false;
+    let allStudentsByIdGlobal = new Map();
+    let allStudentsByNumberGlobal = new Map();
+    let centerNamesCache = new Map();    // centerId -> centerName
 
     let attendanceLoaded = false;
 
@@ -206,6 +216,60 @@ function initializeAttendance() {
         return allStudents;
     }
 
+    // ===============================
+    // Cross-Center: Load ALL students from ALL centers
+    // ===============================
+    async function loadAllStudentsGlobal(force = false) {
+        if (allStudentsGlobalLoaded && !force) return allStudentsGlobal;
+
+        try {
+            const centersSnap = await get(ref(db, 'centers'));
+            allStudentsGlobal = [];
+            allStudentsByIdGlobal = new Map();
+            allStudentsByNumberGlobal = new Map();
+            centerNamesCache = new Map();
+
+            if (centersSnap.exists()) {
+                centersSnap.forEach((centerSnap) => {
+                    const cId = centerSnap.key;
+                    const centerData = centerSnap.val() || {};
+                    const centerName = centerData.name || centerData.centerName || cId;
+                    centerNamesCache.set(cId, centerName);
+
+                    const students = centerData.students || {};
+                    Object.keys(students).forEach((studentId) => {
+                        const student = {
+                            ...students[studentId],
+                            id: studentId,
+                            homeCenterId: cId,
+                            homeCenterName: centerName
+                        };
+                        allStudentsGlobal.push(student);
+                        allStudentsByIdGlobal.set(String(studentId), student);
+
+                        if (
+                            student.studentNumber !== undefined &&
+                            student.studentNumber !== null &&
+                            student.studentNumber !== ''
+                        ) {
+                            allStudentsByNumberGlobal.set(String(student.studentNumber), student);
+                        }
+                    });
+                });
+            }
+            allStudentsGlobalLoaded = true;
+        } catch (err) {
+            console.error('❌ Failed to load all students globally:', err);
+        }
+        return allStudentsGlobal;
+    }
+
+    // Helper: is this student visiting from another center?
+    function isVisitingStudent(student) {
+        if (!student || !student.homeCenterId) return false;
+        return student.homeCenterId !== centerId;
+    }
+
     // Preload students for faster search
     loadStudents().catch((err) => {
         console.error('❌ Failed to preload students:', err);
@@ -256,18 +320,16 @@ function initializeAttendance() {
     }
 
     function getLinkedStudent(record = {}) {
-        if (record.studentId && studentsById.has(String(record.studentId))) {
-            return studentsById.get(String(record.studentId));
-        }
+        const id = String(record.studentId || '');
+        const num = String(record.studentNumber || '');
 
-        if (
-            record.studentNumber !== undefined &&
-            record.studentNumber !== null &&
-            record.studentNumber !== '' &&
-            studentsByNumber.has(String(record.studentNumber))
-        ) {
-            return studentsByNumber.get(String(record.studentNumber));
-        }
+        // Current center first (fast path)
+        if (id && studentsById.has(id)) return studentsById.get(id);
+        if (num && num !== '' && studentsByNumber.has(num)) return studentsByNumber.get(num);
+
+        // Then check global index (for visiting students)
+        if (id && allStudentsByIdGlobal.has(id)) return allStudentsByIdGlobal.get(id);
+        if (num && num !== '' && allStudentsByNumberGlobal.has(num)) return allStudentsByNumberGlobal.get(num);
 
         return null;
     }
@@ -430,34 +492,33 @@ function initializeAttendance() {
     // ===============================
     function findStudentByScan(scannedValue) {
         const value = String(scannedValue || '').trim();
-
         if (!value) return null;
 
-        if (studentsById.has(value)) {
-            return studentsById.get(value);
-        }
+        // Current center (fast path)
+        if (studentsById.has(value)) return studentsById.get(value);
+        if (studentsByNumber.has(value)) return studentsByNumber.get(value);
 
-        if (studentsByNumber.has(value)) {
-            return studentsByNumber.get(value);
-        }
+        // Global (all centers)
+        if (allStudentsByIdGlobal.has(value)) return allStudentsByIdGlobal.get(value);
+        if (allStudentsByNumberGlobal.has(value)) return allStudentsByNumberGlobal.get(value);
 
-        return allStudents.find((student) => {
-            return String(student.qrCode || '') === value;
-        }) || null;
+        // Fallback: QR code field across all students
+        return allStudentsGlobal.find((s) => String(s.qrCode || '') === value) || null;
     }
 
     async function findStudentForScan(scannedValue) {
         let student = findStudentByScan(scannedValue);
-
+        
         if (!student) {
-            await loadStudents(true);
+            // Force reload both current and global student lists if not found initially
+            await Promise.all([loadStudents(true), loadAllStudentsGlobal(true)]);
             student = findStudentByScan(scannedValue);
         }
-
+        
         if (!student) {
-            throw new Error('Student not found in database');
+            throw new Error('Student not found in any center');
         }
-
+        
         return student;
     }
 
@@ -734,28 +795,52 @@ function initializeAttendance() {
             `
             : '';
 
+        const visiting = isVisitingStudent(student);
+        const visitingBanner = visiting
+            ? `<div style="background:#fef3c7; color:#92400e; padding:0.55rem 0.75rem; border-radius:6px; margin-bottom:0.75rem; font-size:0.85rem; font-weight:600; border:1px solid #fcd34d;">
+                🏫 Visiting from: <strong>${escapeHtml(student.homeCenterName)}</strong>
+               </div>`
+            : '';
+
         if (infoDiv) {
             infoDiv.innerHTML = `
+                ${visitingBanner}
                 <div style="background:#f8fafc; padding:0.75rem; border-radius:8px; border:1px solid #e2e8f0;">
                     <h3 style="margin:0 0 0.3rem; font-size:1.1rem; font-weight:700;">
                         ${escapeHtml(student.nameCn || student.name || pinyin || 'N/A')}
                     </h3>
-
                     <div style="display:flex; flex-wrap:wrap; gap:0.25rem 0.75rem; font-size:0.85rem; color:#475569;">
                         <span><strong>Pinyin:</strong> ${escapeHtml(pinyin || '-')}</span>
                         <span><strong>Nickname:</strong> ${escapeHtml(student.nickname || '-')}</span>
                         <span><strong>Grade:</strong> ${escapeHtml(student.grade || '-')}</span>
                         <span><strong>School:</strong> ${escapeHtml(student.school || '-')}</span>
+                        ${visiting ? `<span><strong>Home Center:</strong> ${escapeHtml(student.homeCenterName)}</span>` : ''}
                     </div>
-
                     ${existingWarningHtml}
                 </div>
             `;
         }
 
-        let html = `
-            <div style="border:1px solid #e2e8f0; border-radius:8px; max-height:260px; overflow-y:auto; background:#fff;">
-        `;
+        let html = `<div style="border:1px solid #e2e8f0; border-radius:8px; max-height:260px; overflow-y:auto; background:#fff;">`;
+
+        if (infoDiv) {
+            infoDiv.innerHTML = `
+                ${visitingBanner}
+                <div style="background:#f8fafc; padding:0.75rem; border-radius:8px; border:1px solid #e2e8f0;">
+                    <h3 style="margin:0 0 0.3rem; font-size:1.1rem; font-weight:700;">
+                        ${escapeHtml(student.nameCn || student.name || pinyin || 'N/A')}
+                    </h3>
+                    <div style="display:flex; flex-wrap:wrap; gap:0.25rem 0.75rem; font-size:0.85rem; color:#475569;">
+                        <span><strong>Pinyin:</strong> ${escapeHtml(pinyin || '-')}</span>
+                        <span><strong>Nickname:</strong> ${escapeHtml(student.nickname || '-')}</span>
+                        <span><strong>Grade:</strong> ${escapeHtml(student.grade || '-')}</span>
+                        <span><strong>School:</strong> ${escapeHtml(student.school || '-')}</span>
+                        ${visiting ? `<span><strong>Home Center:</strong> ${escapeHtml(student.homeCenterName)}</span>` : ''}
+                    </div>
+                    ${existingWarningHtml}
+                </div>
+            `;
+        }
 
         activeSubjects.forEach((subject, index) => {
             try {
@@ -930,6 +1015,9 @@ function initializeAttendance() {
                     checkInTime: String(checkInTime),
                     date: String(dateStr),
                     status: String(checkbox.dataset.status || ''),
+                    homeCenterId: String(scannedStudentData.homeCenterId || ''),
+                    homeCenterName: String(scannedStudentData.homeCenterName || ''),
+                    isVisiting: isVisitingStudent(scannedStudentData),
                     timestamp: serverTimestamp()
                 });
             });
@@ -1079,7 +1167,6 @@ function initializeAttendance() {
 
         filteredAttendanceData.forEach((record) => {
             const [bg, txt] = (colors[record.status] || ['#eee', '#333']).split(',');
-
             const scheduledDisplay = record.scheduledTime && record.scheduledTime !== 'N/A'
                 ? escapeHtml(record.scheduledTime)
                 : '<span style="color:#999;font-style:italic">No schedule set</span>';
@@ -1087,11 +1174,23 @@ function initializeAttendance() {
             const linkedStudent = getLinkedStudent(record);
             const pinyin = record.pinyin || getStudentPinyin(linkedStudent || {}) || '';
 
+            // ✅ Detect visiting student (from saved field OR by comparing homeCenterId)
+            const isVisiting =
+                record.isVisiting === true ||
+                (record.homeCenterId && record.homeCenterId !== centerId);
+
+            const visitingBadge = isVisiting
+                ? `<span class="visiting-badge" title="Visiting from ${escapeHtml(record.homeCenterName || 'another center')}">🏫</span>`
+                : '';
+
             const tr = document.createElement('tr');
+            if (isVisiting) tr.classList.add('visiting-row');
 
             tr.innerHTML = `
                 <td>${escapeHtml(record.subject || '-')}</td>
-                <td title="${escapeHtml(pinyin)}">${escapeHtml(record.nameCn || '-')}</td>
+                <td title="${escapeHtml(pinyin)}${isVisiting ? ` • Home: ${escapeHtml(record.homeCenterName || '')}` : ''}">
+                    ${escapeHtml(record.nameCn || '-')} ${visitingBadge}
+                </td>
                 <td>${escapeHtml(record.nickname || '-')}</td>
                 <td>${escapeHtml(record.grade || '-')}</td>
                 <td>${escapeHtml(record.school || '-')}</td>
@@ -1103,17 +1202,10 @@ function initializeAttendance() {
                     </span>
                 </td>
                 <td>
-                    <button
-                        type="button"
-                        class="delete-att-btn"
-                        data-id="${record.id}"
-                        style="cursor:pointer; background:none; border:none; font-size:1.2rem;"
-                    >
-                        🗑️
-                    </button>
+                    <button type="button" class="delete-att-btn" data-id="${record.id}"
+                        style="cursor:pointer; background:none; border:none; font-size:1.2rem;">🗑️</button>
                 </td>
             `;
-
             tbody.appendChild(tr);
         });
     }
@@ -1138,19 +1230,14 @@ function initializeAttendance() {
 
     async function handleManualSearchInput() {
         const query = normalizeText(manualInput?.value || '');
-
-        if (!query) {
-            hideManualResults();
-            return;
-        }
+        if (!query) { hideManualResults(); return; }
 
         try {
-            const students = await loadStudents();
+            if (!allStudentsGlobalLoaded) await loadAllStudentsGlobal();
 
-            const matches = students
+            const matches = allStudentsGlobal
                 .filter((student) => matchesManualSearch(student, query))
                 .slice(0, 20);
-
             renderManualResults(matches);
         } catch (err) {
             console.error('❌ Manual search failed:', err);
@@ -1160,7 +1247,6 @@ function initializeAttendance() {
 
     function renderManualResults(matches) {
         if (!manualResults) return;
-
         manualResults.innerHTML = '';
 
         if (!matches.length) {
@@ -1177,26 +1263,28 @@ function initializeAttendance() {
             item.type = 'button';
             item.className = 'manual-result-item';
 
-            const pinyin = getStudentPinyin(student);
+            const visiting = isVisitingStudent(student);
+            if (visiting) item.classList.add('visiting-student');
 
+            const pinyin = getStudentPinyin(student);
             const displayName =
-                student.nameCn ||
-                student.name ||
-                pinyin ||
-                student.nickname ||
-                'Unknown Student';
+                student.nameCn || student.name || pinyin || student.nickname || 'Unknown Student';
 
             const name = document.createElement('span');
             name.className = 'manual-result-name';
             name.textContent = displayName;
 
             const metaParts = [];
-
             if (pinyin) metaParts.push(pinyin);
             if (student.nickname) metaParts.push(`Nickname: ${student.nickname}`);
             if (student.studentNumber) metaParts.push(`No: ${student.studentNumber}`);
             if (student.grade) metaParts.push(`Grade: ${student.grade}`);
             if (student.school) metaParts.push(student.school);
+
+            // 🏫 Center indicator for visiting students
+            if (visiting) {
+                metaParts.push(`🏫 ${student.homeCenterName}`);
+            }
 
             const meta = document.createElement('span');
             meta.className = 'manual-result-meta';
@@ -1208,10 +1296,8 @@ function initializeAttendance() {
             item.addEventListener('click', async () => {
                 await selectManualStudent(student);
             });
-
             manualResults.appendChild(item);
         });
-
         showManualResults();
     }
 
@@ -1323,5 +1409,10 @@ function initializeAttendance() {
     // Cleanup camera when leaving page
     window.addEventListener('beforeunload', async () => {
         await cleanupScanner();
+    });
+
+    // Preload all students across all centers for cross-center search/scan
+    loadAllStudentsGlobal().catch((err) => {
+        console.warn('⚠️ Global student preload failed:', err);
     });
 }

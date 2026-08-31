@@ -2317,6 +2317,110 @@ header button:hover {
   }
 }
 
+/* ============================================
+🏫 CROSS-CENTER / VISITING STUDENT INDICATORS (Dashboard)
+============================================ */
+.dash-attendance-result-item.visiting-student {
+    border-left: 3px solid #f59e0b;
+    background: #fffdf5;
+}
+.dash-attendance-result-item.visiting-student:hover {
+    background: #fef3c7;
+}
+
+/* =========================================
+⏳ EXPECTED TODAY — NOT ARRIVED PANEL
+========================================= */
+#dashAttendanceManualModal .modal-content {
+  max-width: 640px;
+  text-align: left;
+}
+#dashAttendanceExpectedSection.hidden { display: none; }
+
+.expected-section {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #e2e8f0;
+}
+.expected-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+}
+.expected-title { font-weight: 800; color: #1e293b; font-size: 0.98rem; }
+.expected-total-badge {
+  min-width: 28px; height: 28px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0 8px;
+  background: var(--primary-dark); color: #fff;
+  border-radius: 999px; font-weight: 800; font-size: 0.85rem;
+}
+.expected-scroll { max-height: 46vh; overflow-y: auto; padding-right: 2px; }
+
+.expected-subject-group {
+  border: 1px solid #e2e8f0; border-radius: 10px;
+  overflow: hidden; margin-bottom: 0.75rem; background: #fff;
+}
+.expected-subject-header {
+  display: flex; align-items: center; justify-content: space-between;
+  background: #f1f5f9; padding: 0.5rem 0.85rem;
+  font-weight: 700; font-size: 0.9rem; color: #334155;
+}
+.expected-subject-count {
+  background: #fff; border: 1px solid #e2e8f0; color: #475569;
+  border-radius: 999px; font-size: 0.75rem; font-weight: 800;
+  padding: 0.1rem 0.6rem;
+}
+.expected-student-row {
+  width: 100%; display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.6rem 0.85rem;
+  background: #fff; border: none; border-top: 1px solid #f1f5f9;
+  cursor: pointer; text-align: left; font-family: inherit;
+  transition: background 0.15s ease;
+}
+.expected-student-row:first-child { border-top: none; }
+.expected-student-row:hover { background: #eef6fb; }
+.expected-student-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.expected-student-name { font-weight: 700; color: #1e293b; font-size: 0.92rem; }
+.expected-student-sub { font-size: 0.76rem; color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.expected-student-time { font-size: 0.8rem; color: #475569; font-weight: 600; white-space: nowrap; }
+
+.expected-status-chip {
+  font-size: 0.68rem; font-weight: 800; letter-spacing: 0.3px;
+  padding: 0.22rem 0.6rem; border-radius: 999px; white-space: nowrap;
+}
+.chip-late      { background: #fee2e2; color: #b91c1c; }
+.chip-due       { background: #dcfce7; color: #15803d; }
+.chip-scheduled { background: #e2e8f0; color: #475569; }
+
+.expected-all-done {
+  text-align: center; padding: 1.25rem;
+  color: #15803d; font-weight: 700;
+  background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px;
+}
+
+@media (max-width: 768px) {
+  .expected-student-row { flex-wrap: wrap; }
+  .expected-student-time { order: 3; }
+}
+
+.expected-student-row.visiting {
+  border-left: 3px solid #f59e0b;
+  background: #fffdf5;
+}
+.expected-student-row.visiting:hover { background: #fef3c7; }
+.expected-student-center {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 999px;
+  padding: 0.12rem 0.5rem;
+  white-space: nowrap;
+}
+
 /* =========================================
 🌐 TRADITIONAL CHINESE FONT SUPPORT
 ========================================= */

@@ -40,6 +40,7 @@ export default {
 
     attendance: {
       title: "🕒 新增出席",
+      expectedTitle: "今日課表中的學生：", 
       chooseMethod: "請選擇記錄出席方式：",
       manualSearch: "手動搜尋學生",
       scanQR: "掃描 QR 碼",

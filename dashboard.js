@@ -2,7 +2,7 @@
 import './dashboard-i18n.js';
 import { i18nReady, t, currentLanguage } from './i18n-core.js';
 import { auth, requireAuth, logout, db, syncPendingRequests } from './auth.js';
-import { ref, get, update, remove, push, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { ref, get, update, remove, push, serverTimestamp, onValue, off, onChildAdded, onChildRemoved } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 // ============================================
 // GLOBAL STATE
@@ -42,6 +42,18 @@ let attendanceLastMethod = 'manual';
 
 let attendanceHtml5QrCode = null;
 let dashAttendanceRestartTimer = null;
+
+let expectedRealtimeRef = null;
+let expectedTickerTimer = null;
+
+// ============================================
+// 🌐 CROSS-CENTER ATTENDANCE STATE
+// ============================================
+let allStudentsGlobal = [];
+let allStudentsGlobalLoaded = false;
+let allStudentsByIdGlobal = new Map();
+let allStudentsByNumberGlobal = new Map();
+let centerNamesCache = new Map();
 
 // ============================================
 // DASHBOARD INITIALIZATION
@@ -2659,31 +2671,36 @@ async function loadDashboardAttendanceRecords(force = false) {
 }
 
 function getDashAttendanceExistingTodayFromCache(student = {}) {
-  const today = dashAttendanceTodayISO();
-
+  const now = new Date();
   const studentId = String(student.id || '');
   const studentNumber = String(student.studentNumber || '');
   const studentName = dashAttendanceNormalizeText(student.nameCn || student.name || '');
 
   return attendanceRecordsCache.filter((record) => {
-    if (record.date !== today) return false;
+    // ✅ Robust local-date check using checkInTime
+    let isToday = false;
+    if (record.checkInTime) {
+      const d = new Date(record.checkInTime);
+      if (!isNaN(d.getTime())) {
+        isToday = (d.getFullYear() === now.getFullYear() &&
+                   d.getMonth() === now.getMonth() &&
+                   d.getDate() === now.getDate());
+      }
+    }
+    if (!isToday) {
+      // Fallback to date string if checkInTime is missing
+      const todayUtc = dashAttendanceTodayISO();
+      const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      if (record.date !== todayUtc && record.date !== todayLocal) return false;
+    }
 
     const recordStudentId = String(record.studentId || '');
     const recordStudentNumber = String(record.studentNumber || '');
     const recordName = dashAttendanceNormalizeText(record.nameCn || '');
 
-    if (studentId && recordStudentId && recordStudentId === studentId) {
-      return true;
-    }
-
-    if (studentNumber && recordStudentNumber && recordStudentNumber === studentNumber) {
-      return true;
-    }
-
-    if (studentName && recordName && recordName === studentName) {
-      return true;
-    }
-
+    if (studentId && recordStudentId && recordStudentId === studentId) return true;
+    if (studentNumber && recordStudentNumber && recordStudentNumber === studentNumber) return true;
+    if (studentName && recordName && recordName === studentName) return true;
     return false;
   });
 }
@@ -2711,28 +2728,391 @@ function calculateDashAttendanceStatus(timeStr, now) {
   if (!timeStr || timeStr === 'N/A' || timeStr === 'No schedule set') {
     return 'Not Today';
   }
-
   const parts = timeStr.split(':');
-  if (parts.length < 2) {
-    return 'Not Today';
-  }
-
+  if (parts.length < 2) return 'Not Today';
   const h = parseInt(parts[0], 10);
   const m = parseInt(parts[1], 10);
-
-  if (isNaN(h) || isNaN(m)) {
-    return 'Not Today';
-  }
-
+  if (isNaN(h) || isNaN(m)) return 'Not Today';
   const scheduled = new Date(now);
   scheduled.setHours(h, m, 0, 0);
-
   const diff = (now - scheduled) / 60000;
-
   if (diff < -15) return 'Early';
   if (diff > 15) return 'Late';
-
   return 'On Time';
+}
+
+// ============================================
+// ⏳ EXPECTED TODAY — NOT ARRIVED (Manual modal panel)
+// Timetable-grade logic ported from timetable.js
+// ============================================
+function expectedT(key, fallback, vars) {
+  try {
+    const out = t(key, vars);
+    return (out && out !== key) ? out : fallback;
+  } catch { return fallback; }
+}
+
+function getTodayDayName(date = new Date()) {
+  const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  return dayNames[date.getDay()];
+}
+
+// ---- Ported from timetable.js: robust day normalization ----
+const EXPECTED_DAY_NUMBER_TO_NAME = {
+  0: 'Sunday', 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday',
+  4: 'Thursday', 5: 'Friday', 6: 'Saturday', 7: 'Sunday'
+};
+const EXPECTED_DAY_ALIASES = {
+  monday: 'Monday', mon: 'Monday',
+  tuesday: 'Tuesday', tue: 'Tuesday', tues: 'Tuesday',
+  wednesday: 'Wednesday', wed: 'Wednesday', weds: 'Wednesday',
+  thursday: 'Thursday', thu: 'Thursday', thur: 'Thursday', thurs: 'Thursday',
+  friday: 'Friday', fri: 'Friday',
+  saturday: 'Saturday', sat: 'Saturday',
+  sunday: 'Sunday', sun: 'Sunday',
+  '周一': 'Monday', '星期一': 'Monday', '礼拜一': 'Monday',
+  '周二': 'Tuesday', '星期二': 'Tuesday', '礼拜二': 'Tuesday',
+  '周三': 'Wednesday', '星期三': 'Wednesday', '礼拜三': 'Wednesday',
+  '周四': 'Thursday', '星期四': 'Thursday', '礼拜四': 'Thursday',
+  '周五': 'Friday', '星期五': 'Friday', '礼拜五': 'Friday',
+  '周六': 'Saturday', '星期六': 'Saturday', '礼拜六': 'Saturday',
+  '周日': 'Sunday', '星期日': 'Sunday', '周天': 'Sunday', '星期天': 'Sunday', '礼拜天': 'Sunday', '礼拜日': 'Sunday'
+};
+function expectedNormalizeWeekday(raw) {
+  if (raw === null || raw === undefined || raw === '') return null;
+  if (typeof raw === 'number') return EXPECTED_DAY_NUMBER_TO_NAME[raw] || null;
+  const original = String(raw).trim().toLowerCase();
+  if (EXPECTED_DAY_ALIASES[original]) return EXPECTED_DAY_ALIASES[original];
+  const cleaned = original.replace(/[^\p{L}\p{N}]+/gu, '');
+  if (!cleaned) return null;
+  if (/^\d+$/.test(cleaned)) return EXPECTED_DAY_NUMBER_TO_NAME[Number(cleaned)] || null;
+  return EXPECTED_DAY_ALIASES[cleaned] || EXPECTED_DAY_ALIASES[cleaned.slice(0, 3)] || null;
+}
+
+// ---- Ported from timetable.js: robust time normalization ----
+function expectedNormalizeTime(raw) {
+  if (raw === null || raw === undefined || raw === '') return '';
+  let value = String(raw).trim();
+  if (/^\d{4}$/.test(value)) value = `${value.slice(0, 2)}:${value.slice(2)}`;
+  if (/^\d{3}$/.test(value)) value = `0${value.slice(0, 1)}:${value.slice(1)}`;
+  const match = value.match(/^(\d{1,2}):([0-5]?\d)$/);
+  if (!match) return '';
+  const h = Number(match[1]);
+  const m = Number(match[2]);
+  if (h < 0 || h > 23 || m < 0 || m > 59) return '';
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+// ---- Ported from timetable.js: isSubjectActiveOnDate ----
+function expectedIsSubjectActiveOnDate(sub, targetDate) {
+  if (!sub || !targetDate) return false;
+  const tM = targetDate.getMonth() + 1;
+  const tY = targetDate.getFullYear();
+
+  // 1. Resume request brings the student back
+  if (sub.resumeRequest && sub.resumeRequest.returnMonth && sub.resumeRequest.returnYear) {
+    const rM = parseInt(sub.resumeRequest.returnMonth);
+    const rY = parseInt(sub.resumeRequest.returnYear);
+    if (rY < tY || (rY === tY && rM <= tM)) return true;
+  }
+
+  // 2. Current status: drop / pause / inquiry
+  if (sub.status === 'drop') {
+    const dM = parseInt(sub.dropMonth);
+    const dY = parseInt(sub.dropYear);
+    if (dY < tY || (dY === tY && dM <= tM)) return false;
+  } else if (sub.status === 'pause') {
+    const pfM = parseInt(sub.pauseFromMonth);
+    const pfY = parseInt(sub.pauseFromYear);
+    const ptM = sub.pauseToMonth ? parseInt(sub.pauseToMonth) : null;
+    const ptY = sub.pauseToYear ? parseInt(sub.pauseToYear) : null;
+    const isAfterFrom = (pfY < tY || (pfY === tY && pfM <= tM));
+    const isBeforeTo = !ptM || !ptY || (ptY > tY || (ptY === tY && ptM >= tM));
+    if (isAfterFrom && isBeforeTo) return false;
+  } else if (sub.status === 'inquiry') {
+    return false;
+  }
+
+  // 3. Pending request
+  if (sub.pendingRequest && !sub.pendingRequest.cancelled) {
+    const pr = sub.pendingRequest;
+    if (pr.type === 'drop') {
+      const dM = parseInt(pr.dropMonth);
+      const dY = parseInt(pr.dropYear);
+      if (dY < tY || (dY === tY && dM <= tM)) return false;
+    } else if (pr.type === 'pause') {
+      const pfM = parseInt(pr.pauseFromMonth);
+      const pfY = parseInt(pr.pauseFromYear);
+      const ptM = pr.pauseToMonth ? parseInt(pr.pauseToMonth) : null;
+      const ptY = pr.pauseToYear ? parseInt(pr.pauseToYear) : null;
+      const isAfterFrom = (pfY < tY || (pfY === tY && pfM <= tM));
+      const isBeforeTo = !ptM || !ptY || (ptY > tY || (ptY === tY && ptM >= tM));
+      if (isAfterFrom && isBeforeTo) return false;
+    }
+  }
+
+  if (sub.status === 'current') return true;
+  return false;
+}
+
+// Multi-slot aware: Late only once the LAST slot of the day has passed
+function expectedSlotStatus(sortedTimes, now) {
+  for (const tm of sortedTimes) {
+    if (calculateDashAttendanceStatus(tm, now) === 'On Time') return 'On Time';
+  }
+  const last = sortedTimes[sortedTimes.length - 1];
+  if (calculateDashAttendanceStatus(last, now) === 'Early') return 'Early';
+  return 'Late';
+}
+
+function computeExpectedNotArrived() {
+  const groups = new Map();
+  const now = new Date();
+  const todayName = getTodayDayName(now);
+  const todayUtc = dashAttendanceTodayISO();
+  const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const validDates = new Set([todayUtc, todayLocal]);
+
+  const isRecordToday = (r) => {
+    if (r.checkInTime) {
+      const d = new Date(r.checkInTime);
+      if (!isNaN(d.getTime())) {
+        return d.getFullYear() === now.getFullYear() &&
+               d.getMonth() === now.getMonth() &&
+               d.getDate() === now.getDate();
+      }
+    }
+    return validDates.has(r.date);
+  };
+
+  // Arrived index: id / studentNumber / name → Set(normalized subjects)
+  const arrivedSubjects = new Map();
+  const markArrived = (key, subj) => {
+    if (!key) return;
+    if (!arrivedSubjects.has(key)) arrivedSubjects.set(key, new Set());
+    arrivedSubjects.get(key).add(subj);
+  };
+
+  attendanceRecordsCache.forEach(r => {
+    if (!isRecordToday(r)) return;
+    const subj = dashAttendanceNormalizeText(r.subject);
+    if (!subj) return;
+    if (r.studentId) markArrived(`id:${r.studentId}`, subj);
+    if (r.studentNumber !== undefined && r.studentNumber !== null && String(r.studentNumber).trim() !== '') {
+      markArrived(`num:${String(r.studentNumber)}`, subj);
+    }
+    // ✅ Index by nameCn if available
+    const recNameCn = dashAttendanceNormalizeText(r.nameCn || '');
+    if (recNameCn && recNameCn !== '-') markArrived(`name:${recNameCn}`, subj);
+
+    // ✅ Also index by nameEn/name if different
+    const recNameEn = dashAttendanceNormalizeText(r.nameEn || r.name || '');
+    if (recNameEn && recNameEn !== '-' && recNameEn !== recNameCn) {
+      markArrived(`name:${recNameEn}`, subj);
+    }
+  });
+
+  const hasArrived = (student, subjKey) => {
+    const keys = [];
+    if (student.id) keys.push(`id:${student.id}`);
+    if (student.studentNumber !== undefined && student.studentNumber !== null && String(student.studentNumber).trim() !== '') {
+      keys.push(`num:${String(student.studentNumber)}`);
+    }
+    // ✅ Check both nameCn and name
+    const nameCn = dashAttendanceNormalizeText(student.nameCn || '');
+    if (nameCn && nameCn !== '-') keys.push(`name:${nameCn}`);
+    const nameEn = dashAttendanceNormalizeText(student.name || '');
+    if (nameEn && nameEn !== '-' && nameEn !== nameCn) keys.push(`name:${nameEn}`);
+    
+    return keys.some(k => arrivedSubjects.get(k)?.has(subjKey));
+  };
+
+  const roster = (allStudentsGlobalLoaded && allStudentsGlobal.length)
+    ? allStudentsGlobal
+    : allStudentsForAttendance;
+
+  roster.forEach(student => {
+    normalizeDashAttendanceSubjects(student).forEach(sub => {
+      if (!sub || !sub.name || !sub.timeslots) return;
+      if (!expectedIsSubjectActiveOnDate(sub, now)) return;
+
+      const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots);
+      const todaysSlots = [];
+      tsList.forEach(ts => {
+        if (!ts) return;
+        const tsCenter = ts.center || student.homeCenterId || centerId;
+        if (tsCenter !== centerId) return;
+        if (expectedNormalizeWeekday(ts.day) !== todayName) return;
+        const time = expectedNormalizeTime(ts.time);
+        if (!time) return;
+        todaysSlots.push(time);
+      });
+      if (!todaysSlots.length) return;
+
+      // ✅ Already checked in for this subject today → remove from list
+      if (hasArrived(student, dashAttendanceNormalizeText(sub.name))) return;
+
+      const sorted = todaysSlots.sort();
+      if (!groups.has(sub.name)) groups.set(sub.name, []);
+      groups.get(sub.name).push({
+        student,
+        subjectName: sub.name,
+        time: sorted[0],
+        allTimes: sorted,
+        status: expectedSlotStatus(sorted, now)
+      });
+    });
+  });
+
+  groups.forEach(list => list.sort((a, b) => {
+    const aLate = a.status === 'Late', bLate = b.status === 'Late';
+    if (aLate !== bLate) return aLate ? -1 : 1;
+    return (a.time || '99:99').localeCompare(b.time || '99:99');
+  }));
+
+  return groups;
+}
+
+function buildExpectedStudentRow({ student, time, allTimes, status }) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'expected-student-row';
+
+  const visiting = student.homeCenterId && student.homeCenterId !== centerId;
+  if (visiting) btn.classList.add('visiting');
+
+  const pinyin = getDashAttendancePinyin(student);
+  const displayName = student.nameCn || student.name || pinyin || student.nickname || 'Unknown';
+  const meta = [pinyin, student.grade ? `Grade ${student.grade}` : '', student.studentNumber ? `No: ${student.studentNumber}` : '']
+    .filter(Boolean).join(' • ');
+
+  let chipClass = 'chip-scheduled', chipText = expectedT('dashboard.attendance.scheduled', 'Scheduled');
+  if (status === 'Late') { chipClass = 'chip-late'; chipText = expectedT('dashboard.attendance.late', 'Late'); }
+  else if (status === 'On Time') { chipClass = 'chip-due'; chipText = expectedT('dashboard.attendance.dueNow', 'Due now'); }
+
+  btn.innerHTML = `
+    <span class="expected-student-main">
+      <span class="expected-student-name">${dashAttendanceEscapeHtml(displayName)}</span>
+      ${meta ? `<span class="expected-student-sub">${dashAttendanceEscapeHtml(meta)}</span>` : ''}
+    </span>
+    ${visiting ? `<span class="expected-student-center">🏫 ${dashAttendanceEscapeHtml(student.homeCenterName || '')}</span>` : ''}
+    <span class="expected-student-time" title="${dashAttendanceEscapeHtml(allTimes.join(', '))}">🕒 ${dashAttendanceEscapeHtml(time || '--:--')}</span>
+    <span class="expected-status-chip ${chipClass}">${chipText}</span>
+  `;
+  btn.addEventListener('click', () => selectDashboardAttendanceStudent(student, 'manual'));
+  return btn;
+}
+
+function renderExpectedNotArrived() {
+const section = document.getElementById('dashAttendanceExpectedSection');
+const container = document.getElementById('expectedSubjectsContainer');
+const totalBadge = document.getElementById('expectedTotalBadge');
+if (!section || !container) return;
+
+// ✅ 'now' MUST be declared before the debug line uses it
+const now = new Date();
+console.info('[Expected] cache:', attendanceRecordsCache.length,
+  '| today:', attendanceRecordsCache.filter(r => {
+      if (r.checkInTime) {
+        const d = new Date(r.checkInTime);
+        return d.toDateString() === now.toDateString();
+      }
+      return r.date === dashAttendanceTodayISO();
+  }).length);
+
+if (!attendanceRecordsLoaded) { section.classList.add('hidden'); return; }
+
+const groups = computeExpectedNotArrived();
+let total = 0;
+groups.forEach(list => total += list.length);
+if (totalBadge) totalBadge.textContent = total;
+
+container.innerHTML = '';
+section.classList.remove('hidden');
+
+if (total === 0) {
+  container.innerHTML = `<div class="expected-all-done">✅ ${expectedT('dashboard.attendance.allArrived', 'All expected students have arrived!')}</div>`;
+  return;
+}
+
+groups.forEach((list, subjectName) => {
+  const group = document.createElement('div');
+  group.className = 'expected-subject-group';
+  group.innerHTML = `
+    <div class="expected-subject-header">
+      <span class="expected-subject-name">${dashAttendanceEscapeHtml(subjectName)}</span>
+      <span class="expected-subject-count">${list.length}</span>
+    </div>`;
+  const listEl = document.createElement('div');
+  listEl.className = 'expected-student-list';
+  list.forEach(entry => listEl.appendChild(buildExpectedStudentRow(entry)));
+  group.appendChild(listEl);
+  container.appendChild(group);
+});
+}
+
+// ✅ FIX: Use child listeners instead of onValue to prevent the "cache drops to 1" bug
+function startExpectedRealtimeSync() {
+  if (!centerId || expectedRealtimeRef) return;
+  expectedRealtimeRef = ref(db, `centers/${centerId}/attendance`);
+  
+  // 1. Listen for NEW attendance records (Real-time check-ins)
+  onChildAdded(expectedRealtimeRef, (snap) => {
+    const newRecord = { ...snap.val(), id: snap.key };
+    // Avoid duplicates (in case it was already added locally by push())
+    if (!attendanceRecordsCache.some(r => r.id === snap.key)) {
+      attendanceRecordsCache.push(newRecord);
+      if (!isDashModalHidden('dashAttendanceManualModal')) {
+        renderExpectedNotArrived();
+      }
+    }
+  }, (err) => console.error('Expected-list realtime sync (added) error:', err));
+  
+  // 2. Listen for DELETED records (if someone deletes a record from the attendance page)
+  onChildRemoved(expectedRealtimeRef, (snap) => {
+    const removedId = snap.key;
+    const initialLength = attendanceRecordsCache.length;
+    attendanceRecordsCache = attendanceRecordsCache.filter(r => r.id !== removedId);
+    if (attendanceRecordsCache.length !== initialLength && !isDashModalHidden('dashAttendanceManualModal')) {
+      renderExpectedNotArrived();
+    }
+  }, (err) => console.error('Expected-list realtime sync (removed) error:', err));
+}
+
+function stopExpectedRealtimeSync() {
+  if (!expectedRealtimeRef) return;
+  off(expectedRealtimeRef); // Removes ALL listeners (onChildAdded, onChildRemoved, etc.)
+  expectedRealtimeRef = null;
+}
+
+// ✅ Short, lightweight re-sync after a check-in (not a long loader)
+function refreshExpectedSoon() {
+  [500, 1200].forEach(ms => {
+    setTimeout(async () => {
+      try {
+        await loadDashboardAttendanceRecords(true);
+        if (!isDashModalHidden('dashAttendanceManualModal')) renderExpectedNotArrived();
+      } catch (e) { console.warn('refreshExpectedSoon:', e); }
+    }, ms);
+  });
+}
+
+// Keeps Late / Due-now chips accurate while the modal stays open
+function startExpectedTicker() {
+  if (expectedTickerTimer) return;
+  expectedTickerTimer = setInterval(() => {
+    if (!isDashModalHidden('dashAttendanceManualModal')) renderExpectedNotArrived();
+  }, 5000);
+}
+function stopExpectedTicker() {
+  if (expectedTickerTimer) { clearInterval(expectedTickerTimer); expectedTickerTimer = null; }
+}
+function stopExpectedSync() { stopExpectedRealtimeSync(); stopExpectedTicker(); }
+
+function closeAttendanceConfirmModal() {
+  hideDashModal('dashAttendanceConfirmModal');
+  attendanceSelectedStudent = null;
+  if (attendanceLastMethod === 'manual') openDashboardAttendanceManualModal();
 }
 
 function getDashAttendanceStatusColor(status) {
@@ -2782,6 +3162,60 @@ function getDashAttendanceDateWarnings(dateStr) {
   }
 
   return warnings;
+}
+
+// ===============================
+// Cross-Center: Load ALL students from ALL centers
+// ===============================
+async function loadAllStudentsGlobal(force = false) {
+    if (allStudentsGlobalLoaded && !force) return allStudentsGlobal;
+
+    try {
+        const centersSnap = await get(ref(db, 'centers'));
+        allStudentsGlobal = [];
+        allStudentsByIdGlobal = new Map();
+        allStudentsByNumberGlobal = new Map();
+        centerNamesCache = new Map();
+
+        if (centersSnap.exists()) {
+            centersSnap.forEach((centerSnap) => {
+                const cId = centerSnap.key;
+                const centerData = centerSnap.val() || {};
+                const centerName = centerData.name || centerData.centerName || cId;
+                centerNamesCache.set(cId, centerName);
+
+                const students = centerData.students || {};
+                Object.keys(students).forEach((studentId) => {
+                    const student = {
+                        ...students[studentId],
+                        id: studentId,
+                        homeCenterId: cId,
+                        homeCenterName: centerName
+                    };
+                    allStudentsGlobal.push(student);
+                    allStudentsByIdGlobal.set(String(studentId), student);
+
+                    if (
+                        student.studentNumber !== undefined &&
+                        student.studentNumber !== null &&
+                        String(student.studentNumber).trim() !== ''
+                    ) {
+                        allStudentsByNumberGlobal.set(String(student.studentNumber), student);
+                    }
+                });
+            });
+        }
+        allStudentsGlobalLoaded = true;
+    } catch (err) {
+        console.error('❌ Failed to load all students globally:', err);
+    }
+    return allStudentsGlobal;
+}
+
+// Helper: is this student visiting from another center?
+function isVisitingStudent(student) {
+    if (!student || !student.homeCenterId) return false;
+    return student.homeCenterId !== centerId;
 }
 
 async function confirmDashAttendanceDateWarnings() {
@@ -2838,29 +3272,25 @@ function setupDashboardAttendanceModals() {
     }
   });
 
-  // Manual modal
+  // Manual modal — stop live sync when it closes
   document.getElementById('closeDashAttendanceManualModal')?.addEventListener('click', () => {
     hideDashModal('dashAttendanceManualModal');
+    stopExpectedSync();
   });
-
   document.getElementById('dashAttendanceManualModal')?.addEventListener('click', (e) => {
     if (e.target.id === 'dashAttendanceManualModal') {
       hideDashModal('dashAttendanceManualModal');
+      stopExpectedSync();
     }
   });
 
-  // Confirm modal
-  document.getElementById('closeDashAttendanceConfirmModal')?.addEventListener('click', () => {
-    hideDashModal('dashAttendanceConfirmModal');
-    attendanceSelectedStudent = null;
-  });
-
+  // Confirm modal — cancelling returns to the manual modal (and its live list)
+  document.getElementById('closeDashAttendanceConfirmModal')?.addEventListener('click', closeAttendanceConfirmModal);
   document.getElementById('dashAttendanceConfirmModal')?.addEventListener('click', (e) => {
-    if (e.target.id === 'dashAttendanceConfirmModal') {
-      hideDashModal('dashAttendanceConfirmModal');
-      attendanceSelectedStudent = null;
-    }
+    if (e.target.id === 'dashAttendanceConfirmModal') closeAttendanceConfirmModal();
   });
+  document.getElementById('dashAttendanceCancelBtn')?.addEventListener('click', closeAttendanceConfirmModal);
+  document.getElementById('dashAttendanceConfirmBtn')?.addEventListener('click', recordDashboardAttendance);
 
   // Scan modal
   document.getElementById('closeDashAttendanceScanModal')?.addEventListener('click', async () => {
@@ -2908,30 +3338,22 @@ function setupDashboardAttendanceModals() {
     }
   });
 
-  // Confirm attendance
-  document.getElementById('dashAttendanceCancelBtn')?.addEventListener('click', () => {
-    hideDashModal('dashAttendanceConfirmModal');
-    attendanceSelectedStudent = null;
-  });
-
-  document.getElementById('dashAttendanceConfirmBtn')?.addEventListener('click', recordDashboardAttendance);
-
   // Escape handling
   document.addEventListener('keydown', async (e) => {
     if (e.key !== 'Escape') return;
-
     // Warning modal handles its own Escape inside the Promise
     if (!isDashModalHidden('dashAttendanceWarningModal')) return;
-
     if (!isDashModalHidden('dashAttendanceScanModal')) {
       await stopDashboardAttendanceScanner();
       return;
     }
-
+    if (!isDashModalHidden('dashAttendanceConfirmModal')) {
+      closeAttendanceConfirmModal();
+      return;
+    }
     hideDashModal('dashAttendanceChoiceModal');
     hideDashModal('dashAttendanceManualModal');
-    hideDashModal('dashAttendanceConfirmModal');
-    attendanceSelectedStudent = null;
+    stopExpectedSync();
   });
 }
 
@@ -3037,128 +3459,136 @@ function showDashAttendanceWarning({
 }
 
 async function openDashboardAttendanceEntry() {
-  if (!centerId) {
-    alert('No center selected.');
-    return;
-  }
-
-  const canContinue = await confirmDashAttendanceDateWarnings();
-  if (!canContinue) return;
-
-  // Preload in background
-  loadDashboardAttendanceStudents().catch(console.error);
-  loadDashboardAttendanceRecords().catch(console.error);
-
-  showDashModal('dashAttendanceChoiceModal');
+    if (!centerId) {
+        alert('No center selected.');
+        return;
+    }
+    const canContinue = await confirmDashAttendanceDateWarnings();
+    if (!canContinue) return;
+    
+    // Preload in background (Added loadAllStudentsGlobal)
+    loadDashboardAttendanceStudents().catch(console.error);
+    loadAllStudentsGlobal().catch(console.error);
+    loadDashboardAttendanceRecords().catch(console.error);
+    
+    showDashModal('dashAttendanceChoiceModal');
 }
 
 async function openDashboardAttendanceManualModal() {
   const input = document.getElementById('dashAttendanceManualSearch');
   const results = document.getElementById('dashAttendanceManualResults');
-
+  
   if (input) {
     input.value = '';
     input.placeholder = t('dashboard.attendance.manualPlaceholder');
   }
-
   if (results) {
     results.innerHTML = '';
     results.classList.add('hidden');
   }
-
+  
   showDashModal('dashAttendanceManualModal');
-
+  
   setTimeout(() => {
     input?.focus();
   }, 100);
+  
+  try {
+    // ✅ Ensure we force reload attendance records
+    await Promise.all([
+      loadDashboardAttendanceStudents(),
+      loadAllStudentsGlobal(),
+      loadDashboardAttendanceRecords(true)  // Force reload
+    ]);
+  } catch (err) { 
+    console.error('Expected list preload failed:', err); 
+  }
+  
+  // ✅ Render the expected list after records are loaded
+  renderExpectedNotArrived();
+  
+  startExpectedRealtimeSync();
+  startExpectedTicker();
 }
 
 async function handleDashboardAttendanceManualSearch() {
-  const input = document.getElementById('dashAttendanceManualSearch');
-  const results = document.getElementById('dashAttendanceManualResults');
-
-  if (!input || !results) return;
-
-  const query = dashAttendanceNormalizeText(input.value);
-
-  if (!query) {
-    results.innerHTML = '';
-    results.classList.add('hidden');
-    return;
-  }
-
-  try {
-    await loadDashboardAttendanceStudents();
-
-    const matches = allStudentsForAttendance
-      .filter((student) => {
-        return hasCurrentDashAttendanceSubjects(student) &&
-          getDashAttendanceSearchText(student).includes(query);
-      })
-      .slice(0, 20);
-
-    renderDashboardAttendanceManualResults(matches);
-  } catch (err) {
-    console.error('Dashboard attendance manual search failed:', err);
-    renderDashboardAttendanceManualResults([]);
-  }
+    const input = document.getElementById('dashAttendanceManualSearch');
+    const results = document.getElementById('dashAttendanceManualResults');
+    if (!input || !results) return;
+    
+    const query = dashAttendanceNormalizeText(input.value);
+    if (!query) {
+        results.innerHTML = '';
+        results.classList.add('hidden');
+        return;
+    }
+    
+    try {
+        // Load both current and global students
+        await Promise.all([loadDashboardAttendanceStudents(), loadAllStudentsGlobal()]);
+        
+        const matches = allStudentsGlobal
+            .filter((student) => {
+                return hasCurrentDashAttendanceSubjects(student) &&
+                       getDashAttendanceSearchText(student).includes(query);
+            })
+            .slice(0, 20);
+            
+        renderDashboardAttendanceManualResults(matches);
+    } catch (err) {
+        console.error('Dashboard attendance manual search failed:', err);
+        renderDashboardAttendanceManualResults([]);
+    }
 }
 
 function renderDashboardAttendanceManualResults(matches) {
-  const results = document.getElementById('dashAttendanceManualResults');
-  if (!results) return;
+    const results = document.getElementById('dashAttendanceManualResults');
+    if (!results) return;
+    results.innerHTML = '';
+    
+    if (!matches.length) {
+        results.innerHTML = `<div class="dash-attendance-result-empty"> No matching current students found. </div>`;
+        results.classList.remove('hidden');
+        return;
+    }
+    
+    matches.forEach((student) => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'dash-attendance-result-item';
+        
+        const visiting = isVisitingStudent(student);
+        if (visiting) item.classList.add('visiting-student');
 
-  results.innerHTML = '';
+        const pinyin = getDashAttendancePinyin(student);
+        const displayName = student.nameCn || student.name || pinyin || student.nickname || 'Unknown Student';
+        
+        const metaParts = [];
+        if (pinyin) metaParts.push(pinyin);
+        if (student.nickname) metaParts.push(`Nickname: ${student.nickname}`);
+        if (student.studentNumber) metaParts.push(`No: ${student.studentNumber}`);
+        if (student.grade) metaParts.push(`Grade: ${student.grade}`);
+        if (student.school) metaParts.push(student.school);
+        
+        // 🏫 Center indicator for visiting students
+        if (visiting) {
+            metaParts.push(`🏫 ${student.homeCenterName}`);
+        }
 
-  if (!matches.length) {
-    results.innerHTML = `
-      <div class="dash-attendance-result-empty">
-        No matching current students found.
-      </div>
-    `;
-    results.classList.remove('hidden');
-    return;
-  }
-
-  matches.forEach((student) => {
-    const item = document.createElement('button');
-    item.type = 'button';
-    item.className = 'dash-attendance-result-item';
-
-    const pinyin = getDashAttendancePinyin(student);
-
-    const displayName =
-      student.nameCn ||
-      student.name ||
-      pinyin ||
-      student.nickname ||
-      'Unknown Student';
-
-    const metaParts = [];
-
-    if (pinyin) metaParts.push(pinyin);
-    if (student.nickname) metaParts.push(`Nickname: ${student.nickname}`);
-    if (student.studentNumber) metaParts.push(`No: ${student.studentNumber}`);
-    if (student.grade) metaParts.push(`Grade: ${student.grade}`);
-    if (student.school) metaParts.push(student.school);
-
-    item.innerHTML = `
-      <span class="dash-attendance-result-name">
-        ${dashAttendanceEscapeHtml(displayName)}
-      </span>
-      <span class="dash-attendance-result-meta">
-        ${dashAttendanceEscapeHtml(metaParts.join(' • '))}
-      </span>
-    `;
-
-    item.addEventListener('click', async () => {
-      await selectDashboardAttendanceStudent(student, 'manual');
+        item.innerHTML = `
+          <span class="dash-attendance-result-name">
+            ${dashAttendanceEscapeHtml(displayName)}
+          </span>
+          <span class="dash-attendance-result-meta">
+            ${dashAttendanceEscapeHtml(metaParts.join(' • '))}
+          </span>
+        `;
+        item.addEventListener('click', async () => {
+            await selectDashboardAttendanceStudent(student, 'manual');
+        });
+        results.appendChild(item);
     });
-
-    results.appendChild(item);
-  });
-
-  results.classList.remove('hidden');
+    results.classList.remove('hidden');
 }
 
 async function selectDashboardAttendanceStudent(student, method = 'manual') {
@@ -3166,6 +3596,7 @@ async function selectDashboardAttendanceStudent(student, method = 'manual') {
 
   hideDashModal('dashAttendanceChoiceModal');
   hideDashModal('dashAttendanceManualModal');
+  stopExpectedSync();
 
   if (!student || !student.id) {
     showDashboardToast(t('dashboard.attendance.studentNotFound'), true);
@@ -3192,7 +3623,7 @@ async function selectDashboardAttendanceStudent(student, method = 'manual') {
   }
 
   try {
-    await loadDashboardAttendanceRecords();
+      await loadDashboardAttendanceRecords(true);   // ✅ always fresh → duplicate warning works
 
     const existingRecords = getDashAttendanceExistingTodayFromCache(student);
 
@@ -3307,22 +3738,29 @@ function renderDashboardAttendanceConfirm(existingRecords = []) {
     `
     : '';
 
-  infoDiv.innerHTML = `
-    <div style="background:#f8fafc; padding:0.75rem; border-radius:10px; border:1px solid #e2e8f0;">
-      <h3 style="margin:0 0 0.3rem; font-size:1.1rem; font-weight:800;">
-        ${dashAttendanceEscapeHtml(student.nameCn || student.name || pinyin || 'N/A')}
-      </h3>
+    const visiting = isVisitingStudent(student);
+    const visitingBanner = visiting
+        ? `<div style="background:#fef3c7; color:#92400e; padding:0.55rem 0.75rem; border-radius:6px; margin-bottom:0.75rem; font-size:0.85rem; font-weight:600; border:1px solid #fcd34d;">
+             🏫 Visiting from: <strong>${dashAttendanceEscapeHtml(student.homeCenterName)}</strong>
+           </div>`
+        : '';
 
-      <div style="display:flex; flex-wrap:wrap; gap:0.25rem 0.75rem; font-size:0.85rem; color:#475569;">
-        <span><strong>Pinyin:</strong> ${dashAttendanceEscapeHtml(pinyin || '-')}</span>
-        <span><strong>Nickname:</strong> ${dashAttendanceEscapeHtml(student.nickname || '-')}</span>
-        <span><strong>Grade:</strong> ${dashAttendanceEscapeHtml(student.grade || '-')}</span>
-        <span><strong>School:</strong> ${dashAttendanceEscapeHtml(student.school || '-')}</span>
-      </div>
-
-      ${existingWarningHtml}
-    </div>
-  `;
+    infoDiv.innerHTML = `
+        ${visitingBanner}
+        <div style="background:#f8fafc; padding:0.75rem; border-radius:10px; border:1px solid #e2e8f0;">
+            <h3 style="margin:0 0 0.3rem; font-size:1.1rem; font-weight:800;">
+                ${dashAttendanceEscapeHtml(student.nameCn || student.name || pinyin || 'N/A')}
+            </h3>
+            <div style="display:flex; flex-wrap:wrap; gap:0.25rem 0.75rem; font-size:0.85rem; color:#475569;">
+                <span><strong>Pinyin:</strong> ${dashAttendanceEscapeHtml(pinyin || '-')}</span>
+                <span><strong>Nickname:</strong> ${dashAttendanceEscapeHtml(student.nickname || '-')}</span>
+                <span><strong>Grade:</strong> ${dashAttendanceEscapeHtml(student.grade || '-')}</span>
+                <span><strong>School:</strong> ${dashAttendanceEscapeHtml(student.school || '-')}</span>
+                ${visiting ? `<span><strong>Home Center:</strong> ${dashAttendanceEscapeHtml(student.homeCenterName)}</span>` : ''}
+            </div>
+            ${existingWarningHtml}
+        </div>
+    `;
 
   let html = '';
 
@@ -3336,7 +3774,7 @@ function renderDashboardAttendanceConfirm(existingRecords = []) {
       : t('dashboard.attendance.noSchedule');
 
     const todaySlot = slots.find((slot) => {
-      return String(slot.day || '').toLowerCase() === todayDay.toLowerCase();
+      return expectedNormalizeWeekday(slot.day) === todayDay;
     });
 
     const todayTime = todaySlot?.time || 'N/A';
@@ -3438,22 +3876,26 @@ async function recordDashboardAttendance() {
     const attendanceRef = ref(db, `centers/${centerId}/attendance`);
 
     const saves = Array.from(checks).map(async (checkbox) => {
-      const payload = {
-        studentId: String(attendanceSelectedStudent.id || ''),
-        studentNumber: String(attendanceSelectedStudent.studentNumber || ''),
-        nameCn: String(attendanceSelectedStudent.nameCn || attendanceSelectedStudent.name || '-'),
-        nickname: String(attendanceSelectedStudent.nickname || '-'),
-        grade: String(attendanceSelectedStudent.grade || '-'),
-        school: String(attendanceSelectedStudent.school || '-'),
-        pinyin: String(getDashAttendancePinyin(attendanceSelectedStudent) || ''),
-        nameEn: String(attendanceSelectedStudent.nameEn || attendanceSelectedStudent.englishName || ''),
-        subject: String(checkbox.value.trim()),
-        scheduledTime: String(checkbox.dataset.scheduled || t('dashboard.attendance.noSchedule')),
-        checkInTime: String(checkInTime),
-        date: String(dateStr),
-        status: String(checkbox.dataset.status || ''),
-        timestamp: serverTimestamp()
-      };
+    const payload = {
+      studentId: String(attendanceSelectedStudent.id || ''),
+      studentNumber: String(attendanceSelectedStudent.studentNumber || ''),
+      nameCn: String(attendanceSelectedStudent.nameCn || attendanceSelectedStudent.name || '-'),
+      nickname: String(attendanceSelectedStudent.nickname || '-'),
+      grade: String(attendanceSelectedStudent.grade || '-'),
+      school: String(attendanceSelectedStudent.school || '-'),
+      pinyin: String(getDashAttendancePinyin(attendanceSelectedStudent) || ''),
+      nameEn: String(attendanceSelectedStudent.nameEn || attendanceSelectedStudent.englishName || ''),
+      subject: String(checkbox.value.trim()),
+      scheduledTime: String(checkbox.dataset.scheduled || t('dashboard.attendance.noSchedule')),
+      checkInTime: String(checkInTime),
+      date: String(dateStr),
+      status: String(checkbox.dataset.status || ''),
+      // ✅ NEW: cross-center tracking
+      homeCenterId: String(attendanceSelectedStudent.homeCenterId || ''),
+      homeCenterName: String(attendanceSelectedStudent.homeCenterName || ''),
+      isVisiting: isVisitingStudent(attendanceSelectedStudent),
+      timestamp: serverTimestamp()
+    };
 
       const newRef = push(attendanceRef, payload);
       await newRef;
@@ -3465,8 +3907,26 @@ async function recordDashboardAttendance() {
     });
 
     await Promise.all(saves);
+    
+    // ✅ INSTANT UPDATE: The records are already in the cache via the .push() above.
+    if (!isDashModalHidden('dashAttendanceManualModal')) {
+      renderExpectedNotArrived();
+    }
 
     hideDashModal('dashAttendanceConfirmModal');
+    
+    // ✅ BACKGROUND SYNC (0.5s load): Give Firebase server time to propagate the write, 
+    // then force a fresh pull just in case the server data differs from the local push.
+    setTimeout(async () => {
+      try {
+        await loadDashboardAttendanceRecords(true);
+        if (!isDashModalHidden('dashAttendanceManualModal')) {
+          renderExpectedNotArrived();
+        }
+      } catch (e) { 
+        console.warn('Background attendance sync failed:', e); 
+      }
+    }, 500);
 
     const studentName =
       attendanceSelectedStudent.nameCn ||
@@ -3480,7 +3940,6 @@ async function recordDashboardAttendance() {
     }));
 
     const method = attendanceLastMethod;
-
     attendanceSelectedStudent = null;
 
     if (method === 'qr') {
@@ -3537,46 +3996,38 @@ async function stopDashboardAttendanceScanner() {
 }
 
 function findDashboardAttendanceStudentByScan(scannedValue) {
-  let value = String(scannedValue || '').trim();
-
-  if (!value) return null;
-
-  // Optional: support QR codes that are URLs with query params
-  try {
-    const url = new URL(value);
-    const possible =
-      url.searchParams.get('studentNumber') ||
-      url.searchParams.get('student') ||
-      url.searchParams.get('id') ||
-      url.searchParams.get('qr') ||
-      url.searchParams.get('qrCode');
-
-    if (possible) {
-      value = possible.trim();
+    let value = String(scannedValue || '').trim();
+    if (!value) return null;
+    
+    try {
+        const url = new URL(value);
+        const possible =
+            url.searchParams.get('studentNumber') ||
+            url.searchParams.get('student') ||
+            url.searchParams.get('id') ||
+            url.searchParams.get('qr') ||
+            url.searchParams.get('qrCode');
+        if (possible) value = possible.trim();
+    } catch {
+        // Not a URL, use raw value
     }
-  } catch {
-    // Not a URL, use raw value
-  }
-
-  if (attendanceStudentById.has(value)) {
-    return attendanceStudentById.get(value);
-  }
-
-  if (attendanceStudentByNumber.has(value)) {
-    return attendanceStudentByNumber.get(value);
-  }
-
-  if (attendanceStudentByQr.has(value)) {
-    return attendanceStudentByQr.get(value);
-  }
-
-  return allStudentsForAttendance.find((student) => {
-    return (
-      String(student.id || '') === value ||
-      String(student.studentNumber || '') === value ||
-      String(student.qrCode || '') === value
-    );
-  }) || null;
+    
+    // Current center first (fast path)
+    if (attendanceStudentById.has(value)) return attendanceStudentById.get(value);
+    if (attendanceStudentByNumber.has(value)) return attendanceStudentByNumber.get(value);
+    if (attendanceStudentByQr.has(value)) return attendanceStudentByQr.get(value);
+    
+    // Global (all centers)
+    if (allStudentsByIdGlobal.has(value)) return allStudentsByIdGlobal.get(value);
+    if (allStudentsByNumberGlobal.has(value)) return allStudentsByNumberGlobal.get(value);
+    
+    return allStudentsGlobal.find((student) => {
+        return (
+            String(student.id || '') === value ||
+            String(student.studentNumber || '') === value ||
+            String(student.qrCode || '') === value
+        );
+    }) || null;
 }
 
 async function startDashboardAttendanceScanner() {
@@ -3613,36 +4064,31 @@ async function startDashboardAttendanceScanner() {
         },
         aspectRatio: 1.0
       },
+      // Inside the scanner success callback (decodedText):
       async (decodedText) => {
-        const cleanValue = decodedText.trim();
-
-        await cleanupDashboardAttendanceScanner();
-        hideDashModal('dashAttendanceScanModal');
-
-        try {
-          await loadDashboardAttendanceStudents();
-
-          let student = findDashboardAttendanceStudentByScan(cleanValue);
-
-          if (!student) {
-            await loadDashboardAttendanceStudents(true);
-            student = findDashboardAttendanceStudentByScan(cleanValue);
+          const cleanValue = decodedText.trim();
+          await cleanupDashboardAttendanceScanner();
+          hideDashModal('dashAttendanceScanModal');
+          try {
+              let student = findDashboardAttendanceStudentByScan(cleanValue);
+              
+              // Fallback: force reload both lists if not found initially
+              if (!student) {
+                  await Promise.all([loadDashboardAttendanceStudents(true), loadAllStudentsGlobal(true)]);
+                  student = findDashboardAttendanceStudentByScan(cleanValue);
+              }
+              
+              if (!student) {
+                  throw new Error(t('dashboard.attendance.studentNotFound'));
           }
-
-          if (!student) {
-            throw new Error(t('dashboard.attendance.studentNotFound'));
+              await selectDashboardAttendanceStudent(student, 'qr');
+          } catch (err) {
+              console.error('Dashboard attendance scan processing failed:', err);
+              showDashboardToast(err.message || 'Scan error', true);
+              dashAttendanceRestartTimer = setTimeout(async () => {
+                  await startDashboardAttendanceScanner();
+              }, 1200);
           }
-
-          await selectDashboardAttendanceStudent(student, 'qr');
-        } catch (err) {
-          console.error('Dashboard attendance scan processing failed:', err);
-          showDashboardToast(err.message || 'Scan error', true);
-
-          // Continue scanning automatically after invalid QR / error
-          dashAttendanceRestartTimer = setTimeout(async () => {
-            await startDashboardAttendanceScanner();
-          }, 1200);
-        }
       },
       () => {
         // Ignore QR decode frame errors
