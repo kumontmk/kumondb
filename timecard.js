@@ -33,6 +33,7 @@ let currentEmployeeData = null;
 let hasFullAccess = false;
 let nfcAbortController = null;
 let authInitialized = false;
+let timecardEditModal = null;
 
 
 // ==========================================
@@ -494,14 +495,13 @@ function getTimecardListenerKey(date) {
     return `${date}|${hasFullAccess ? 'all' : (currentEmployeeId || 'anonymous')}`;
 }
 
-function renderTimecardLoading(tbody, cardContainer) {
+function renderTimecardLoading(tbody, cardContainer, colspan = 6) {
     const msg = getI18nText('timecard.loadingRecords', 'Loading attendance records...');
-
     const spinner = '<span class="timecard-spinner" aria-hidden="true"></span>';
 
     tbody.innerHTML = `
         <tr>
-            <td colspan="6" class="empty-state">
+            <td colspan="${colspan}" class="empty-state">
                 <span class="timecard-loading-inline" role="status" aria-live="polite">
                     ${spinner}
                     <span>${msg}</span>
@@ -734,115 +734,472 @@ function setupTimecardListener(date) {
     }
 }
 
-function renderTimecardTable() {
-  const tbody = document.getElementById('timecardBody');
-  const cardContainer = document.getElementById('mobileTimecardCards');
-  if (!tbody || !cardContainer) return;
-  updateTapButton();
-  const filterTxt = searchInput ? searchInput.value.toLowerCase() : '';
-  const filterPos = posFilter ? posFilter.value : '';
+function ensureTimecardActionColumn() {
+    const tbody = document.getElementById('timecardBody');
+    const table = tbody ? tbody.closest('table') : null;
+    if (!table) return;
 
-  const employeeData = {};
-  const allLogs = [];
+    const headRow = table.querySelector('thead tr');
+    if (!headRow) return;
 
-  Object.entries(employees).forEach(([id, e]) => {
-    if (!hasFullAccess && id !== currentEmployeeId) return;
-    if (filterTxt && !e.englishName.toLowerCase().includes(filterTxt) && !(e.chineseName || '').toLowerCase().includes(filterTxt)) return;
-    if (filterPos) {
-      const empPositions = (Array.isArray(e.positions) ? e.positions : (e.position ? [e.position] : [])).map(p => p.toLowerCase());
-      if (!empPositions.includes(filterPos.toLowerCase())) return;
+    let actionTh = document.getElementById('timecardActionTh');
+
+    if (isMasterAdmin) {
+        if (!actionTh) {
+            actionTh = document.createElement('th');
+            actionTh.id = 'timecardActionTh';
+            actionTh.textContent = getI18nText('timecard.action', 'Action');
+            headRow.appendChild(actionTh);
+        }
+        actionTh.classList.remove('hidden');
+    } else if (actionTh) {
+        actionTh.classList.add('hidden');
     }
-
-    const logs = currentDayLogs[id]?.logs || [];
-    if (logs.length === 0) return;
-
-    const sortedLogs = [...logs].sort((a, b) => a.time.localeCompare(b.time));
-    employeeData[id] = {
-      employee: {
-        chineseName: e.chineseName || '-',
-        englishName: e.englishName,
-        position: e.position
-      },
-      logs: sortedLogs
-    };
-
-    sortedLogs.forEach(log => {
-      allLogs.push({
-        chineseName: e.chineseName || '-',
-        englishName: e.englishName,
-        position: e.position,
-        time: log.time,
-        location: log.location || '-',
-        type: log.type
-      });
-    });
-  });
-
-allLogs.sort((a, b) => b.time.localeCompare(a.time));
-
-tbody.innerHTML = '';
-cardContainer.innerHTML = '';
-
-if (allLogs.length === 0) {
-    // Still loading employees or timecards? Show loading state first.
-    if (!employeesLoaded || timecardLoading) {
-        renderTimecardLoading(tbody, cardContainer);
-        updateAdminStatusLine();
-        return;
-    }
-
-    // If Firebase failed to load timecards, show a failure message instead of
-    // falsely telling the user there are no records.
-    if (timecardLoadError) {
-        const errorMsg = getI18nText(
-            'timecard.failedToLoadRecords',
-            'Failed to load attendance records.'
-        );
-
-        tbody.innerHTML = `<tr><td colspan="6" class="empty-state">${errorMsg}</td></tr>`;
-        cardContainer.innerHTML = `<div class="tc-empty-msg">${errorMsg}</div>`;
-
-        return;
-    }
-
-    const msg = !hasFullAccess
-        ? t('timecard.noRecordsPersonal')
-        : t('timecard.noRecords');
-
-    tbody.innerHTML = `<tr><td colspan="6" class="empty-state">${msg}</td></tr>`;
-    cardContainer.innerHTML = `<div class="tc-empty-msg">${msg}</div>`;
-
-    return;
 }
 
-  allLogs.forEach(log => {
-    const statusClass = log.type === 'in' ? 'status-in' : log.type === 'out' ? 'status-out' : 'status-none';
-    const tr = document.createElement('tr');
-    tr.className = 'student-row';
-    tr.innerHTML = `
-      <td>${log.chineseName}</td>
-      <td>${log.englishName}</td>
-      <td>${log.position}</td>
-      <td>${log.time}</td>
-      <td>${log.location}</td>
-      <td><span class="status-pill ${statusClass}">${log.type.toUpperCase()}</span></td>
-    `;
-    tbody.appendChild(tr);
-  });
+function renderTimecardTable() {
+    const tbody = document.getElementById('timecardBody');
+    const cardContainer = document.getElementById('mobileTimecardCards');
+    if (!tbody || !cardContainer) return;
 
-  Object.values(employeeData).forEach(({ employee, logs }) => {
-    let currentIn = null;
-    logs.forEach(log => {
-      if (log.type === 'in') {
-        currentIn = log;
-      } else if (log.type === 'out' && currentIn) {
-        addCard(cardContainer, employee, currentIn, log);
-        currentIn = null;
-      }
+    ensureTimecardActionColumn();
+    updateTapButton();
+
+    const actionColumnVisible =
+        isMasterAdmin &&
+        !!document.getElementById('timecardActionTh') &&
+        !document.getElementById('timecardActionTh').classList.contains('hidden');
+
+    const tableColspan = actionColumnVisible ? 7 : 6;
+
+    const filterTxt = searchInput ? searchInput.value.toLowerCase() : '';
+    const filterPos = posFilter ? posFilter.value : '';
+    const employeeData = {};
+    const allLogs = [];
+
+    Object.entries(employees).forEach(([id, e]) => {
+        if (!hasFullAccess && id !== currentEmployeeId) return;
+
+        if (
+            filterTxt &&
+            !e.englishName.toLowerCase().includes(filterTxt) &&
+            !(e.chineseName || '').toLowerCase().includes(filterTxt)
+        ) {
+            return;
+        }
+
+        if (filterPos) {
+            const empPositions = (
+                Array.isArray(e.positions)
+                    ? e.positions
+                    : (e.position ? [e.position] : [])
+            ).map(p => p.toLowerCase());
+
+            if (!empPositions.includes(filterPos.toLowerCase())) return;
+        }
+
+        const rawLogs = currentDayLogs[id]?.logs || [];
+        if (rawLogs.length === 0) return;
+
+        const sortedLogs = [...rawLogs]
+            .filter(Boolean)
+            .sort((a, b) => String(a.time || '').localeCompare(String(b.time || '')));
+
+        employeeData[id] = {
+            employee: {
+                chineseName: e.chineseName || '-',
+                englishName: e.englishName,
+                position: e.position
+            },
+            logs: sortedLogs
+        };
+
+        rawLogs.forEach((log, logIndex) => {
+            if (!log) return;
+
+            allLogs.push({
+                empId: id,
+                logIndex,
+                chineseName: e.chineseName || '-',
+                englishName: e.englishName,
+                position: e.position,
+                time: log.time,
+                location: log.location || '-',
+                type: log.type
+            });
+        });
     });
-    if (currentIn) addCard(cardContainer, employee, currentIn, null);
-  });
+
+    allLogs.sort((a, b) => {
+        return (
+            String(b.time || '').localeCompare(String(a.time || '')) ||
+            (b.logIndex - a.logIndex)
+        );
+    });
+
+    tbody.innerHTML = '';
+    cardContainer.innerHTML = '';
+
+    if (allLogs.length === 0) {
+        if (!employeesLoaded || timecardLoading) {
+            renderTimecardLoading(tbody, cardContainer, tableColspan);
+            updateAdminStatusLine();
+            return;
+        }
+
+        if (timecardLoadError) {
+            const errorMsg = getI18nText(
+                'timecard.failedToLoadRecords',
+                'Failed to load attendance records.'
+            );
+
+            tbody.innerHTML = `<tr><td colspan="${tableColspan}" class="empty-state">${errorMsg}</td></tr>`;
+            cardContainer.innerHTML = `<div class="tc-empty-msg">${errorMsg}</div>`;
+            return;
+        }
+
+        const msg = !hasFullAccess
+            ? t('timecard.noRecordsPersonal')
+            : t('timecard.noRecords');
+
+        tbody.innerHTML = `<tr><td colspan="${tableColspan}" class="empty-state">${msg}</td></tr>`;
+        cardContainer.innerHTML = `<div class="tc-empty-msg">${msg}</div>`;
+        return;
+    }
+
+    const editLabel = getI18nText('timecard.edit', 'Edit');
+
+    allLogs.forEach(log => {
+        const statusClass =
+            log.type === 'in'
+                ? 'status-in'
+                : log.type === 'out'
+                    ? 'status-out'
+                    : 'status-none';
+
+        const tr = document.createElement('tr');
+        tr.className = 'student-row';
+
+        const editCell = actionColumnVisible
+            ? `
+                <td>
+                    <button
+                        type="button"
+                        class="tc-edit-log-btn"
+                        data-emp-id="${encodeURIComponent(log.empId)}"
+                        data-log-index="${log.logIndex}"
+                    >
+                        ✏️ ${editLabel}
+                    </button>
+                </td>
+            `
+            : '';
+
+        tr.innerHTML = `
+            <td>${log.chineseName}</td>
+            <td>${log.englishName}</td>
+            <td>${log.position || ''}</td>
+            <td>${log.time}</td>
+            <td>${log.location}</td>
+            <td>
+                <span class="status-pill ${statusClass}">
+                    ${(log.type || '').toUpperCase()}
+                </span>
+            </td>
+            ${editCell}
+        `;
+
+        tbody.appendChild(tr);
+    });
+
+    Object.values(employeeData).forEach(({ employee, logs }) => {
+        let currentIn = null;
+
+        logs.forEach(log => {
+            if (log.type === 'in') {
+                currentIn = log;
+            } else if (log.type === 'out' && currentIn) {
+                addCard(cardContainer, employee, currentIn, log);
+                currentIn = null;
+            }
+        });
+
+        if (currentIn) addCard(cardContainer, employee, currentIn, null);
+    });
+
     updateAdminStatusLine();
+}
+
+// ==========================================
+// ✏️ MASTER ADMIN: EDIT TIMECARD ROW
+// ==========================================
+
+function normalizeTimecardLogs(logs) {
+    return [...(logs || [])]
+        .filter(Boolean)
+        .map((log, index) => ({ log, index }))
+        .sort((a, b) => {
+            const aTime = String(a.log.time || '');
+            const bTime = String(b.log.time || '');
+            return aTime.localeCompare(bTime) || a.index - b.index;
+        })
+        .map(item => item.log);
+}
+
+function getTimecardCenterOptions(selectedLocation) {
+    const names = new Set();
+
+    CENTERS.forEach(c => {
+        if (c?.name) names.add(c.name);
+    });
+
+    Object.values(firebaseCenters || {}).forEach(center => {
+        if (center?.name) names.add(center.name);
+    });
+
+    if (selectedLocation && selectedLocation !== '-') {
+        names.add(selectedLocation);
+    }
+
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+}
+
+function ensureTimecardEditModal() {
+    if (timecardEditModal) return timecardEditModal;
+
+    timecardEditModal = document.createElement('div');
+    timecardEditModal.id = 'timecardEditModal';
+    timecardEditModal.className = 'result-modal hidden';
+
+    timecardEditModal.innerHTML = `
+        <div class="result-content" style="width:92%; max-width:400px; padding:1.75rem 1.5rem; text-align:center; border-radius:12px;">
+            <div class="result-icon" style="color:#4682B4;">✏️</div>
+
+            <div class="result-text" style="margin-bottom:0.9rem;">
+                ${getI18nText('timecard.editTimeRecord', 'Edit Time Record')}
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:0.8rem; text-align:left;">
+
+                <div id="timecardEditSummary" style="
+                    font-size:0.9rem; color:#475569; background:#f1f5f9;
+                    border:1px solid #e2e8f0; border-radius:8px;
+                    padding:0.6rem 0.75rem; text-align:center; font-weight:600;
+                "></div>
+
+                <div>
+                    <label for="timecardEditTime" style="
+                        display:block; font-size:0.85rem; font-weight:600;
+                        color:#666; margin-bottom:0.3rem;
+                    ">${getI18nText('timecard.time', 'Time')}</label>
+                    <input type="time" id="timecardEditTime" class="day-select" style="width:100%;">
+                </div>
+
+                <div>
+                    <label for="timecardEditCenter" style="
+                        display:block; font-size:0.85rem; font-weight:600;
+                        color:#666; margin-bottom:0.3rem;
+                    ">${getI18nText('timecard.center', 'Center')}</label>
+                    <select id="timecardEditCenter" class="day-select" style="width:100%; background:#fff;"></select>
+                </div>
+
+                <input type="hidden" id="timecardEditEmpId">
+                <input type="hidden" id="timecardEditLogIndex">
+
+                <div style="display:flex; gap:0.75rem; margin-top:0.25rem;">
+                    <button type="button" id="timecardEditCancelBtn" style="
+                        flex:1; min-height:46px; padding:0.7rem 1rem;
+                        border:none; border-radius:8px;
+                        background:#64748b; color:#fff;
+                        font-weight:700; font-size:0.95rem; cursor:pointer;
+                    ">${getI18nText('timecard.cancel', 'Cancel')}</button>
+
+                    <button type="button" id="timecardEditSaveBtn" style="
+                        flex:1; min-height:46px; padding:0.7rem 1rem;
+                        border:none; border-radius:8px;
+                        background:#059669; color:#fff;
+                        font-weight:700; font-size:0.95rem; cursor:pointer;
+                    ">${getI18nText('timecard.save', 'Save')}</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(timecardEditModal);
+
+    timecardEditModal
+        .querySelector('#timecardEditCancelBtn')
+        .addEventListener('click', closeTimecardEditModal);
+
+    timecardEditModal
+        .querySelector('#timecardEditSaveBtn')
+        .addEventListener('click', saveTimecardEdit);
+
+    timecardEditModal.addEventListener('click', (e) => {
+        if (e.target === timecardEditModal) {
+            closeTimecardEditModal();
+        }
+    });
+
+    return timecardEditModal;
+}
+
+function openTimecardEditModal(empId, logIndex) {
+    if (!isMasterAdmin) return;
+
+    const logs = currentDayLogs[empId]?.logs || [];
+    const log = logs[logIndex];
+
+    if (!log) {
+        showResultModal(false, '❌ Record not found. Please refresh and try again.');
+        return;
+    }
+
+    const modal = ensureTimecardEditModal();
+
+    const emp = employees[empId] || {};
+    const date = datePicker?.value || '';
+
+    const summary = modal.querySelector('#timecardEditSummary');
+    const timeInput = modal.querySelector('#timecardEditTime');
+    const centerSelect = modal.querySelector('#timecardEditCenter');
+    const empIdInput = modal.querySelector('#timecardEditEmpId');
+    const logIndexInput = modal.querySelector('#timecardEditLogIndex');
+
+    if (summary) {
+        summary.textContent =
+            `${emp.englishName || empId} — ${date} — ${(log.type || '').toUpperCase()}`;
+    }
+
+    if (timeInput) {
+        timeInput.value = String(log.time || '').slice(0, 5);
+    }
+
+    if (centerSelect) {
+        centerSelect.innerHTML = '';
+
+        const options = getTimecardCenterOptions(log.location);
+
+        options.forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+
+            if (name === (log.location || '')) {
+                opt.selected = true;
+            }
+
+            centerSelect.appendChild(opt);
+        });
+
+        if (!centerSelect.value && log.location) {
+            const opt = document.createElement('option');
+            opt.value = log.location;
+            opt.textContent = log.location;
+            opt.selected = true;
+            centerSelect.appendChild(opt);
+        }
+    }
+
+    if (empIdInput) empIdInput.value = empId;
+    if (logIndexInput) logIndexInput.value = String(logIndex);
+
+    modal.classList.remove('hidden');
+}
+
+function closeTimecardEditModal() {
+    if (timecardEditModal) {
+        timecardEditModal.classList.add('hidden');
+    }
+}
+
+async function saveTimecardEdit() {
+    if (!isMasterAdmin) return;
+
+    const saveBtn = timecardEditModal?.querySelector('#timecardEditSaveBtn');
+
+    const empId =
+        timecardEditModal?.querySelector('#timecardEditEmpId')?.value || '';
+
+    const logIndex = Number(
+        timecardEditModal?.querySelector('#timecardEditLogIndex')?.value || '-1'
+    );
+
+    const newTime =
+        timecardEditModal?.querySelector('#timecardEditTime')?.value || '';
+
+    const newCenter =
+        timecardEditModal?.querySelector('#timecardEditCenter')?.value || '';
+
+    const date = datePicker?.value || '';
+
+    if (
+        !empId ||
+        Number.isNaN(logIndex) ||
+        logIndex < 0 ||
+        !date ||
+        !newTime ||
+        !newCenter
+    ) {
+        showResultModal(false, '❌ Please provide a valid time and center.');
+        return;
+    }
+
+    const currentLogs = currentDayLogs[empId]?.logs || [];
+
+    if (!currentLogs[logIndex]) {
+        showResultModal(false, '❌ Record not found. Please refresh and try again.');
+        return;
+    }
+
+    const previousLogs = [...currentLogs];
+
+    if (saveBtn) saveBtn.disabled = true;
+
+    try {
+        const updatedLogs = [...currentLogs];
+
+        updatedLogs[logIndex] = {
+            ...updatedLogs[logIndex],
+            time: newTime,
+            location: newCenter,
+            editedByAdmin: true,
+            editedAt: new Date().toISOString()
+        };
+
+        const normalizedLogs = normalizeTimecardLogs(updatedLogs);
+
+        currentDayLogs[empId] = { logs: normalizedLogs };
+
+        renderTimecardTable();
+        updateAdminStatusLine();
+        closeTimecardEditModal();
+
+        await update(
+            ref(db, `timecards/${date}/${empId}`),
+            { logs: normalizedLogs }
+        );
+
+        const empName = employees[empId]?.englishName || empId;
+
+        showResultModal(
+            true,
+            `✅ ${empName}: updated to ${newTime} @ ${newCenter}`
+        );
+    } catch (err) {
+        console.error('💥 Failed to edit timecard record:', err);
+
+        currentDayLogs[empId] = { logs: previousLogs };
+        renderTimecardTable();
+        updateAdminStatusLine();
+
+        showResultModal(
+            false,
+            `${t('timecard.failedToSave')}${err.message}`
+        );
+    } finally {
+        if (saveBtn) saveBtn.disabled = false;
+    }
 }
 
 function addCard(container, employee, inLog, outLog) {
@@ -1368,4 +1725,20 @@ function getDistance(lat1, lon1, lat2, lon2) {
   const dLon = (lon2 - lon1) * Math.PI / 180;
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+const timecardBodyForEdit = document.getElementById('timecardBody');
+
+if (timecardBodyForEdit) {
+    timecardBodyForEdit.addEventListener('click', (e) => {
+        const editBtn = e.target.closest('.tc-edit-log-btn');
+        if (!editBtn) return;
+
+        if (!isMasterAdmin) return;
+
+        const empId = decodeURIComponent(editBtn.dataset.empId || '');
+        const logIndex = Number(editBtn.dataset.logIndex || '-1');
+
+        openTimecardEditModal(empId, logIndex);
+    });
 }

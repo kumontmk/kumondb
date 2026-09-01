@@ -76,5 +76,9 @@ export default {
     tapLoginRequired: "🚫 您必須以註冊員工身份登入才能使用輕觸打卡按鈕。",
     loadingRecords: "正在載入考勤記錄...",
     failedToLoadRecords: "載入考勤記錄失敗。",
+    action: "操作",
+    edit: "編輯",
+    editTimeRecord: "編輯考勤記錄",
+    save: "儲存",
   }
 };

@@ -1718,3 +1718,137 @@ background-color: var(--white);
   .wr-section { padding: 0.9rem; }
   .wr-line { flex-wrap: wrap; }
 }
+
+/* ============================================================
+🆕 EMPLOYEE SCHEDULE MODAL (Overview Double-Click)
+============================================================ */
+#empScheduleModal .modal-content.wide { max-width: 950px; width: 95%; }
+.emp-schedule-cal-wrapper {
+  max-height: 75vh;
+  overflow-y: auto;
+  padding: 0.5rem;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.emp-schedule-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.emp-schedule-cal-header {
+  background: var(--primary-dark);
+  color: var(--white);
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.8rem;
+  padding: 0.5rem 0.25rem;
+  border-radius: 4px;
+}
+.emp-schedule-cal-header.weekend { background: #3a6f94; }
+.emp-schedule-cal-cell {
+  background: var(--white);
+  min-height: 110px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: relative; /* Required for overlay */
+  overflow: hidden;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+}
+.emp-schedule-cal-cell.empty-slot { background: #f1f5f9; border-color: transparent; }
+.emp-schedule-cal-cell.weekend { background: #f8fafc; }
+.emp-schedule-cal-cell.today { box-shadow: inset 0 0 0 2px #27ae60; }
+.emp-schedule-day-num {
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--text-light);
+  align-self: flex-end;
+  margin-bottom: 2px;
+}
+.emp-schedule-cell-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.72rem;
+  overflow-y: auto;
+}
+.emp-schedule-shift {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  line-height: 1.2;
+}
+.emp-schedule-center {
+  display: inline-block;
+  font-size: 0.6rem;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 700;
+  color: white;
+}
+.emp-schedule-center.c-MK { background: #3498db; }
+.emp-schedule-center.c-PT { background: #9b59b6; }
+.emp-schedule-center.c-TS { background: #e67e22; }
+.emp-schedule-center.c-C { background: #27ae60; }
+.emp-schedule-center.c-T11 { background: #16a085; }
+.emp-schedule-center.c-AO { background: #d35400; }
+.emp-schedule-center.c-AM { background: #34495e; }
+
+/* Leave Overlays (Semi-transparent to show schedule underneath) */
+.leave-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.9rem;
+  color: rgba(0,0,0,0.75);
+  text-shadow: 0 1px 3px rgba(255,255,255,0.9);
+  letter-spacing: 0.5px;
+}
+.leave-overlay.approved {
+  background: rgba(70, 130, 180, 0.25); /* Semi-transparent blue */
+  border-left: 4px solid rgba(70, 130, 180, 0.8);
+}
+.leave-overlay.pending {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(180, 83, 9, 0.15),
+    rgba(180, 83, 9, 0.15) 4px,
+    transparent 4px,
+    transparent 8px
+  );
+  border-left: 4px dashed rgba(180, 83, 9, 0.7); /* Criss-cross / dashed */
+}
+.leave-overlay.hourly {
+  background: rgba(234, 179, 8, 0.25);
+  border-left: 4px solid rgba(234, 179, 8, 0.8);
+}
+@media (max-width: 768px) {
+  .emp-schedule-cal-cell { min-height: 80px; }
+  .emp-schedule-day-num { font-size: 0.7rem; }
+  .emp-schedule-cell-body { font-size: 0.65rem; }
+  .leave-overlay { font-size: 0.75rem; }
+}
+
+/* Holiday styling in the Employee Schedule Modal */
+.emp-schedule-cal-cell.holiday {
+  background: #fef2f2;
+}
+.emp-schedule-cal-cell.holiday .emp-schedule-day-num {
+  color: #b91c1c;
+}
+.emp-schedule-holiday {
+  color: #b91c1c;
+  font-weight: 700;
+  font-size: 0.68rem;
+  line-height: 1.2;
+  margin-top: 2px;
+}

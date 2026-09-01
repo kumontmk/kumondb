@@ -1000,7 +1000,7 @@ async function renderOverview() {
   if (empRows.length === 0) html += `<tr><td colspan="${daysInMonth + 1}" class="empty-state">${escapeHtml(t('noOneOnLeave', { month: monthLabel }))}</td></tr>`;
   for (const [empId, emp] of empRows) {
     const weeklyOffDays = getWeeklyOffDays(empId); const offDates = offDatesByEmp[empId] || new Set();
-    html += `<tr><td class="name-col">${escapeHtml(emp.englishName || '-')}</td>`;
+    html += `<tr data-emp-id="${empId}"><td class="name-col">${escapeHtml(emp.englishName || '-')}</td>`;
     for (let d = 1; d <= daysInMonth; d++) {
       const ds = `${y}-${pad(m + 1)}-${pad(d)}`; const dow = new Date(y, m, d).getDay();
       const extraCls = [(dow === 0 || dow === 6) ? 'weekend-col' : '', ds === tStr ? 'today-col' : ''].join(' ');
@@ -1023,8 +1023,12 @@ async function renderOverview() {
   
   table.querySelectorAll('tbody tr').forEach(tr => {
     tr.addEventListener('click', () => {
-        // Toggles the highlight class on click
         tr.classList.toggle('row-highlighted');
+      });
+      // 🆕 Double-click to open monthly schedule modal
+      tr.addEventListener('dblclick', () => {
+          const empId = tr.dataset.empId;
+          if (empId) openEmpScheduleModal(empId);
       });
   });
 
@@ -1040,6 +1044,132 @@ async function renderOverview() {
       }).join('');
     }
   }
+}
+
+// ============ 🆕 EMPLOYEE SCHEDULE MODAL (OVERVIEW DBL-CLICK) ============
+async function openEmpScheduleModal(empId) {
+    const emp = employees[empId];
+    if (!emp) return;
+    
+    const y = viewDate.getFullYear();
+    const m = viewDate.getMonth();
+    const monthLabel = viewDate.toLocaleDateString(uiLocale(), { month: 'long', year: 'numeric' });
+    
+    setText('empScheduleModalTitle', `${emp.englishName || emp.chineseName || 'Employee'} — ${monthLabel}`);
+    
+    const grid = $('empScheduleCalGrid');
+    grid.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding:2rem; color:var(--text-light);">Loading schedule...</div>';
+    openModal('empScheduleModal');
+    
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    let html = '';
+    
+    // 1. Headers (Respects i18n)
+    for (let i = 0; i < 7; i++) {
+        const isWknd = i === 0 || i === 6;
+        html += `<div class="emp-schedule-cal-header ${isWknd ? 'weekend' : ''}">${DOW[i]}</div>`;
+    }
+    
+    // 2. Empty slots before 1st of month
+    const firstDay = new Date(y, m, 1).getDay();
+    for (let i = 0; i < firstDay; i++) {
+        html += `<div class="emp-schedule-cal-cell empty-slot"></div>`;
+    }
+    
+    // 3. Fetch schedules for all days in parallel (uses cache if admin)
+    const todayStr = fmtISO(new Date());
+    const schedulesByDate = {};
+    const promises = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+        const ds = `${y}-${pad(m + 1)}-${pad(d)}`;
+        promises.push(
+            getEmpScheduleForDate(empId, ds).then(sched => {
+                schedulesByDate[ds] = sched;
+            })
+        );
+    }
+    await Promise.all(promises);
+    // 🆕 Make sure holiday data is loaded (same source the Overview uses)
+    if (!Object.keys(centerCalendars).length) await loadCenterCalendars();  
+    
+    // 4. Get leaves for this employee in this month
+    const monthStart = `${y}-${pad(m + 1)}-01`;
+    const monthEnd = `${y}-${pad(m + 1)}-${pad(daysInMonth)}`;
+    const empLeaves = Object.values(leaves).filter(l => 
+        l.empId === empId && 
+        (l.status === 'approved' || l.status === 'pending') && 
+        l.dateFrom <= monthEnd && l.dateTo >= monthStart
+    );
+    
+    const typeAbbr = { annual: 'AL', sick: 'SL', unpaid: 'UL', pt: 'PT' };
+    
+    // 5. Render days
+    for (let d = 1; d <= daysInMonth; d++) {
+        const dt = new Date(y, m, d);
+        const ds = fmtISO(dt);
+        const dow = dt.getDay();
+        const isWknd = dow === 0 || dow === 6;
+        const isToday = ds === todayStr;
+        const holiday = getPublicHolidayForEmp(empId, ds); 
+        
+        let cellClasses = 'emp-schedule-cal-cell';
+        if (isWknd) cellClasses += ' weekend';
+        if (isToday) cellClasses += ' today';
+        if (holiday) cellClasses += ' holiday';
+        
+        html += `<div class="${cellClasses}">`;
+        html += `<div class="emp-schedule-day-num">${d}</div>`;
+        html += `<div class="emp-schedule-cell-body">`;
+        
+        const sched = schedulesByDate[ds];
+        if (sched && sched.shifts && sched.shifts.length > 0) {
+            const sortedShifts = [...sched.shifts].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+            sortedShifts.forEach(shift => {
+                if (shift.type === 'break') {
+                    html += `<div class="emp-schedule-shift" style="color:#999;font-style:italic;">☕ ${shift.start}-${shift.end}</div>`;
+                } else {
+                    const cId = shift._center || shift.center;
+                    const abbr = getCenterAbbr(cId);
+                    const cls = `c-${abbr}`;
+                    html += `<div class="emp-schedule-shift">${shift.start}-${shift.end} <span class="emp-schedule-center ${cls}">${abbr}</span></div>`;
+                }
+            });
+        } else if (sched && sched.status === 'off') {
+            html += `<div style="color:#999;font-weight:600;font-size:0.75rem;">OFF</div>`;
+        } else {
+            html += `<div style="color:#ccc;">—</div>`;
+        }
+        
+        // 🆕 Holiday chip (same behavior as the Overview calendar)
+        if (holiday) {
+            html += `<div class="emp-schedule-holiday">🎌 ${escapeHtml(holiday.name || t('publicHoliday'))}</div>`;
+        }
+
+        html += `</div>`; // end body
+        
+        // 6. Overlay Leaves (Semi-transparent)
+        const dayLeaves = empLeaves.filter(l => l.dateFrom <= ds && l.dateTo >= ds);
+        if (dayLeaves.length > 0) {
+            // Prioritize approved over pending if both somehow exist on the same day
+            const approved = dayLeaves.find(l => l.status === 'approved');
+            const pending = dayLeaves.find(l => l.status === 'pending');
+            const lv = approved || pending;
+            
+            let overlayClass = 'leave-overlay ' + lv.status;
+            let overlayText = typeAbbr[lv.type] || (lv.type || '').toUpperCase();
+            
+            if (lv.durationType === 'hours') {
+                overlayClass += ' hourly';
+                overlayText = `${lv.amount}h ${overlayText}`;
+            }
+            
+            html += `<div class="${overlayClass}">${overlayText}</div>`;
+        }
+        
+        html += `</div>`; // end cell
+    }
+    
+    grid.innerHTML = html;
 }
 
 // ============ APPLY MODAL ============
@@ -1535,9 +1665,94 @@ function wrCenterCodes(empId) {
     return Object.keys(perms).filter(k => perms[k] === true).map(getCenterAbbr).join('/');
 }
 
+// Centers the employee is actually SCHEDULED at on a specific date
+// (explicit schedule first → weekly pattern fallback)
+function wrCentersForDate(empId, dateStr) {
+    const centers = new Set();
+
+    // 1) Explicit schedule for that exact date
+    if (allSchedulesCache) {
+        for (const cid of allCenterIds) {
+            const rec = allSchedulesCache[cid]?.[empId]?.[dateStr];
+            if (!rec) continue;
+            const shifts = Array.isArray(rec.shifts) ? rec.shifts : Object.values(rec.shifts || {});
+            shifts.forEach(s => {
+                if ((s.type || 'work') === 'work' && s.center && s.center !== 'other') centers.add(s.center);
+            });
+        }
+    }
+
+    // 2) Fall back to the weekly pattern (scheduleTemplates)
+    if (!centers.size) {
+        const dow = new Date(dateStr + 'T00:00:00').getDay();
+        const tmpl = scheduleTemplates[empId]?.[dow];
+        if (tmpl) {
+            const shifts = Array.isArray(tmpl.shifts) ? tmpl.shifts : Object.values(tmpl.shifts || {});
+            shifts.forEach(s => {
+                if ((s.type || 'work') === 'work' && s.center && s.center !== 'other') centers.add(s.center);
+            });
+        }
+    }
+    return [...centers];
+}
+
+// Weekday label for a dow number (0=Sun ... 6=Sat), follows UI language
+const WR_DOW_REF = new Date(2024, 0, 1); // a Monday
+function wrDowLabel(dow) {
+    const d = new Date(WR_DOW_REF);
+    d.setDate(d.getDate() + ((dow + 6) % 7));
+    return getDowAbbr(d);
+}
+
+// Compress a set of weekdays → "Tues-Fri", "Mon, Wed", "Sat-Sun"
+function wrCompressDows(dows) {
+    const ord = [...new Set(dows)].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)); // Monday-first
+    const runs = [];
+    let start = ord[0], prev = ord[0];
+    for (let i = 1; i < ord.length; i++) {
+        if (((ord[i] + 6) % 7) === ((prev + 6) % 7) + 1) prev = ord[i];
+        else { runs.push([start, prev]); start = prev = ord[i]; }
+    }
+    runs.push([start, prev]);
+    return runs.map(([a, b]) =>
+        a === b ? wrDowLabel(a) : `${wrDowLabel(a)}-${wrDowLabel(b)}`
+    ).join(', ');
+}
+
+// Full schedule-based center label for a leave record
+function wrScheduleLabel(l) {
+    const dates = [];
+    if (l.durationType === 'hours') dates.push(l.dateFrom);
+    else eachDate(l.dateFrom, l.dateTo, d => dates.push(fmtISO(d)));
+
+    const dayCenters = {};
+    dates.forEach(ds => {
+        const cs = wrCentersForDate(l.empId, ds);
+        if (cs.length) dayCenters[ds] = cs;
+    });
+    const covered = Object.keys(dayCenters);
+
+    // Nothing scheduled anywhere in the range → keep old permission-based codes
+    if (!covered.length) return wrCenterCodes(l.empId);
+
+    // Single day → just the center(s), e.g. [MK] or [MK/PT]
+    if (covered.length === 1) {
+        return '[' + dayCenters[covered[0]].map(getCenterAbbr).join('/') + ']';
+    }
+
+    // Multi-day → group days by center: [MK(Tues-Fri) PT(Sat)]
+    const byCenter = {};
+    covered.forEach(ds => dayCenters[ds].forEach(c => (byCenter[c] = byCenter[c] || []).push(ds)));
+    const parts = Object.entries(byCenter)
+        .sort((a, b) => a[1][0].localeCompare(b[1][0])) // order by first day
+        .map(([cid, ds]) =>
+            `${getCenterAbbr(cid)}(${wrCompressDows(ds.map(d => new Date(d + 'T00:00:00').getDay()))})`);
+    return '[' + parts.join(' ') + ']';
+}
+
 function wrEmpLabel(l) {
     const name = [l.empChinese, l.empName].filter(Boolean).join(' ');
-    const c = wrCenterCodes(l.empId);
+    const c = wrScheduleLabel(l);   // 👈 was wrCenterCodes(l.empId)
     return c ? `${name} ${c}` : name;
 }
 
@@ -1667,6 +1882,7 @@ function wireEvents() {
   $('cancelApplyBtn')?.addEventListener('click', () => closeModal('applyModal'));
   $('closeApplyBtn')?.addEventListener('click', () => closeModal('applyModal'));
   $('closeAttachmentBtn')?.addEventListener('click', () => closeModal('attachmentModal'));
+  $('closeEmpScheduleModal')?.addEventListener('click', () => closeModal('empScheduleModal'));
   $('cancelApproveBtn')?.addEventListener('click', () => closeModal('approveModal'));
   $('closeApproveBtn')?.addEventListener('click', () => closeModal('approveModal'));
   $('confirmApproveBtn')?.addEventListener('click', confirmApproval);
@@ -1724,6 +1940,7 @@ function wireEvents() {
       closeModal('attachmentModal');
       closeModal('approveModal');
       closeModal('editEntitlementModal');
+      closeModal('empScheduleModal'); 
       closeMonthPicker();
     }
   });

@@ -569,5 +569,101 @@ td.kc-cell {
     }
 }
 
+/* =========================================
+   ✏️ MASTER ADMIN TIMECARD ROW EDIT
+========================================= */
+
+#timecardActionTh {
+    width: 110px;
+    min-width: 110px;
+}
+
+.tc-edit-log-btn {
+    padding: 0.4rem 0.7rem;
+    background: var(--primary-dark);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+.tc-edit-log-btn:hover {
+    background: #3a6f94;
+    transform: translateY(-1px);
+}
+
+.tc-edit-log-btn:active {
+    transform: translateY(0);
+}
+
+.timecard-edit-content {
+    width: 92%;
+    max-width: 380px;
+}
+
+.admin-edit-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    text-align: left;
+}
+
+.admin-edit-summary {
+    font-size: 0.9rem;
+    color: var(--text-light);
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 0.65rem 0.75rem;
+    text-align: center;
+    font-weight: 600;
+}
+
+.admin-edit-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+.admin-edit-actions .acp-btn {
+    flex: 1;
+    min-height: 46px;
+}
+
+.acp-btn.cancel {
+    background: #64748b;
+}
+
+.acp-btn.cancel:hover {
+    background: #475569;
+}
+
+@media (max-width: 768px) {
+    .table-wrapper table {
+        min-width: 950px;
+    }
+
+    .table-wrapper th:nth-child(7),
+    .table-wrapper td:nth-child(7) {
+        min-width: 100px;
+    }
+}
+
+@media (max-width: 480px) {
+    .admin-edit-actions {
+        flex-direction: column;
+    }
+}
+
+@media print {
+    #timecardActionTh,
+    .tc-edit-log-btn {
+        display: none !important;
+    }
+}
 
 
