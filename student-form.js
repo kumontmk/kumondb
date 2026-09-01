@@ -35,7 +35,8 @@ onAuthStateChanged(auth, async (user) => {
         }
 
         const dashPerms = userData?.permissions?.dashboardCards || {};
-        const hasAccess = isAdmin || dashPerms['editStudentDetails'] === true;
+        // Check against the REQUIRED_PERMISSION constant, with a fallback for 'editStudentDetails'
+        const hasAccess = isAdmin || dashPerms[REQUIRED_PERMISSION] === true || dashPerms['editStudentDetails'] === true;
         
         if (hasAccess) {
             document.getElementById('accessDenied')?.classList.add('hidden');
