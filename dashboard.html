@@ -95,6 +95,11 @@
         <h3 data-i18n="dashboard.cards.studentManagement">Student Management</h3>
         <p data-i18n="dashboard.cards.studentManagementDesc">Add, edit, search students & track progress</p>
       </a>
+      <a href="change-classes.html" class="center-card" id="card-changeClasses">
+        <div class="card-icon">🔄</div>
+        <h3 data-i18n="dashboard.cards.changeClasses">Change Classes</h3>
+        <p data-i18n="dashboard.cards.changeClassesDesc">Manage CC/MC requests, replacements & reports</p>
+      </a>
       <a href="new-student-list.html" id="card-newStudentList" class="center-card">
         <div class="card-icon">📋</div>
         <h3 data-i18n="dashboard.cards.newStudentList">New Student List</h3>
@@ -438,6 +443,10 @@
         <span class="fab-icon">👨‍👩‍👧</span>
         <span data-i18n="dashboard.fab.schedulePO">Schedule Parent Orientation</span>
       </button>
+      <!--<button class="fab-menu-item" id="fabChangeClasses">
+        <span class="fab-icon">🔄</span>
+        <span data-i18n="dashboard.fab.changeClasses">Change Classes</span>
+      </button>-->
     </div>
     <button id="fabBtn" class="fab-btn"><span class="fab-icon-plus">+</span></button>
   </div>
@@ -505,24 +514,51 @@
   </div>
 </div>
 
-<!-- Confirm Attendance Modal -->
+<!-- ✅ Confirm Attendance / Absence -->
 <div class="modal-overlay hidden" id="dashAttendanceConfirmModal">
   <div class="modal-content">
-    <span class="close-modal" id="closeDashAttendanceConfirmModal">×</span>
+    <span class="close-modal" id="closeDashAttendanceConfirmModal">&times;</span>
 
-    <h3 data-i18n="dashboard.attendance.confirmTitle">✅ Confirm Attendance</h3>
+    <h3 id="dashAttendanceConfirmTitle">✅ Confirm Attendance</h3>
 
-    <div id="dashAttendanceStudentInfo" style="margin-top: 1rem;"></div>
-    <div id="dashAttendanceSubjectCheckboxes" style="margin-top: 1rem;"></div>
+    <div class="dash-attendance-mode-tabs">
+      <button type="button" id="dashAttendanceModeAttendanceBtn" class="mode-tab active">
+        ✅ Attendance
+      </button>
+
+      <button type="button" id="dashAttendanceModeAbsenceBtn" class="mode-tab">
+        🔄 Absence (CC/MC)
+      </button>
+    </div>
+
+    <!-- Attendance pane -->
+    <div id="dashAttendanceAttendancePane">
+      <div id="dashAttendanceStudentInfo"></div>
+      <div id="dashAttendanceSubjectCheckboxes"></div>
+    </div>
+
+    <!-- Absence pane -->
+    <div id="dashAttendanceAbsencePane" class="hidden">
+      <div id="dashAbsenceStudentInfo"></div>
+
+      <div class="form-group">
+        <label for="dashAbsenceDateInput" id="dashAbsenceDateLabel">Absence date *</label>
+        <input type="date" id="dashAbsenceDateInput">
+      </div>
+
+      <div id="dashAbsenceSubjectRows"></div>
+
+      <div class="form-group">
+        <label for="dashAbsenceNote" id="dashAbsenceNoteLabel">Note (optional)</label>
+        <textarea id="dashAbsenceNote" rows="2"></textarea>
+      </div>
+
+      <div id="dashAbsenceExistingList"></div>
+    </div>
 
     <div class="modal-actions">
-      <button type="button" class="secondary" id="dashAttendanceCancelBtn">
-        Cancel
-      </button>
-
-      <button type="button" class="primary" id="dashAttendanceConfirmBtn" style="display:none;">
-        Confirm Attendance
-      </button>
+      <button id="dashAttendanceCancelBtn" class="secondary">Cancel</button>
+      <button id="dashAttendanceConfirmBtn" class="primary">Confirm Attendance</button>
     </div>
   </div>
 </div>

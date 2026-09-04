@@ -35,7 +35,8 @@ export default {
       searchStudent: "Search Student",
       scheduleDT: "Schedule Diagnostic Test",
       schedulePO: "Schedule Parent Orientation",
-      attendance: "New Attendance"
+      attendance: "New Attendance",
+      changeClasses: "Change Classes",
     },
 
     attendance: {
@@ -68,7 +69,32 @@ export default {
       today: "Today",
       status: "Status",
       noSchedule: "No schedule set",
-      notToday: "Not Today"
+      notToday: "Not Today",
+      attendanceMode: "Attendance",
+      absenceMode: "Absence (CC/MC)",
+      absenceTitle: "🔄 Mark Absence (CC/MC)",
+      absenceDate: "Absence date *",
+      absenceNote: "Note (optional)",
+      saveAbsence: "Save Absence",
+      absenceExistingTitle: "Existing CC/MC records for this date",
+      absenceNoExisting: "No existing CC/MC records for this date.",
+      absenceReplacementMissing: "⚠️ Please choose replacement date and time for CC.",
+      absenceSelectSubject: "⚠️ Please select at least one subject.",
+      absenceSaveSuccess: "✅ Absence/CC saved for {{name}}",
+      absenceSaveFailed: "❌ Failed to save absence/CC.",
+      existingAttendanceTitle: "⚠️ Existing Attendance Found",
+      existingAttendanceText: "Attendance already exists for this date. Existing attendance will be kept.",
+      deleteClassChangeConfirm: "Delete this CC/MC record?",
+      classChangeDeleted: "✅ CC/MC record deleted.",
+      classChangeDeleteFailed: "❌ Failed to delete CC/MC record.",
+      classChangeBadge: "CC",
+      makeupFrom: "Make-up from {{date}}",
+      typeCCPU: "CC PU",
+      typeCCNoPU: "CC No PU",
+      typeMC: "MC",
+      typeMCPU: "MC PU",
+      replacementLabel: "Replacement",
+      absentLabel: "Absent",
     },
 
     cards: {
@@ -95,7 +121,9 @@ export default {
       myNotes: "My Notes",
       myNotesDesc: "Personal notes & reminders",
       labelEditor: "Label Editor",
-      labelEditorDesc: "Generate & print student labels (A4, 24-up)"
+      labelEditorDesc: "Generate & print student labels (A4, 24-up)",
+      changeClasses: "Change Classes",
+      changeClassesDesc: "Manage CC/MC requests, replacements & reports",
     },
 
     links: {

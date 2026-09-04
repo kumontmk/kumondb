@@ -2422,6 +2422,238 @@ header button:hover {
 }
 
 /* =========================================
+🔄 ATTENDANCE / ABSENCE MODE TABS
+========================================= */
+.dash-attendance-mode-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.75rem 0 1rem;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 0.5rem;
+}
+
+.dash-attendance-mode-tabs .mode-tab {
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  padding: 0.55rem 0.9rem;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.dash-attendance-mode-tabs .mode-tab.active {
+  background: var(--primary-dark);
+  color: #fff;
+  border-color: var(--primary-dark);
+}
+
+/* =========================================
+🔄 ABSENCE FORM
+========================================= */
+#dashAbsenceStudentInfo {
+  margin-bottom: 1rem;
+}
+
+#dashAbsenceSubjectRows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.dash-absence-subject-row {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.75rem;
+  background: #fff;
+}
+
+.dash-absence-subject-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.dash-absence-subject-top input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin-top: 0.2rem;
+  accent-color: var(--primary-dark);
+}
+
+.dash-absence-subject-body {
+  flex: 1;
+}
+
+.dash-absence-subject-name {
+  font-weight: 800;
+  color: #1e293b;
+}
+
+.dash-absence-subject-meta {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-top: 0.15rem;
+}
+
+.dash-absence-controls {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.dash-absence-controls select,
+.dash-absence-controls input[type="date"],
+.dash-absence-controls input[type="time"] {
+  width: 100%;
+  padding: 0.6rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  background: #fff;
+}
+
+.dash-absence-replacement {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.dash-absence-replacement.hidden {
+  display: none;
+}
+
+#dashAbsenceNote {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0.6rem;
+  font-family: inherit;
+}
+
+/* Existing CC/MC records inside absence pane */
+.dash-absence-existing {
+  margin-top: 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.dash-absence-existing-header {
+  background: #f1f5f9;
+  padding: 0.55rem 0.75rem;
+  font-weight: 800;
+  font-size: 0.88rem;
+  color: #334155;
+}
+
+.dash-absence-existing-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.dash-absence-existing-info {
+  min-width: 0;
+}
+
+.dash-absence-existing-title {
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.dash-absence-existing-sub {
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.dash-absence-delete-btn {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 0.4rem 0.65rem;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.dash-absence-delete-btn:hover {
+  background: #fecaca;
+}
+
+/* Expected list CC rows */
+.expected-student-row.class-change {
+  border-left: 3px solid #0ea5e9;
+  background: #f0f9ff;
+}
+
+.expected-student-row.class-change:hover {
+  background: #e0f2fe;
+}
+
+.expected-status-chip.chip-cc {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+@media (max-width: 768px) {
+  .dash-absence-replacement {
+    grid-template-columns: 1fr;
+  }
+
+  .dash-attendance-mode-tabs {
+    flex-direction: column;
+  }
+
+  .dash-attendance-mode-tabs .mode-tab {
+    width: 100%;
+  }
+}
+
+/* =========================================
+🔄 ATTENDANCE / ABSENCE PANE VISIBILITY FIX
+========================================= */
+#dashAttendanceAttendancePane.hidden,
+#dashAttendanceAbsencePane.hidden {
+  display: none !important;
+}
+
+#dashAttendanceAbsencePane .form-group {
+  margin: 1rem 0;
+}
+
+#dashAttendanceAbsencePane .form-group label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 0.4rem;
+}
+
+#dashAttendanceAbsencePane input[type="date"],
+#dashAttendanceAbsencePane textarea {
+  width: 100%;
+  padding: 0.65rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background: #fff;
+}
+
+#dashAttendanceAbsencePane input[type="date"]:focus,
+#dashAttendanceAbsencePane textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.25);
+}
+
+/* =========================================
 🌐 TRADITIONAL CHINESE FONT SUPPORT
 ========================================= */
 :lang(zh-TW) body,

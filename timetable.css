@@ -666,4 +666,26 @@ td.kc-cell {
     }
 }
 
+/* =========================================
+🔄 CLASS CHANGE INDICATORS
+========================================= */
+
+/* Day view CC cell */
+.cc-cell {
+  background: #e0f2fe !important;
+  border-left: 3px solid #0284c7;
+}
+
+/* Week view CC chip */
+.week-student.cc-student {
+  border-left: 3px solid #0284c7;
+  background: #f0f9ff;
+}
+
+/* Mobile if needed */
+.mobile-student.cc {
+  border-left: 3px solid #0284c7;
+  background: #f0f9ff;
+}
+
 

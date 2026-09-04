@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Change Classes - Kumon DB</title>
+  <link rel="stylesheet" href="change-classes.css" />
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+  <!-- Loader -->
+  <div id="page-loader">
+    <div class="spinner"></div>
+    <p data-i18n="common.loading">Loading...</p>
+  </div>
+
+  <!-- Access Denied -->
+  <div id="accessDenied" class="access-denied hidden">
+    <div class="access-denied-content">
+      <h2 data-i18n="common.accessDenied">Access Denied</h2>
+      <p data-i18n="common.noPermission">You do not have permission to view this page.</p>
+      <button id="backToDashboardBtn" class="primary" data-i18n="common.backToDashboard">Back to Dashboard</button>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header id="mainContent" class="hidden">
+    <nav>
+      <a href="dashboard.html" data-i18n="common.backToDashboard">← Dashboard</a>
+    </nav>
+    <h2 id="page-title">🔄 Change Classes</h2>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="form-container hidden" id="mainContainer">
+    <!-- Summary Stats -->
+    <section class="stats-grid" id="statsGrid">
+      <div class="stat-card stat-total">
+        <div class="stat-icon">📋</div>
+        <div class="stat-body">
+          <div class="stat-value" id="statTotal">0</div>
+          <div class="stat-label" data-i18n="cc.statsTotal">Total Records</div>
+        </div>
+      </div>
+      <div class="stat-card stat-scheduled">
+        <div class="stat-icon">🕒</div>
+        <div class="stat-body">
+          <div class="stat-value" id="statScheduled">0</div>
+          <div class="stat-label" data-i18n="cc.statsScheduled">Scheduled</div>
+        </div>
+      </div>
+      <div class="stat-card stat-completed">
+        <div class="stat-icon">✅</div>
+        <div class="stat-body">
+          <div class="stat-value" id="statCompleted">0</div>
+          <div class="stat-label" data-i18n="cc.statsCompleted">Completed</div>
+        </div>
+      </div>
+      <div class="stat-card stat-missed">
+        <div class="stat-icon">❌</div>
+        <div class="stat-body">
+          <div class="stat-value" id="statMissed">0</div>
+          <div class="stat-label" data-i18n="cc.statsMissed">Missed</div>
+        </div>
+      </div>
+      <div class="stat-card stat-cancelled">
+        <div class="stat-icon">🚫</div>
+        <div class="stat-body">
+          <div class="stat-value" id="statCancelled">0</div>
+          <div class="stat-label" data-i18n="cc.statsCancelled">Cancelled</div>
+        </div>
+      </div>
+      <div class="stat-card stat-pu">
+        <div class="stat-icon">📚</div>
+        <div class="stat-body">
+          <div class="stat-value" id="statPU">0</div>
+          <div class="stat-label" data-i18n="cc.statsPU">Picked Up</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Controls -->
+    <section class="controls">
+      <!-- Status Filter (Segmented) -->
+      <div class="segmented" id="statusSegmented">
+        <button class="segment active" data-status="all" data-i18n="cc.filterAll">All</button>
+        <button class="segment" data-status="scheduled" data-i18n="cc.filterScheduled">Scheduled</button>
+        <button class="segment" data-status="completed" data-i18n="cc.filterCompleted">Completed</button>
+        <button class="segment" data-status="missed" data-i18n="cc.filterMissed">Missed</button>
+        <button class="segment" data-status="cancelled" data-i18n="cc.filterCancelled">Cancelled</button>
+      </div>
+
+      <!-- Search -->
+      <input type="text" id="searchInput" class="search-input" placeholder="Search student, subject..." data-i18n-attr="placeholder:cc.searchPlaceholder" />
+
+      <!-- Date Range -->
+      <div class="date-range-controls">
+        <label data-i18n="cc.from">From</label>
+        <input type="date" id="dateFrom" />
+        <label data-i18n="cc.to">To</label>
+        <input type="date" id="dateTo" />
+        <button id="clearDatesBtn" class="clear-dates-btn" title="Clear dates">✕</button>
+      </div>
+
+      <!-- Type Filter -->
+      <select id="typeFilter">
+        <option value="all" data-i18n="cc.typeAll">All Types</option>
+        <option value="CC_PU">CC PU</option>
+        <option value="CC_NO_PU">CC No PU</option>
+        <option value="MC">MC</option>
+        <option value="MC_PU">MC PU</option>
+      </select>
+
+      <!-- Subject Filter -->
+      <select id="subjectFilter">
+        <option value="all" data-i18n="cc.subjectAll">All Subjects</option>
+        <option value="Math">Math</option>
+        <option value="English">English</option>
+        <option value="Chinese">Chinese</option>
+      </select>
+
+      <!-- Export -->
+      <button id="exportBtn" class="secondary export-btn">
+        <span>📊</span> <span data-i18n="cc.export">Export</span>
+      </button>
+
+      <!-- Add Button (Desktop pill / Mobile FAB) -->
+      <button id="addRequestBtn" class="add-request-btn">
+        <span class="fab-icon">+</span>
+        <span class="fab-text" data-i18n="cc.addNew">+ Add Change Class</span>
+      </button>
+    </section>
+
+    <!-- Bulk Actions Bar (shown when items selected) -->
+    <section class="bulk-actions hidden" id="bulkActions">
+      <span class="bulk-count" id="bulkCount">0 selected</span>
+      <button id="bulkCompleteBtn" class="bulk-btn bulk-complete">✅ Mark Completed</button>
+      <button id="bulkCancelBtn" class="bulk-btn bulk-cancel">🚫 Cancel</button>
+      <button id="bulkClearBtn" class="bulk-btn bulk-clear">Clear Selection</button>
+    </section>
+
+    <!-- Desktop Table -->
+    <div class="table-wrapper">
+      <table id="ccTable">
+        <thead>
+          <tr>
+            <th class="col-check"><input type="checkbox" id="selectAllCheck" /></th>
+            <th data-i18n="cc.colStudent">Student</th>
+            <th data-i18n="cc.colSubject">Subject</th>
+            <th data-i18n="cc.colType">Type</th>
+            <th data-i18n="cc.colAbsence">Absence Date</th>
+            <th data-i18n="cc.colReplacement">Replacement</th>
+            <th data-i18n="cc.colStatus">Status</th>
+            <th data-i18n="cc.colPU">PU</th>
+            <th data-i18n="cc.colActions">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="ccTableBody"></tbody>
+      </table>
+      <div class="empty-state hidden" id="emptyState">
+        <div class="empty-icon">📭</div>
+        <p data-i18n="cc.emptyState">No change class records found.</p>
+      </div>
+    </div>
+
+    <!-- Mobile Cards -->
+    <div class="cards-container" id="cardsContainer"></div>
+  </main>
+
+  <!-- ============== ADD / EDIT MODAL ============== -->
+  <div id="ccModal" class="modal hidden">
+    <div class="modal-content dropbook-modal-content">
+      <span class="close-modal" id="closeCcModal">&times;</span>
+      <h2 id="ccModalTitle" data-i18n="cc.addTitle">Add Change Class</h2>
+
+      <form id="ccForm">
+        <!-- Student Search -->
+        <div class="info-group full-width">
+          <label data-i18n="cc.student">Student *</label>
+          <div class="search-wrapper">
+            <input type="text" id="studentSearch" placeholder="Search student..." data-i18n-attr="placeholder:cc.searchStudent" />
+            <div class="search-results hidden" id="studentResults"></div>
+          </div>
+          <div class="selected-student-info hidden" id="selectedStudentInfo">
+            <div>
+              <h3 id="selectedStudentName"></h3>
+              <div id="selectedStudentMeta" class="student-meta"></div>
+            </div>
+            <button type="button" id="changeStudentBtn" class="change-student-btn" data-i18n="cc.changeStudent">Change</button>
+          </div>
+          <input type="hidden" id="selectedStudentId" />
+        </div>
+
+        <div class="modal-grid">
+          <!-- Subject -->
+          <div class="info-group">
+            <label data-i18n="cc.subject">Subject *</label>
+            <select id="subjectSelect" required>
+              <option value="" data-i18n="cc.selectSubject">Select subject</option>
+            </select>
+          </div>
+
+          <!-- Type -->
+          <div class="info-group">
+            <label data-i18n="cc.type">Type *</label>
+            <select id="typeSelect" required>
+              <option value="CC_PU">CC PU (Class Change + Pick Up)</option>
+              <option value="CC_NO_PU">CC No PU</option>
+              <option value="MC">MC (Missed Class)</option>
+              <option value="MC_PU">MC PU</option>
+            </select>
+          </div>
+
+          <!-- Absence Date -->
+          <div class="info-group">
+            <label data-i18n="cc.absenceDate">Absence Date *</label>
+            <input type="date" id="absenceDate" required />
+          </div>
+
+          <!-- Original Time -->
+          <div class="info-group">
+            <label data-i18n="cc.originalTime">Original Time</label>
+            <input type="time" id="originalTime" step="900" />
+          </div>
+
+          <!-- Replacement Date -->
+          <div class="info-group replacement-field">
+            <label data-i18n="cc.replacementDate">Replacement Date *</label>
+            <input type="date" id="replacementDate" />
+          </div>
+
+          <!-- Replacement Time -->
+          <div class="info-group replacement-field">
+            <label data-i18n="cc.replacementTime">Replacement Time *</label>
+            <input type="time" id="replacementTime" step="900" />
+          </div>
+
+          <!-- Status -->
+          <div class="info-group">
+            <label data-i18n="cc.status">Status</label>
+            <select id="statusSelect">
+              <option value="scheduled" data-i18n="cc.statusScheduled">Scheduled</option>
+              <option value="completed" data-i18n="cc.statusCompleted">Completed</option>
+              <option value="missed" data-i18n="cc.statusMissed">Missed</option>
+              <option value="cancelled" data-i18n="cc.statusCancelled">Cancelled</option>
+            </select>
+          </div>
+
+          <!-- Homework Pick Up -->
+          <div class="info-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="homeworkPU" />
+              <span data-i18n="cc.homeworkPU">Homework Picked Up</span>
+            </label>
+          </div>
+
+          <!-- Note -->
+          <div class="info-group full-width">
+            <label data-i18n="cc.note">Note</label>
+            <textarea id="noteInput" rows="3" placeholder="Optional note..." data-i18n-attr="placeholder:cc.notePlaceholder"></textarea>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" id="cancelCcBtn" class="secondary" data-i18n="common.cancel">Cancel</button>
+          <button type="submit" id="saveCcBtn" class="primary" data-i18n="cc.save">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============== DETAIL MODAL ============== -->
+  <div id="detailModal" class="modal hidden">
+    <div class="modal-content dropbook-modal-content">
+      <span class="close-modal" id="closeDetailModal">&times;</span>
+      <h2 data-i18n="cc.detailTitle">Change Class Details</h2>
+      <div id="detailContent"></div>
+      <div class="modal-actions">
+        <button type="button" id="deleteDetailBtn" class="cancel-request-btn modal-left-btn" data-i18n="cc.delete">🗑 Delete</button>
+        <button type="button" id="editDetailBtn" class="primary" data-i18n="cc.edit">✏️ Edit</button>
+        <button type="button" id="closeDetailBtn" class="secondary" data-i18n="common.close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============== CONFIRM MODAL ============== -->
+  <div id="confirmModal" class="modal hidden">
+    <div class="modal-content confirm-modal-content">
+      <h3 id="confirmTitle" data-i18n="common.confirm">Confirm</h3>
+      <p class="confirm-message" id="confirmMessage"></p>
+      <div class="modal-actions" style="justify-content: center;">
+        <button id="confirmCancelBtn" class="secondary" data-i18n="common.cancel">Cancel</button>
+        <button id="confirmOkBtn" class="primary" data-i18n="common.confirm">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script type="module" src="change-classes.js?v=2"></script>
+</body>
+</html>

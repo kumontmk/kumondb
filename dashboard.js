@@ -2,7 +2,7 @@
 import './dashboard-i18n.js';
 import { i18nReady, t, currentLanguage } from './i18n-core.js';
 import { auth, requireAuth, logout, db, syncPendingRequests } from './auth.js';
-import { ref, get, update, remove, push, serverTimestamp, onValue, off, onChildAdded, onChildRemoved } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { ref, get, update, remove, push, serverTimestamp, onValue, off, onChildAdded, onChildChanged, onChildRemoved } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 // ============================================
 // GLOBAL STATE
@@ -45,6 +45,14 @@ let dashAttendanceRestartTimer = null;
 
 let expectedRealtimeRef = null;
 let expectedTickerTimer = null;
+
+// ============================================
+// 🔄 CLASS CHANGE / MISSED CLASS STATE
+// ============================================
+let classChangesCache = [];
+let classChangesLoaded = false;
+let classChangesRealtimeRef = null;
+let attendanceConfirmMode = 'attendance';
 
 // ============================================
 // 🌐 CROSS-CENTER ATTENDANCE STATE
@@ -141,6 +149,15 @@ function initFAB() {
   const fabSearchStudent = document.getElementById('fabSearchStudent');
   const fabScheduleDT = document.getElementById('fabScheduleDT');
   const fabAttendance = document.getElementById('fabAttendance');
+  const fabChangeClasses = document.getElementById('fabChangeClasses');
+
+  if (fabChangeClasses) {
+    fabChangeClasses.addEventListener('click', () => {
+      closeFAB();
+      window.location.href = 'change-classes.html';
+    });
+  }
+
   if (!fabBtn || !fabMenu || !fabOverlay) return;
 
   function closeFAB() {
@@ -442,41 +459,71 @@ async function processGradeUpdates() {
 
 async function applyDashboardPermissions(user) {
   try {
-    const userSnap = await get(ref(db, `users/${user.uid}`));
-    if (!userSnap.exists()) return;
-    const userData = userSnap.val();
-    isAdmin = user.email?.toLowerCase() === 'kumonchamps@gmail.com';
-    const dashPerms = userData.permissions?.dashboardCards || {};
-    const cardMap = {
-      'card-studentManagement': 'studentManagement',
-      'card-timetable': 'timetable',
-      'card-monthlyReports': 'monthlyReports',
-      'card-progressCharts': 'progressCharts',
-      'card-attendance': 'attendance',
-      'card-followUps': 'followUps',
-      'card-dropBook': 'dropBook',
-      'card-bulletin': 'bulletin',
-      'card-newStudentList': 'newStudentList',
-      'card-labelEditor': 'labelEditor'
-    };
-    for (const [cardId, permKey] of Object.entries(cardMap)) {
-      const card = document.getElementById(cardId);
-      if (card) {
-        if (isAdmin || dashPerms[permKey] === true) {
-          card.style.display = 'flex'; 
-        } else {
-          card.style.display = 'none';
-        }
-      }
+    // 1) Load user record by uid, with email fallback
+    let userData = null;
+    let uid = user?.uid;
+
+    if (uid) {
+      const snap = await get(ref(db, `users/${uid}`));
+      if (snap.exists()) userData = snap.val();
     }
-    // 🕒 Show/hide New Attendance FAB item
-    const fabAttendance = document.getElementById('fabAttendance');
-    if (fabAttendance) {
-      if (isAdmin || dashPerms.attendance === true) {
-        fabAttendance.style.display = 'flex';
-      } else {
-        fabAttendance.style.display = 'none';
-      }
+
+    if (!userData && user?.email) {
+      const usersSnap = await get(ref(db, 'users'));
+      const users = usersSnap.val() || {};
+      uid = Object.keys(users).find(u =>
+        (users[u].email || '').toLowerCase() === user.email.toLowerCase()
+      ) || null;
+      if (uid) userData = users[uid];
+    }
+
+    // 2) Fallback: employees node (permissions are saved there too)
+    if (!userData && user?.email) {
+      const empSnap = await get(ref(db, 'employees'));
+      const emps = empSnap.val() || {};
+      userData = Object.values(emps).find(e =>
+        (e.email || '').toLowerCase() === user.email.toLowerCase()
+      ) || null;
+    }
+
+    if (!userData) return;
+
+    isAdmin = (user.email || '').toLowerCase() === 'kumonchamps@gmail.com';
+
+    // 3) Normalized set of granted keys (fixes key-name mismatches)
+    const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const granted = new Set(
+      Object.entries(userData.permissions?.dashboardCards || {})
+        .filter(([_, v]) => v === true)
+        .map(([k]) => norm(k))
+    );
+    const has = (...aliases) => isAdmin || aliases.some(a => granted.has(norm(a)));
+
+    console.log('[PERMS] dashboardCards =', userData.permissions?.dashboardCards);
+
+    // 4) Show/hide cards (aliases cover old + new key names)
+    const cardRules = {
+      'card-studentManagement': ['studentManagement'],
+      'card-newStudentList':    ['newStudentList', 'newStudent', 'studentList'],
+      'card-timetable':         ['timetable'],
+      'card-monthlyReports':    ['monthlyReports'],
+      'card-progressCharts':    ['progressCharts'],
+      'card-attendance':        ['attendance'],
+      'card-followUps':         ['followUps'],
+      'card-dropBook':          ['dropBook'],
+      'card-bulletin':          ['bulletin', 'centreBulletin', 'centerBulletin'],
+      'card-labelEditor':       ['labelEditor'],
+      'card-changeClasses':     ['changeClasses'],
+    };
+
+    for (const [cardId, aliases] of Object.entries(cardRules)) {
+      const card = document.getElementById(cardId);
+      if (card) card.style.display = has(...aliases) ? 'flex' : 'none';
+    }
+
+    const fabChangeClasses = document.getElementById('fabChangeClasses');
+    if (fabChangeClasses) {
+      fabChangeClasses.style.display = has('changeClasses') ? 'flex' : 'none';
     }
   } catch (err) {
     console.error("Error applying dashboard permissions:", err);
@@ -2878,15 +2925,16 @@ function computeExpectedNotArrived() {
       const d = new Date(r.checkInTime);
       if (!isNaN(d.getTime())) {
         return d.getFullYear() === now.getFullYear() &&
-               d.getMonth() === now.getMonth() &&
-               d.getDate() === now.getDate();
+          d.getMonth() === now.getMonth() &&
+          d.getDate() === now.getDate();
       }
     }
     return validDates.has(r.date);
   };
 
-  // Arrived index: id / studentNumber / name → Set(normalized subjects)
+  // Arrived index
   const arrivedSubjects = new Map();
+
   const markArrived = (key, subj) => {
     if (!key) return;
     if (!arrivedSubjects.has(key)) arrivedSubjects.set(key, new Set());
@@ -2895,35 +2943,79 @@ function computeExpectedNotArrived() {
 
   attendanceRecordsCache.forEach(r => {
     if (!isRecordToday(r)) return;
+
     const subj = dashAttendanceNormalizeText(r.subject);
     if (!subj) return;
+
     if (r.studentId) markArrived(`id:${r.studentId}`, subj);
-    if (r.studentNumber !== undefined && r.studentNumber !== null && String(r.studentNumber).trim() !== '') {
+
+    if (
+      r.studentNumber !== undefined &&
+      r.studentNumber !== null &&
+      String(r.studentNumber).trim() !== ''
+    ) {
       markArrived(`num:${String(r.studentNumber)}`, subj);
     }
-    // ✅ Index by nameCn if available
+
     const recNameCn = dashAttendanceNormalizeText(r.nameCn || '');
     if (recNameCn && recNameCn !== '-') markArrived(`name:${recNameCn}`, subj);
 
-    // ✅ Also index by nameEn/name if different
     const recNameEn = dashAttendanceNormalizeText(r.nameEn || r.name || '');
     if (recNameEn && recNameEn !== '-' && recNameEn !== recNameCn) {
       markArrived(`name:${recNameEn}`, subj);
     }
   });
 
+  // Class change indexes
+  const classChangeAbsent = new Set();
+  const classChangeDue = [];
+  const classChangeDueSet = new Set();
+
+  classChangesCache.forEach((cc) => {
+    if (!cc) return;
+
+    const ccSubjectKey = dashAttendanceNormalizeText(cc.subject);
+    const studentKey = `${String(cc.studentId || '')}|${ccSubjectKey}`;
+
+    // If student is marked CC/MC for today, remove from expected list.
+    if (
+      cc.absenceDate === todayLocal &&
+      cc.replacementStatus !== 'cancelled'
+    ) {
+      classChangeAbsent.add(studentKey);
+    }
+
+    // If replacement class is due today, show it as CC expected item.
+    if (
+      cc.replacementDate === todayLocal &&
+      cc.replacementStatus === 'scheduled'
+    ) {
+      classChangeDue.push(cc);
+      classChangeDueSet.add(studentKey);
+    }
+  });
+
   const hasArrived = (student, subjKey) => {
     const keys = [];
+
     if (student.id) keys.push(`id:${student.id}`);
-    if (student.studentNumber !== undefined && student.studentNumber !== null && String(student.studentNumber).trim() !== '') {
+
+    if (
+      student.studentNumber !== undefined &&
+      student.studentNumber !== null &&
+      String(student.studentNumber).trim() !== ''
+    ) {
       keys.push(`num:${String(student.studentNumber)}`);
     }
-    // ✅ Check both nameCn and name
+
     const nameCn = dashAttendanceNormalizeText(student.nameCn || '');
     if (nameCn && nameCn !== '-') keys.push(`name:${nameCn}`);
+
     const nameEn = dashAttendanceNormalizeText(student.name || '');
-    if (nameEn && nameEn !== '-' && nameEn !== nameCn) keys.push(`name:${nameEn}`);
-    
+    if (nameEn && nameEn !== '-' && nameEn !== nameCn) {
+      keys.push(`name:${nameEn}`);
+    }
+
     return keys.some(k => arrivedSubjects.get(k)?.has(subjKey));
   };
 
@@ -2936,24 +3028,43 @@ function computeExpectedNotArrived() {
       if (!sub || !sub.name || !sub.timeslots) return;
       if (!expectedIsSubjectActiveOnDate(sub, now)) return;
 
-      const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots);
+      const subjectKey = dashAttendanceNormalizeText(sub.name);
+      const classKey = `${String(student.id || '')}|${subjectKey}`;
+
+      // Hidden because CC/MC marked for today.
+      if (classChangeAbsent.has(classKey)) return;
+
+      // Avoid duplicate if replacement due today.
+      if (classChangeDueSet.has(classKey)) return;
+
+      const tsList = Array.isArray(sub.timeslots)
+        ? sub.timeslots
+        : Object.values(sub.timeslots);
+
       const todaysSlots = [];
+
       tsList.forEach(ts => {
         if (!ts) return;
+
         const tsCenter = ts.center || student.homeCenterId || centerId;
         if (tsCenter !== centerId) return;
+
         if (expectedNormalizeWeekday(ts.day) !== todayName) return;
+
         const time = expectedNormalizeTime(ts.time);
         if (!time) return;
+
         todaysSlots.push(time);
       });
+
       if (!todaysSlots.length) return;
 
-      // ✅ Already checked in for this subject today → remove from list
-      if (hasArrived(student, dashAttendanceNormalizeText(sub.name))) return;
+      if (hasArrived(student, subjectKey)) return;
 
       const sorted = todaysSlots.sort();
+
       if (!groups.has(sub.name)) groups.set(sub.name, []);
+
       groups.get(sub.name).push({
         student,
         subjectName: sub.name,
@@ -2964,42 +3075,124 @@ function computeExpectedNotArrived() {
     });
   });
 
+  // Add scheduled CC replacements due today.
+  classChangeDue.forEach((cc) => {
+    const subjectKey = dashAttendanceNormalizeText(cc.subject);
+
+    const student = allStudentsByIdGlobal.get(String(cc.studentId)) ||
+      attendanceStudentById.get(String(cc.studentId)) ||
+      {
+        id: cc.studentId,
+        studentNumber: cc.studentNumber,
+        nameCn: cc.nameCn,
+        nickname: cc.nickname,
+        grade: cc.grade,
+        homeCenterId: cc.homeCenterId,
+        homeCenterName: cc.homeCenterName
+      };
+
+    if (hasArrived(student, subjectKey)) return;
+
+    if (!groups.has(cc.subject)) groups.set(cc.subject, []);
+
+    const time = expectedNormalizeTime(cc.replacementTime) || '--:--';
+
+    groups.get(cc.subject).push({
+      student,
+      subjectName: cc.subject,
+      time,
+      allTimes: [time],
+      status: 'CC',
+      isClassChange: true,
+      classChangeId: cc.id,
+      absenceDate: cc.absenceDate,
+      type: cc.type
+    });
+  });
+
   groups.forEach(list => list.sort((a, b) => {
-    const aLate = a.status === 'Late', bLate = b.status === 'Late';
+    if (!!a.isClassChange !== !!b.isClassChange) {
+      return a.isClassChange ? -1 : 1;
+    }
+
+    const aLate = a.status === 'Late';
+    const bLate = b.status === 'Late';
+
     if (aLate !== bLate) return aLate ? -1 : 1;
+
     return (a.time || '99:99').localeCompare(b.time || '99:99');
   }));
 
   return groups;
 }
 
-function buildExpectedStudentRow({ student, time, allTimes, status }) {
+function buildExpectedStudentRow({ student, time, allTimes, status, isClassChange, absenceDate }) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'expected-student-row';
+
+  if (isClassChange) {
+    btn.classList.add('class-change');
+  }
 
   const visiting = student.homeCenterId && student.homeCenterId !== centerId;
   if (visiting) btn.classList.add('visiting');
 
   const pinyin = getDashAttendancePinyin(student);
   const displayName = student.nameCn || student.name || pinyin || student.nickname || 'Unknown';
-  const meta = [pinyin, student.grade ? `Grade ${student.grade}` : '', student.studentNumber ? `No: ${student.studentNumber}` : '']
-    .filter(Boolean).join(' • ');
 
-  let chipClass = 'chip-scheduled', chipText = expectedT('dashboard.attendance.scheduled', 'Scheduled');
-  if (status === 'Late') { chipClass = 'chip-late'; chipText = expectedT('dashboard.attendance.late', 'Late'); }
-  else if (status === 'On Time') { chipClass = 'chip-due'; chipText = expectedT('dashboard.attendance.dueNow', 'Due now'); }
+  const metaParts = [
+    pinyin,
+    student.grade ? `Grade ${student.grade}` : '',
+    student.studentNumber ? `No: ${student.studentNumber}` : ''
+  ].filter(Boolean);
+
+  if (isClassChange && absenceDate) {
+    metaParts.push(`⟲ ${absenceDate}`);
+  }
+
+  const meta = metaParts.join(' • ');
+
+  let chipClass = 'chip-scheduled';
+  let chipText = expectedT('dashboard.attendance.scheduled', 'Scheduled');
+
+  if (isClassChange) {
+    chipClass = 'chip-cc';
+    chipText = t('dashboard.attendance.classChangeBadge');
+  } else if (status === 'Late') {
+    chipClass = 'chip-late';
+    chipText = expectedT('dashboard.attendance.late', 'Late');
+  } else if (status === 'On Time') {
+    chipClass = 'chip-due';
+    chipText = expectedT('dashboard.attendance.dueNow', 'Due now');
+  }
 
   btn.innerHTML = `
     <span class="expected-student-main">
-      <span class="expected-student-name">${dashAttendanceEscapeHtml(displayName)}</span>
+      <span class="expected-student-name">
+        ${isClassChange ? '🔄 ' : ''}${dashAttendanceEscapeHtml(displayName)}
+      </span>
+
       ${meta ? `<span class="expected-student-sub">${dashAttendanceEscapeHtml(meta)}</span>` : ''}
     </span>
-    ${visiting ? `<span class="expected-student-center">🏫 ${dashAttendanceEscapeHtml(student.homeCenterName || '')}</span>` : ''}
-    <span class="expected-student-time" title="${dashAttendanceEscapeHtml(allTimes.join(', '))}">🕒 ${dashAttendanceEscapeHtml(time || '--:--')}</span>
-    <span class="expected-status-chip ${chipClass}">${chipText}</span>
+
+    ${visiting ? `
+      <span class="expected-student-center">
+        🏫 ${dashAttendanceEscapeHtml(student.homeCenterName || '')}
+      </span>
+    ` : ''}
+
+    <span class="expected-student-time" title="${dashAttendanceEscapeHtml(allTimes.join(', '))}">
+      🕒 ${dashAttendanceEscapeHtml(time || '--:--')}
+    </span>
+
+    <span class="expected-status-chip ${chipClass}">
+      ${chipText}
+    </span>
   `;
+
   btn.addEventListener('click', () => selectDashboardAttendanceStudent(student, 'manual'));
+
   return btn;
 }
 
@@ -3107,7 +3300,673 @@ function startExpectedTicker() {
 function stopExpectedTicker() {
   if (expectedTickerTimer) { clearInterval(expectedTickerTimer); expectedTickerTimer = null; }
 }
-function stopExpectedSync() { stopExpectedRealtimeSync(); stopExpectedTicker(); }
+
+function stopExpectedSync() {
+  stopExpectedRealtimeSync();
+  stopExpectedTicker();
+  stopClassChangesRealtimeSync();
+}
+
+// ============================================
+// 🔄 CLASS CHANGE / MISSED CLASS FUNCTIONS
+// ============================================
+
+function dashAttendanceToISODate(dateObj) {
+  return `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+}
+
+function dashAttendanceRecordMatchesDate(record, dateStr) {
+  if (!record || !dateStr) return false;
+
+  if (record.date === dateStr) return true;
+
+  if (record.checkInTime) {
+    const d = new Date(record.checkInTime);
+    if (!isNaN(d.getTime())) {
+      return dashAttendanceToISODate(d) === dateStr;
+    }
+  }
+
+  return false;
+}
+
+function getClassChangeTypeLabel(type) {
+  switch (type) {
+    case 'CC_PU': return t('dashboard.attendance.typeCCPU');
+    case 'CC_NO_PU': return t('dashboard.attendance.typeCCNoPU');
+    case 'MC': return t('dashboard.attendance.typeMC');
+    case 'MC_PU': return t('dashboard.attendance.typeMCPU');
+    default: return type || '-';
+  }
+}
+
+function dashAttendanceTypeIsCC(type) {
+  return String(type || '').startsWith('CC');
+}
+
+async function loadDashboardClassChanges(force = false) {
+  if (!centerId) return [];
+
+  if (classChangesLoaded && !force) {
+    return classChangesCache;
+  }
+
+  const snap = await get(ref(db, `centers/${centerId}/classChanges`));
+  classChangesCache = [];
+
+  if (snap.exists()) {
+    snap.forEach((child) => {
+      classChangesCache.push({
+        ...child.val(),
+        id: child.key
+      });
+    });
+  }
+
+  classChangesLoaded = true;
+  return classChangesCache;
+}
+
+function startClassChangesRealtimeSync() {
+  if (!centerId || classChangesRealtimeRef) return;
+
+  classChangesRealtimeRef = ref(db, `centers/${centerId}/classChanges`);
+
+  const upsertLocalClassChange = (snap) => {
+    const record = { ...snap.val(), id: snap.key };
+    const index = classChangesCache.findIndex((r) => r.id === record.id);
+
+    if (index >= 0) {
+      classChangesCache[index] = record;
+    } else {
+      classChangesCache.push(record);
+    }
+
+    if (!isDashModalHidden('dashAttendanceManualModal')) {
+      renderExpectedNotArrived();
+    }
+
+    if (!isDashModalHidden('dashAttendanceConfirmModal')) {
+      renderAbsenceExistingRecords();
+    }
+  };
+
+  onChildAdded(classChangesRealtimeRef, upsertLocalClassChange);
+  onChildChanged(classChangesRealtimeRef, upsertLocalClassChange);
+
+  onChildRemoved(classChangesRealtimeRef, (snap) => {
+    classChangesCache = classChangesCache.filter((r) => r.id !== snap.key);
+
+    if (!isDashModalHidden('dashAttendanceManualModal')) {
+      renderExpectedNotArrived();
+    }
+
+    if (!isDashModalHidden('dashAttendanceConfirmModal')) {
+      renderAbsenceExistingRecords();
+    }
+  });
+}
+
+function stopClassChangesRealtimeSync() {
+  if (!classChangesRealtimeRef) return;
+
+  off(classChangesRealtimeRef);
+  classChangesRealtimeRef = null;
+}
+
+function confirmAbsenceDateWarnings(dates = []) {
+  const uniqueWarnings = [
+    ...new Set(
+      dates
+        .filter(Boolean)
+        .flatMap((date) => getDashAttendanceDateWarnings(date))
+    )
+  ];
+
+  if (uniqueWarnings.length === 0) return true;
+
+  return confirm(
+    `${t('dashboard.dtWarning.continueAnyway')}\n\n${uniqueWarnings.join('\n')}`
+  );
+}
+
+function getAbsenceSlotForDate(student, subject, dateStr) {
+  const result = {
+    day: '',
+    time: '',
+    fullSchedule: t('dashboard.attendance.noSchedule')
+  };
+
+  if (!subject || !dateStr) return result;
+
+  const tsList = Array.isArray(subject.timeslots)
+    ? subject.timeslots
+    : Object.values(subject.timeslots || {});
+
+  if (tsList.length) {
+    result.fullSchedule = tsList
+      .map((slot) => `${String(slot.day || '').substring(0, 3)} ${slot.time || '--:--'}`)
+      .join(', ');
+  }
+
+  const dateObj = new Date(`${dateStr}T00:00:00`);
+  if (isNaN(dateObj.getTime())) return result;
+
+  const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+
+  const matchingTimes = tsList
+    .filter((ts) => {
+      if (!ts) return false;
+      const tsCenter = ts.center || student.homeCenterId || centerId;
+      if (tsCenter !== centerId) return false;
+      return expectedNormalizeWeekday(ts.day) === dayName;
+    })
+    .map((ts) => expectedNormalizeTime(ts.time))
+    .filter(Boolean)
+    .sort();
+
+  result.day = dayName;
+  result.time = matchingTimes[0] || '';
+
+  return result;
+}
+
+function setDashAttendanceConfirmMode(mode) {
+  attendanceConfirmMode = mode;
+
+  const attendanceBtn = document.getElementById('dashAttendanceModeAttendanceBtn');
+  const absenceBtn = document.getElementById('dashAttendanceModeAbsenceBtn');
+  const attendancePane = document.getElementById('dashAttendanceAttendancePane');
+  const absencePane = document.getElementById('dashAttendanceAbsencePane');
+  const confirmBtn = document.getElementById('dashAttendanceConfirmBtn');
+  const title = document.getElementById('dashAttendanceConfirmTitle');
+
+  if (!attendanceBtn || !absenceBtn || !attendancePane || !absencePane || !confirmBtn) return;
+
+  if (mode === 'absence') {
+    attendanceBtn.classList.remove('active');
+    absenceBtn.classList.add('active');
+
+    attendancePane.classList.add('hidden');
+    absencePane.classList.remove('hidden');
+
+    if (title) title.textContent = t('dashboard.attendance.absenceTitle');
+    confirmBtn.textContent = t('dashboard.attendance.saveAbsence');
+
+    renderDashboardAbsencePane();
+  } else {
+    attendanceBtn.classList.add('active');
+    absenceBtn.classList.remove('active');
+
+    attendancePane.classList.remove('hidden');
+    absencePane.classList.add('hidden');
+
+    if (title) title.textContent = t('dashboard.attendance.confirmTitle');
+    confirmBtn.textContent = t('dashboard.attendance.confirm');
+  }
+}
+
+function renderDashboardAbsencePane() {
+  const infoDiv = document.getElementById('dashAbsenceStudentInfo');
+  const dateInput = document.getElementById('dashAbsenceDateInput');
+  const dateLabel = document.getElementById('dashAbsenceDateLabel');
+  const noteLabel = document.getElementById('dashAbsenceNoteLabel');
+  const noteInput = document.getElementById('dashAbsenceNote');
+
+  if (!infoDiv || !dateInput) return;
+
+  const student = attendanceSelectedStudent;
+
+  if (dateLabel) dateLabel.textContent = t('dashboard.attendance.absenceDate');
+  if (noteLabel) noteLabel.textContent = t('dashboard.attendance.absenceNote');
+
+  if (!student) {
+    infoDiv.innerHTML = `<span style="color:#dc3545;">❌ No student selected.</span>`;
+    document.getElementById('dashAbsenceSubjectRows').innerHTML = '';
+    document.getElementById('dashAbsenceExistingList').innerHTML = '';
+    return;
+  }
+
+  if (!dateInput.value) {
+    dateInput.value = dashAttendanceTodayISO();
+  }
+
+  if (noteInput && noteInput.value === undefined) {
+    noteInput.value = '';
+  }
+
+  const pinyin = getDashAttendancePinyin(student);
+  const visiting = isVisitingStudent(student);
+
+  infoDiv.innerHTML = `
+    ${visiting ? `
+      <div style="background:#fef3c7; color:#92400e; padding:0.55rem 0.75rem; border-radius:6px; margin-bottom:0.75rem; font-size:0.85rem; font-weight:600; border:1px solid #fcd34d;">
+        🏫 Visiting from: <strong>${dashAttendanceEscapeHtml(student.homeCenterName || '')}</strong>
+      </div>
+    ` : ''}
+
+    <div style="background:#f8fafc; padding:0.75rem; border-radius:10px; border:1px solid #e2e8f0;">
+      <h3 style="margin:0 0 0.3rem; font-size:1.1rem; font-weight:800;">
+        ${dashAttendanceEscapeHtml(student.nameCn || student.name || pinyin || 'N/A')}
+      </h3>
+
+      <div style="display:flex; flex-wrap:wrap; gap:0.25rem 0.75rem; font-size:0.85rem; color:#475569;">
+        <span><strong>Pinyin:</strong> ${dashAttendanceEscapeHtml(pinyin || '-')}</span>
+        <span><strong>Nickname:</strong> ${dashAttendanceEscapeHtml(student.nickname || '-')}</span>
+        <span><strong>Grade:</strong> ${dashAttendanceEscapeHtml(student.grade || '-')}</span>
+        <span><strong>School:</strong> ${dashAttendanceEscapeHtml(student.school || '-')}</span>
+      </div>
+    </div>
+  `;
+
+  renderAbsenceSubjectRows();
+  renderAbsenceExistingRecords();
+}
+
+function renderAbsenceSubjectRows() {
+  const container = document.getElementById('dashAbsenceSubjectRows');
+  const dateInput = document.getElementById('dashAbsenceDateInput');
+
+  if (!container || !dateInput) return;
+
+  const student = attendanceSelectedStudent;
+  const dateStr = dateInput.value || dashAttendanceTodayISO();
+
+  container.innerHTML = '';
+
+  if (!student) return;
+
+  const subjects = getDashAttendanceCurrentSubjects(student);
+
+  if (!subjects.length) {
+    container.innerHTML = `
+      <div style="padding:0.8rem; border:1px solid #fecaca; background:#fee2e2; color:#b91c1c; border-radius:10px;">
+        ${dashAttendanceEscapeHtml(t('dashboard.attendance.noActiveSubjects'))}
+      </div>
+    `;
+    return;
+  }
+
+  subjects.forEach((subject) => {
+    const slot = getAbsenceSlotForDate(student, subject, dateStr);
+
+    const row = document.createElement('div');
+    row.className = 'dash-absence-subject-row';
+
+    row.innerHTML = `
+      <div class="dash-absence-subject-top">
+        <input
+          type="checkbox"
+          class="absence-subject-check"
+          value="${dashAttendanceEscapeHtml(subject.name)}"
+          data-level="${dashAttendanceEscapeHtml(subject.currentLevel || subject.startLevel || '')}"
+          data-day="${dashAttendanceEscapeHtml(slot.day)}"
+          data-time="${dashAttendanceEscapeHtml(slot.time)}"
+          checked
+        >
+
+        <div class="dash-absence-subject-body">
+          <div class="dash-absence-subject-name">
+            ${dashAttendanceEscapeHtml(subject.name)}
+            <span style="color:#64748b; font-weight:600;">
+              (${dashAttendanceEscapeHtml(subject.currentLevel || subject.startLevel || '?')})
+            </span>
+          </div>
+
+          <div class="dash-absence-subject-meta">
+            🕒 ${dashAttendanceEscapeHtml(slot.fullSchedule)}<br>
+            ${dashAttendanceEscapeHtml(dateStr)}: ${dashAttendanceEscapeHtml(slot.day || 'No day')} ${dashAttendanceEscapeHtml(slot.time || '--:--')}
+          </div>
+        </div>
+      </div>
+
+      <div class="dash-absence-controls">
+        <select class="absence-type-select">
+          <option value="CC_PU" selected>${dashAttendanceEscapeHtml(t('dashboard.attendance.typeCCPU'))}</option>
+          <option value="CC_NO_PU">${dashAttendanceEscapeHtml(t('dashboard.attendance.typeCCNoPU'))}</option>
+          <option value="MC">${dashAttendanceEscapeHtml(t('dashboard.attendance.typeMC'))}</option>
+          <option value="MC_PU">${dashAttendanceEscapeHtml(t('dashboard.attendance.typeMCPU'))}</option>
+        </select>
+
+        <div class="dash-absence-replacement">
+          <input type="date" class="absence-replacement-date">
+          <input type="time" class="absence-replacement-time" step="900">
+        </div>
+      </div>
+    `;
+
+    const typeSelect = row.querySelector('.absence-type-select');
+    const replacementDiv = row.querySelector('.dash-absence-replacement');
+
+    const toggleReplacement = () => {
+      replacementDiv.classList.toggle(
+        'hidden',
+        !dashAttendanceTypeIsCC(typeSelect.value)
+      );
+    };
+
+    typeSelect.addEventListener('change', toggleReplacement);
+    toggleReplacement();
+
+    container.appendChild(row);
+  });
+}
+
+function renderAbsenceExistingRecords() {
+  const container = document.getElementById('dashAbsenceExistingList');
+  const dateInput = document.getElementById('dashAbsenceDateInput');
+
+  if (!container || !dateInput) return;
+
+  const student = attendanceSelectedStudent;
+  const dateStr = dateInput.value || dashAttendanceTodayISO();
+
+  container.innerHTML = '';
+
+  if (!student) return;
+
+  const records = classChangesCache
+    .filter((cc) => {
+      return String(cc.studentId || '') === String(student.id || '') && (
+        cc.absenceDate === dateStr ||
+        cc.replacementDate === dateStr
+      );
+    })
+    .sort((a, b) => String(a.subject || '').localeCompare(String(b.subject || '')));
+
+  const box = document.createElement('div');
+  box.className = 'dash-absence-existing';
+
+  box.innerHTML = `
+    <div class="dash-absence-existing-header">
+      ${dashAttendanceEscapeHtml(t('dashboard.attendance.absenceExistingTitle'))}
+    </div>
+  `;
+
+  if (!records.length) {
+    box.insertAdjacentHTML(
+      'beforeend',
+      `<div class="dash-absence-existing-row">${dashAttendanceEscapeHtml(t('dashboard.attendance.absenceNoExisting'))}</div>`
+    );
+    container.appendChild(box);
+    return;
+  }
+
+  records.forEach((record) => {
+    const row = document.createElement('div');
+    row.className = 'dash-absence-existing-row';
+
+    const replacementText = record.replacementDate
+      ? `${t('dashboard.attendance.replacementLabel')}: ${record.replacementDate} ${record.replacementTime || ''}`
+      : t('dashboard.attendance.absentLabel');
+
+    row.innerHTML = `
+      <div class="dash-absence-existing-info">
+        <div class="dash-absence-existing-title">
+          ${dashAttendanceEscapeHtml(record.subject || '-')} • ${dashAttendanceEscapeHtml(getClassChangeTypeLabel(record.type))}
+        </div>
+        <div class="dash-absence-existing-sub">
+          ${dashAttendanceEscapeHtml(replacementText)}
+          ${record.homeworkPickedUp ? ' • PU' : ''}
+        </div>
+      </div>
+
+      <button type="button" class="dash-absence-delete-btn">🗑</button>
+    `;
+
+    row.querySelector('.dash-absence-delete-btn').addEventListener('click', async () => {
+      await deleteClassChangeRecord(record.id);
+    });
+
+    box.appendChild(row);
+  });
+
+  container.appendChild(box);
+}
+
+async function deleteClassChangeRecord(classChangeId) {
+  if (!classChangeId || !centerId) return;
+
+  if (!confirm(t('dashboard.attendance.deleteClassChangeConfirm'))) return;
+
+  try {
+    await remove(ref(db, `centers/${centerId}/classChanges/${classChangeId}`));
+
+    classChangesCache = classChangesCache.filter((r) => r.id !== classChangeId);
+
+    renderExpectedNotArrived();
+    renderAbsenceExistingRecords();
+
+    showDashboardToast(t('dashboard.attendance.classChangeDeleted'));
+  } catch (err) {
+    console.error('Delete class change failed:', err);
+    showDashboardToast(t('dashboard.attendance.classChangeDeleteFailed'), true);
+  }
+}
+
+async function saveDashboardAbsence() {
+  const student = attendanceSelectedStudent;
+  if (!student || !student.id) {
+    showDashboardToast(t('dashboard.attendance.studentNotFound'), true);
+    return;
+  }
+
+  const dateInput = document.getElementById('dashAbsenceDateInput');
+  const noteInput = document.getElementById('dashAbsenceNote');
+  const absenceDate = dateInput?.value || '';
+  const note = noteInput?.value?.trim() || '';
+
+  if (!absenceDate) {
+    showDashboardToast(t('dashboard.attendance.absenceDate'), true);
+    return;
+  }
+
+  const rows = Array.from(document.querySelectorAll('#dashAbsenceSubjectRows .dash-absence-subject-row'));
+  const selected = [];
+
+  for (const row of rows) {
+    const checkbox = row.querySelector('.absence-subject-check');
+    if (!checkbox || !checkbox.checked) continue;
+
+    const type = row.querySelector('.absence-type-select')?.value || '';
+    const isCC = dashAttendanceTypeIsCC(type);
+
+    const replacementDate = row.querySelector('.absence-replacement-date')?.value || '';
+    const replacementTime = row.querySelector('.absence-replacement-time')?.value || '';
+
+    if (isCC && (!replacementDate || !replacementTime)) {
+      showDashboardToast(t('dashboard.attendance.absenceReplacementMissing'), true);
+      return;
+    }
+
+    selected.push({
+      subject: checkbox.value,
+      level: checkbox.dataset.level || '',
+      originalDay: checkbox.dataset.day || '',
+      originalTime: checkbox.dataset.time || '',
+      type,
+      isCC,
+      replacementDate,
+      replacementTime,
+      homeworkPickedUp: type === 'CC_PU' || type === 'MC_PU'
+    });
+  }
+
+  if (!selected.length) {
+    showDashboardToast(t('dashboard.attendance.absenceSelectSubject'), true);
+    return;
+  }
+
+  // Warn if attendance already exists on that date.
+  const attendanceConflicts = attendanceRecordsCache.filter((record) => {
+    return dashAttendanceRecordMatchesDate(record, absenceDate) &&
+      String(record.studentId || '') === String(student.id || '') &&
+      selected.some((item) => (
+        dashAttendanceNormalizeText(item.subject) === dashAttendanceNormalizeText(record.subject)
+      ));
+  });
+
+  if (attendanceConflicts.length > 0) {
+    const proceed = await showDashAttendanceWarning({
+      title: t('dashboard.attendance.existingAttendanceTitle'),
+      message: t('dashboard.attendance.existingAttendanceText'),
+      items: attendanceConflicts.map(formatDashAttendanceRecordLabel),
+      proceedText: t('dashboard.attendance.proceed'),
+      cancelText: t('dashboard.attendance.cancel')
+    });
+
+    if (!proceed) return;
+  }
+
+  // Warn for holidays/closed days.
+  const warningDates = [
+    absenceDate,
+    ...selected
+      .filter((item) => item.isCC)
+      .map((item) => item.replacementDate)
+  ];
+
+  if (!confirmAbsenceDateWarnings(warningDates)) return;
+
+  const btn = document.getElementById('dashAttendanceConfirmBtn');
+  const originalText = btn?.textContent || t('dashboard.attendance.saveAbsence');
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Saving...';
+  }
+
+  try {
+    await loadDashboardClassChanges(true);
+
+    const updates = {};
+
+    for (const item of selected) {
+      const subjectNorm = dashAttendanceNormalizeText(item.subject);
+
+      // If this absence date is actually a scheduled replacement day,
+      // update that existing CC instead of creating a duplicate.
+      const existingDue = classChangesCache.find((cc) => {
+        return cc &&
+          String(cc.studentId || '') === String(student.id || '') &&
+          dashAttendanceNormalizeText(cc.subject) === subjectNorm &&
+          cc.replacementDate === absenceDate &&
+          cc.replacementStatus === 'scheduled';
+      });
+
+      if (existingDue) {
+        if (item.isCC) {
+          const history = Array.isArray(existingDue.history) ? [...existingDue.history] : [];
+
+          history.push({
+            replacementDate: existingDue.replacementDate || '',
+            replacementTime: existingDue.replacementTime || '',
+            type: existingDue.type || '',
+            updatedAt: Date.now(),
+            reason: 'CC again'
+          });
+
+          updates[`${existingDue.id}/absenceDate`] = absenceDate;
+          updates[`${existingDue.id}/type`] = item.type;
+          updates[`${existingDue.id}/replacementDate`] = item.replacementDate;
+          updates[`${existingDue.id}/replacementTime`] = item.replacementTime;
+          updates[`${existingDue.id}/replacementStatus`] = 'scheduled';
+          updates[`${existingDue.id}/homeworkPickedUp`] = item.homeworkPickedUp;
+          updates[`${existingDue.id}/note`] = note || existingDue.note || '';
+          updates[`${existingDue.id}/history`] = history;
+          updates[`${existingDue.id}/updatedAt`] = Date.now();
+        } else {
+          updates[`${existingDue.id}/type`] = item.type;
+          updates[`${existingDue.id}/replacementStatus`] = 'missed';
+          updates[`${existingDue.id}/homeworkPickedUp`] = item.homeworkPickedUp;
+          updates[`${existingDue.id}/note`] = note || existingDue.note || '';
+          updates[`${existingDue.id}/updatedAt`] = Date.now();
+        }
+
+        continue;
+      }
+
+      const payload = {
+        studentId: String(student.id || ''),
+        studentNumber: String(student.studentNumber || ''),
+        nameCn: String(student.nameCn || student.name || '-'),
+        nickname: String(student.nickname || '-'),
+        grade: String(student.grade || '-'),
+        school: String(student.school || '-'),
+        pinyin: String(getDashAttendancePinyin(student) || ''),
+        nameEn: String(student.nameEn || student.englishName || ''),
+
+        subject: String(item.subject || ''),
+        subjectLevel: String(item.level || ''),
+
+        type: item.type,
+        absenceDate,
+        originalDay: item.originalDay || '',
+        originalTime: item.originalTime || '',
+
+        replacementDate: item.isCC ? item.replacementDate : '',
+        replacementTime: item.isCC ? item.replacementTime : '',
+        replacementStatus: item.isCC ? 'scheduled' : 'none',
+
+        homeworkPickedUp: item.homeworkPickedUp,
+        note,
+
+        history: [],
+
+        homeCenterId: String(student.homeCenterId || ''),
+        homeCenterName: String(student.homeCenterName || ''),
+        isVisiting: isVisitingStudent(student),
+
+        createdAt: Date.now(),
+        createdBy: auth.currentUser?.uid || '',
+        updatedAt: Date.now()
+      };
+
+      const newRef = push(ref(db, `centers/${centerId}/classChanges`), payload);
+      await newRef;
+
+      classChangesCache.push({
+        ...payload,
+        id: newRef.key
+      });
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await update(ref(db, `centers/${centerId}/classChanges`), updates);
+    }
+
+    await loadDashboardClassChanges(true);
+
+    if (!isDashModalHidden('dashAttendanceManualModal')) {
+      renderExpectedNotArrived();
+    }
+
+    hideDashModal('dashAttendanceConfirmModal');
+
+    const studentName =
+      student.nameCn ||
+      student.name ||
+      getDashAttendancePinyin(student) ||
+      student.nickname ||
+      'student';
+
+    showDashboardToast(t('dashboard.attendance.absenceSaveSuccess', {
+      name: studentName
+    }));
+
+    setTimeout(() => {
+      openDashboardAttendanceManualModal();
+    }, 700);
+  } catch (err) {
+    console.error('Save absence failed:', err);
+    showDashboardToast(t('dashboard.attendance.absenceSaveFailed'), true);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  }
+}
 
 function closeAttendanceConfirmModal() {
   hideDashModal('dashAttendanceConfirmModal');
@@ -3125,43 +3984,30 @@ function getDashAttendanceStatusColor(status) {
 }
 
 function getDashAttendanceDateWarnings(dateStr) {
-  const warnings = [];
-
-  if (!dateStr) return warnings;
-
-  const event = calendarEventsMap[dateStr];
-  const nameSuffix = event?.name ? `: ${event.name}` : '';
-
-  if (event?.type === 'public') {
-    warnings.push(t('dashboard.dtWarning.publicHoliday', {
-      date: dateStr,
-      name: nameSuffix
-    }));
-  }
-
-  if (event?.type === 'center') {
-    warnings.push(t('dashboard.dtWarning.centerHoliday', {
-      date: dateStr,
-      name: nameSuffix
-    }));
-  }
-
-  const otherEvents = getOtherEventsFromCalendarEvent(event);
-  if (otherEvents.length > 0) {
-    warnings.push(
-      `${t('dashboard.holidayOther')}: ${otherEvents.map(o => o.name).join(', ')}`
-    );
-  }
-
-  const dateObj = new Date(`${dateStr}T00:00:00`);
-  if (!isNaN(dateObj.getTime())) {
-    const closedDays = getClosedDaysForCenter(centerName);
-    if (closedDays.includes(dateObj.getDay())) {
-      warnings.push(t('dashboard.dtWarning.closedDay', { date: dateStr }));
+    const warnings = [];
+    if (!dateStr) return warnings;
+    const event = calendarEventsMap[dateStr];
+    const nameSuffix = event?.name ? `: ${event.name}` : '';
+    if (event?.type === 'public') {
+        warnings.push(t('dashboard.dtWarning.publicHoliday', {
+            date: dateStr,
+            name: nameSuffix
+        }));
     }
-  }
-
-  return warnings;
+    if (event?.type === 'center') {
+        warnings.push(t('dashboard.dtWarning.centerHoliday', {
+            date: dateStr,
+            name: nameSuffix
+        }));
+    }
+    const dateObj = new Date(`${dateStr}T00:00:00`);
+    if (!isNaN(dateObj.getTime())) {
+        const closedDays = getClosedDaysForCenter(centerName);
+        if (closedDays.includes(dateObj.getDay())) {
+            warnings.push(t('dashboard.dtWarning.closedDay', { date: dateStr }));
+        }
+    }
+    return warnings;
 }
 
 // ===============================
@@ -3290,7 +4136,14 @@ function setupDashboardAttendanceModals() {
     if (e.target.id === 'dashAttendanceConfirmModal') closeAttendanceConfirmModal();
   });
   document.getElementById('dashAttendanceCancelBtn')?.addEventListener('click', closeAttendanceConfirmModal);
-  document.getElementById('dashAttendanceConfirmBtn')?.addEventListener('click', recordDashboardAttendance);
+
+  document.getElementById('dashAttendanceConfirmBtn')?.addEventListener('click', async () => {
+    if (attendanceConfirmMode === 'absence') {
+      await saveDashboardAbsence();
+    } else {
+      await recordDashboardAttendance();
+    }
+  });
 
   // Scan modal
   document.getElementById('closeDashAttendanceScanModal')?.addEventListener('click', async () => {
@@ -3301,6 +4154,19 @@ function setupDashboardAttendanceModals() {
     if (e.target.id === 'dashAttendanceScanModal') {
       await stopDashboardAttendanceScanner();
     }
+  });
+
+  document.getElementById('dashAttendanceModeAttendanceBtn')?.addEventListener('click', () => {
+  setDashAttendanceConfirmMode('attendance');
+  });
+
+  document.getElementById('dashAttendanceModeAbsenceBtn')?.addEventListener('click', () => {
+    setDashAttendanceConfirmMode('absence');
+  });
+
+  document.getElementById('dashAbsenceDateInput')?.addEventListener('change', () => {
+    renderAbsenceSubjectRows();
+    renderAbsenceExistingRecords();
   });
 
   // Attendance method options
@@ -3498,17 +4364,17 @@ async function openDashboardAttendanceManualModal() {
     await Promise.all([
       loadDashboardAttendanceStudents(),
       loadAllStudentsGlobal(),
-      loadDashboardAttendanceRecords(true)  // Force reload
+      loadDashboardAttendanceRecords(true),
+      loadDashboardClassChanges(true)
     ]);
   } catch (err) { 
     console.error('Expected list preload failed:', err); 
   }
   
-  // ✅ Render the expected list after records are loaded
-  renderExpectedNotArrived();
-  
-  startExpectedRealtimeSync();
-  startExpectedTicker();
+    renderExpectedNotArrived();
+    startExpectedRealtimeSync();
+    startExpectedTicker();
+    startClassChangesRealtimeSync();
 }
 
 async function handleDashboardAttendanceManualSearch() {
@@ -3672,6 +4538,8 @@ async function selectDashboardAttendanceStudent(student, method = 'manual') {
 
 function openDashboardAttendanceConfirmModal(existingRecords = []) {
   renderDashboardAttendanceConfirm(existingRecords);
+  renderDashboardAbsencePane();
+  setDashAttendanceConfirmMode('attendance');
   showDashModal('dashAttendanceConfirmModal');
 }
 
@@ -3875,8 +4743,18 @@ async function recordDashboardAttendance() {
   try {
     const attendanceRef = ref(db, `centers/${centerId}/attendance`);
 
+    const classChangeUpdates = {};
+
     const saves = Array.from(checks).map(async (checkbox) => {
-    const payload = {
+      const scheduledCC = classChangesCache.find((cc) => {
+        return cc &&
+          cc.replacementStatus === 'scheduled' &&
+          cc.replacementDate === dateStr &&
+          String(cc.studentId || '') === String(attendanceSelectedStudent.id || '') &&
+          dashAttendanceNormalizeText(cc.subject) === dashAttendanceNormalizeText(checkbox.value);
+      });
+
+      const payload = {
       studentId: String(attendanceSelectedStudent.id || ''),
       studentNumber: String(attendanceSelectedStudent.studentNumber || ''),
       nameCn: String(attendanceSelectedStudent.nameCn || attendanceSelectedStudent.name || '-'),
@@ -3894,6 +4772,8 @@ async function recordDashboardAttendance() {
       homeCenterId: String(attendanceSelectedStudent.homeCenterId || ''),
       homeCenterName: String(attendanceSelectedStudent.homeCenterName || ''),
       isVisiting: isVisitingStudent(attendanceSelectedStudent),
+      fromClassChange: scheduledCC ? true : false,
+      classChangeId: scheduledCC ? scheduledCC.id : '',
       timestamp: serverTimestamp()
     };
 
@@ -3904,9 +4784,21 @@ async function recordDashboardAttendance() {
         ...payload,
         id: newRef.key
       });
+
+      if (scheduledCC) {
+        classChangeUpdates[`${scheduledCC.id}/replacementStatus`] = 'completed';
+        classChangeUpdates[`${scheduledCC.id}/completedAt`] = new Date().toISOString();
+        classChangeUpdates[`${scheduledCC.id}/updatedAt`] = new Date().toISOString();
+      }
+
     });
 
     await Promise.all(saves);
+    
+    if (Object.keys(classChangeUpdates).length > 0) {
+      await update(ref(db, `centers/${centerId}/classChanges`), classChangeUpdates);
+      await loadDashboardClassChanges(true);
+    }
     
     // ✅ INSTANT UPDATE: The records are already in the cache via the .push() above.
     if (!isDashModalHidden('dashAttendanceManualModal')) {

@@ -70,7 +70,6 @@ function initializeTimetable() {
 
     function setPrintActive(container) {
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('print-active'));
-
         if (container) {
             container.classList.add('print-active');
         }
@@ -81,86 +80,69 @@ function initializeTimetable() {
             document.querySelector('.tab-content.active') ||
             document.querySelector('.tab-content.print-active') ||
             dayViewContainer;
-
         setPrintActive(activePane);
     }
 
     tabBtns.forEach(btn => {
         btn.addEventListener('click', () => {
             const targetTab = btn.dataset.tab;
-
-            // Update active tab button
             tabBtns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-
-            // Update active tab content
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
 
             if (targetTab === 'dayView') {
                 dayViewContainer.classList.add('active');
                 setPrintActive(dayViewContainer);
-
                 if (daySelect) loadTimetable();
             } else if (targetTab === 'weekView') {
                 weekViewContainer.classList.add('active');
                 setPrintActive(weekViewContainer);
-
                 loadWeekTimetable();
             } else if (targetTab === 'champView') {
                 if (champViewContainer) {
                     champViewContainer.classList.add('active');
                     setPrintActive(champViewContainer);
                 }
-
                 loadChampTimetable();
             }
         });
     });
 
-    // Initialize print view correctly
     syncPrintActiveToActiveTab();
 
-    function showLoader() {
-        document.getElementById('page-loader')?.classList.remove('hidden');
-    }
+    function showLoader() { document.getElementById('page-loader')?.classList.remove('hidden'); }
+    function hideLoader() { document.getElementById('page-loader')?.classList.add('hidden'); }
 
-    function hideLoader() {
-        document.getElementById('page-loader')?.classList.add('hidden');
-    }
-
-    const DAY_MAP = {
-        Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday',
-        Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday'
-    };
+    const DAY_MAP = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' };
     const DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    const DAY_TO_NUM = {
-        Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4,
-        Friday: 5, Saturday: 6, Sunday: 7
-    };
+    const DAY_TO_NUM = { Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6, Sunday: 7 };
     const DAY_ABBR = ['MON', 'TUES', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
-    // ============================================
-    // 🛡️ PERMANENT FIX: ROBUST NORMALIZATION HELPERS
-    // ============================================
-    const DAY_NUMBER_TO_NAME = {
-        0: 'Sunday', 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday',
-        4: 'Thursday', 5: 'Friday', 6: 'Saturday', 7: 'Sunday'
-    };
+    function toISODate(dateObj) {
+        return `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+    }
 
+    function buildClassChangeStudentObj(cc) {
+        const baseName = cc.nameCn || cc.nameEn || 'Unknown';
+        const nick = cc.nickname ? ` (${cc.nickname})` : '';
+        return {
+            grade: cc.grade || '-',
+            name: `${baseName}${nick} [CC]`,
+            level: cc.subjectLevel || '-',
+            worksheetType: cc.worksheetType || 'Paper',
+            isClassChange: true
+        };
+    }
+
+    const DAY_NUMBER_TO_NAME = { 0: 'Sunday', 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday', 7: 'Sunday' };
     const DAY_ALIASES = {
-        monday: 'Monday', mon: 'Monday',
-        tuesday: 'Tuesday', tue: 'Tuesday', tues: 'Tuesday',
+        monday: 'Monday', mon: 'Monday', tuesday: 'Tuesday', tue: 'Tuesday', tues: 'Tuesday',
         wednesday: 'Wednesday', wed: 'Wednesday', weds: 'Wednesday',
         thursday: 'Thursday', thu: 'Thursday', thur: 'Thursday', thurs: 'Thursday',
-        friday: 'Friday', fri: 'Friday',
-        saturday: 'Saturday', sat: 'Saturday',
-        sunday: 'Sunday', sun: 'Sunday',
-        '周一': 'Monday', '星期一': 'Monday', '礼拜一': 'Monday',
-        '周二': 'Tuesday', '星期二': 'Tuesday', '礼拜二': 'Tuesday',
-        '周三': 'Wednesday', '星期三': 'Wednesday', '礼拜三': 'Wednesday',
-        '周四': 'Thursday', '星期四': 'Thursday', '礼拜四': 'Thursday',
-        '周五': 'Friday', '星期五': 'Friday', '礼拜五': 'Friday',
-        '周六': 'Saturday', '星期六': 'Saturday', '礼拜六': 'Saturday',
+        friday: 'Friday', fri: 'Friday', saturday: 'Saturday', sat: 'Saturday', sunday: 'Sunday', sun: 'Sunday',
+        '周一': 'Monday', '星期一': 'Monday', '礼拜一': 'Monday', '周二': 'Tuesday', '星期二': 'Tuesday', '礼拜二': 'Tuesday',
+        '周三': 'Wednesday', '星期三': 'Wednesday', '礼拜三': 'Wednesday', '周四': 'Thursday', '星期四': 'Thursday', '礼拜四': 'Thursday',
+        '周五': 'Friday', '星期五': 'Friday', '礼拜五': 'Friday', '周六': 'Saturday', '星期六': 'Saturday', '礼拜六': 'Saturday',
         '周日': 'Sunday', '星期日': 'Sunday', '周天': 'Sunday', '星期天': 'Sunday', '礼拜天': 'Sunday', '礼拜日': 'Sunday'
     };
 
@@ -188,121 +170,76 @@ function initializeTimetable() {
         return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
     }
 
-    function getTsDay(ts) {
-        return normalizeWeekday(DAY_MAP?.[ts?.day] ?? ts?.day);
-    }
-
-    function getTsTime(ts) {
-        return normalizeTime(ts?.time);
-    }
+    function getTsDay(ts) { return normalizeWeekday(DAY_MAP?.[ts?.day] ?? ts?.day); }
+    function getTsTime(ts) { return normalizeTime(ts?.time); }
 
     function warnInvalidTimeslot(context, centerSnap, centerData, s, sub, ts, extra = {}) {
         console.warn(`[Timetable:${context}] Skipping invalid timeslot`, {
-            center: centerSnap?.key,
-            centerName: centerData?.name,
-            student: s?.nameCn || s?.name || s?.id,
-            subject: sub?.name,
-            timeslot: ts,
-            ...extra
+            center: centerSnap?.key, centerName: centerData?.name,
+            student: s?.nameCn || s?.name || s?.id, subject: sub?.name, timeslot: ts, ...extra
         });
     }
 
-    // 🆕 NEW: Robustly checks if a subject should be visible on a specific date
     function isSubjectActiveOnDate(sub, targetDate) {
         if (!sub || !targetDate) return false;
-        
         const tM = targetDate.getMonth() + 1;
         const tY = targetDate.getFullYear();
 
-        // 1. Check Resume Request (Brings student back)
         if (sub.resumeRequest && sub.resumeRequest.returnMonth && sub.resumeRequest.returnYear) {
             const rM = parseInt(sub.resumeRequest.returnMonth);
             const rY = parseInt(sub.resumeRequest.returnYear);
-            if (rY < tY || (rY === tY && rM <= tM)) {
-                return true; 
-            }
+            if (rY < tY || (rY === tY && rM <= tM)) return true;
         }
 
-        // 2. Check Current Status (Direct Drop/Pause)
         if (sub.status === 'drop') {
             const dM = parseInt(sub.dropMonth);
             const dY = parseInt(sub.dropYear);
-            if (dY < tY || (dY === tY && dM <= tM)) {
-                return false; 
-            }
+            if (dY < tY || (dY === tY && dM <= tM)) return false;
         } else if (sub.status === 'pause') {
             const pfM = parseInt(sub.pauseFromMonth);
             const pfY = parseInt(sub.pauseFromYear);
             const ptM = sub.pauseToMonth ? parseInt(sub.pauseToMonth) : null;
             const ptY = sub.pauseToYear ? parseInt(sub.pauseToYear) : null;
-            
             const isAfterFrom = (pfY < tY || (pfY === tY && pfM <= tM));
             const isBeforeTo = !ptM || !ptY || (ptY > tY || (ptY === tY && ptM >= tM));
-            
-            if (isAfterFrom && isBeforeTo) {
-                return false; 
-            }
+            if (isAfterFrom && isBeforeTo) return false;
         } else if (sub.status === 'inquiry') {
             return false;
         }
 
-        // 3. Check Pending Request
         if (sub.pendingRequest && !sub.pendingRequest.cancelled) {
             const pr = sub.pendingRequest;
             if (pr.type === 'drop') {
                 const dM = parseInt(pr.dropMonth);
                 const dY = parseInt(pr.dropYear);
-                if (dY < tY || (dY === tY && dM <= tM)) {
-                    return false; 
-                }
+                if (dY < tY || (dY === tY && dM <= tM)) return false;
             } else if (pr.type === 'pause') {
                 const pfM = parseInt(pr.pauseFromMonth);
                 const pfY = parseInt(pr.pauseFromYear);
                 const ptM = pr.pauseToMonth ? parseInt(pr.pauseToMonth) : null;
                 const ptY = pr.pauseToYear ? parseInt(pr.pauseToYear) : null;
-                
                 const isAfterFrom = (pfY < tY || (pfY === tY && pfM <= tM));
                 const isBeforeTo = !ptM || !ptY || (ptY > tY || (ptY === tY && ptM >= tM));
-                
-                if (isAfterFrom && isBeforeTo) {
-                    return false; 
-                }
+                if (isAfterFrom && isBeforeTo) return false;
             }
         }
-
-        if (sub.status === 'current') {
-            return true;
-        }
-
-        return false;
+        return sub.status === 'current';
     }
 
-    // ✅ UPDATED: Now returns targetDate object for accurate month/year evaluation
     function getDayViewHeaderInfo(selectedDay) {
         const today = new Date();
-        const currentDayNum = today.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-        
-        const targetDayMap = {
-            'Monday': 1, 'Tuesday': 2, 'Wednesday': 3,
-            'Thursday': 4, 'Friday': 5, 'Saturday': 6, 'Sunday': 0
-        };
+        const currentDayNum = today.getDay();
+        const targetDayMap = { 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4, 'Friday': 5, 'Saturday': 6, 'Sunday': 0 };
         const targetDayNum = targetDayMap[selectedDay];
-        
-        // Calculate days to add to get to the target day (if it already passed this week, go to next week)
         let daysToAdd = targetDayNum - currentDayNum;
         if (daysToAdd < 0) daysToAdd += 7;
-        
         const targetDate = new Date(today);
         targetDate.setDate(today.getDate() + daysToAdd);
-        
         const dd = targetDate.getDate();
         const mm = targetDate.getMonth() + 1;
         const dateStr = `${dd}/${mm}`;
-        
-        // Day of week number (1=Mon ... 7=Sun)
         const dayOfWeekNum = targetDayNum === 0 ? 7 : targetDayNum;
         const dayStr = `${dayOfWeekNum} - ${selectedDay}`;
-        
         return { dateStr, dayStr, targetDate };
     }
 
@@ -325,9 +262,7 @@ function initializeTimetable() {
         const slots = [];
         for (let h = 10; h <= 19; h++) {
             const minutes = (h === 19) ? ['00', '15'] : ['00', '15', '30', '45'];
-            minutes.forEach(m => {
-                slots.push(`${String(h).padStart(2, '0')}:${m}`);
-            });
+            minutes.forEach(m => { slots.push(`${String(h).padStart(2, '0')}:${m}`); });
         }
         return slots;
     }
@@ -338,17 +273,11 @@ function initializeTimetable() {
         const monday = new Date(today);
         monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
         monday.setHours(0, 0, 0, 0);
-
         const dates = [];
         for (let i = 0; i < 7; i++) {
             const d = new Date(monday);
             d.setDate(monday.getDate() + i);
-            dates.push({
-                date: d.getDate(),
-                month: d.toLocaleString('en', { month: 'short' }),
-                fullDate: d,
-                isToday: d.toDateString() === today.toDateString()
-            });
+            dates.push({ date: d.getDate(), month: d.toLocaleString('en', { month: 'short' }), fullDate: d, isToday: d.toDateString() === today.toDateString() });
         }
         return dates;
     }
@@ -395,18 +324,13 @@ function initializeTimetable() {
         return String(next);
     }
 
-    // ✅ UPDATED: Accepts targetDate to accurately filter active subjects for ordering
     function getDaySubjectOrder(subjects, currentDay, targetDate) {
         const daySubjects = [];
         const seen = new Set();
         subjects.forEach(sub => {
             if (!isSubjectActiveOnDate(sub, targetDate) || !sub.timeslots) return;
             const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
-            
-            const dayTs = tsList
-                .map(ts => ({ ts, day: getTsDay(ts), time: getTsTime(ts) }))
-                .filter(item => item.day === currentDay && item.time);
-
+            const dayTs = tsList.map(ts => ({ ts, day: getTsDay(ts), time: getTsTime(ts) })).filter(item => item.day === currentDay && item.time);
             if (dayTs.length > 0) {
                 const earliestTime = dayTs.reduce((min, item) => item.time < min ? item.time : min, '23:59');
                 const group = getSubjectGroup(sub.name);
@@ -417,11 +341,7 @@ function initializeTimetable() {
                 else if (lowerName.includes('erp')) letter = 'R';
                 else if (lowerName.includes('efl')) letter = 'L';
                 else if (group === 'English') letter = 'E';
-
-                if (letter && !seen.has(letter)) {
-                    seen.add(letter);
-                    daySubjects.push({ letter, time: earliestTime });
-                }
+                if (letter && !seen.has(letter)) { seen.add(letter); daySubjects.push({ letter, time: earliestTime }); }
             }
         });
         daySubjects.sort((a, b) => a.time.localeCompare(b.time));
@@ -431,157 +351,122 @@ function initializeTimetable() {
     function getEffectiveLevelAndWS(sub) {
         const now = new Date();
         const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        
         let progress = sub.progress;
         if (progress) {
-            if (!Array.isArray(progress)) {
-                progress = Object.values(progress);
-            }
-            const validProgress = progress
-                .filter(p => p && p.month && p.month <= currentMonth)
-                .sort((a, b) => b.month.localeCompare(a.month));
-                
+            if (!Array.isArray(progress)) progress = Object.values(progress);
+            const validProgress = progress.filter(p => p && p.month && p.month <= currentMonth).sort((a, b) => b.month.localeCompare(a.month));
             if (validProgress.length > 0) {
                 const latest = validProgress[0];
-                const level = latest.currLevel || sub.startLevel || '-';
-                const ws = latest.currWS ?? sub.startWS ?? 0;
-                return { level, ws };
+                return { level: latest.currLevel || sub.startLevel || '-', ws: latest.currWS ?? sub.startWS ?? 0 };
             }
         }
-        return {
-            level: sub.startLevel || '-',
-            ws: sub.startWS ?? 0
-        };
+        return { level: sub.startLevel || '-', ws: sub.startWS ?? 0 };
     }
 
-    // ✅ UPDATED: Accepts targetDate to pass to getDaySubjectOrder
     function buildStudentObj(s, sub, tsDay, tsList, targetDate) {
         const group = getSubjectGroup(sub.name);
         if (!group) return null;
-        
         const { level } = getEffectiveLevelAndWS(sub);
-        const levelWS = level;
-
         let enType = '';
-        if (group === 'English') {
-            enType = sub.name.includes('EFL') ? '(L)' : sub.name.includes('ERP') ? '(R)' : '(L)';
-        }
+        if (group === 'English') { enType = sub.name.includes('EFL') ? '(L)' : sub.name.includes('ERP') ? '(R)' : '(L)'; }
         const nextDayNum = getNextDayNum(tsList, tsDay);
         const baseName = s.nameCn || '-';
         const nick = s.nickname ? ` (${s.nickname})` : '';
-        const dayOrderStr = getDaySubjectOrder(
-            Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {}),
-            tsDay,
-            targetDate
-        );
+        const dayOrderStr = getDaySubjectOrder(Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {}), tsDay, targetDate);
         const indicators = [enType, nextDayNum].filter(Boolean).join('');
         const displayName = `${baseName}${nick}${indicators}${dayOrderStr ? ' ' + dayOrderStr : ''}`;
-
-        return {
-            grade: s.grade || '-',
-            name: displayName,
-            level: levelWS,
-            worksheetType: sub.worksheetType || s.worksheetType || 'Paper' 
-        };
+        return { grade: s.grade || '-', name: displayName, level: level, worksheetType: sub.worksheetType || s.worksheetType || 'Paper' };
     }
 
-    // ============================================
-// 📱 MOBILE CARD RENDERERS
-// ============================================
-function buildMobileStudentRow(st) {
-    const li = document.createElement('li');
-    li.className = 'mobile-student';
-    if (st.worksheetType === 'Kumon Connect') li.classList.add('kc');
-    const grade = document.createElement('span'); grade.className = 'm-grade'; grade.textContent = st.grade;
-    const name  = document.createElement('span'); name.className  = 'm-name';  name.textContent  = st.name;
-    const level = document.createElement('span'); level.className = 'm-level'; level.textContent = st.level;
-    li.append(grade, name, level);
-    return li;
-}
-function buildMobileGroup(label, cls, students) {
-    if (!students || !students.length) return null;
-    const sec = document.createElement('section');
-    sec.className = 'mobile-group ' + cls;
-    const h = document.createElement('h4'); h.textContent = label;
-    const ul = document.createElement('ul');
-    students.forEach(st => ul.appendChild(buildMobileStudentRow(st)));
-    sec.append(h, ul);
-    return sec;
-}
-function renderDayMobile(containerId, schedule, timeSlots, groupsFn) {
-    const container = document.getElementById(containerId);
-    if (!container) return;
-    container.innerHTML = '';
-    const active = timeSlots.filter(t => groupsFn(schedule[t]).some(g => g.students.length > 0));
-    if (!active.length) {
-        container.innerHTML = '<p class="mobile-empty">No students scheduled for this day.</p>';
-        return;
+    function buildMobileStudentRow(st) {
+        const li = document.createElement('li');
+        li.className = 'mobile-student';
+        if (st.worksheetType === 'Kumon Connect') li.classList.add('kc');
+        const grade = document.createElement('span'); grade.className = 'm-grade'; grade.textContent = st.grade;
+        const name = document.createElement('span'); name.className = 'm-name'; name.textContent = st.name;
+        const level = document.createElement('span'); level.className = 'm-level'; level.textContent = st.level;
+        li.append(grade, name, level);
+        return li;
     }
-    active.forEach(time => {
-        const card = document.createElement('article'); card.className = 'slot-card';
-        const head = document.createElement('div'); head.className = 'slot-time'; head.textContent = time;
-        card.appendChild(head);
-        groupsFn(schedule[time]).forEach(g => {
-            const sec = buildMobileGroup(g.label, g.cls, g.students);
-            if (sec) card.appendChild(sec);
-        });
-        container.appendChild(card);
-    });
-}
-function renderWeekMobile(schedule, days, weekDates) {
-    const chips = document.getElementById('weekMobileChips');
-    const list  = document.getElementById('weekMobileList');
-    if (!chips || !list) return;
-    chips.innerHTML = ''; list.innerHTML = '';
-    const dayEntries = days.map(day =>
-        Object.keys(schedule).sort()
-            .filter(time => schedule[time][day].length > 0)
-            .map(time => ({ time, students: schedule[time][day] }))
-    );
-    let selected = Math.max(0, weekDates.findIndex(w => w.isToday));
-    function renderList() {
-        list.innerHTML = '';
-        const entries = dayEntries[selected];
-        if (!entries.length) { list.innerHTML = '<p class="mobile-empty">No students scheduled for this day.</p>'; return; }
-        entries.forEach(e => {
+
+    function buildMobileGroup(label, cls, students) {
+        if (!students || !students.length) return null;
+        const sec = document.createElement('section'); sec.className = 'mobile-group ' + cls;
+        const h = document.createElement('h4'); h.textContent = label;
+        const ul = document.createElement('ul');
+        students.forEach(st => ul.appendChild(buildMobileStudentRow(st)));
+        sec.append(h, ul);
+        return sec;
+    }
+
+    function renderDayMobile(containerId, schedule, timeSlots, groupsFn) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        container.innerHTML = '';
+        const active = timeSlots.filter(t => groupsFn(schedule[t]).some(g => g.students.length > 0));
+        if (!active.length) { container.innerHTML = '<p class="mobile-empty">No students scheduled for this day.</p>'; return; }
+        active.forEach(time => {
             const card = document.createElement('article'); card.className = 'slot-card';
-            const head = document.createElement('div'); head.className = 'slot-time'; head.textContent = e.time;
-            const ul = document.createElement('ul'); ul.className = 'mobile-flat';
-            e.students.forEach(st => ul.appendChild(buildMobileStudentRow(st)));
-            card.append(head, ul);
-            list.appendChild(card);
+            const head = document.createElement('div'); head.className = 'slot-time'; head.textContent = time;
+            card.appendChild(head);
+            groupsFn(schedule[time]).forEach(g => {
+                const sec = buildMobileGroup(g.label, g.cls, g.students);
+                if (sec) card.appendChild(sec);
+            });
+            container.appendChild(card);
         });
     }
-    days.forEach((day, i) => {
-        const chip = document.createElement('button');
-        chip.type = 'button';
-        chip.className = 'day-chip' + (i === selected ? ' active' : '');
-        if (weekDates[i].isToday) chip.classList.add('today');
-        chip.textContent = DAY_ABBR[i];
-        chip.addEventListener('click', () => {
-            selected = i;
-            chips.querySelectorAll('.day-chip').forEach(c => c.classList.remove('active'));
-            chip.classList.add('active');
-            renderList();
+
+    function renderWeekMobile(schedule, days, weekDates) {
+        const chips = document.getElementById('weekMobileChips');
+        const list = document.getElementById('weekMobileList');
+        if (!chips || !list) return;
+        chips.innerHTML = ''; list.innerHTML = '';
+        const dayEntries = days.map(day => Object.keys(schedule).sort().filter(time => schedule[time][day].length > 0).map(time => ({ time, students: schedule[time][day] })));
+        let selected = Math.max(0, weekDates.findIndex(w => w.isToday));
+        function renderList() {
+            list.innerHTML = '';
+            const entries = dayEntries[selected];
+            if (!entries.length) { list.innerHTML = '<p class="mobile-empty">No students scheduled for this day.</p>'; return; }
+            entries.forEach(e => {
+                const card = document.createElement('article'); card.className = 'slot-card';
+                const head = document.createElement('div'); head.className = 'slot-time'; head.textContent = e.time;
+                const ul = document.createElement('ul'); ul.className = 'mobile-flat';
+                e.students.forEach(st => ul.appendChild(buildMobileStudentRow(st)));
+                card.append(head, ul); list.appendChild(card);
+            });
+        }
+        days.forEach((day, i) => {
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'day-chip' + (i === selected ? ' active' : '');
+            if (weekDates[i].isToday) chip.classList.add('today');
+            chip.textContent = DAY_ABBR[i];
+            chip.addEventListener('click', () => {
+                selected = i;
+                chips.querySelectorAll('.day-chip').forEach(c => c.classList.remove('active'));
+                chip.classList.add('active');
+                renderList();
+            });
+            chips.appendChild(chip);
         });
-        chips.appendChild(chip);
-    });
-    renderList();
-}
+        renderList();
+    }
+
     const dayGroupsFn = (s) => [
-        { label: 'Math (6A–E)', cls: 'g-math',    students: s.mathLow },
-        { label: 'Math (F+)',   cls: 'g-math',    students: s.mathHigh },
-        { label: 'English',     cls: 'g-english', students: s.english },
-        { label: 'Chinese',     cls: 'g-chinese', students: s.chinese }
+        { label: 'Math (6A–E)', cls: 'g-math', students: s.mathLow },
+        { label: 'Math (F+)', cls: 'g-math', students: s.mathHigh },
+        { label: 'English', cls: 'g-english', students: s.english },
+        { label: 'Chinese', cls: 'g-chinese', students: s.chinese }
     ];
     const champGroupsFn = (s) => [
-        { label: 'Math (6A–2A)',   cls: 'g-math',    students: s.math6A2A },
-        { label: 'Math (A–F)',     cls: 'g-math',    students: s.mathAF },
-        { label: 'Math (G–I)',     cls: 'g-math',    students: s.mathGI },
-        { label: 'Math (J–O)',     cls: 'g-math',    students: s.mathJO },
-        { label: 'English (K0–K3)',cls: 'g-english', students: s.engK },
-        { label: 'English (P1+)',  cls: 'g-english', students: s.engP1 },
-        { label: 'Chinese',        cls: 'g-chinese', students: s.chinese }
+        { label: 'Math (6A–2A)', cls: 'g-math', students: s.math6A2A },
+        { label: 'Math (A–F)', cls: 'g-math', students: s.mathAF },
+        { label: 'Math (G–I)', cls: 'g-math', students: s.mathGI },
+        { label: 'Math (J–O)', cls: 'g-math', students: s.mathJO },
+        { label: 'English (K0–K3)', cls: 'g-english', students: s.engK },
+        { label: 'English (P1+)', cls: 'g-english', students: s.engP1 },
+        { label: 'Chinese', cls: 'g-chinese', students: s.chinese }
     ];
 
     // ============================================
@@ -597,14 +482,10 @@ function renderWeekMobile(schedule, days, weekDates) {
                 cachedStudentsSnap = snap;
                 timetableBody.innerHTML = '';
                 const day = daySelect.value;
-
                 const headerDateEl = document.querySelector('#dayViewHeaderRow .header-date');
                 const headerDayEl = document.querySelector('#dayViewHeaderRow .header-day');
-                
-                // ✅ UPDATED: Extract targetDate for evaluation
                 const info = getDayViewHeaderInfo(day);
                 const targetDate = info.targetDate;
-                
                 if (headerDateEl && headerDayEl) {
                     headerDateEl.textContent = info.dateStr;
                     headerDayEl.textContent = info.dayStr;
@@ -612,86 +493,79 @@ function renderWeekMobile(schedule, days, weekDates) {
 
                 const timeSlots = getTimeSlots(day);
                 const schedule = {};
-                timeSlots.forEach(t => schedule[t] = {
-                    mathLow: [], mathHigh: [], english: [], chinese: []
-                });
+                timeSlots.forEach(t => schedule[t] = { mathLow: [], mathHigh: [], english: [], chinese: [] });
 
-                // ✅ UPDATED: Loop through all centers
                 snap.forEach(centerSnap => {
                     const centerData = centerSnap.val();
                     if (!centerData?.students) return;
-
                     Object.values(centerData.students).forEach(s => {
                         if (!s?.subjects) return;
                         const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
                         subjects.forEach(sub => {
-                            // ✅ CRITICAL FIX: Use isSubjectActiveOnDate instead of sub.status !== 'current'
                             if (!isSubjectActiveOnDate(sub, targetDate) || !sub.timeslots) return;
-                            
                             const group = getSubjectGroup(sub.name);
                             if (!group) return;
                             const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
                             tsList.forEach(ts => {
                                 if (!ts) return;
-                                // ✅ CRITICAL FILTER: Only include if timeslot is for THIS center
-                                const tsCenter = ts.center || centerSnap.key; // Fallback for backward compatibility
+                                const tsCenter = ts.center || centerSnap.key;
                                 if (tsCenter !== centerId) return;
-
                                 const tsDay = getTsDay(ts);
                                 const time = getTsTime(ts);
-
-                                if (!tsDay || !time) {
-                                    warnInvalidTimeslot('Day View', centerSnap, centerData, s, sub, ts);
-                                    return;
-                                }
-
+                                if (!tsDay || !time) { warnInvalidTimeslot('Day View', centerSnap, centerData, s, sub, ts); return; }
                                 if (tsDay === day && schedule[time]) {
                                     const studentObj = buildStudentObj(s, sub, tsDay, tsList, targetDate);
                                     if (!studentObj) return;
-                                    if (group === 'Math') {
-                                        if (isMathHighLevel(studentObj.level)) {
-                                            schedule[time].mathHigh.push(studentObj);
-                                        } else {
-                                            schedule[time].mathLow.push(studentObj);
-                                        }
-                                    } else if (group === 'English') {
-                                        schedule[time].english.push(studentObj);
-                                    } else if (group === 'Chinese') {
-                                        schedule[time].chinese.push(studentObj);
-                                    }
+                                    if (group === 'Math') { if (isMathHighLevel(studentObj.level)) schedule[time].mathHigh.push(studentObj); else schedule[time].mathLow.push(studentObj); }
+                                    else if (group === 'English') schedule[time].english.push(studentObj);
+                                    else if (group === 'Chinese') schedule[time].chinese.push(studentObj);
                                 }
                             });
                         });
                     });
                 });
 
-                Object.values(schedule).forEach(slot => {
-                    Object.values(slot).forEach(arr => arr.sort((a, b) => a.grade.localeCompare(b.grade)));
-                });
+                // ============================================
+                // 🔄 ADD CLASS CHANGE REPLACEMENTS — DAY VIEW (Runs ONCE)
+                // ============================================
+                const targetISO = toISODate(targetDate);
+                const classChangesSnap = snap.child(`${centerId}/classChanges`);
+
+                if (classChangesSnap.exists()) {
+                    classChangesSnap.forEach((child) => {
+                        const cc = child.val();
+                        if (!cc) return;
+                        if (cc.replacementStatus !== 'scheduled') return;
+                        if (cc.replacementDate !== targetISO) return;
+                        const time = normalizeTime(cc.replacementTime);
+                        const group = getSubjectGroup(cc.subject);
+                        if (!time || !group || !schedule[time]) return;
+                        const studentObj = buildClassChangeStudentObj(cc);
+                        if (group === 'Math') { if (isMathHighLevel(studentObj.level)) schedule[time].mathHigh.push(studentObj); else schedule[time].mathLow.push(studentObj); }
+                        else if (group === 'English') schedule[time].english.push(studentObj);
+                        else if (group === 'Chinese') schedule[time].chinese.push(studentObj);
+                    });
+                }
+
+                Object.values(schedule).forEach(slot => { Object.values(slot).forEach(arr => arr.sort((a, b) => a.grade.localeCompare(b.grade))); });
 
                 timeSlots.forEach(time => {
                     const s = schedule[time];
                     const maxRows = Math.max(s.mathLow.length, s.mathHigh.length, s.english.length, s.chinese.length);
                     const rowCount = maxRows === 0 ? 2 : maxRows;
                     const isEmptyTimeSlot = maxRows === 0;
-
                     for (let i = 0; i < rowCount; i++) {
                         const row = document.createElement('tr');
-
-                        if (isEmptyTimeSlot) {
-                            row.classList.add('empty-time-row');
-                        }
+                        if (isEmptyTimeSlot) row.classList.add('empty-time-row');
                         if (i === 0) {
                             const timeCell = document.createElement('td');
-                            timeCell.textContent = time;
-                            timeCell.className = 'time-cell';
-                            timeCell.rowSpan = rowCount;
+                            timeCell.textContent = time; timeCell.className = 'time-cell'; timeCell.rowSpan = rowCount;
                             row.appendChild(timeCell);
                         }
                         const addSubjectCells = (arr) => {
                             if (arr[i]) {
                                 row.appendChild(createCell(arr[i].grade));
-                                row.appendChild(createCell(arr[i].name, false, arr[i].worksheetType === 'Kumon Connect'));
+                                row.appendChild(createCell(arr[i].name, false, arr[i].worksheetType === 'Kumon Connect', !!arr[i].isClassChange));
                                 row.appendChild(createCell(arr[i].level));
                             } else {
                                 row.appendChild(createCell('', true));
@@ -699,34 +573,21 @@ function renderWeekMobile(schedule, days, weekDates) {
                                 row.appendChild(createCell('', true));
                             }
                         };
-                        addSubjectCells(s.mathLow);
-                        addSubjectCells(s.mathHigh);
-                        addSubjectCells(s.english);
-                        addSubjectCells(s.chinese);
+                        addSubjectCells(s.mathLow); addSubjectCells(s.mathHigh); addSubjectCells(s.english); addSubjectCells(s.chinese);
                         timetableBody.appendChild(row);
                     }
                 });
             } catch (err) {
                 console.error('[Day View] Rendering failed:', err);
-                if (timetableBody) {
-                    timetableBody.innerHTML = `
-                        <tr>
-                            <td colspan="13" class="week-empty-msg">
-                                Failed to load day timetable. Check console for invalid timeslot data.
-                            </td>
-                        </tr>
-                    `;
-                }
-            } finally {
-                hideLoader();
-            }
+                if (timetableBody) timetableBody.innerHTML = `<tr><td colspan="13" class="week-empty-msg">Failed to load day timetable.</td></tr>`;
+            } finally { hideLoader(); }
         };
 
-        function createCell(content, isEmpty = false, isKC = false) {
-            const td = document.createElement('td');
-            td.textContent = content;
+        function createCell(content, isEmpty = false, isKC = false, isCC = false) {
+            const td = document.createElement('td'); td.textContent = content;
             if (isEmpty) td.className = 'empty-cell';
             if (isKC) td.classList.add('kc-cell');
+            if (isCC) td.classList.add('cc-cell');
             return td;
         }
 
@@ -743,36 +604,19 @@ function renderWeekMobile(schedule, days, weekDates) {
         const weekDayRow = document.getElementById('weekDayRow');
         const weekRangeLabel = document.getElementById('weekRangeLabel');
         if (!weekBody || !weekDateRow || !weekDayRow) return;
-
         showLoader();
 
         function renderWeekViewSafely(snap) {
-            try {
-                renderWeekView(snap);
-            } catch (err) {
+            try { renderWeekView(snap); } catch (err) {
                 console.error('[Week View] Rendering failed:', err);
-                if (weekBody) {
-                    weekBody.innerHTML = `
-                        <tr>
-                            <td colspan="8" class="week-empty-msg">
-                                Failed to load week timetable. Check console for invalid timeslot data.
-                            </td>
-                        </tr>
-                    `;
-                }
-            } finally {
-                hideLoader();
-            }
+                if (weekBody) weekBody.innerHTML = `<tr><td colspan="8" class="week-empty-msg">Failed to load week timetable.</td></tr>`;
+            } finally { hideLoader(); }
         }
 
-        if (cachedStudentsSnap) {
-            renderWeekViewSafely(cachedStudentsSnap);
-        } else {
+        if (cachedStudentsSnap) renderWeekViewSafely(cachedStudentsSnap);
+        else {
             if (weekTimetableUnsub) { weekTimetableUnsub(); weekTimetableUnsub = null; }
-            const cb = (snap) => {
-                cachedStudentsSnap = snap;
-                renderWeekViewSafely(snap);
-            };
+            const cb = (snap) => { cachedStudentsSnap = snap; renderWeekViewSafely(snap); };
             onValue(centersRef, cb);
             weekTimetableUnsub = () => off(centersRef, 'value', cb);
         }
@@ -780,147 +624,100 @@ function renderWeekMobile(schedule, days, weekDates) {
         function renderWeekView(snap) {
             const weekDates = getWeekDates();
             const days = DAY_ORDER;
-
             weekDateRow.innerHTML = '<th rowspan="2" class="th-time">Time</th>';
             weekDates.forEach((wd, i) => {
-                const th = document.createElement('th');
-                th.textContent = `${wd.date}`;
-                th.title = `${wd.month} ${wd.date}`;
+                const th = document.createElement('th'); th.textContent = `${wd.date}`; th.title = `${wd.month} ${wd.date}`;
                 if (wd.isToday) th.classList.add('week-today-header');
                 weekDateRow.appendChild(th);
             });
-
             weekDayRow.innerHTML = '';
             days.forEach((day, i) => {
-                const th = document.createElement('th');
-                th.textContent = DAY_ABBR[i];
+                const th = document.createElement('th'); th.textContent = DAY_ABBR[i];
                 if (weekDates[i].isToday) th.classList.add('week-today-header');
                 weekDayRow.appendChild(th);
             });
-
-            const first = weekDates[0];
-            const last = weekDates[6];
+            const first = weekDates[0], last = weekDates[6];
             weekRangeLabel.textContent = `Week of ${first.month} ${first.date} – ${last.month} ${last.date}, ${last.fullDate.getFullYear()}`;
 
             const allTimeSlots = getWeekTimeSlots();
             const schedule = {};
-            allTimeSlots.forEach(time => {
-                schedule[time] = {};
-                days.forEach(day => { schedule[time][day] = []; });
-            });
+            allTimeSlots.forEach(time => { schedule[time] = {}; days.forEach(day => { schedule[time][day] = []; }); });
 
-            // ✅ UPDATED: Loop through all centers
             snap.forEach(centerSnap => {
                 const centerData = centerSnap.val();
                 if (!centerData?.students) return;
-
                 Object.values(centerData.students).forEach(s => {
                     if (!s?.subjects) return;
                     const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
                     subjects.forEach(sub => {
                         if (!sub.timeslots) return;
-                        
                         const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
                         tsList.forEach(ts => {
                             if (!ts) return;
-                            // ✅ CRITICAL FILTER: Only include if timeslot is for THIS center
                             const tsCenter = ts.center || centerSnap.key;
                             if (tsCenter !== centerId) return;
-
-                            const tsDay = getTsDay(ts);
-                            const time = getTsTime(ts);
-
-                            if (!tsDay || !time) {
-                                warnInvalidTimeslot('Week View', centerSnap, centerData, s, sub, ts, { reason: 'Missing or invalid day/time' });
-                                return;
-                            }
-
+                            const tsDay = getTsDay(ts); const time = getTsTime(ts);
+                            if (!tsDay || !time) { warnInvalidTimeslot('Week View', centerSnap, centerData, s, sub, ts, { reason: 'Missing or invalid day/time' }); return; }
                             const dayIdx = days.indexOf(tsDay);
-
-                            if (dayIdx === -1 || !weekDates[dayIdx]?.fullDate) {
-                                warnInvalidTimeslot('Week View', centerSnap, centerData, s, sub, ts, { reason: 'Weekday not recognized', tsDay });
-                                return;
-                            }
-
-                            if (!schedule[time] || !schedule[time][tsDay]) {
-                                warnInvalidTimeslot('Week View', centerSnap, centerData, s, sub, ts, { reason: 'Time is outside the week timetable grid', time, tsDay });
-                                return;
-                            }
-
+                            if (dayIdx === -1 || !weekDates[dayIdx]?.fullDate) { warnInvalidTimeslot('Week View', centerSnap, centerData, s, sub, ts, { reason: 'Weekday not recognized', tsDay }); return; }
+                            if (!schedule[time] || !schedule[time][tsDay]) { warnInvalidTimeslot('Week View', centerSnap, centerData, s, sub, ts, { reason: 'Time is outside the week timetable grid', time, tsDay }); return; }
                             const targetDate = weekDates[dayIdx].fullDate;
                             if (!isSubjectActiveOnDate(sub, targetDate)) return;
-
                             if (schedule[time] && schedule[time][tsDay]) {
                                 const studentObj = buildStudentObj(s, sub, tsDay, tsList, targetDate);
-                                if (studentObj) {
-                                    schedule[time][tsDay].push(studentObj);
-                                }
+                                if (studentObj) schedule[time][tsDay].push(studentObj);
                             }
                         });
                     });
                 });
             });
 
-            Object.values(schedule).forEach(daySchedule => {
-                Object.values(daySchedule).forEach(arr => {
-                    arr.sort((a, b) => a.grade.localeCompare(b.grade));
+            // ============================================
+            // 🔄 ADD CLASS CHANGE REPLACEMENTS — WEEK VIEW (Runs ONCE)
+            // ============================================
+            const classChangesSnap = snap.child(`${centerId}/classChanges`);
+            if (classChangesSnap.exists()) {
+                classChangesSnap.forEach((child) => {
+                    const cc = child.val();
+                    if (!cc) return;
+                    if (cc.replacementStatus !== 'scheduled') return;
+                    if (!cc.replacementDate) return;
+                    const dayIdx = weekDates.findIndex((w) => toISODate(w.fullDate) === cc.replacementDate);
+                    if (dayIdx === -1) return;
+                    const time = normalizeTime(cc.replacementTime);
+                    const tsDay = days[dayIdx];
+                    if (!time || !schedule[time] || !schedule[time][tsDay]) return;
+                    schedule[time][tsDay].push(buildClassChangeStudentObj(cc));
                 });
+            }
+
+            Object.values(schedule).forEach(daySchedule => {
+                Object.values(daySchedule).forEach(arr => { arr.sort((a, b) => a.grade.localeCompare(b.grade)); });
             });
 
-            const activeTimeSlots = allTimeSlots.filter(time =>
-                days.some(day => schedule[time][day].length > 0)
-            );
-
+            const activeTimeSlots = allTimeSlots.filter(time => days.some(day => schedule[time][day].length > 0));
             weekBody.innerHTML = '';
             if (activeTimeSlots.length === 0) {
                 const row = document.createElement('tr');
-                const td = document.createElement('td');
-                td.colSpan = 8;
-                td.className = 'week-empty-msg';
-                td.textContent = 'No students scheduled for this week.';
-                row.appendChild(td);
-                weekBody.appendChild(row);
-                return;
+                const td = document.createElement('td'); td.colSpan = 8; td.className = 'week-empty-msg'; td.textContent = 'No students scheduled for this week.';
+                row.appendChild(td); weekBody.appendChild(row); return;
             }
 
             activeTimeSlots.forEach(time => {
                 const row = document.createElement('tr');
-                const timeTd = document.createElement('td');
-                timeTd.textContent = time;
-                timeTd.className = 'week-time-cell';
-                row.appendChild(timeTd);
-
+                const timeTd = document.createElement('td'); timeTd.textContent = time; timeTd.className = 'week-time-cell'; row.appendChild(timeTd);
                 days.forEach((day, dayIdx) => {
-                    const td = document.createElement('td');
-                    td.className = 'week-cell';
+                    const td = document.createElement('td'); td.className = 'week-cell';
                     if (weekDates[dayIdx].isToday) td.classList.add('week-today-col');
-
                     const students = schedule[time][day];
                     students.forEach(st => {
-                        const div = document.createElement('div');
-                        div.className = 'week-student';
-                        
-                        // ✅ CRITICAL: Add data attribute for bulletproof Excel export detection
-                        if (st.worksheetType === 'Kumon Connect') {
-                            div.classList.add('kc-student');
-                            div.setAttribute('data-kc', 'true');
-                        }
-
-                        const gradeSpan = document.createElement('span');
-                        gradeSpan.className = 'ws-grade';
-                        gradeSpan.textContent = st.grade;
-
-                        const nameSpan = document.createElement('span');
-                        nameSpan.className = 'ws-name';
-                        nameSpan.textContent = st.name;
-
-                        const levelSpan = document.createElement('span');
-                        levelSpan.className = 'ws-level';
-                        levelSpan.textContent = st.level;
-
-                        div.appendChild(gradeSpan);
-                        div.appendChild(nameSpan);
-                        div.appendChild(levelSpan);
+                        const div = document.createElement('div'); div.className = 'week-student';
+                        if (st.isClassChange) div.classList.add('cc-student');
+                        if (st.worksheetType === 'Kumon Connect') { div.classList.add('kc-student'); div.setAttribute('data-kc', 'true'); }
+                        const gradeSpan = document.createElement('span'); gradeSpan.className = 'ws-grade'; gradeSpan.textContent = st.grade;
+                        const nameSpan = document.createElement('span'); nameSpan.className = 'ws-name'; nameSpan.textContent = st.name;
+                        const levelSpan = document.createElement('span'); levelSpan.className = 'ws-level'; levelSpan.textContent = st.level;
+                        div.appendChild(gradeSpan); div.appendChild(nameSpan); div.appendChild(levelSpan);
                         td.appendChild(div);
                     });
                     row.appendChild(td);
@@ -937,108 +734,87 @@ function renderWeekMobile(schedule, days, weekDates) {
         const champDaySelect = document.getElementById('champDay');
         const champBody = document.getElementById('champTimetableBody');
         if (!champDaySelect || !champBody) return;
-
         showLoader();
 
         const render = (snap) => {
             try {
                 champBody.innerHTML = '';
                 const day = champDaySelect.value;
-                
-                // ✅ UPDATED: Extract targetDate for evaluation
                 const info = getDayViewHeaderInfo(day);
                 const targetDate = info.targetDate;
-                
                 const timeSlots = getTimeSlots(day);
-
                 const schedule = {};
-                timeSlots.forEach(t => {
-                    schedule[t] = {
-                        math6A2A: [], mathAF: [], mathGI: [], mathJO: [],
-                        engK: [], engP1: [],
-                        chinese: []
-                    };
-                });
+                timeSlots.forEach(t => { schedule[t] = { math6A2A: [], mathAF: [], mathGI: [], mathJO: [], engK: [], engP1: [], chinese: [] }; });
 
-                // ✅ UPDATED: Loop through all centers
                 snap.forEach(centerSnap => {
                     const centerData = centerSnap.val();
                     if (!centerData?.students) return;
-
                     Object.values(centerData.students).forEach(s => {
                         if (!s?.subjects) return;
                         const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
-
                         subjects.forEach(sub => {
-                            // ✅ CRITICAL FIX: Use isSubjectActiveOnDate instead of sub.status !== 'current'
                             if (!isSubjectActiveOnDate(sub, targetDate) || !sub.timeslots) return;
-                            
                             const group = getSubjectGroup(sub.name);
                             if (!group) return;
-
                             const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
                             tsList.forEach(ts => {
                                 if (!ts) return;
-                                // ✅ CRITICAL FILTER: Only include if timeslot is for THIS center
                                 const tsCenter = ts.center || centerSnap.key;
                                 if (tsCenter !== centerId) return;
-
-                                const tsDay = getTsDay(ts);
-                                const time = getTsTime(ts);
-
-                                if (!tsDay || !time) {
-                                    warnInvalidTimeslot('Champ View', centerSnap, centerData, s, sub, ts);
-                                    return;
-                                }
-
+                                const tsDay = getTsDay(ts); const time = getTsTime(ts);
+                                if (!tsDay || !time) { warnInvalidTimeslot('Champ View', centerSnap, centerData, s, sub, ts); return; }
                                 if (tsDay !== day || !schedule[time]) return;
-
                                 const studentObj = buildStudentObj(s, sub, tsDay, tsList, targetDate);
                                 if (!studentObj) return;
-
-                                if (group === 'Math') {
-                                    const bucket = getMathChampGroup(studentObj.level);
-                                    if (bucket) schedule[time][bucket].push(studentObj);
-                                } else if (group === 'English') {
-                                    const bucket = getEnglishChampGroup(s.grade);
-                                    if (bucket) schedule[time][bucket].push(studentObj);
-                                } else if (group === 'Chinese') {
-                                    schedule[time].chinese.push(studentObj);
-                                }
+                                if (group === 'Math') { const bucket = getMathChampGroup(studentObj.level); if (bucket) schedule[time][bucket].push(studentObj); }
+                                else if (group === 'English') { const bucket = getEnglishChampGroup(s.grade); if (bucket) schedule[time][bucket].push(studentObj); }
+                                else if (group === 'Chinese') schedule[time].chinese.push(studentObj);
                             });
                         });
                     });
                 });
 
+                // ============================================
+                // 🔄 ADD CLASS CHANGE REPLACEMENTS — CHAMP VIEW (Runs ONCE)
+                // ============================================
+                const champTargetISO = toISODate(targetDate);
+                const champCCSnap = snap.child(`${centerId}/classChanges`);
+                if (champCCSnap.exists()) {
+                    champCCSnap.forEach((child) => {
+                        const cc = child.val();
+                        if (!cc) return;
+                        if (cc.replacementStatus !== 'scheduled') return;
+                        if (cc.replacementDate !== champTargetISO) return;
+                        const time = normalizeTime(cc.replacementTime);
+                        const group = getSubjectGroup(cc.subject);
+                        if (!time || !group || !schedule[time]) return;
+                        const studentObj = buildClassChangeStudentObj(cc);
+                        if (group === 'Math') { const bucket = getMathChampGroup(studentObj.level); if (bucket) schedule[time][bucket].push(studentObj); }
+                        else if (group === 'English') { const bucket = getEnglishChampGroup(cc.grade); if (bucket) schedule[time][bucket].push(studentObj); }
+                        else if (group === 'Chinese') schedule[time].chinese.push(studentObj);
+                    });
+                }
+
                 const BUCKETS = ['math6A2A', 'mathAF', 'mathGI', 'mathJO', 'engK', 'engP1', 'chinese'];
-                Object.values(schedule).forEach(slot => {
-                    BUCKETS.forEach(b => slot[b].sort((a, b) => a.grade.localeCompare(b.grade)));
-                });
+                Object.values(schedule).forEach(slot => { BUCKETS.forEach(b => slot[b].sort((a, b) => a.grade.localeCompare(b.grade))); });
 
                 timeSlots.forEach(time => {
                     const s = schedule[time];
                     const maxRows = Math.max(...BUCKETS.map(b => s[b].length));
                     const rowCount = maxRows === 0 ? 2 : maxRows;
                     const isEmptyTimeSlot = maxRows === 0;
-
                     for (let i = 0; i < rowCount; i++) {
                         const row = document.createElement('tr');
-
-                        if (isEmptyTimeSlot) {
-                            row.classList.add('empty-time-row');
-                        }
+                        if (isEmptyTimeSlot) row.classList.add('empty-time-row');
                         if (i === 0) {
                             const timeCell = document.createElement('td');
-                            timeCell.textContent = time;
-                            timeCell.className = 'time-cell';
-                            timeCell.rowSpan = rowCount;
+                            timeCell.textContent = time; timeCell.className = 'time-cell'; timeCell.rowSpan = rowCount;
                             row.appendChild(timeCell);
                         }
-
                         const addSubjectCells = (arr) => {
                             if (arr[i]) {
                                 row.appendChild(createChampCell(arr[i].grade));
-                                row.appendChild(createChampCell(arr[i].name, false, arr[i].worksheetType === 'Kumon Connect'));
+                                row.appendChild(createChampCell(arr[i].name, false, arr[i].worksheetType === 'Kumon Connect', !!arr[i].isClassChange));
                                 row.appendChild(createChampCell(arr[i].level));
                             } else {
                                 row.appendChild(createChampCell('', true));
@@ -1046,49 +822,31 @@ function renderWeekMobile(schedule, days, weekDates) {
                                 row.appendChild(createChampCell('', true));
                             }
                         };
-
                         BUCKETS.forEach(b => addSubjectCells(s[b]));
                         champBody.appendChild(row);
                     }
                 });
             } catch (err) {
                 console.error('[Champ View] Rendering failed:', err);
-                if (champBody) {
-                    champBody.innerHTML = `
-                        <tr>
-                            <td colspan="22" class="week-empty-msg">
-                                Failed to load Champ Format timetable. Check console for invalid timeslot data.
-                            </td>
-                        </tr>
-                    `;
-                }
-            } finally {
-                hideLoader();
-            }
+                if (champBody) champBody.innerHTML = `<tr><td colspan="22" class="week-empty-msg">Failed to load Champ Format timetable.</td></tr>`;
+            } finally { hideLoader(); }
         };
 
-        function createChampCell(content, isEmpty = false, isKC = false) {
-            const td = document.createElement('td');
-            td.textContent = content;
+        function createChampCell(content, isEmpty = false, isKC = false, isCC = false) {
+            const td = document.createElement('td'); td.textContent = content;
             if (isEmpty) td.className = 'empty-cell';
             if (isKC) td.classList.add('kc-cell');
+            if (isCC) td.classList.add('cc-cell');
             return td;
         }
 
-        if (cachedStudentsSnap) {
-            render(cachedStudentsSnap);
-        } else {
-            const cb = (snap) => {
-                cachedStudentsSnap = snap;
-                render(snap);
-            };
+        if (cachedStudentsSnap) render(cachedStudentsSnap);
+        else {
+            const cb = (snap) => { cachedStudentsSnap = snap; render(snap); };
             onValue(centersRef, cb);
         }
     }
 
-    // ============================================
-    // INITIAL LOAD
-    // ============================================
     if (daySelect) {
         const today = new Date();
         const currentDayName = today.toLocaleDateString('en-US', { weekday: 'long' });
@@ -1098,12 +856,9 @@ function renderWeekMobile(schedule, days, weekDates) {
         loadTimetable();
     }
 
-document.getElementById('printTimetable')?.addEventListener('click', () => {
-    syncPrintActiveToActiveTab();
-    window.print();
-});
+    document.getElementById('printTimetable')?.addEventListener('click', () => { syncPrintActiveToActiveTab(); window.print(); });
+    window.addEventListener('beforeprint', syncPrintActiveToActiveTab);
 
-window.addEventListener('beforeprint', syncPrintActiveToActiveTab);    
     const champDaySelect = document.getElementById('champDay');
     if (champDaySelect) {
         const today = new Date();
@@ -1111,80 +866,46 @@ window.addEventListener('beforeprint', syncPrintActiveToActiveTab);
         const hasOption = Array.from(champDaySelect.options).some(opt => opt.value === currentDayName);
         champDaySelect.value = hasOption ? currentDayName : 'Monday';
         champDaySelect.addEventListener('change', loadChampTimetable);
-        if (document.getElementById('champViewContainer')?.classList.contains('active')) {
-            loadChampTimetable();
-        }
+        if (document.getElementById('champViewContainer')?.classList.contains('active')) loadChampTimetable();
     }
 
-    // ============================================
-    // ✅ EXPORT TO EXCEL (Bulletproof Nested Table Approach)
-    // ============================================
     function exportToExcel() {
         let activeTable = null;
         let viewName = 'Timetable';
-        
-        if (document.getElementById('dayViewContainer').classList.contains('active')) {
-            activeTable = document.getElementById('timetableTable');
-            viewName = 'Day_View';
-        } else if (document.getElementById('weekViewContainer').classList.contains('active')) {
-            activeTable = document.getElementById('weekTimetableTable');
-            viewName = 'Week_View';
-        } else if (document.getElementById('champViewContainer').classList.contains('active')) {
-            activeTable = document.getElementById('champTimetableTable');
-            viewName = 'Champ_Format';
-        }
-
-        if (!activeTable) {
-            alert('Please select a view to export.');
-            return;
-        }
-
+        if (document.getElementById('dayViewContainer').classList.contains('active')) { activeTable = document.getElementById('timetableTable'); viewName = 'Day_View'; }
+        else if (document.getElementById('weekViewContainer').classList.contains('active')) { activeTable = document.getElementById('weekTimetableTable'); viewName = 'Week_View'; }
+        else if (document.getElementById('champViewContainer').classList.contains('active')) { activeTable = document.getElementById('champTimetableTable'); viewName = 'Champ_Format'; }
+        if (!activeTable) { alert('Please select a view to export.'); return; }
         const tableClone = activeTable.cloneNode(true);
 
         if (viewName === 'Day_View') {
-                const headerRow = tableClone.querySelector('#dayViewHeaderRow');
-                if (headerRow) {
-                    const th = headerRow.querySelector('th');
-                    const dateText = th.querySelector('.header-date')?.textContent || '';
-                    const dayText = th.querySelector('.header-day')?.textContent || '';
-                    
-                    // Replace the single merged cell with two separate cells (1 col + 12 cols = 13 total)
-                    headerRow.innerHTML = `
-                        <th style="text-align: left; padding: 8px 12px; font-size: 14pt; font-weight: 600; background: #fff !important; color: #000 !important; border: 1px solid #333 !important;">${dateText}</th>
-                        <th colspan="12" style="text-align: right; padding: 8px 12px; font-size: 18pt; font-weight: 700; background: #fff !important; color: #dc3545 !important; border: 1px solid #333 !important;">${dayText}</th>
-                    `;
-                }
+            const headerRow = tableClone.querySelector('#dayViewHeaderRow');
+            if (headerRow) {
+                const th = headerRow.querySelector('th');
+                const dateText = th.querySelector('.header-date')?.textContent || '';
+                const dayText = th.querySelector('.header-day')?.textContent || '';
+                headerRow.innerHTML = `
+                    <th style="text-align: left; padding: 8px 12px; font-size: 14pt; font-weight: 600; background: #fff !important; color: #000 !important; border: 1px solid #333 !important;">${dateText}</th>
+                    <th colspan="12" style="text-align: right; padding: 8px 12px; font-size: 18pt; font-weight: 700; background: #fff !important; color: #dc3545 !important; border: 1px solid #333 !important;">${dayText}</th>
+                `;
+            }
         }
 
-        // ✅ CRITICAL FIX: Use nested tables for Week View. 
-        // Excel's HTML engine IGNORES background-color on <div> elements.
-        // It ONLY reliably renders background colors on <td> elements.
         if (viewName === 'Week_View') {
             const cells = tableClone.querySelectorAll('.week-cell');
             cells.forEach(td => {
                 const students = td.querySelectorAll('.week-student');
                 if (students.length === 0) return;
-
                 let innerHTML = '<table style="width:100%; border-collapse:collapse; border:none; margin:0;">';
-                
                 students.forEach(div => {
                     const grade = div.querySelector('.ws-grade')?.innerText || '';
                     const name = div.querySelector('.ws-name')?.innerText || '';
                     const level = div.querySelector('.ws-level')?.innerText || '';
-                    
-                    // Check both class and data attribute for maximum reliability
                     const isKC = div.classList.contains('kc-student') || div.getAttribute('data-kc') === 'true';
-                    const bgColor = isKC ? '#fff9c4' : 'transparent';
-                    
-                    innerHTML += `<tr>
-                        <td style="background-color:${bgColor}; padding:2px 3px; border:none; text-align:left; vertical-align:middle; font-size:9.5pt;">
-                            <b style="color:#4682B4; font-size:9pt; font-weight:700;">${grade}</b> 
-                            <span style="font-size:9.5pt; font-weight:500; color:#000;">${name}</span> 
-                            <b style="color:#555; font-size:9pt; font-weight:600; white-space:nowrap;">${level}</b>
-                        </td>
-                    </tr>`;
+                    const isCC = div.classList.contains('cc-student');
+                    const bgColor = isKC ? '#fff9c4' : (isCC ? '#e0f2fe' : 'transparent');
+                    innerHTML += `<tr><td style="background-color:${bgColor}; padding:2px 3px; border:none; text-align:left; vertical-align:middle; font-size:9.5pt;"><b style="color:#4682B4; font-size:9pt; font-weight:700;">${grade}</b> <span style="font-size:9.5pt; font-weight:500; color:#000;">${name}</span> <b style="color:#555; font-size:9pt; font-weight:600; white-space:nowrap;">${level}</b></td></tr>`;
                 });
-                
                 innerHTML += '</table>';
                 td.innerHTML = innerHTML;
             });
@@ -1195,53 +916,26 @@ window.addEventListener('beforeprint', syncPrintActiveToActiveTab);
                 table { border-collapse: collapse; border: 2px solid #333; font-family: 'Microsoft YaHei', 'PingFang SC', 'Segoe UI', Arial, sans-serif; font-size: 11pt; }
                 th, td { border: 1px solid #333; padding: 4px 5px; text-align: center; vertical-align: middle; color: #000; }
                 th { font-weight: 700; font-size: 11pt; }
-                
                 .th-math { background: #008B8B !important; color: #fff !important; }
                 .th-english { background: #DC143C !important; color: #fff !important; }
                 .th-chinese { background: #9ACD32 !important; color: #333 !important; }
-                
                 .th-time { background: #555 !important; color: #fff !important; }
                 #weekDateRow th { background: #4682B4 !important; color: #fff !important; font-size: 13pt; }
                 #weekDayRow th { background: #d0e8f5 !important; color: #333 !important; font-size: 10pt; }
-                
                 .time-cell, .week-time-cell { font-weight: 600; background: #f8f9fa !important; border-right: 2px solid #cbd5e1 !important; }
                 .empty-cell { background: transparent !important; }
                 .kc-cell { background-color: #fff9c4 !important; }
-                
+                .cc-cell { background-color: #e0f2fe !important; }
                 .week-today-col { background: rgba(135, 206, 235, 0.15) !important; }
                 .week-today-header { background: #2e6da4 !important; color: #fff !important; }
             </style>
         `;
 
-        const htmlTemplate = `
-            <html xmlns:o="urn:schemas-microsoft-com:office:office"
-                xmlns:x="urn:schemas-microsoft-com:office:excel"
-                xmlns="http://www.w3.org/TR/REC-html40">
-            <head>
-                <meta charset="UTF-8">
-                <!--[if gte mso 9]><xml>
-                <x:ExcelWorkbook>
-                <x:ExcelWorksheets>
-                <x:ExcelWorksheet>
-                    <x:Name>${viewName}</x:Name>
-                    <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
-                </x:ExcelWorksheet>
-                </x:ExcelWorksheets>
-                </x:ExcelWorkbook>
-                </xml><![endif]-->
-                ${excelCSS}
-            </head>
-            <body>
-                ${tableClone.outerHTML}
-            </body>
-            </html>
-        `;
-
+        const htmlTemplate = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>${viewName}</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->${excelCSS}</head><body>${tableClone.outerHTML}</body></html>`;
         const blob = new Blob([htmlTemplate], { type: 'application/vnd.ms-excel' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         const dateStr = new Date().toISOString().slice(0, 10);
-        
         a.href = url;
         a.download = `Kumon_Timetable_${viewName}_${dateStr}.xls`;
         document.body.appendChild(a);
@@ -1251,16 +945,12 @@ window.addEventListener('beforeprint', syncPrintActiveToActiveTab);
     }
 
     document.getElementById('exportExcel')?.addEventListener('click', exportToExcel);
-
     window.addEventListener('beforeunload', () => {
         if (timetableUnsub) timetableUnsub();
         if (weekTimetableUnsub) weekTimetableUnsub();
     });
 }
 
-// ============================================
-// 📱 MOBILE RESPONSIVE CARDS (self-contained, table-driven)
-// ============================================
 (function initMobileTimetable() {
     const DAY_LABELS = ['Math (6A–E)', 'Math (F+)', 'English', 'Chinese'];
     const DAY_CLASSES = ['g-math', 'g-math', 'g-english', 'g-chinese'];
@@ -1268,22 +958,17 @@ window.addEventListener('beforeprint', syncPrintActiveToActiveTab);
     const CHAMP_CLASSES = ['g-math', 'g-math', 'g-math', 'g-math', 'g-english', 'g-english', 'g-chinese'];
 
     function ensureContainers() {
-        [{ host: 'dayViewContainer', id: 'dayViewMobile' },
-         { host: 'weekViewContainer', id: 'weekViewMobile', chips: 'weekMobileChips', list: 'weekMobileList' },
-         { host: 'champViewContainer', id: 'champViewMobile' }].forEach(sp => {
+        [{ host: 'dayViewContainer', id: 'dayViewMobile' }, { host: 'weekViewContainer', id: 'weekViewMobile', chips: 'weekMobileChips', list: 'weekMobileList' }, { host: 'champViewContainer', id: 'champViewMobile' }].forEach(sp => {
             const host = document.getElementById(sp.host);
             if (!host || document.getElementById(sp.id)) return;
             const el = document.createElement('div');
             el.id = sp.id; el.className = 'mobile-schedule';
-            if (sp.chips) {
-                const c = document.createElement('div'); c.id = sp.chips; c.className = 'mobile-day-chips';
-                const l = document.createElement('div'); l.id = sp.list;
-                el.append(c, l);
-            }
+            if (sp.chips) { const c = document.createElement('div'); c.id = sp.chips; c.className = 'mobile-day-chips'; const l = document.createElement('div'); l.id = sp.list; el.append(c, l); }
             const wrapper = host.querySelector('.timetable-wrapper');
             wrapper ? wrapper.after(el) : host.appendChild(el);
         });
     }
+
     function studentLi(st) {
         const li = document.createElement('li');
         li.className = 'mobile-student' + (st.kc ? ' kc' : '');
@@ -1293,6 +978,7 @@ window.addEventListener('beforeprint', syncPrintActiveToActiveTab);
         li.append(g, n, l);
         return li;
     }
+
     function parseDayTable(bodyId, labels) {
         const body = document.getElementById(bodyId);
         if (!body) return [];
@@ -1306,15 +992,12 @@ window.addEventListener('beforeprint', syncPrintActiveToActiveTab);
                 const nameTd = cells[gi * 3 + 1];
                 const name = nameTd?.textContent.trim() || '';
                 if (!name || nameTd.classList.contains('empty-cell')) return;
-                current.groups[gi].push({
-                    grade: cells[gi * 3]?.textContent.trim() || '',
-                    name, level: cells[gi * 3 + 2]?.textContent.trim() || '',
-                    kc: nameTd.classList.contains('kc-cell')
-                });
+                current.groups[gi].push({ grade: cells[gi * 3]?.textContent.trim() || '', name, level: cells[gi * 3 + 2]?.textContent.trim() || '', kc: nameTd.classList.contains('kc-cell') });
             });
         });
         return slots.filter(s => s.groups.some(g => g.length));
     }
+
     function renderCards(containerId, slots, labels, classes) {
         const el = document.getElementById(containerId);
         if (!el) return;
@@ -1335,6 +1018,7 @@ window.addEventListener('beforeprint', syncPrintActiveToActiveTab);
             el.appendChild(card);
         });
     }
+
     function renderWeek() {
         const chips = document.getElementById('weekMobileChips');
         const list = document.getElementById('weekMobileList');
@@ -1357,7 +1041,7 @@ window.addEventListener('beforeprint', syncPrintActiveToActiveTab);
             });
         });
         const headers = Array.from(document.querySelectorAll('#weekDayRow th'));
-        const labels = headers.length ? headers.map(th => th.textContent.trim()) : ['MON','TUE','WED','THU','FRI','SAT','SUN'];
+        const labels = headers.length ? headers.map(th => th.textContent.trim()) : ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
         let selected = Math.max(0, headers.findIndex(th => th.classList.contains('week-today-header')));
         chips.innerHTML = '';
         const renderList = () => {
@@ -1387,11 +1071,13 @@ window.addEventListener('beforeprint', syncPrintActiveToActiveTab);
         });
         renderList();
     }
+
     function refreshAll() {
         renderCards('dayViewMobile', parseDayTable('timetableBody', DAY_LABELS), DAY_LABELS, DAY_CLASSES);
         renderCards('champViewMobile', parseDayTable('champTimetableBody', CHAMP_LABELS), CHAMP_LABELS, CHAMP_CLASSES);
         renderWeek();
     }
+
     ensureContainers();
     ['timetableBody', 'champTimetableBody', 'weekTimetableBody'].forEach(id => {
         const el = document.getElementById(id);

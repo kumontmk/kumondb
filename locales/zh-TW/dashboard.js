@@ -68,7 +68,32 @@ export default {
       today: "今天",
       status: "狀態",
       noSchedule: "未設定時間",
-      notToday: "不是今天"
+      notToday: "不是今天",
+      attendanceMode: "上課記錄",
+      absenceMode: "缺席 / 調堂 (CC/MC)",
+      absenceTitle: "🔄 標記缺席 / 調堂 (CC/MC)",
+      absenceDate: "缺席日期 *",
+      absenceNote: "備註 (可選)",
+      saveAbsence: "儲存缺席記錄",
+      absenceExistingTitle: "此日期已有的 CC/MC 記錄",
+      absenceNoExisting: "此日期沒有已有的 CC/MC 記錄。",
+      absenceReplacementMissing: "⚠️ CC 必須選擇補堂日期及時間。",
+      absenceSelectSubject: "⚠️ 請至少選擇一個科目。",
+      absenceSaveSuccess: "✅ 已為 {{name}} 儲存缺席 / 調堂記錄",
+      absenceSaveFailed: "❌ 儲存缺席 / 調堂失敗。",
+      existingAttendanceTitle: "⚠️ 已有上課記錄",
+      existingAttendanceText: "此日期已有上課記錄。現有上課記錄會保留。",
+      deleteClassChangeConfirm: "確定刪除此 CC/MC 記錄？",
+      classChangeDeleted: "✅ 已刪除 CC/MC 記錄。",
+      classChangeDeleteFailed: "❌ 刪除 CC/MC 記錄失敗。",
+      classChangeBadge: "CC",
+      makeupFrom: "補堂來自 {{date}}",
+      typeCCPU: "CC PU",
+      typeCCNoPU: "CC No PU",
+      typeMC: "MC",
+      typeMCPU: "MC PU",
+      replacementLabel: "補堂",
+      absentLabel: "缺席",
     },
 
     cards: {
@@ -95,7 +120,8 @@ export default {
       myNotes: "我的備註",
       myNotesDesc: "個人備註與提醒",
       labelEditor: "標籤編輯器",
-      labelEditorDesc: "產生並列印學生標籤（A4、24 格）"
+      labelEditorDesc: "產生並列印學生標籤（A4、24 格）",
+      
     },
 
     links: {
