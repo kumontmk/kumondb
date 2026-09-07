@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Kumon Class Change Request</title>
+<meta name="theme-color" content="#4682B4">
+<link rel="manifest" href="manifest-parent.webmanifest">
+<link rel="icon" href="favicon.svg">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="stylesheet" href="parent-request.css">
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="screenLoading" class="screen">
+  <div class="spinner"></div>
+  <p data-tr="loading">Loading...</p>
+</div>
+
+<!-- INVALID LINK -->
+<div id="screenInvalid" class="screen hidden">
+  <div class="auth-card">
+    <div class="big-icon">🔗</div>
+    <h2 data-tr="invalidTitle">Invalid Link</h2>
+    <p id="invalidMsg" data-tr="invalidMsg">This link is invalid or has been disabled by the center. Please contact your Kumon center.</p>
+  </div>
+</div>
+
+<!-- CODE GATE -->
+<div id="screenCode" class="screen hidden">
+  <div class="auth-card">
+    <div class="big-icon">🔑</div>
+    <h2 data-tr="codeTitle">Enter your code</h2>
+    <p class="muted" data-tr="codeHint">Enter the 4-character code the center gave you.</p>
+    <input type="text" id="codeInput" maxlength="4" autocomplete="off" autocapitalize="characters" placeholder="••••">
+    <p id="codeError" class="error-text hidden" data-tr="codeError">Incorrect code. Please try again.</p>
+    <button id="codeSubmitBtn" class="btn-primary" data-tr="codeSubmit">Unlock</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="screenMain" class="screen hidden">
+  <header class="pr-header">
+    <div class="pr-brand">
+      <span class="pr-logo">📚</span>
+      <div>
+        <h1 data-tr="title">Class Change Request</h1>
+        <small id="centerLabel" class="muted"></small>
+      </div>
+    </div>
+    <button id="langToggle" class="lang-btn">中文</button>
+  </header>
+
+  <main class="pr-main">
+
+    <!-- CHILDREN -->
+    <section class="pr-card">
+      <h2>👨‍👩‍👧 <span data-tr="family">Your Family</span></h2>
+      <div id="childrenChips" class="chips"></div>
+    </section>
+
+    <!-- FORM -->
+    <section class="pr-card">
+      <h2>📝 <span data-tr="newRequest">New Request</span></h2>
+      <div class="field">
+        <label data-tr="subject">Subject</label>
+        <select id="prSubject"></select>
+      </div>
+      <div class="field">
+        <label data-tr="absenceDate">Absence Date (the class you will miss)</label>
+        <input type="date" id="prAbsenceDate">
+      </div>
+      <div class="field">
+        <label data-tr="originalTime">Original Class Time</label>
+        <select id="prOriginalTime"></select>
+        <small id="originalHint" class="muted hidden"></small>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label data-tr="preferredDate">Preferred Replacement Date</label>
+          <input type="date" id="prPreferredDate">
+        </div>
+        <div class="field">
+          <label data-tr="preferredTime">Preferred Time</label>
+          <select id="prPreferredTime"></select>
+        </div>
+      </div>
+      <div class="field">
+        <label data-tr="reason">Reason (optional)</label>
+        <textarea id="prReason" rows="2" data-tr-placeholder="reasonPh" placeholder="e.g. school event, travel, sick..."></textarea>
+      </div>
+      <button id="prSubmitBtn" class="btn-primary btn-big" data-tr="submit">Submit Request</button>
+    </section>
+
+    <!-- MY REQUESTS -->
+    <section class="pr-card">
+      <h2>📋 <span data-tr="myRequests">My Requests</span></h2>
+      <div id="requestsList" class="requests-list"></div>
+    </section>
+
+    <!-- INSTALL -->
+    <section class="pr-card install-card">
+      <h2>📲 <span data-tr="installTitle">Install as App</span></h2>
+      <p class="muted" data-tr="installHint">Install this page on your phone to request change classes anytime.</p>
+      <button id="installBtn" class="btn-secondary hidden" data-tr="installBtn">📲 Install App</button>
+      <p id="iosHint" class="muted ios-hint hidden" data-tr="iosHint">iPhone: tap Share ⬆️ then "Add to Home Screen".</p>
+    </section>
+
+  </main>
+
+  <footer class="pr-footer">
+    <span data-tr="footerNote">Requests are usually processed within 1–2 working days.</span>
+  </footer>
+</div>
+
+<div id="prToast" class="pr-toast hidden"></div>
+
+<script type="module" src="parent-request.js"></script>
+</body>
+</html>

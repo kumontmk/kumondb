@@ -1,10 +1,13 @@
-const CACHE_NAME = 'kumon-db-cache-v11.6.3 ';
-
+const CACHE_NAME = 'kumon-db-cache-12.0.1';
 const APP_SHELL = [
   'index.html',
   'style.css',
   'auth.js',
   'manifest.webmanifest',
+  'manifest-parent.webmanifest',
+  'parent-request.html',
+  'parent-request.css',
+  'parent-request.js',
   'favicon.svg',
   'dblogo.png',
   'dblogo-192.png',
@@ -17,11 +20,7 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
       for (const url of APP_SHELL) {
-        try {
-          await cache.add(url);
-        } catch (err) {
-          console.warn('Skipping cache for:', url);
-        }
+        try { await cache.add(url); } catch (err) { console.warn('Skipping cache for:', url); }
       }
     })
   );
@@ -40,14 +39,10 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
-
   const url = new URL(request.url);
-
-  // Only handle our own files. Firebase Auth/DB calls are never cached.
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/__/') || url.pathname.includes('identitytoolkit')) return;
 
-  // Pages: network first, fall back to cache when offline.
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
@@ -56,23 +51,17 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
           return response;
         })
-        .catch(() =>
-          caches.match(request).then((cached) => cached || caches.match('index.html'))
-        )
+        .catch(() => caches.match(request).then((cached) => cached || caches.match('index.html')))
     );
     return;
   }
 
-  // CSS / JS / images: cache first, then network.
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;
-
       return fetch(request)
         .then((response) => {
-          if (!response || response.status !== 200 || response.type !== 'basic') {
-            return response;
-          }
+          if (!response || response.status !== 200 || response.type !== 'basic') return response;
           const copy = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
           return response;
@@ -81,4 +70,3 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
-

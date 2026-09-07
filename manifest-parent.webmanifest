@@ -1,0 +1,16 @@
+{
+  "name": "Kumon Class Change 調堂申請",
+  "short_name": "Class Change",
+  "description": "Request Kumon change classes",
+  "start_url": "parent-request.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f0f8ff",
+  "theme_color": "#4682B4",
+  "icons": [
+    { "src": "dblogo-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "dblogo-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "dblogo-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

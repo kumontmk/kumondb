@@ -290,8 +290,17 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 onAuthStateChanged(auth, async (user) => {
-  const pageLoader = document.getElementById('page-loader');
-  if (user) {
+const pageLoader = document.getElementById('page-loader');
+if (user && user.isAnonymous) {
+  // 🛡 Self-heal: a parent (anonymous) session ended up in the staff app.
+  // Sign it out and return to login instead of throwing permission errors.
+  sessionStorage.removeItem('kumonUser');
+  await signOut(auth);
+  if (pageLoader) pageLoader.classList.add('hidden');
+  window.location.href = 'index.html';
+  return;
+}
+if (user) {
     const userRef = ref(db, `users/${user.uid}`);
     let snapshot = await get(userRef);
 
