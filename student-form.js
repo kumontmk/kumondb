@@ -174,6 +174,506 @@ function initApp() {
     let html5QrCode = null;
     let scannerActive = false;
     let originalFormData = null;
+
+    // ============================================
+    // 👨‍👩‍👧 FAMILY / SIBLINGS
+    // ============================================
+    let familyStudentsCache = [];
+    let pendingSiblingLinks = {};      // siblingId -> relationship key
+    let originalSiblingLinks = {};     // siblingId -> relationship key
+    let familySelectedSiblingId = '';
+
+    const tr = (key, fallback) => {
+    const val = t(key);
+        return (val && val !== key) ? val : fallback;
+    };
+
+
+    function normalizeRelationshipKey(rel) {
+        const r = String(rel || '').toLowerCase().trim();
+        if (r === 'brother' || r === 'sister' || r === 'sibling') return r;
+        return 'sibling';
+    }
+
+    function relationshipLabel(relKey) {
+        const key = normalizeRelationshipKey(relKey);
+
+        if (key === 'brother') return tr('studentForm.brother', 'Brother');
+        if (key === 'sister') return tr('studentForm.sister', 'Sister');
+
+        return tr('studentForm.sibling', 'Sibling');
+    }
+
+    function getSiblingKeyFromGender(gender) {
+        if (gender === 'Male') return 'brother';
+        if (gender === 'Female') return 'sister';
+        return 'sibling';
+    }
+
+    function computeFamilyStudentStatus(subjects) {
+        const list = Array.isArray(subjects)
+            ? subjects
+            : Object.values(subjects || {});
+
+        if (!list.length) return '';
+
+        const statuses = list.map(s => s?.status || '');
+
+        if (statuses.includes('current')) return 'Current';
+        if (statuses.includes('inquiry')) return 'Inquiry';
+
+        if (statuses.every(s => s === 'drop')) return 'Drop';
+
+        if (
+            statuses.every(s => ['drop', 'completer'].includes(s)) &&
+            statuses.includes('completer')
+        ) {
+            return 'Completer';
+        }
+
+        return 'Pause';
+    }
+
+    async function fetchFamilyStudents() {
+    try {
+        const snap = await get(ref(db, 'centers'));
+
+        familyStudentsCache = [];
+        if (!snap.exists()) return;
+
+        snap.forEach(centerChild => {
+            const cId = centerChild.key;
+            const cVal = centerChild.val() || {};
+            const centerName = cVal.name || cId;
+            const students = cVal.students || {};
+
+            Object.entries(students).forEach(([sId, v]) => {
+                v = v || {};
+                familyStudentsCache.push({
+                    id: sId,
+                    centerId: cId,
+                    centerName: centerName,
+                    nameCn: v.nameCn || '',
+                    namePinyin: v.namePinyin || '',
+                    studentNumber: v.studentNumber || '',
+                    grade: v.grade || '',
+                    gender: v.gender || '',
+                    status: computeFamilyStudentStatus(v.subjects)
+                });
+            });
+        });
+
+        familyStudentsCache.sort((a, b) => {
+            const nameA = (a.namePinyin || a.nameCn || '').toLowerCase();
+            const nameB = (b.namePinyin || b.nameCn || '').toLowerCase();
+            if (nameA < nameB) return -1;
+            if (nameA > nameB) return 1;
+            return 0;
+        });
+
+    } catch (err) {
+        console.error('Error fetching family students:', err);
+    }
+}
+
+    function getFamilyStudent(id) {
+        return familyStudentsCache.find(s => s.id === id) || null;
+    }
+
+    function isFamilyStudentLinkable(s) {
+        if (!s) return false;
+
+        // Cannot link self
+        if (studentId && s.id === studentId) return false;
+
+        // Already pending
+        if (pendingSiblingLinks[s.id]) return false;
+
+        // For now, hide fully dropped / completed students by default.
+        // You can relax this later if you want former students too.
+        if (['Drop', 'Completer'].includes(s.status)) return false;
+
+        return true;
+    }
+
+    async function loadStudentSiblingLinks(id) {
+        pendingSiblingLinks = {};
+        originalSiblingLinks = {};
+
+        if (!centerId || !id) return;
+
+        try {
+            const snap = await get(ref(db, `centers/${centerId}/studentSiblingLinks/${id}`));
+            if (!snap.exists()) return;
+
+            snap.forEach(child => {
+                const val = child.val();
+                const isObj = val && typeof val === 'object';
+
+                pendingSiblingLinks[child.key] = {
+                    relationship: normalizeRelationshipKey(isObj ? val.relationship : val),
+                    // Old same-center links don't have siblingCenterId → default to current center
+                    centerId: (isObj && val.siblingCenterId) ? val.siblingCenterId : centerId
+                };
+            });
+
+            originalSiblingLinks = JSON.parse(JSON.stringify(pendingSiblingLinks));
+
+        } catch (err) {
+            console.error('Error loading sibling links:', err);
+        }
+    }
+
+    function resolveFamilyRelationship(siblingId, choice) {
+        if (choice && choice !== 'auto') {
+            return normalizeRelationshipKey(choice);
+        }
+
+        const sibling = getFamilyStudent(siblingId);
+        return getSiblingKeyFromGender(sibling?.gender || '');
+    }
+
+    function hideFamilySearchDropdown() {
+        const dropdown = document.getElementById('familySiblingSearchDropdown');
+        if (dropdown) dropdown.classList.add('hidden');
+    }
+
+    function renderFamilySelectedChip() {
+        const chip = document.getElementById('familySelectedSibling');
+        if (!chip) return;
+
+        if (!familySelectedSiblingId) {
+            chip.classList.add('hidden');
+            chip.innerHTML = '';
+            return;
+        }
+
+        const s = getFamilyStudent(familySelectedSiblingId);
+        const name = s?.nameCn || s?.namePinyin || tr('studentForm.unknown', 'Unknown');
+
+        chip.classList.remove('hidden');
+        chip.innerHTML = `
+            <span class="family-selected-chip">
+                ${tr('studentForm.selectedSibling', 'Selected')}:
+                <strong>${name}</strong>
+                <button type="button" id="clearFamilySelectionBtn">×</button>
+            </span>
+        `;
+
+        chip.querySelector('#clearFamilySelectionBtn')?.addEventListener('click', () => {
+            familySelectedSiblingId = '';
+            renderFamilySelectedChip();
+        });
+    }
+
+    function renderFamilyTab() {
+    const list = document.getElementById('familySiblingsList');
+    const noSiblings = document.getElementById('familyNoSiblings');
+    if (!list) return;
+
+    list.innerHTML = '';
+
+    const entries = Object.entries(pendingSiblingLinks).sort((a, b) => {
+        const sa = getFamilyStudent(a[0]);
+        const sb = getFamilyStudent(b[0]);
+        const nameA = (sa?.namePinyin || sa?.nameCn || '').toLowerCase();
+        const nameB = (sb?.namePinyin || sb?.nameCn || '').toLowerCase();
+        if (nameA < nameB) return -1;
+        if (nameA > nameB) return 1;
+        return 0;
+    });
+
+    if (noSiblings) noSiblings.classList.toggle('hidden', entries.length > 0);
+
+    entries.forEach(([siblingId, info]) => {
+        const s = getFamilyStudent(siblingId);
+        const card = document.createElement('div');
+        card.className = 'sibling-card';
+
+        const name = s?.nameCn || s?.namePinyin || tr('studentForm.unknown', 'Unknown');
+        const pinyin = s?.namePinyin || '';
+        const grade = s?.grade || '';
+        const studentNumber = s?.studentNumber || '';
+        const status = s?.status || '';
+        const isOtherCenter = (info.centerId || centerId) !== centerId;
+        const centerAbbr = isOtherCenter ? getCenterAbbr(s?.centerName || '') : '';
+
+        card.innerHTML = `
+            <div>
+                <div class="sibling-name">${name}</div>
+                <div class="sibling-meta">
+                    ${[pinyin, grade, studentNumber].filter(Boolean).join(' • ')}
+                </div>
+                <div class="sibling-tags">
+                    <span class="sibling-relationship">${relationshipLabel(info.relationship)}</span>
+                    ${status ? `<span class="sibling-status">${status}</span>` : ''}
+                    ${centerAbbr ? `<span class="sibling-status" title="${(s?.centerName || '').replace(/"/g, '&quot;')}">🏫 ${centerAbbr}</span>` : ''}
+                </div>
+            </div>
+            <button type="button" class="danger remove-sibling-btn">
+                ${tr('studentForm.remove', 'Remove')}
+            </button>
+        `;
+
+        card.querySelector('.remove-sibling-btn')?.addEventListener('click', () => {
+            const ok = confirm(tr('studentForm.removeSiblingConfirm', 'Remove this sibling link?'));
+            if (!ok) return;
+            delete pendingSiblingLinks[siblingId];
+            renderFamilyTab();
+        });
+
+        list.appendChild(card);
+    });
+
+    renderFamilySelectedChip();
+}
+
+    function updateFamilySearchDropdown() {
+        const input = document.getElementById('familySiblingSearchInput');
+        const dropdown = document.getElementById('familySiblingSearchDropdown');
+
+        if (!input || !dropdown) return;
+
+        const term = input.value.trim().toLowerCase();
+
+        dropdown.innerHTML = '';
+
+        if (!term) {
+            dropdown.classList.add('hidden');
+            return;
+        }
+
+        const matches = familyStudentsCache.filter(s => {
+            if (!isFamilyStudentLinkable(s)) return false;
+
+            const text = `${s.nameCn || ''} ${s.namePinyin || ''} ${s.studentNumber || ''}`.toLowerCase();
+            return text.includes(term);
+        }).slice(0, 50);
+
+        if (!matches.length) {
+            dropdown.innerHTML = `<li class="no-results">${tr('studentForm.noStudentsFound', 'No students found')}</li>`;
+            dropdown.classList.remove('hidden');
+            return;
+        }
+
+        matches.forEach(s => {
+            const li = document.createElement('li');
+            li.setAttribute('data-id', s.id);
+
+            const nameContainer = document.createElement('span');
+            nameContainer.className = 'student-name-container';
+
+            const cn = document.createElement('span');
+            cn.className = 'student-name-cn';
+            cn.textContent = s.nameCn || 'N/A';
+
+            const py = document.createElement('span');
+            py.className = 'student-name-pinyin';
+            py.textContent = s.namePinyin || '';
+
+            nameContainer.appendChild(cn);
+            nameContainer.appendChild(py);
+
+            const right = document.createElement('span');
+            right.className = 'student-grade';
+            const centerAbbr = s.centerId !== centerId ? getCenterAbbr(s.centerName) : '';
+            right.textContent = [s.grade, centerAbbr, s.status].filter(Boolean).join(' • ');
+
+            li.appendChild(nameContainer);
+            li.appendChild(right);
+
+            li.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                selectFamilySiblingCandidate(s);
+            });
+
+            dropdown.appendChild(li);
+        });
+
+        dropdown.classList.remove('hidden');
+    }
+
+    function selectFamilySiblingCandidate(s) {
+        familySelectedSiblingId = s.id;
+
+        const input = document.getElementById('familySiblingSearchInput');
+        if (input) input.value = '';
+
+        hideFamilySearchDropdown();
+        renderFamilySelectedChip();
+    }
+
+    function addSelectedFamilySibling() {
+        if (!familySelectedSiblingId) {
+            return showError(tr('studentForm.selectSiblingFirst', '⚠️ Please choose a sibling from the search list.'));
+        }
+        if (studentId && familySelectedSiblingId === studentId) {
+            return showError(tr('studentForm.cannotAddSelf', '⚠️ A student cannot be their own sibling.'));
+        }
+        if (pendingSiblingLinks[familySelectedSiblingId]) {
+            return showError(tr('studentForm.siblingAlreadyAdded', '⚠️ This sibling is already added.'));
+        }
+
+        const choice = document.getElementById('familyRelationshipSelect')?.value || 'auto';
+
+        const sibling = getFamilyStudent(familySelectedSiblingId);
+
+        pendingSiblingLinks[familySelectedSiblingId] = {
+            relationship: resolveFamilyRelationship(familySelectedSiblingId, choice),
+            centerId: sibling?.centerId || centerId
+        };
+
+        familySelectedSiblingId = '';
+
+        renderFamilyTab();
+    }
+
+    function initFamilyTab() {
+        const searchInput = document.getElementById('familySiblingSearchInput');
+        const addBtn = document.getElementById('addFamilySiblingBtn');
+
+        // Fallback for placeholder in case data-i18n-placeholder isn't parsed by your core
+        if (searchInput) {
+            searchInput.placeholder = tr('studentForm.searchSiblingPlaceholder', 'Search sibling by name / student number');
+            searchInput.addEventListener('input', updateFamilySearchDropdown);
+            searchInput.addEventListener('focus', updateFamilySearchDropdown);
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') hideFamilySearchDropdown();
+            });
+        }
+
+        if (addBtn) addBtn.addEventListener('click', addSelectedFamilySibling);
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.family-search-wrapper')) hideFamilySearchDropdown();
+        });
+    }
+
+    async function syncStudentSiblingLinks(savedStudentId) {
+    if (!centerId || !savedStudentId) return;
+
+    const updates = {};
+    const now = new Date().toISOString();
+    const uid = auth.currentUser?.uid || '';
+
+    const currentGender = document.getElementById('gender')?.value || '';
+    const reverseRelKey = getSiblingKeyFromGender(currentGender);
+
+    const desired = pendingSiblingLinks || {};
+    const original = originalSiblingLinks || {};
+
+    // Remove old links no longer in the form
+    Object.keys(original).forEach(siblingId => {
+        if (!(siblingId in desired)) {
+            const oldCenter = original[siblingId]?.centerId || centerId;
+            updates[`centers/${centerId}/studentSiblingLinks/${savedStudentId}/${siblingId}`] = null;
+            updates[`centers/${oldCenter}/studentSiblingLinks/${siblingId}/${savedStudentId}`] = null;
+        }
+    });
+
+    // Add / update links (each side stored in its own center)
+    Object.entries(desired).forEach(([siblingId, info]) => {
+        const relationship = normalizeRelationshipKey(info.relationship);
+        const sibCenter = info.centerId || centerId;
+
+        updates[`centers/${centerId}/studentSiblingLinks/${savedStudentId}/${siblingId}`] = {
+            relationship,
+            reverseRelationship: reverseRelKey,
+            siblingCenterId: sibCenter,
+            updatedAt: now,
+            updatedBy: uid
+        };
+
+        updates[`centers/${sibCenter}/studentSiblingLinks/${siblingId}/${savedStudentId}`] = {
+            relationship: reverseRelKey,
+            reverseRelationship: relationship,
+            siblingCenterId: centerId,
+            updatedAt: now,
+            updatedBy: uid
+        };
+    });
+
+    if (Object.keys(updates).length) {
+        await update(ref(db), updates);
+    }
+
+    originalSiblingLinks = JSON.parse(JSON.stringify(desired));
+}
+
+    async function cleanupStudentSiblingLinks(id) {
+    if (!centerId || !id) return;
+
+    try {
+        const snap = await get(ref(db, `centers/${centerId}/studentSiblingLinks/${id}`));
+
+        const updates = {};
+        updates[`centers/${centerId}/studentSiblingLinks/${id}`] = null;
+
+        if (snap.exists()) {
+            snap.forEach(child => {
+                const val = child.val();
+                const sibCenter = (val && typeof val === 'object' && val.siblingCenterId)
+                    ? val.siblingCenterId
+                    : centerId;
+                updates[`centers/${sibCenter}/studentSiblingLinks/${child.key}/${id}`] = null;
+            });
+        }
+
+        await update(ref(db), updates);
+
+    } catch (err) {
+        console.error('Error cleaning up sibling links:', err);
+    }
+    }
+
+    async function moveStudentSiblingLinks(id, targetCenterId) {
+    if (!centerId || !id || !targetCenterId) return;
+
+    try {
+        const snap = await get(ref(db, `centers/${centerId}/studentSiblingLinks/${id}`));
+
+        const updates = {};
+        const now = new Date().toISOString();
+        const uid = auth.currentUser?.uid || '';
+
+        updates[`centers/${centerId}/studentSiblingLinks/${id}`] = null;
+
+        if (snap.exists()) {
+            snap.forEach(child => {
+                const sibId = child.key;
+                const raw = child.val();
+                const val = (raw && typeof raw === 'object') ? raw : {};
+                const sibCenter = val.siblingCenterId || centerId;
+
+                // Forward link moves to the new center
+                updates[`centers/${targetCenterId}/studentSiblingLinks/${id}/${sibId}`] = {
+                    relationship: val.relationship || 'sibling',
+                    reverseRelationship: val.reverseRelationship || 'sibling',
+                    siblingCenterId: sibCenter,
+                    updatedAt: now,
+                    updatedBy: uid
+                };
+
+                // Reverse link on the sibling's side now points to the new center
+                updates[`centers/${sibCenter}/studentSiblingLinks/${sibId}/${id}`] = {
+                    relationship: val.reverseRelationship || 'sibling',
+                    reverseRelationship: val.relationship || 'sibling',
+                    siblingCenterId: targetCenterId,
+                    updatedAt: now,
+                    updatedBy: uid
+                };
+            });
+        }
+
+        await update(ref(db), updates);
+
+    } catch (err) {
+        console.error('Error moving sibling links:', err);
+    }
+}
+
+    initFamilyTab();
+
     const centerId = sessionStorage.getItem('selectedCenter');
     const urlParams = new URLSearchParams(window.location.search);
     const studentId = urlParams.get('id');
@@ -573,6 +1073,7 @@ function initApp() {
             document.getElementById(targetId)?.classList.add('active');
             if (btn.dataset.tab === 'schedule') renderSchedule();
             if (btn.dataset.tab === 'dt-at') renderATTable();
+            if (btn.dataset.tab === 'family') renderFamilyTab();
         });
     });
 
@@ -1290,6 +1791,14 @@ function renderSchedule() {
         const generatedQrCode = document.getElementById('generatedQrCodeInput')?.value?.trim() || '';
         const activeQrCode = qrMode === 'generated' ? generatedQrCode : registeredQrCode;
 
+        const familySiblingLinks = Object.entries(pendingSiblingLinks)
+            .map(([siblingId, info]) => ({
+                studentId: siblingId,
+                relationship: normalizeRelationshipKey(info.relationship),
+                centerId: info.centerId || centerId
+            }))
+            .sort((a, b) => a.studentId.localeCompare(b.studentId));
+
         return {
             gender: document.getElementById('gender')?.value || '',
             studentNumber: document.getElementById('studentNumber')?.value?.trim() || '',
@@ -1318,7 +1827,9 @@ function renderSchedule() {
             subjects,
             diagnosticTests,
             achievementTests,
-            assignedTeachers 
+            assignedTeachers, 
+            familySiblingLinks,
+            familySiblingIds: familySiblingLinks.map(x => x.studentId).join(','),
         };
     }
 
@@ -1924,6 +2435,8 @@ function renderSchedule() {
                 updateOverallStatus();
                 updateCurrentLevelsSummary();
                 renderTeachersTab(); 
+                await loadStudentSiblingLinks(studentId);
+                renderFamilyTab();
                 originalFormData = collectFormData();
             } else {
                 showError(t('studentForm.studentNotFound'));
@@ -1956,9 +2469,13 @@ function renderSchedule() {
             if(confirm(t('studentForm.confirmDelete'))) {
                 try {
                     showLoader();
+
+                    await cleanupStudentSiblingLinks(studentId);
                     await remove(ref(db, `centers/${centerId}/students/${studentId}`));
+
                     alert(t('studentForm.deleted'));
                     navigateBack();
+
                 } catch(err) {
                     showError(`${t('studentForm.error')}: ${err.message}`);
                 } finally {
@@ -2006,6 +2523,7 @@ function renderSchedule() {
             data.transferredFrom = centerId;
             data.transferredAt = new Date().toISOString();
             await push(ref(db, `centers/${targetId}/students`), data);
+            await moveStudentSiblingLinks(studentId, targetId);
             await remove(sourceRef);
             alert(t('studentForm.transferred'));
             navigateBack();
@@ -2221,10 +2739,27 @@ function renderSchedule() {
         }
         try {
             showLoader();
-            if (isEdit) await set(ref(db, `centers/${centerId}/students/${studentId}`), studentData);
-            else await push(ref(db, `centers/${centerId}/students`), studentData);
+
+            // Remove Family tab helper fields from the student record
+            delete studentData.familySiblingLinks;
+            delete studentData.familySiblingIds;
+
+            let savedStudentId = studentId;
+
+            if (isEdit) {
+                await set(ref(db, `centers/${centerId}/students/${studentId}`), studentData);
+            } else {
+                const newStudentRef = push(ref(db, `centers/${centerId}/students`));
+                await set(newStudentRef, studentData);
+                savedStudentId = newStudentRef.key;
+            }
+
+            // Save / sync sibling links after we know the saved student ID
+            await syncStudentSiblingLinks(savedStudentId);
+
             alert(isEdit ? t('studentForm.updated') : t('studentForm.added'));
             navigateBack();
+
         } catch (err) {
             showError(`${t('studentForm.saveError')}${err.message}`);
         } finally {
@@ -2687,12 +3222,23 @@ document.getElementById('saveScheduleDTBtn')?.addEventListener('click', () => {
 
     setupTeachersTab();
     
-    Promise.all([fetchTeachers(), fetchCenters()]).then(() => {
-        if (isEdit) loadStudentData(); 
-        else { 
-            addSubjectField(); 
-            renderTeachersTab(); 
-            hideLoader(); 
+    Promise.all([
+        fetchTeachers(),
+        fetchCenters(),
+        fetchFamilyStudents()
+    ]).then(() => {
+        if (isEdit) {
+            loadStudentData();
+        } else {
+            addSubjectField();
+            renderTeachersTab();
+
+            pendingSiblingLinks = {};
+            originalSiblingLinks = {};
+            familySelectedSiblingId = '';
+            renderFamilyTab();
+
+            hideLoader();
         }
     });
     

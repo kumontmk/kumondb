@@ -1565,6 +1565,141 @@ button { padding: 0.55rem 1.05rem; font-size: 0.85rem; }
     background: #94a3b8 !important;
 }
 
+/* ============================================
+👨‍‍👧 FAMILY / SIBLINGS TAB
+============================================ */
+#tab-family .family-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+#tab-family .family-search-wrapper {
+    position: relative;
+    flex: 1 1 260px;
+    min-width: 220px;
+}
+
+#tab-family .family-search-wrapper input {
+    width: 100%;
+}
+
+#tab-family #familyRelationshipSelect {
+    width: auto !important;
+    min-width: 180px;
+    flex: 0 1 auto;
+}
+
+#tab-family #addFamilySiblingBtn {
+    width: auto !important;
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+
+#tab-family .family-selected-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: #e0f7fa;
+    border: 1px solid #4dd0e1;
+    color: #00695c;
+    border-radius: 999px;
+    padding: 0.45rem 0.8rem;
+    font-size: 0.9rem;
+    margin: 0.5rem 0 1rem;
+}
+
+#tab-family .family-selected-chip button {
+    border: none;
+    background: transparent;
+    color: #00695c;
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+#tab-family .sibling-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid var(--primary-dark);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+#tab-family .sibling-card > div:first-child {
+    flex: 1;
+    min-width: 0;
+}
+
+#tab-family .sibling-name {
+    font-weight: 700;
+    margin-bottom: 0.2rem;
+}
+
+#tab-family .sibling-meta {
+    font-size: 0.85rem;
+    color: var(--text-light);
+    margin-bottom: 0.4rem;
+}
+
+#tab-family .sibling-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+#tab-family .sibling-relationship,
+#tab-family .sibling-status {
+    display: inline-block;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+#tab-family .sibling-relationship {
+    background: #e0f7fa;
+    color: #00695c;
+}
+
+#tab-family .sibling-status {
+    background: #e2e8f0;
+    color: #475569;
+}
+
+#tab-family .remove-sibling-btn {
+    flex: 0 0 auto;
+}
+
+@media (max-width: 768px) {
+    #tab-family .family-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    #tab-family #familyRelationshipSelect,
+    #tab-family #addFamilySiblingBtn {
+        width: 100% !important;
+    }
+
+    #tab-family .sibling-card {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    #tab-family .sibling-card .remove-sibling-btn {
+        width: 100%;
+    }
+}
+
 /* =========================================
 🌐 TRADITIONAL CHINESE FONT SUPPORT
 ========================================= */

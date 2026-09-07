@@ -194,6 +194,7 @@
           <button type="button" class="tab-btn" data-tab="schedule" data-i18n="studentForm.scheduleTab">📅 Schedule</button>
           <button type="button" class="tab-btn" data-tab="dt-at" data-i18n="studentForm.dtAtTab">📝 DT & AT</button>
           <button type="button" class="tab-btn" data-tab="qr" data-i18n="studentForm.qrTab">📷 QR Code</button>
+          <button type="button" class="tab-btn" data-tab="family" data-i18n="studentForm.familyTab">👨‍👩‍👧 Family</button>
         </div>
 
         <!-- ✅ WRAPPER FOR ALL TAB CONTENTS (Creates the unified folder effect) -->
@@ -373,6 +374,44 @@
                     </div>
                 </div>
             </div>
+          </div>
+            <div class="tab-content" id="tab-family">
+              <h3 data-i18n="studentForm.familyTitle">👨‍👩‍👧 Family / Siblings</h3>
+
+              <p class="hint" data-i18n="studentForm.familyHint">
+                  Add brothers or sisters who are also studying in this center. The link is shared: if Student A is linked to Student B, Student B will also show Student A.
+              </p>
+
+              <div class="family-toolbar">
+                  <div class="search-input-wrapper family-search-wrapper">
+                      <input
+                          type="text"
+                          id="familySiblingSearchInput"
+                          data-i18n-placeholder="studentForm.searchSiblingPlaceholder"
+                          placeholder="Search sibling by name / student number"
+                          autocomplete="off"
+                      >
+                      <ul id="familySiblingSearchDropdown" class="search-dropdown hidden"></ul>
+                  </div>
+
+                  <select id="familyRelationshipSelect">
+                      <option value="auto" data-i18n="studentForm.relationshipAuto">Relationship: Auto</option>
+                      <option value="brother" data-i18n="studentForm.brother">Brother</option>
+                      <option value="sister" data-i18n="studentForm.sister">Sister</option>
+                      <option value="sibling" data-i18n="studentForm.sibling">Sibling</option>
+                  </select>
+
+                  <button type="button" id="addFamilySiblingBtn" class="primary" data-i18n="studentForm.addSibling">
+                      + Add Sibling
+                  </button>
+              </div>
+
+              <div id="familySelectedSibling" class="hidden"></div>
+              <div id="familySiblingsList"></div>
+
+              <p id="familyNoSiblings" class="hint" data-i18n="studentForm.noSiblingsLinked">
+                  No siblings linked yet.
+              </p>
           </div>
 
         </div> <!-- ✅ CLOSE .tab-contents-wrapper -->
