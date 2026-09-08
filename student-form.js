@@ -598,7 +598,63 @@ function initApp() {
     }
 
     originalSiblingLinks = JSON.parse(JSON.stringify(desired));
-}
+    }
+
+      // ============================================
+  // 🔗 AUTO-SYNC FAMILY PORTAL SNAPSHOT
+  //    Keeps parent request links up-to-date every time a student is saved
+  // ============================================
+  function buildPortalStudentSnapshot(sid, s) {
+    const subjects = (Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {}))
+      .filter(x => x && x.status === 'current' && x.name)
+      .map(x => ({
+        name: x.name,
+        level: x.currentLevel || x.startLevel || '',
+        timeslots: (Array.isArray(x.timeslots) ? x.timeslots : Object.values(x.timeslots || {})).map(ts => ({
+          center: ts.center || '',
+          centerName: (allCenters.find(c => c.id === ts.center) || {}).name || '',
+          day: ts.day || '',
+          time: ts.time || ''
+        }))
+      }));
+      return {
+        v: 2,
+        centerId: centerId,
+      centerName: (allCenters.find(c => c.id === centerId) || {}).name || '',
+      nameCn: s.nameCn || '',
+      namePinyin: s.namePinyin || '',
+      nickname: s.nickname || '',
+      grade: s.grade || '',
+      school: s.school || '',
+      studentNumber: s.studentNumber || '',
+      subjects
+    };
+  }
+
+  async function syncFamilyPortalsSnapshot(savedStudentId, studentData) {
+    if (!savedStudentId || !studentData) return;
+    try {
+      const snap = await get(ref(db, 'publicFamilyLinks'));
+      if (!snap.exists()) return;
+      const updates = {};
+      const snapshot = buildPortalStudentSnapshot(savedStudentId, studentData);
+      snap.forEach(centerChild => {
+        const cid = centerChild.key;
+        const tokens = centerChild.val() || {};
+        Object.entries(tokens).forEach(([token, p]) => {
+          if (p?.students?.[savedStudentId]) {
+            updates[`publicFamilyLinks/${cid}/${token}/students/${savedStudentId}`] = snapshot;
+          }
+        });
+      });
+      if (Object.keys(updates).length) {
+        await update(ref(db), updates);
+        console.log(`🔗 Synced student snapshot to ${Object.keys(updates).length} family portal(s).`);
+      }
+    } catch (err) {
+      console.error('Family portal snapshot sync error:', err);
+    }
+  }
 
     async function cleanupStudentSiblingLinks(id) {
     if (!centerId || !id) return;
@@ -2756,8 +2812,10 @@ function renderSchedule() {
 
             // Save / sync sibling links after we know the saved student ID
             await syncStudentSiblingLinks(savedStudentId);
-
+            // 🔗 Keep family request links up-to-date automatically
+            await syncFamilyPortalsSnapshot(savedStudentId, studentData);
             alert(isEdit ? t('studentForm.updated') : t('studentForm.added'));
+
             navigateBack();
 
         } catch (err) {

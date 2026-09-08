@@ -30,6 +30,7 @@ let knownPendingIds = null;
 let pendingPrimed = false;
 const BASE_TITLE = document.title;
 const EXPIRE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const SNAPSHOT_VERSION = 2; // bump whenever snapshot shape changes
 
 // ============================================
 // INIT
@@ -240,6 +241,7 @@ function startPortalsSync() {
     renderPending();
     sweepExpiredRequests();
     updatePendingNotifications();
+    autoHealSnapshots();
   }, (err) => console.error('Portals sync error:', err));
 }
 
@@ -956,6 +958,7 @@ function buildSnapshot(fam) {
   fam.members.forEach(m => {
     const s = m.data;
     students[m.studentId] = {
+      v: SNAPSHOT_VERSION,
       centerId: m.centerId,
       centerName: allCentersData[m.centerId]?.name || '',
       nameCn: s.nameCn || '', namePinyin: s.namePinyin || '', nickname: s.nickname || '',
@@ -963,11 +966,31 @@ function buildSnapshot(fam) {
       subjects: getCurrentSubjects(s).map(sub => ({
         name: sub.name,
         level: sub.currentLevel || sub.startLevel || '',
-        timeslots: (sub.timeslots || []).map(ts => ({ day: ts.day || '', time: ts.time || '' }))
+        timeslots: (sub.timeslots || []).map(ts => ({
+          center: ts.center || '',
+          centerName: allCentersData[ts.center]?.name || '',
+          day: ts.day || '',
+          time: ts.time || ''
+        }))
       }))
     };
   });
   return students;
+}
+
+// 🩺 Auto-repair stale snapshots (e.g. links created before center info existed)
+async function autoHealSnapshots() {
+  try {
+    for (const [token, p] of Object.entries(portalsCache)) {
+      const stale = Object.values(p.students || {}).some(s => (s.v || 1) < SNAPSHOT_VERSION);
+      if (!stale) continue;
+      const fam = familiesCache.find(f => familyKeyOfMembers(p.meta?.members) === f.key);
+      if (!fam) continue;
+      await set(ref(db, `publicFamilyLinks/${centerId}/${token}/students`), buildSnapshot(fam));
+      await update(ref(db, `publicFamilyLinks/${centerId}/${token}/meta`), { lastSyncedAt: new Date().toISOString() });
+      console.log(`🩺 Auto-healed stale snapshot for family link ${token}`);
+    }
+  } catch (err) { console.error('Auto-heal snapshots failed:', err); }
 }
 
 async function generateOrRegenerate(fam) {
@@ -1223,11 +1246,11 @@ function renderPending() {
     const tr = document.createElement('tr');
     tr.className = `pr-${r.status || 'pending'}`;
     tr.innerHTML = `
-      <td>${new Date(r.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
-      <td><strong>${escapeHtml(r.studentName || '')}</strong>${cBadge}<br><small style="color:var(--text-light);">${escapeHtml(r.studentNameEn || '')}</small></td>
+      <td>${new Date(r.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}${r.parentEditedAt ? `<span title="${escapeHtml(t('pending.editedByParent'))}"> ✏️</span>` : ''}</td>
+      <td><strong>${escapeHtml(cleanName(r.studentName) || cleanName(r.studentNameEn) || 'Unknown')}</strong>${cBadge}<br><small style="color:var(--text-light);">${escapeHtml(r.studentNameEn || '')}</small></td>
       <td>${escapeHtml(r.subject || '')} ${r.subjectLevel ? `(${escapeHtml(r.subjectLevel)})` : ''}</td>
       <td>${formatDate(r.absenceDate)}<br><small style="color:var(--text-light);">${escapeHtml(r.originalTime || '')}</small></td>
-      <td>${formatDate(r.preferredDate)}<br><small style="color:var(--text-light);">${escapeHtml(r.preferredTime || '')}</small></td>
+      <td>${formatDate(r.preferredDate)}<br><small style="color:var(--text-light);">${escapeHtml(r.preferredTime || '')}${r.preferredCenterName ? ` @ ${escapeHtml(r.preferredCenterName)}` : ''}</small></td>
       <td class="reason-cell">${escapeHtml(r.reason || '—')}</td>
       <td>${statusPill}</td>
       <td><div class="action-btn-group">${actions}</div></td>`;
@@ -1238,7 +1261,7 @@ function renderPending() {
     card.innerHTML = `
       <div style="display:flex;justify-content:space-between;gap:0.5rem;">
         <div>
-          <div class="cc-card-name">${escapeHtml(r.studentName || '')} ${cBadge}</div>
+          <div class="cc-card-name">${escapeHtml(cleanName(r.studentName) || cleanName(r.studentNameEn) || 'Unknown')} ${cBadge}</div>
           <div class="cc-card-subject">${escapeHtml(r.subject || '')} ${r.subjectLevel ? `(${escapeHtml(r.subjectLevel)})` : ''}</div>
         </div>
         ${statusPill}
@@ -1274,7 +1297,7 @@ function renderPending() {
 }
 
 function reqStatusLabel(s) {
-  return { pending: t('pending.statusPending'), approved: t('pending.statusApproved'), rejected: t('pending.statusRejected'), expired: t('pending.statusExpired') }[s] || s || '—';
+  return { pending: t('pending.statusPending'), approved: t('pending.statusApproved'), rejected: t('pending.statusRejected'), expired: t('pending.statusExpired'), cancelled: t('pending.statusCancelled') }[s] || s || '—';
 }
 function rejectReasonText(r) {
   if (r.rejectReasonKey && r.rejectReasonKey !== 'other') return t(`pending.tpl${r.rejectReasonKey.charAt(0).toUpperCase()}${r.rejectReasonKey.slice(1)}`);
@@ -1286,6 +1309,10 @@ function getCenterAbbr(name) {
   const rules = [['pac tat', 'PT'], ['mei keng', 'MK'], ['tap siac', 'TS'], ['champs', 'C']];
   for (const [m, a] of rules) if (lower.includes(m)) return a;
   return (name.replace(/^kumon[\s.-]*/i, '').trim() || name).substring(0, 2).toUpperCase();
+}
+function cleanName(n) { return (n && n !== '-') ? n : ''; }
+function centerKeyAbbr(key) {
+  return { 'mei keng': 'MK', 'pac tat': 'PT', 'champs': 'C', 'tap siac': 'TS' }[key] || (key || '').substring(0, 2).toUpperCase();
 }
 
 async function approveRequest(r) {
@@ -1365,13 +1392,14 @@ function openReqDetail(r) {
   if (r.status === 'approved') timeline.push({ at: r.reviewedAt, label: `✅ ${t('pending.timelineApproved')}`, by: r.reviewedBy });
   if (r.status === 'rejected') timeline.push({ at: r.reviewedAt, label: `🚫 ${t('pending.timelineRejected')}`, by: r.reviewedBy });
   if (r.status === 'expired') timeline.push({ at: r.expiredAt || r.reviewedAt, label: `⌛ ${t('pending.timelineExpired')}`, by: '' });
-  document.getElementById('reqDetailContent').innerHTML = `
+  if (r.parentEditedAt) timeline.push({ at: r.parentEditedAt, label: `✏️ ${t('pending.timelineEdited')}`, by: '' });
+  timeline.sort((a, b) => String(a.at || '').localeCompare(String(b.at || '')));  document.getElementById('reqDetailContent').innerHTML = `
     <div class="detail-section"><h4>📋 ${t('pending.detailTitle')}</h4>
       <div class="detail-grid">
         <div class="detail-item"><strong>${t('pending.colStudent')}</strong><span>${escapeHtml(r.studentName || '')} ${escapeHtml(r.studentNameEn || '')}</span></div>
         <div class="detail-item"><strong>${t('pending.colSubject')}</strong><span>${escapeHtml(r.subject || '')} ${r.subjectLevel ? `(${escapeHtml(r.subjectLevel)})` : ''}</span></div>
         <div class="detail-item"><strong>${t('pending.colAbsence')}</strong><span>${formatDate(r.absenceDate)} ${r.originalTime || ''} (${escapeHtml(r.originalDay || '')})</span></div>
-        <div class="detail-item"><strong>${t('pending.colPreferred')}</strong><span>${formatDate(r.preferredDate)} ${r.preferredTime || ''}</span></div>
+        <div class="detail-item"><strong>${t('pending.colPreferred')}</strong><span>${formatDate(r.preferredDate)} ${r.preferredTime || ''}${r.preferredCenterName ? ` @ ${escapeHtml(r.preferredCenterName)}` : ''}</span></div>
         <div class="detail-item full-width"><strong>${t('pending.colReason')}</strong><span>${escapeHtml(r.reason || '—')}</span></div>
         <div class="detail-item"><strong>${t('pending.colStatus')}</strong><span><span class="req-status rq-${r.status}">${reqStatusLabel(r.status)}</span></span></div>
         ${rejectLine}
@@ -1392,9 +1420,9 @@ function exportPending() {
     'Received': r.createdAt || '', 'Student': r.studentName || '', 'Pinyin': r.studentNameEn || '',
     'Subject': r.subject || '', 'Level': r.subjectLevel || '',
     'Absence Date': r.absenceDate || '', 'Original Time': r.originalTime || '',
-    'Preferred Date': r.preferredDate || '', 'Preferred Time': r.preferredTime || '',
+    'Preferred Date': r.preferredDate || '', 'Preferred Time': r.preferredTime || '', 'Preferred Center': r.preferredCenterName || '',
     'Reason': r.reason || '', 'Status': reqStatusLabel(r.status),
-    'Reject Reason': rejectReasonText(r), 'Reviewed By': r.reviewedBy || '',
+    'Reject Reason': rejectReasonText(r), 'Edited By Parent': r.parentEditedAt || '', 'Reviewed By': r.reviewedBy || '',
     'Student Center': r.studentCenterName || ''
   }));
   downloadExcel(rows, `Parent_Requests_${new Date().toISOString().slice(0, 10)}.xls`);

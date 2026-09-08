@@ -5,11 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Kumon Class Change Request</title>
 <meta name="theme-color" content="#4682B4">
+<!-- ✅ Fixes the deprecation warning while keeping iOS PWA compatibility -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="manifest-parent.webmanifest">
 <link rel="icon" href="favicon.svg">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="parent-request.css">
 </head>
 <body>
@@ -65,23 +67,40 @@
     <!-- FORM -->
     <section class="pr-card">
       <h2>📝 <span data-tr="newRequest">New Request</span></h2>
+      
+      <!-- ✅ Edit banner sits inside the form card -->
+      <div id="editBanner" class="edit-banner hidden">
+        <span>✏️ <span id="editBannerText"></span></span>
+        <button type="button" id="cancelEditBtn" class="edit-banner-x" title="Stop editing">×</button>
+      </div>
+
       <div class="field">
         <label data-tr="subject">Subject</label>
         <select id="prSubject"></select>
+        <div id="prTimeslots" class="ts-chips hidden"></div>
       </div>
       <div class="field">
         <label data-tr="absenceDate">Absence Date (the class you will miss)</label>
-        <input type="date" id="prAbsenceDate">
+        <select id="prAbsenceDate"></select>
+        <input type="date" id="prAbsenceDateFree" class="hidden">
+        <small id="absenceHint" class="muted hidden"></small>
       </div>
       <div class="field">
         <label data-tr="originalTime">Original Class Time</label>
         <select id="prOriginalTime"></select>
+        <input type="time" id="prOriginalTimeFree" class="hidden">
         <small id="originalHint" class="muted hidden"></small>
+      </div>
+      <div class="field">
+        <label data-tr="preferredCenter">Preferred Center</label>
+        <select id="prPreferredCenter"></select>
+        <small id="prCenterHint" class="muted"></small>
       </div>
       <div class="field-row">
         <div class="field">
           <label data-tr="preferredDate">Preferred Replacement Date</label>
           <input type="date" id="prPreferredDate">
+          <small id="preferredHint" class="muted hidden"></small>
         </div>
         <div class="field">
           <label data-tr="preferredTime">Preferred Time</label>
@@ -95,7 +114,7 @@
       <button id="prSubmitBtn" class="btn-primary btn-big" data-tr="submit">Submit Request</button>
     </section>
 
-    <!-- MY REQUESTS -->
+    <!-- ✅ MY REQUESTS (Properly closed, contains the list container) -->
     <section class="pr-card">
       <h2>📋 <span data-tr="myRequests">My Requests</span></h2>
       <div id="requestsList" class="requests-list"></div>

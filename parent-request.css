@@ -138,3 +138,41 @@ button { font-family: inherit; }
 @media (max-width: 380px) {
   .field-row { grid-template-columns: 1fr; }
 }
+
+/* 🕐 Weekly timeslot chips */
+.ts-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.45rem; align-items: center; }
+.ts-chips-label { font-size: 0.72rem; color: var(--muted); font-weight: 700; width: 100%; }
+.ts-chip {
+  background: #e0f2fe; color: #0369a1; padding: 0.3rem 0.75rem;
+  border-radius: 999px; font-size: 0.82rem; font-weight: 700;
+  border: 1px solid #bae6fd;
+}
+
+/* ✏️ Edit / 🚫 Cancel actions on my requests */
+.req-actions { display: flex; gap: 0.4rem; margin-top: 0.55rem; }
+.req-actions button {
+  flex: 1 1 auto; padding: 0.5rem 0.6rem; border: none; border-radius: 8px;
+  font-size: 0.82rem; font-weight: 700; cursor: pointer;
+}
+.req-edit { background: #e0e7ff; color: #3730a3; }
+.req-cancel { background: #fee2e2; color: #b91c1c; }
+.pill-cancelled { background: #f1f5f9; color: #6b7280; }
+.req-item.st-cancelled { opacity: 0.7; }
+.edit-banner {
+  display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;
+  background: #fffbeb; border: 1px solid #fcd34d; color: #92400e;
+  padding: 0.6rem 0.8rem; border-radius: 10px; font-size: 0.85rem; font-weight: 600;
+  margin-bottom: 0.8rem;
+}
+.edit-banner-x { background: none; border: none; font-size: 1.3rem; line-height: 1; color: #92400e; cursor: pointer; }
+
+/* ============================================
+🏫 HEADER CENTER NAME — bright on the blue bar
+============================================ */
+#centerLabel {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  display: block;
+}
