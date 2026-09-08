@@ -2351,16 +2351,36 @@ function renderSchedule() {
         if (!tbody) return;
         tbody.innerHTML = '';
         let hasData = false;
+        
         if (currentStudentData && currentStudentData.subjects) {
             const subjects = Array.isArray(currentStudentData.subjects) ? currentStudentData.subjects : Object.values(currentStudentData.subjects || {});
+            console.log(' AT SCAN:', JSON.parse(JSON.stringify(
+                subjects.map(sub => ({ name: sub.name, status: sub.status, progress: sub.progress }))
+            ), null, 2));
             subjects.forEach(sub => {
                 if (!sub.progress) return;
-                const progArray = Array.isArray(sub.progress) ? sub.progress : Object.values(sub.progress || {});
+
+                const progArray = normalizeToArray(sub.progress);
+
                 progArray.forEach(prog => {
-                    const testsToRender = prog.tests || (prog.test ? [prog.test] : []);
+                    const testsToRender = getProgressTests(prog);
+
                     testsToRender.forEach(test => {
-                        if (test && (test.date || test.level || test.score || test.time || test.group)) {
+                        const hasTime =
+                            test.time !== undefined &&
+                            test.time !== null &&
+                            String(test.time).trim() !== '';
+
+                        const hasAnyValue =
+                            test.date ||
+                            test.level ||
+                            test.score ||
+                            test.group ||
+                            hasTime;
+
+                        if (hasAnyValue) {
                             hasData = true;
+
                             addATRow({
                                 subject: sub.name || t('studentForm.unknown'),
                                 level: test.level,
@@ -2374,15 +2394,42 @@ function renderSchedule() {
                 });
             });
         }
-        if (currentStudentData && Array.isArray(currentStudentData.achievementTests)) {
-            currentStudentData.achievementTests.forEach(at => {
+        
+        // FIX: Safely handle manual 'achievementTests' if converted to an object
+        if (currentStudentData && currentStudentData.achievementTests) {
+        const atArray = normalizeToArray(currentStudentData.achievementTests);
+                
+            atArray.forEach(at => {
                 hasData = true;
                 addATRow(at, true);
             });
         }
+        
         if (!hasData) {
             tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#999; padding:1rem;">${t('studentForm.noAT')}</td></tr>`;
         }
+    }
+
+    function normalizeToArray(value) {
+        if (!value) return [];
+        return Array.isArray(value) ? value : Object.values(value);
+    }
+
+    function getProgressTests(prog) {
+        if (!prog) return [];
+
+        let tests = prog.tests;
+
+        // Backward compatibility for older data shape
+        if (!tests && prog.test) {
+            tests = [prog.test];
+        }
+
+        tests = normalizeToArray(tests);
+
+        return tests
+            .filter(test => test && typeof test === 'object')
+            .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
     }
 
     document.getElementById('addDTBtn')?.addEventListener('click', () => addDTRow());
@@ -2398,6 +2445,33 @@ function renderSchedule() {
             const snap = await get(ref(db, `centers/${centerId}/students/${studentId}`));
             if (snap.exists()) {
                 let s = snap.val();
+
+                // Firebase can sometimes return arrays as objects.
+                // Normalize before rendering/editing.
+                if (s.subjects && !Array.isArray(s.subjects)) {
+                    s.subjects = Object.values(s.subjects);
+                }
+
+                if (s.diagnosticTests && !Array.isArray(s.diagnosticTests)) {
+                    s.diagnosticTests = Object.values(s.diagnosticTests);
+                }
+
+                if (s.achievementTests && !Array.isArray(s.achievementTests)) {
+                    s.achievementTests = Object.values(s.achievementTests);
+                }
+
+                (s.subjects || []).forEach(sub => {
+                    if (sub?.progress && !Array.isArray(sub.progress)) {
+                        sub.progress = Object.values(sub.progress);
+                    }
+
+                    (sub.progress || []).forEach(p => {
+                        if (p?.tests && !Array.isArray(p.tests)) {
+                            p.tests = Object.values(p.tests);
+                        }
+                    });
+                });
+
                 if (processPendingRequests(s)) {
                     s.updatedAt = new Date().toISOString();
                     await update(ref(db, `centers/${centerId}/students/${studentId}`), s);
@@ -2493,6 +2567,10 @@ function renderSchedule() {
                 renderTeachersTab(); 
                 await loadStudentSiblingLinks(studentId);
                 renderFamilyTab();
+
+                // Make sure AT/DT tab data is rendered after loading from DB
+                renderATTable();
+
                 originalFormData = collectFormData();
             } else {
                 showError(t('studentForm.studentNotFound'));

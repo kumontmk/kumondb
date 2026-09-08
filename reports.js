@@ -229,13 +229,20 @@ function initializeReports() {
 
                     if (data.status === 'drop' || data.status === 'pause') return;
 
-                    data.subjects = Array.isArray(data.subjects)
+                    const rawSubjects = Array.isArray(data.subjects)
                         ? data.subjects
                         : Object.values(data.subjects || {});
+                    const rawKeys = Array.isArray(data.subjects)
+                        ? data.subjects.map((_, i) => i)
+                        : Object.keys(data.subjects || {});
 
-                    data.subjects = data.subjects.filter(sub =>
-                        sub && !['drop', 'pause', 'inquiry'].includes(sub.status)
-                    );
+                    // Tag each subject with its REAL DB index/key before filtering
+                    data.subjects = rawSubjects
+                        .map((sub, i) => {
+                            if (sub && typeof sub === 'object') sub.__dbKey = rawKeys[i];
+                            return sub;
+                        })
+                        .filter(sub => sub && !['drop', 'pause', 'inquiry'].includes(sub.status));
 
                     cachedStudents.push({ id: child.key, data });
                 });
@@ -328,7 +335,7 @@ function initializeReports() {
                 <input type="date" class="report-input test-date" value="${dateVal}" title="${t('reports.thDate')}">
                 <input type="text" class="report-input test-level" value="${levelVal}" placeholder="${t('reports.phLevel')}" title="${t('reports.phLevel')}">
                 <input type="text" class="report-input test-score" value="${scoreVal}" placeholder="${t('reports.phScore')}" title="${t('reports.phScore')}">
-                <input type="number" class="report-input test-time" value="${timeVal}" placeholder="${t('reports.phTime')}" title="${t('reports.phTime')}">
+                <input type="text" class="report-input test-time" value="${timeVal ?? ''}" placeholder="${t('reports.phTime')}" title="${t('reports.phTime')}" inputmode="text">
                 <input type="text" class="report-input test-group" value="${groupVal}" placeholder="${t('reports.phGroup')}" title="${t('reports.phGroup')}">
                 <button type="button" class="remove-at-btn" title="Remove AT">✕</button>
             </div>
@@ -428,8 +435,7 @@ function initializeReports() {
                 input.style.background = changed ? '#fff' : '#f8f9fa';
                 input.style.color = changed ? 'inherit' : '#999';
                 input.style.cursor = changed ? 'text' : 'not-allowed';
-
-                if (!changed && input.value) input.value = '';
+                // Keep existing saved AT values visible even when fields are locked.
             });
         };
 
@@ -492,7 +498,7 @@ function initializeReports() {
                     const tTime = block.querySelector('.test-time')?.value?.trim() || '';
                     const tGroup = block.querySelector('.test-group')?.value?.trim() || '';
                     if (tDate || tLevel || tScore || tTime || tGroup) {
-                        tests.push({ date: tDate, level: tLevel, score: tScore, time: parseInt(tTime) || 0, group: tGroup });
+                        tests.push({ date: tDate, level: tLevel, score: tScore, time: tTime, group: tGroup });
                     }
                 });
                 patch.tests = tests;
@@ -1006,8 +1012,10 @@ function initializeReports() {
                     ? ['Chinese (Trad)', 'Chinese (Simp)', 'Chinese'].includes(dbName)
                     : dbName === subjectName;
                 if (Array.isArray(subjects)) {
-                    subjectKey = subjects.findIndex(s => matchSubject((s.name || '').trim()));
-                    subjectData = subjectKey !== -1 ? subjects[subjectKey] : null;
+                    const filteredIdx = subjects.findIndex(s => matchSubject((s.name || '').trim()));
+                    subjectData = filteredIdx !== -1 ? subjects[filteredIdx] : null;
+                    // Use the ORIGINAL DB index, not the filtered-array index
+                    subjectKey = subjectData ? (subjectData.__dbKey ?? filteredIdx) : null;
                 } else {
                     for (const key in subjects) {
                         if (matchSubject((subjects[key]?.name || '').trim())) { subjectKey = key; subjectData = subjects[key]; break; }
@@ -1062,6 +1070,7 @@ function initializeReports() {
                 }
                 subjectData.progress = progArr;
             }
+            console.log('🧾 REPORT SAVE batchUpdates:', JSON.parse(JSON.stringify(batchUpdates)));
             if (Object.keys(batchUpdates).length > 0) {
                 await update(ref(db), batchUpdates);
                 alert(t('reports.savedSuccess'));
