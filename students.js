@@ -267,20 +267,7 @@ async function initializePage(isAdmin = false) {
             snapshot.forEach(child => {
                 const student = child.val();
                 const id = child.key;
-                let overallStatus = student.overallStatus;
-                if (student.subjects && Array.isArray(student.subjects) && student.subjects.length > 0) {
-                    const hasCurrent = student.subjects.some(sub => sub.status === 'current');
-                    const hasInquiry = student.subjects.some(sub => sub.status === 'inquiry');
-                    const allDrop = student.subjects.every(sub => sub.status === 'drop');
-                    const allFinished = student.subjects.every(sub => sub.status === 'drop' || sub.status === 'completer');
-                    const hasCompleter = student.subjects.some(sub => sub.status === 'completer');
-                    
-                    if (hasCurrent) overallStatus = 'Current';
-                    else if (hasInquiry) overallStatus = 'Inquiry';
-                    else if (allDrop) overallStatus = 'Drop';
-                    else if (allFinished && hasCompleter) overallStatus = 'Completer';
-                    else overallStatus = 'Pause';
-                }
+                const overallStatus = computeOverallStatus(student);
                 if (student.subjects && Array.isArray(student.subjects)) {
                     student.subjects.forEach(sub => {
                         allRows.push({
@@ -549,7 +536,7 @@ async function exportFilteredStudents(filterFn, filenameSuffix) {
     const teachersMap = await getTeachersMap();
 
     const rows = filtered.map(s => {
-        const subs = s.subjects || [];
+        const subs = getSubjectsArray(s.subjects);           // ← also fixes object-shaped subjects
         const getSubj = (name) => subs.find(sub => sub.name === name) || {};
         const math = getSubj('Math');
         const eng = getSubj('English ERP');
@@ -586,7 +573,7 @@ async function exportFilteredStudents(filterFn, filenameSuffix) {
             'Phone (Emergency_D)': s.phone?.dad || '',
             'Phone (Emergency_Self)': s.phone?.own || '',
             'Ship Address': s.address || '',
-            'Overall Status': s.overallStatus || 'Current',
+            'Overall Status': computeOverallStatus(s),
             'Teachers': teachersStr, // 🆕 Added Teachers Column
             'Maths': math.name ? '1' : '',
             'MStarting': math.startLevel || '',
@@ -651,6 +638,30 @@ async function exportFilteredStudents(filterFn, filenameSuffix) {
         await exportFilteredStudents(() => true, "Export_All");
     }
 
+
+// ==========================================
+// 🧭 OVERALL STATUS - SINGLE SOURCE OF TRUTH
+// ==========================================
+function getSubjectsArray(subjects) {
+    if (!subjects) return [];
+    if (Array.isArray(subjects)) return subjects;
+    if (typeof subjects === 'object') return Object.values(subjects);
+    return [];
+}
+
+function computeOverallStatus(student) {
+    const subjects = getSubjectsArray(student?.subjects);
+    if (subjects.length === 0) {
+        return student?.overallStatus || 'Drop'; // matches form logic
+    }
+    const statuses = subjects.map(sub => String(sub?.status || '').toLowerCase());
+    if (statuses.includes('current')) return 'Current';
+    if (statuses.includes('inquiry')) return 'Inquiry';
+    if (statuses.every(st => st === 'drop')) return 'Drop';
+    if (statuses.includes('completer') && statuses.every(st => st === 'drop' || st === 'completer')) return 'Completer';
+    return 'Pause';
+}
+
 // ==========================================
 // 📤 SUBJECT-SPECIFIC EXPORT LOGIC
 // ==========================================
@@ -697,9 +708,9 @@ function buildSubjectExportRow(student, subjectData, subjectName) {
         'Phone (Emergency_D)': student.phone?.dad || '',
         'Phone (Emergency_Self)': student.phone?.own || '',
         'Ship Address': student.address || '',
-        'Overall Status': student.overallStatus || '',
+        'Overall Status': computeOverallStatus(student),
         'Subject': subjectData.name || subjectName,
-        'Subject Status': subjectData.status || student.overallStatus || 'Current'
+        'Subject Status': subjectData.status || computeOverallStatus(student)
     };
 
     if (subjectName === 'Math') {
@@ -806,7 +817,7 @@ async function exportBySubject(subject) {
 
                 // Prefer the subject's own status.
                 // If subject status is missing, fall back to overallStatus.
-                const effectiveStatus = sub.status || student.overallStatus;
+                const effectiveStatus = sub.status || computeOverallStatus(student);
 
                 return isCurrentStatusValue(effectiveStatus);
             });
@@ -878,29 +889,8 @@ async function exportBySubject(subject) {
             const normalizeStatus = (value) => {
                 return String(value || '').trim().toLowerCase();
             };
-            const getSubjectsArray = (subjects) => {
-                if (!subjects) return [];
-                if (Array.isArray(subjects)) return subjects;
-                if (typeof subjects === 'object') {
-                    return Object.values(subjects);
-                }
-                return [];
-            };
-            const isCurrentStudentOnly = (student) => {
-                const subjects = getSubjectsArray(student.subjects);
-                if (subjects.length > 0) {
-                    const statuses = subjects.map(sub => normalizeStatus(sub?.status));
-                    if (statuses.some(status => status === 'current')) {
-                        return true;
-                    }
-                    const nonCurrentStatuses = ['inquiry', 'pause', 'paused', 'drop', 'dropped', 'inactive', 'withdrawn', 'completer'];
-                    if (statuses.some(status => nonCurrentStatuses.includes(status))) {
-                        return false;
-                    }
-                    return normalizeStatus(student.overallStatus) === 'current';
-                }
-                return normalizeStatus(student.overallStatus) === 'current';
-            };
+            
+            const isCurrentStudentOnly = (student) => computeOverallStatus(student) === 'Current';
             const uniqueNames = new Set();
             snapshot.forEach(child => {
                 const s = child.val();
@@ -1176,6 +1166,7 @@ async function exportBySubject(subject) {
             console.log(`🍂 Auto-updated grades for ${Object.keys(updates).length / 3} students.`);
         }
     }
+
 
     // Initial load
     processGradeUpdates();

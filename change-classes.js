@@ -529,6 +529,23 @@ function randomCode() {
   const a = new Uint8Array(4); crypto.getRandomValues(a);
   return [...a].map(x => chars[x % chars.length]).join('');
 }
+// 🔑 Parent code = last 4 digits of phone (Mom → Dad → Own).
+//    For multi-child families, first member with a phone wins.
+function lastFourDigits(raw) {
+  const digits = String(raw || '').replace(/\D/g, ''); // strips spaces, dashes, +853
+  return digits.length >= 4 ? digits.slice(-4) : '';
+}
+
+function familyPhoneCode(fam) {
+  for (const m of (fam?.members || [])) {
+    const p = m?.data?.phone || {};
+    for (const key of ['mom', 'dad', 'own']) {
+      const code = lastFourDigits(p[key]);
+      if (code) return code;
+    }
+  }
+  return '';
+}
 function parentPageUrl(token) {
   const dir = location.pathname.substring(0, location.pathname.lastIndexOf('/') + 1);
   return `${location.origin}${dir}parent-request.html?c=${encodeURIComponent(centerId)}&t=${encodeURIComponent(token)}`;
@@ -1080,17 +1097,20 @@ async function generateOrRegenerate(fam) {
   const now = new Date().toISOString();
   const uid = auth.currentUser?.uid || '';
   const membersMap = buildMembersMap(fam);
+  const phoneCode = familyPhoneCode(fam);
+  const newCode = phoneCode || randomCode();   // fallback: don't lock families out
+  if (!phoneCode) showToast('⚠️ No phone number on record — a random code was used instead', 'error');
 
   if (existing) {
     if (!await showConfirm(t('links.regenerate'), t('links.regenerateConfirm'))) return;
     const newToken = randomToken();
     const base = `publicFamilyLinks/${centerId}`;
     const updates = {};
-    updates[`${base}/${newToken}/meta`] = {
-      ...existing.meta, code: randomCode(), active: true,
-      createdAt: now, createdBy: uid, familyKey: fam.key, members: membersMap,
-      centerName: allCentersData[centerId]?.name || ''
-    };
+    updates[ `${base}/${newToken}/meta` ] = {
+    ...existing.meta, code: newCode, active: true,  
+    createdAt: now, createdBy: uid, familyKey: fam.key, members: membersMap,
+    centerName: allCentersData[centerId]?.name || ''
+  };
     updates[`${base}/${newToken}/students`] = buildSnapshot(fam);
     Object.entries(existing.requests || {}).forEach(([rid, r]) => { updates[`${base}/${newToken}/requests/${rid}`] = r; });
     updates[`${base}/${existing.token}`] = null;
@@ -1102,7 +1122,7 @@ async function generateOrRegenerate(fam) {
     const token = randomToken();
     const payload = {
       meta: {
-        familyId: 'fam_' + randomToken(8), code: randomCode(), active: true,
+        familyId: 'fam_' + randomToken(8), code: newCode, active: true,   
         createdAt: now, createdBy: uid, familyKey: fam.key, members: membersMap,
         centerName: allCentersData[centerId]?.name || ''
       },

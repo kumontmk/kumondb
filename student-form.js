@@ -1744,6 +1744,16 @@ function renderSchedule() {
                     });
                 });
             }
+
+            const overallStatus = (() => {
+                const statuses = subjects.map(s => s.status);
+                if (!statuses.length) return 'Drop';
+                if (statuses.includes('current')) return 'Current';
+                if (statuses.includes('inquiry')) return 'Inquiry';
+                if (statuses.every(st => st === 'drop')) return 'Drop';
+                if (statuses.includes('completer') && statuses.every(st => st === 'drop' || st === 'completer')) return 'Completer';
+                return 'Pause';
+            })();
             const completerMY = parseMonthYear(entry.querySelector('.completer-month-year')?.value);
             const pencilEntry = entry.querySelector('.pencil-skill-entry');
             const pencilVisible = pencilEntry && pencilEntry.style.display !== 'none';
@@ -1855,8 +1865,19 @@ function renderSchedule() {
             }))
             .sort((a, b) => a.studentId.localeCompare(b.studentId));
 
+            const overallStatus = (() => {
+                const statuses = subjects.map(s => s.status);
+                if (!statuses.length) return 'Drop';
+                if (statuses.includes('current')) return 'Current';
+                if (statuses.includes('inquiry')) return 'Inquiry';
+                if (statuses.every(st => st === 'drop')) return 'Drop';
+                if (statuses.includes('completer') && statuses.every(st => st === 'drop' || st === 'completer')) return 'Completer';
+                return 'Pause';
+            })();
+
         return {
             gender: document.getElementById('gender')?.value || '',
+            overallStatus,
             studentNumber: document.getElementById('studentNumber')?.value?.trim() || '',
             nickname: document.getElementById('nickname')?.value?.trim() || '',
             namePinyin: document.getElementById('namePinyin')?.value?.trim() || '',
