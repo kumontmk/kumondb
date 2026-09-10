@@ -11,6 +11,67 @@ const auth = getAuth();
 const mainContent = document.getElementById('mainContent');
 const accessDenied = document.getElementById('accessDenied');
 
+// ============================================
+// PERMISSION NORMALIZATION
+// ============================================
+const DASHBOARD_PERMISSION_ALIASES = {
+  studentmanagement: 'studentManagement',
+
+  newstudentlist: 'newStudentList',
+  newstudent: 'newStudentList',
+  studentlist: 'newStudentList',
+
+  editstudent: 'editStudentDetails',
+  editstudentdetails: 'editStudentDetails',
+  editstudentdetail: 'editStudentDetails',
+
+  timetable: 'timetable',
+  monthlyreports: 'monthlyReports',
+  progresscharts: 'progressCharts',
+  attendance: 'attendance',
+  followups: 'followUps',
+  dropbook: 'dropBook',
+
+  bulletin: 'bulletin',
+  centrebulletin: 'bulletin',
+  centerbulletin: 'bulletin',
+
+  labeleditor: 'labelEditor',
+
+  changeclasses: 'changeClasses',
+  changeclass: 'changeClasses',
+  changeClasses: 'changeClasses'
+};
+
+function normalizePermissionKey(key) {
+  return String(key || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function normalizeDashboardPermissions(perms = {}) {
+  const out = {};
+
+  Object.entries(perms || {}).forEach(([key, value]) => {
+    const normalizedKey = normalizePermissionKey(key);
+    const canonicalKey = DASHBOARD_PERMISSION_ALIASES[normalizedKey] || key;
+
+    // If any alias is true, make the canonical permission true
+    if (value === true) {
+      out[canonicalKey] = true;
+    } else if (!(canonicalKey in out)) {
+      out[canonicalKey] = value;
+    }
+  });
+
+  return out;
+}
+
+function canonicalDashboardPermissionKey(key) {
+  const normalizedKey = normalizePermissionKey(key);
+  return DASHBOARD_PERMISSION_ALIASES[normalizedKey] || key;
+}
+
 function getEmpPositions(emp) {
   if (Array.isArray(emp.positions)) return emp.positions;
   if (emp.position) return [emp.position];
@@ -148,6 +209,734 @@ const monthPicker = document.getElementById('exportMonthPicker');
     monthPicker.value = `${yyyy}-${mm}`;
   }
 
+  // ============================================
+// 🔐 PERMISSIONS TAB - BULK ROLE/PAGE EDITOR
+// ============================================
+
+const PERMISSION_ROLES = [
+  'English Teacher',
+  'Math Teacher',
+  'Chinese Teacher',
+  'Tutorial Teacher',
+  'Admin',
+  'Manager',
+  'Master Admin',
+  'Custodian'
+];
+
+const PERMISSION_PAGE_LIST = [
+  { key: 'studentManagement', label: 'Student Management' },
+  { key: 'newStudentList', label: 'New Student List' },
+  { key: 'editStudentDetails', label: 'Edit Student Details' },
+  { key: 'changeClasses', label: 'Change Classes' },
+  { key: 'timetable', label: 'Timetable' },
+  { key: 'monthlyReports', label: 'Monthly Reports' },
+  { key: 'progressCharts', label: 'Progress Charts' },
+  { key: 'attendance', label: 'Attendance' },
+  { key: 'followUps', label: 'Follow Ups' },
+  { key: 'dropBook', label: 'Drop Book' },
+  { key: 'bulletin', label: 'Centre Bulletin' },
+  { key: 'labelEditor', label: 'Label Editor' }
+];
+
+let permissionsDraft = {};
+let permissionsBaseline = {};
+let permissionsSaving = false;
+
+function permEscapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function permissionsTabActive() {
+  return document.getElementById('main-tab-permissions')?.classList.contains('active');
+}
+
+function getDraftPositionsArray(draft) {
+  const knownPositions = PERMISSION_ROLES.filter(role => draft.positions.has(role));
+  const hiddenPositions = draft.hiddenPositions || [];
+  return [...new Set([...knownPositions, ...hiddenPositions])];
+}
+
+function defaultPermissionDraft(emp) {
+  const dash = normalizeDashboardPermissions(emp?.permissions?.dashboardCards || {});
+  const allPositions = getEmpPositions(emp).filter(Boolean);
+
+  const knownPositions = new Set(
+    allPositions.filter(position => PERMISSION_ROLES.includes(position))
+  );
+
+  const hiddenPositions = allPositions.filter(
+    position => !PERMISSION_ROLES.includes(position)
+  );
+
+  const pages = {};
+  PERMISSION_PAGE_LIST.forEach(page => {
+    pages[page.key] = !!dash[page.key];
+  });
+
+  return {
+    positions: knownPositions,
+    hiddenPositions,
+    pages
+  };
+}
+
+function serializePermissionDraft(draft) {
+  const pages = {};
+
+  PERMISSION_PAGE_LIST.forEach(page => {
+    pages[page.key] = !!draft.pages[page.key];
+  });
+
+  return {
+    positions: getDraftPositionsArray(draft),
+    pages
+  };
+}
+
+function ensurePermissionDraft(empId) {
+  if (!employees[empId]) return null;
+
+  if (!permissionsDraft[empId]) {
+    permissionsDraft[empId] = defaultPermissionDraft(employees[empId]);
+  }
+
+  if (!permissionsBaseline[empId]) {
+    permissionsBaseline[empId] = JSON.stringify(
+      serializePermissionDraft(defaultPermissionDraft(employees[empId]))
+    );
+  }
+
+  return permissionsDraft[empId];
+}
+
+function isPermissionEmployeeChanged(empId) {
+  const draft = permissionsDraft[empId];
+  if (!draft) return false;
+
+  if (!permissionsBaseline[empId] && employees[empId]) {
+    permissionsBaseline[empId] = JSON.stringify(
+      serializePermissionDraft(defaultPermissionDraft(employees[empId]))
+    );
+  }
+
+  return JSON.stringify(serializePermissionDraft(draft)) !== permissionsBaseline[empId];
+}
+
+function getPermissionChangedIds() {
+  return Object.keys(permissionsDraft).filter(empId => isPermissionEmployeeChanged(empId));
+}
+
+function hasPermissionChanges() {
+  return getPermissionChangedIds().length > 0;
+}
+
+function buildPermissionDraftsFromEmployees() {
+  permissionsDraft = {};
+  permissionsBaseline = {};
+
+  Object.entries(employees).forEach(([empId, emp]) => {
+    const draft = defaultPermissionDraft(emp);
+    permissionsDraft[empId] = draft;
+    permissionsBaseline[empId] = JSON.stringify(serializePermissionDraft(draft));
+  });
+
+  updatePermissionSaveBar();
+}
+
+function populatePermissionFilters() {
+  const roleFilter = document.getElementById('permissionsRoleFilter');
+  if (roleFilter && roleFilter.options.length === 0) {
+    roleFilter.innerHTML =
+      '<option value="all">All roles</option>' +
+      PERMISSION_ROLES
+        .map(role => `<option value="${permEscapeHtml(role)}">${permEscapeHtml(role)}</option>`)
+        .join('');
+  }
+
+  const pageFilter = document.getElementById('permissionsPageFilter');
+  if (pageFilter && pageFilter.options.length === 0) {
+    pageFilter.innerHTML =
+      '<option value="all">All pages</option>' +
+      PERMISSION_PAGE_LIST
+        .map(page => `<option value="${permEscapeHtml(page.key)}">${permEscapeHtml(page.label)}</option>`)
+        .join('');
+  }
+}
+
+function getFilteredPermissionEmployees() {
+  const search = (document.getElementById('permissionsSearch')?.value || '').trim().toLowerCase();
+  const roleFilter = document.getElementById('permissionsRoleFilter')?.value || 'all';
+  const pageFilter = document.getElementById('permissionsPageFilter')?.value || 'all';
+  const onlyChanged = document.getElementById('permissionsOnlyChanged')?.checked || false;
+
+  return Object.entries(employees).filter(([empId, emp]) => {
+    const draft = ensurePermissionDraft(empId);
+    if (!draft) return false;
+
+    const positionsText = getDraftPositionsArray(draft).join(' ').toLowerCase();
+
+    const searchText = [
+      emp.englishName || '',
+      emp.chineseName || '',
+      emp.email || '',
+      positionsText
+    ].join(' ').toLowerCase();
+
+    if (search && !searchText.includes(search)) return false;
+
+    if (roleFilter !== 'all' && !draft.positions.has(roleFilter)) return false;
+
+    if (pageFilter !== 'all' && !draft.pages[pageFilter]) return false;
+
+    if (onlyChanged && !isPermissionEmployeeChanged(empId)) return false;
+
+    return true;
+  });
+}
+
+function buildPermissionsHead() {
+  const thead = document.getElementById('permissionsThead');
+  if (!thead) return;
+
+  const roleColumns = PERMISSION_ROLES.map(role => {
+    return `
+      <th class="perm-role-th">
+        <label class="perm-th-label" title="${permEscapeHtml(role)}">
+          <input
+            type="checkbox"
+            class="perm-col-toggle"
+            data-col-type="role"
+            data-col-value="${permEscapeHtml(role)}"
+          >
+          <span>${permEscapeHtml(role)}</span>
+        </label>
+      </th>
+    `;
+  }).join('');
+
+  const pageColumns = PERMISSION_PAGE_LIST.map(page => {
+    return `
+      <th class="perm-page-th">
+        <label class="perm-th-label" title="${permEscapeHtml(page.label)}">
+          <input
+            type="checkbox"
+            class="perm-col-toggle"
+            data-col-type="page"
+            data-col-value="${permEscapeHtml(page.key)}"
+          >
+          <span>${permEscapeHtml(page.label)}</span>
+        </label>
+      </th>
+    `;
+  }).join('');
+
+  thead.innerHTML = `
+    <tr>
+      <th class="perm-employee-th">Employee</th>
+      ${roleColumns}
+      ${pageColumns}
+    </tr>
+  `;
+}
+
+function findPermissionRow(empId) {
+  return Array.from(
+    document.querySelectorAll('#permissionsTableBody tr[data-emp-id]')
+  ).find(row => row.dataset.empId === empId);
+}
+
+function updatePermissionRowChangedState(empId) {
+  const row = findPermissionRow(empId);
+  if (!row) return;
+
+  const draft = permissionsDraft[empId];
+  if (!draft) return;
+
+  const changed = isPermissionEmployeeChanged(empId);
+
+  row.classList.toggle('perm-changed', changed);
+
+  const badge = row.querySelector('.perm-emp-changed-badge');
+  if (badge) {
+    badge.style.display = changed ? 'inline-block' : 'none';
+  }
+
+  const rolesLine = row.querySelector('.perm-emp-roles');
+  if (rolesLine) {
+    rolesLine.textContent = getDraftPositionsArray(draft).join(', ') || 'No roles';
+  }
+}
+
+function renderPermissionRows() {
+  const tbody = document.getElementById('permissionsTableBody');
+  if (!tbody) return;
+
+  const totalColumns = 1 + PERMISSION_ROLES.length + PERMISSION_PAGE_LIST.length;
+  const filteredEmployees = getFilteredPermissionEmployees();
+
+  if (!filteredEmployees.length) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="${totalColumns}" class="empty-state">
+          No employees match the current filter.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = filteredEmployees.map(([empId, emp]) => {
+    const draft = ensurePermissionDraft(empId);
+    const changed = isPermissionEmployeeChanged(empId);
+
+    const statusBadge = emp.isDisabled === true
+      ? '<span class="status-badge disabled">Disabled</span>'
+      : '<span class="status-badge active">Active</span>';
+
+    const changedBadge = `
+      <span
+        class="status-badge perm-emp-changed-badge"
+        style="background:#fef3c7;color:#92400e;${changed ? '' : 'display:none;'}"
+      >
+        Changed
+      </span>
+    `;
+
+    const roleCells = PERMISSION_ROLES.map(role => {
+      return `
+        <td class="perm-cell" data-label="${permEscapeHtml(role)}">
+          <input
+            type="checkbox"
+            class="perm-role"
+            data-emp-id="${permEscapeHtml(empId)}"
+            data-role="${permEscapeHtml(role)}"
+            ${draft.positions.has(role) ? 'checked' : ''}
+            aria-label="${permEscapeHtml(role)}"
+          >
+        </td>
+      `;
+    }).join('');
+
+    const pageCells = PERMISSION_PAGE_LIST.map(page => {
+      return `
+        <td class="perm-cell" data-label="${permEscapeHtml(page.label)}">
+          <input
+            type="checkbox"
+            class="perm-page"
+            data-emp-id="${permEscapeHtml(empId)}"
+            data-page="${permEscapeHtml(page.key)}"
+            ${draft.pages[page.key] ? 'checked' : ''}
+            aria-label="${permEscapeHtml(page.label)}"
+          >
+        </td>
+      `;
+    }).join('');
+
+    return `
+      <tr data-emp-id="${permEscapeHtml(empId)}" class="${changed ? 'perm-changed' : ''}">
+        <td class="perm-employee-cell" data-label="Employee">
+          <div class="perm-emp-name">
+            ${permEscapeHtml(emp.englishName || '-')}
+            ${statusBadge}
+            ${changedBadge}
+          </div>
+          <div class="perm-emp-email">${permEscapeHtml(emp.email || '-')}</div>
+          <div class="perm-emp-roles">
+            ${permEscapeHtml(getDraftPositionsArray(draft).join(', ') || 'No roles')}
+          </div>
+        </td>
+        ${roleCells}
+        ${pageCells}
+      </tr>
+    `;
+  }).join('');
+}
+
+function updatePermissionColumnToggles() {
+  const rows = Array.from(
+    document.querySelectorAll('#permissionsTableBody tr[data-emp-id]')
+  );
+
+  document.querySelectorAll('#permissionsThead .perm-col-toggle').forEach(header => {
+    const type = header.dataset.colType;
+    const value = header.dataset.colValue;
+
+    let total = 0;
+    let checkedCount = 0;
+
+    rows.forEach(row => {
+      const inputs = row.querySelectorAll(type === 'role' ? '.perm-role' : '.perm-page');
+
+      inputs.forEach(input => {
+        const matches =
+          (type === 'role' && input.dataset.role === value) ||
+          (type === 'page' && input.dataset.page === value);
+
+        if (matches) {
+          total++;
+          if (input.checked) checkedCount++;
+        }
+      });
+    });
+
+    header.checked = total > 0 && checkedCount === total;
+    header.indeterminate = checkedCount > 0 && checkedCount < total;
+  });
+}
+
+function applyPermissionChange(empId, type, value, checked) {
+  const draft = ensurePermissionDraft(empId);
+  if (!draft) return;
+
+  if (type === 'role') {
+    if (checked) {
+      draft.positions.add(value);
+    } else {
+      draft.positions.delete(value);
+    }
+  }
+
+  if (type === 'page') {
+    draft.pages[value] = checked;
+  }
+
+  updatePermissionRowChangedState(empId);
+}
+
+function handlePermissionCheckboxChange(e) {
+  const input = e.target;
+
+  if (!input.classList.contains('perm-role') && !input.classList.contains('perm-page')) {
+    return;
+  }
+
+  const empId = input.dataset.empId;
+
+  if (input.classList.contains('perm-role')) {
+    applyPermissionChange(empId, 'role', input.dataset.role, input.checked);
+  }
+
+  if (input.classList.contains('perm-page')) {
+    applyPermissionChange(empId, 'page', input.dataset.page, input.checked);
+  }
+
+  updatePermissionSaveBar();
+  updatePermissionColumnToggles();
+}
+
+function handlePermissionColumnToggle(e) {
+  const header = e.target.closest('.perm-col-toggle');
+  if (!header) return;
+
+  const type = header.dataset.colType;
+  const value = header.dataset.colValue;
+  const checked = header.checked;
+
+  const rows = Array.from(
+    document.querySelectorAll('#permissionsTableBody tr[data-emp-id]')
+  );
+
+  rows.forEach(row => {
+    const empId = row.dataset.empId;
+
+    const inputs = row.querySelectorAll(type === 'role' ? '.perm-role' : '.perm-page');
+
+    inputs.forEach(input => {
+      const matches =
+        (type === 'role' && input.dataset.role === value) ||
+        (type === 'page' && input.dataset.page === value);
+
+      if (matches) {
+        input.checked = checked;
+      }
+    });
+
+    applyPermissionChange(empId, type, value, checked);
+  });
+
+  updatePermissionSaveBar();
+  updatePermissionColumnToggles();
+}
+
+function bulkSetVisiblePages(value) {
+  const rows = Array.from(
+    document.querySelectorAll('#permissionsTableBody tr[data-emp-id]')
+  );
+
+  if (!rows.length) {
+    alert('No visible employees to update.');
+    return;
+  }
+
+  const action = value ? 'grant' : 'clear';
+  const confirmed = confirm(
+    `Are you sure you want to ${action} all page permissions for the ${rows.length} visible employee(s)?`
+  );
+
+  if (!confirmed) return;
+
+  rows.forEach(row => {
+    const empId = row.dataset.empId;
+
+    row.querySelectorAll('.perm-page').forEach(cb => {
+      cb.checked = value;
+    });
+
+    PERMISSION_PAGE_LIST.forEach(page => {
+      applyPermissionChange(empId, 'page', page.key, value);
+    });
+  });
+
+  updatePermissionSaveBar();
+  updatePermissionColumnToggles();
+}
+
+function updatePermissionSaveBar() {
+  const changedIds = getPermissionChangedIds();
+
+  const summary = document.getElementById('permissionsChangeSummary');
+  const saveBtn = document.getElementById('permissionsSaveBtn');
+  const badge = document.getElementById('permissionsTabBadge');
+
+  if (summary) {
+    summary.textContent = changedIds.length
+      ? `${changedIds.length} employee(s) with unsaved changes`
+      : 'No unsaved changes';
+  }
+
+  if (saveBtn) {
+    saveBtn.disabled = permissionsSaving || changedIds.length === 0;
+  }
+
+  if (badge) {
+    if (changedIds.length > 0) {
+      badge.textContent = changedIds.length > 99 ? '99+' : changedIds.length;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+  }
+}
+
+function resetPermissionsTab() {
+  if (!hasPermissionChanges()) {
+    alert('No permission changes to reset.');
+    return;
+  }
+
+  if (!confirm('Reset all unsaved permission changes?')) return;
+
+  buildPermissionDraftsFromEmployees();
+  renderPermissionsTab();
+}
+
+async function savePermissionsTab() {
+  const changedIds = getPermissionChangedIds();
+
+  if (!changedIds.length) {
+    alert('No changes to save.');
+    return;
+  }
+
+  const invalidEmployees = changedIds.filter(empId => {
+    return getDraftPositionsArray(permissionsDraft[empId]).length === 0;
+  });
+
+  if (invalidEmployees.length) {
+    const names = invalidEmployees
+      .map(empId => employees[empId]?.englishName || empId)
+      .join(', ');
+
+    alert(`Please select at least one role for: ${names}`);
+    return;
+  }
+
+  const saveBtn = document.getElementById('permissionsSaveBtn');
+  const originalButtonText = saveBtn?.textContent || 'Save Permissions';
+
+  permissionsSaving = true;
+
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+  }
+
+  try {
+    const updates = {};
+    const savedById = {};
+
+    changedIds.forEach(empId => {
+      const draft = permissionsDraft[empId];
+
+      const positions = getDraftPositionsArray(draft);
+
+      const pageValues = {};
+      PERMISSION_PAGE_LIST.forEach(page => {
+        pageValues[page.key] = !!draft.pages[page.key];
+      });
+
+      const dashboardCards = normalizeDashboardPermissions(pageValues);
+
+      savedById[empId] = {
+        positions,
+        dashboardCards
+      };
+
+      updates[`employees/${empId}/positions`] = positions;
+      updates[`employees/${empId}/position`] = positions[0] || '';
+      updates[`employees/${empId}/permissions/dashboardCards`] = dashboardCards;
+      updates[`employees/${empId}/updatedAt`] = new Date().toISOString();
+    });
+
+    await update(ref(db), updates);
+
+    await Promise.all(
+      changedIds.map(async empId => {
+        const existingEmployee = employees[empId] || {};
+        const { positions, dashboardCards } = savedById[empId];
+        const centers = existingEmployee.permissions?.centers || {};
+
+        employees[empId] = {
+          ...existingEmployee,
+          positions,
+          position: positions[0] || '',
+          permissions: {
+            ...(existingEmployee.permissions || {}),
+            centers,
+            dashboardCards
+          },
+          updatedAt: new Date().toISOString()
+        };
+
+        const uid = await findUserUidForEmployee(empId, employees[empId]);
+
+        if (uid) {
+          await syncUserPermissionsToUserRecord(
+            uid,
+            centers,
+            dashboardCards,
+            positions,
+            positions[0] || ''
+          );
+        }
+      })
+    );
+
+    buildPermissionDraftsFromEmployees();
+    renderPermissionsTab();
+
+    alert('✅ Permissions saved successfully.');
+  } catch (err) {
+    console.error('Error saving permissions:', err);
+    alert('❌ Failed to save permissions: ' + err.message);
+  } finally {
+    permissionsSaving = false;
+
+    if (saveBtn) {
+      saveBtn.textContent = originalButtonText;
+      updatePermissionSaveBar();
+    }
+  }
+}
+
+function renderPermissionsTab() {
+  if (!document.getElementById('permissionsTableBody')) return;
+
+  populatePermissionFilters();
+  buildPermissionsHead();
+  renderPermissionRows();
+  updatePermissionColumnToggles();
+  updatePermissionSaveBar();
+}
+
+function openPermissionsTab() {
+  if (!hasPermissionChanges()) {
+    buildPermissionDraftsFromEmployees();
+  }
+
+  renderPermissionsTab();
+}
+
+function refreshPermissionsTabIfVisible() {
+  if (!permissionsTabActive()) return;
+
+  if (hasPermissionChanges()) return;
+
+  buildPermissionDraftsFromEmployees();
+  renderPermissionsTab();
+}
+
+function setupPermissionsTab() {
+  const permissionsTabButton = document.querySelector('[data-main-tab="permissions"]');
+  permissionsTabButton?.addEventListener('click', openPermissionsTab);
+
+  document.getElementById('permissionsSearch')?.addEventListener('input', () => {
+    renderPermissionRows();
+    updatePermissionColumnToggles();
+    updatePermissionSaveBar();
+  });
+
+  document.getElementById('permissionsRoleFilter')?.addEventListener('change', () => {
+    renderPermissionRows();
+    updatePermissionColumnToggles();
+    updatePermissionSaveBar();
+  });
+
+  document.getElementById('permissionsPageFilter')?.addEventListener('change', () => {
+    renderPermissionRows();
+    updatePermissionColumnToggles();
+    updatePermissionSaveBar();
+  });
+
+  document.getElementById('permissionsOnlyChanged')?.addEventListener('change', () => {
+    renderPermissionRows();
+    updatePermissionColumnToggles();
+    updatePermissionSaveBar();
+  });
+
+  document.getElementById('permissionsRefreshBtn')?.addEventListener('click', () => {
+    buildPermissionDraftsFromEmployees();
+    renderPermissionsTab();
+  });
+
+  document.getElementById('permissionsResetBtn')?.addEventListener('click', resetPermissionsTab);
+
+  document.getElementById('permissionsSaveBtn')?.addEventListener('click', savePermissionsTab);
+
+  document.getElementById('permGrantAllVisible')?.addEventListener('click', () => {
+    bulkSetVisiblePages(true);
+  });
+
+  document.getElementById('permClearAllVisible')?.addEventListener('click', () => {
+    bulkSetVisiblePages(false);
+  });
+
+  document.getElementById('permissionsTableBody')?.addEventListener(
+    'change',
+    handlePermissionCheckboxChange
+  );
+
+  document.getElementById('permissionsThead')?.addEventListener(
+    'change',
+    handlePermissionColumnToggle
+  );
+}
+
+setupPermissionsTab();
+
+window.addEventListener('beforeunload', (e) => {
+  if (hasPermissionChanges()) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
+
   exportBtn?.addEventListener('click', openExportModal);
   natSelect?.addEventListener('change', e => natOther.classList.toggle('visible', e.target.value === 'Others'));
   saveBtn?.addEventListener('click', saveEmployee);
@@ -193,7 +982,10 @@ const monthPicker = document.getElementById('exportMonthPicker');
               employmentDate: userData.employmentDate || new Date().toISOString().split('T')[0],
               terms: userData.terms || 'Full-time',
               qrCode: `EMP_${uid.slice(0, 8)}`,
-              permissions: { centers: {}, dashboardCards: {} },
+              permissions: {
+                centers: userData.permissions?.centers || {},
+                dashboardCards: normalizeDashboardPermissions(userData.permissions?.dashboardCards || {})
+              },
               updatedAt: new Date().toISOString()
             };
             await set(ref(db, `employees/${uid}`), empData);
@@ -253,6 +1045,7 @@ const monthPicker = document.getElementById('exportMonthPicker');
     onValue(ref(db, 'employees'), (snapshot) => {
       employees = snapshot.val() || {};
       renderTable();
+      refreshPermissionsTabIfVisible();
       if (!initialLoadDone) {
         initialLoadDone = true;
         updateIncompleteBadge();
@@ -453,10 +1246,17 @@ function renderTable(filter = '') {
 
       const perms = e.permissions || {};
       const centerPerms = perms.centers || {};
-      const dashPerms = perms.dashboardCards || {};
+      const dashPerms = normalizeDashboardPermissions(perms.dashboardCards || {});
+
       setTimeout(() => {
-        document.querySelectorAll('#centerPermissions input').forEach(cb => cb.checked = !!centerPerms[cb.value]);
-        document.querySelectorAll('#dashboardPermissions input').forEach(cb => cb.checked = !!dashPerms[cb.value]);
+        document.querySelectorAll('#centerPermissions input').forEach(cb => {
+          cb.checked = !!centerPerms[cb.value];
+        });
+
+        document.querySelectorAll('#dashboardPermissions input').forEach(cb => {
+          const canonicalKey = canonicalDashboardPermissionKey(cb.value);
+          cb.checked = !!dashPerms[canonicalKey];
+        });
       }, 100);
     } else {
       document.getElementById('empId').value = '';
@@ -567,6 +1367,70 @@ function renderTable(filter = '') {
     link.click();
   });
 
+  async function findUserUidForEmployee(employeeId, employeeData) {
+    // 1. Prefer explicit authUid
+    const authUid = employeeData?.authUid || employees[employeeId]?.authUid;
+    if (authUid) return authUid;
+
+    // 2. Check whether employee ID itself is the auth UID
+    if (employeeId) {
+      try {
+        const userSnap = await get(ref(db, `users/${employeeId}`));
+        if (userSnap.exists()) return employeeId;
+      } catch (err) {
+        console.error('Error checking user by employee ID:', err);
+      }
+    }
+
+    // 3. Fallback: match by email
+    const email = String(employeeData?.email || '').toLowerCase();
+    if (!email) return null;
+
+    try {
+      const usersSnap = await get(ref(db, 'users'));
+      const users = usersSnap.val() || {};
+
+      const matchingUid = Object.keys(users).find(uid =>
+        String(users[uid].email || '').toLowerCase() === email
+      );
+
+      return matchingUid || null;
+    } catch (err) {
+      console.error('Error finding user by email:', err);
+      return null;
+    }
+  }
+
+  async function syncUserPermissionsToUserRecord(uid, centers, dashboardCards, positions, position) {
+    if (!uid) return;
+
+    try {
+      const userPermSnap = await get(ref(db, `users/${uid}/permissions`));
+      const existingPermissions = userPermSnap.val() || {};
+
+      const mergedPermissions = {
+        centers: {
+          ...(existingPermissions.centers || {}),
+          ...centers
+        },
+        dashboardCards: {
+          ...normalizeDashboardPermissions(existingPermissions.dashboardCards || {}),
+          ...dashboardCards
+        }
+      };
+
+      await update(ref(db, `users/${uid}`), {
+        permissions: mergedPermissions,
+        positions,
+        position
+      });
+
+      console.log(`✅ Synced permissions to users/${uid}`);
+    } catch (err) {
+      console.error('Error syncing permissions to user record:', err);
+    }
+  }
+
   async function saveEmployee() {
     const empId = document.getElementById('empId')?.value;
     const englishName = document.getElementById('empEnglish')?.value.trim();
@@ -588,10 +1452,26 @@ function renderTable(filter = '') {
       return alert('Please fill in all required fields.');
     }
 
-    const centers = {};
-    document.querySelectorAll('#centerPermissions input').forEach(cb => { centers[cb.value] = cb.checked; });
-    const dashboardCards = {};
-    document.querySelectorAll('#dashboardPermissions input').forEach(cb => { dashboardCards[cb.value] = cb.checked; });
+    // Preserve existing permission keys that may not be present in the form
+    const existingEmployee = empId ? employees[empId] : null;
+    const existingPermissions = existingEmployee?.permissions || {};
+
+    // Merge center permissions instead of wiping unknown keys
+    const centers = { ...(existingPermissions.centers || {}) };
+    document.querySelectorAll('#centerPermissions input').forEach(cb => {
+      centers[cb.value] = cb.checked;
+    });
+
+    // Merge dashboard permissions instead of wiping unknown keys
+    let dashboardCards = normalizeDashboardPermissions(existingPermissions.dashboardCards || {});
+
+    document.querySelectorAll('#dashboardPermissions input').forEach(cb => {
+      const canonicalKey = canonicalDashboardPermissionKey(cb.value);
+      dashboardCards[canonicalKey] = cb.checked;
+    });
+
+    // Normalize again after applying checkbox states
+    dashboardCards = normalizeDashboardPermissions(dashboardCards);
 
     let existingLeave = {};
     if (empId && employees[empId]) {
@@ -649,19 +1529,16 @@ function renderTable(filter = '') {
 
       await set(ref(db, `employees/${saveId}`), employeeData);
 
-      if (empId) {
-        const usersSnap = await get(ref(db, 'users'));
-        const usersData = usersSnap.val();
-        if (usersData) {
-          if (usersData[empId]) {
-            await update(ref(db, `users/${empId}`), { permissions: { centers, dashboardCards }, positions: positions, position: position });
-          } else {
-            const matchingUserUid = Object.keys(usersData).find(uid => usersData[uid].email?.toLowerCase() === employeeData.email.toLowerCase());
-            if (matchingUserUid) {
-              await update(ref(db, `users/${matchingUserUid}`), { permissions: { centers, dashboardCards }, positions: positions, position: position });
-            }
-          }
-        }
+      const userUid = await findUserUidForEmployee(saveId, employeeData);
+
+      if (userUid) {
+        await syncUserPermissionsToUserRecord(
+          userUid,
+          centers,
+          dashboardCards,
+          positions,
+          position
+        );
       }
 
       employees[saveId] = { ...employeeData, id: saveId };

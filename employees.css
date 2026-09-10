@@ -1508,3 +1508,232 @@ tr.disabled-row td:first-child {
     flex-direction: column;
   }
 }
+
+/* ============================================
+   🔐 PERMISSIONS TAB
+============================================ */
+
+.permissions-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  align-items: center;
+}
+
+.permissions-toolbar input[type="text"] {
+  flex: 1;
+  min-width: 220px;
+}
+
+.permissions-toolbar select {
+  width: auto;
+  min-width: 180px;
+}
+
+.perm-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #333;
+  cursor: pointer;
+  min-height: 42px;
+}
+
+.perm-filter-toggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--primary-dark);
+}
+
+.permissions-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.permissions-note {
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.permissions-table-wrapper {
+  max-height: calc(100vh - 320px);
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+#permissionsTable {
+  min-width: 1600px;
+}
+
+#permissionsTable th,
+#permissionsTable td {
+  white-space: nowrap;
+}
+
+#permissionsTable thead th {
+  vertical-align: bottom;
+}
+
+.perm-employee-th,
+.perm-employee-cell {
+  position: sticky;
+  left: 0;
+  background: #ffffff;
+  z-index: 20;
+  min-width: 240px;
+  box-shadow: 1px 0 0 #e2e8f0;
+}
+
+#permissionsTable thead .perm-employee-th {
+  background: var(--primary);
+  z-index: 30;
+}
+
+.perm-cell {
+  text-align: center;
+}
+
+.perm-cell input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary-dark);
+}
+
+.perm-th-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  min-width: 68px;
+  font-size: 0.72rem;
+  line-height: 1.15;
+  text-align: center;
+  cursor: pointer;
+}
+
+.perm-th-label input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--white);
+}
+
+.perm-emp-name {
+  font-weight: 700;
+  color: #1e293b;
+  white-space: normal;
+}
+
+.perm-emp-email {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-top: 2px;
+  white-space: normal;
+}
+
+.perm-emp-roles {
+  font-size: 0.78rem;
+  color: #475569;
+  margin-top: 4px;
+  white-space: normal;
+}
+
+.perm-changed {
+  background: #fffbeb;
+}
+
+.perm-changed .perm-employee-cell {
+  background: #fffbeb;
+}
+
+.permissions-save-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.10);
+  padding: 0.85rem 1rem;
+  margin-top: 1rem;
+}
+
+#permissionsChangeSummary {
+  font-weight: 700;
+  color: #334155;
+}
+
+.permissions-save-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+#permissionsSaveBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Keep permissions table as a table on mobile */
+@media (max-width: 768px) {
+  #permissionsTable thead {
+    display: table-header-group !important;
+  }
+
+  #permissionsTable tbody tr {
+    display: table-row !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+  }
+
+  #permissionsTable tbody td {
+    display: table-cell !important;
+    justify-content: initial !important;
+    padding: 0.55rem 0.5rem !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    white-space: nowrap !important;
+  }
+
+  #permissionsTable tbody td::before {
+    display: none !important;
+  }
+
+  #permissionsTable tbody td.perm-employee-cell {
+    display: table-cell !important;
+  }
+
+  .permissions-save-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .permissions-save-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+
+  .permissions-table-wrapper {
+    max-height: none;
+  }
+}

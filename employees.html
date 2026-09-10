@@ -46,6 +46,10 @@
       <button class="tab-btn" data-main-tab="incomplete">
         ⚠️ Incomplete <span id="incompleteBadge" class="tab-badge hidden">0</span>
       </button>
+      <button class="tab-btn" data-main-tab="permissions">
+        🔐 Permissions
+        <span id="permissionsTabBadge" class="tab-badge hidden">0</span>
+      </button>
     </div>
 
     <!-- EMPLOYEES TAB -->
@@ -120,8 +124,70 @@
           </tbody>
         </table>
       </div>
+      </div>
+    </div>
+
+    <section id="main-tab-permissions" class="tab-content">
+  <div class="permissions-toolbar">
+    <input
+      type="text"
+      id="permissionsSearch"
+      placeholder="🔍 Search name, email, role..."
+    >
+
+    <select id="permissionsRoleFilter"></select>
+
+    <select id="permissionsPageFilter"></select>
+
+    <label class="perm-filter-toggle">
+      <input type="checkbox" id="permissionsOnlyChanged">
+      Only changed
+    </label>
+
+    <button id="permissionsRefreshBtn" class="secondary" type="button">
+      ↻ Refresh
+    </button>
+  </div>
+
+  <div class="permissions-quick-actions">
+    <button id="permGrantAllVisible" class="secondary" type="button">
+      ✅ Grant all visible pages
+    </button>
+
+    <button id="permClearAllVisible" class="danger" type="button">
+      🧹 Clear all visible pages
+    </button>
+
+    <span class="permissions-note">
+      Tip: use the header checkboxes to toggle a whole column for visible employees.
+    </span>
+  </div>
+
+  <div class="table-wrapper permissions-table-wrapper">
+    <table id="permissionsTable">
+      <thead id="permissionsThead"></thead>
+      <tbody id="permissionsTableBody">
+        <tr>
+          <td class="empty-state">Loading permissions...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div id="permissionsSaveBar" class="permissions-save-bar">
+    <div id="permissionsChangeSummary">No unsaved changes</div>
+
+    <div class="permissions-save-actions">
+      <button id="permissionsResetBtn" class="secondary" type="button">
+        ↩ Reset changes
+      </button>
+
+      <button id="permissionsSaveBtn" class="primary" type="button" disabled>
+        💾 Save Permissions
+      </button>
     </div>
   </div>
+</section>
 
   <!-- EMPLOYEE MODAL -->
   <div id="employeeModal" class="modal hidden">
@@ -242,6 +308,7 @@
             <label><input type="checkbox" value="newStudent"> New Student</label>
             <label><input type="checkbox" value="studentList"> Student List</label>
             <label><input type="checkbox" value="editStudentDetails"> Edit Student Details</label>
+            <label><input type="checkbox" value="changeClasses">Change Classes</label>
             <label><input type="checkbox" value="timetable"> Timetable</label>
             <label><input type="checkbox" value="monthlyReports"> Monthly Reports</label>
             <label><input type="checkbox" value="progressCharts"> Progress Charts</label>

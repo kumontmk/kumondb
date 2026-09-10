@@ -459,61 +459,128 @@ async function processGradeUpdates() {
 
 async function applyDashboardPermissions(user) {
   try {
-    // 1) Load user record by uid, with email fallback
-    let userData = null;
-    let uid = user?.uid;
+    const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
+    const DASHBOARD_PERMISSION_ALIASES = {
+      studentmanagement: 'studentManagement',
+
+      newstudentlist: 'newStudentList',
+      newstudent: 'newStudentList',
+      studentlist: 'newStudentList',
+
+      editstudent: 'editStudentDetails',
+      editstudentdetails: 'editStudentDetails',
+      editstudentdetail: 'editStudentDetails',
+
+      timetable: 'timetable',
+      monthlyreports: 'monthlyReports',
+      progresscharts: 'progressCharts',
+      attendance: 'attendance',
+      followups: 'followUps',
+      dropbook: 'dropBook',
+
+      bulletin: 'bulletin',
+      centrebulletin: 'bulletin',
+      centerbulletin: 'bulletin',
+
+      labeleditor: 'labelEditor',
+
+      changeclasses: 'changeClasses',
+      changeclass: 'changeClasses'
+    };
+
+    const normalizeDashboardPermissions = (perms = {}) => {
+      const out = {};
+
+      Object.entries(perms || {}).forEach(([key, value]) => {
+        const normalizedKey = norm(key);
+        const canonicalKey = DASHBOARD_PERMISSION_ALIASES[normalizedKey] || key;
+
+        if (value === true) {
+          out[canonicalKey] = true;
+        } else if (!(canonicalKey in out)) {
+          out[canonicalKey] = value;
+        }
+      });
+
+      return out;
+    };
+
+    let uid = user?.uid || null;
+    let userData = null;
+    let employeeData = null;
+
+    // Load user record
     if (uid) {
       const snap = await get(ref(db, `users/${uid}`));
       if (snap.exists()) userData = snap.val();
     }
 
+    // Fallback: find user by email
     if (!userData && user?.email) {
       const usersSnap = await get(ref(db, 'users'));
       const users = usersSnap.val() || {};
-      uid = Object.keys(users).find(u =>
-        (users[u].email || '').toLowerCase() === user.email.toLowerCase()
+
+      const matchingUid = Object.keys(users).find(u =>
+        String(users[u].email || '').toLowerCase() === user.email.toLowerCase()
       ) || null;
-      if (uid) userData = users[uid];
+
+      if (matchingUid) {
+        uid = matchingUid;
+        userData = users[matchingUid];
+      }
     }
 
-    // 2) Fallback: employees node (permissions are saved there too)
-    if (!userData && user?.email) {
+    // Load employee record by UID
+    if (uid) {
+      const empSnap = await get(ref(db, `employees/${uid}`));
+      if (empSnap.exists()) employeeData = empSnap.val();
+    }
+
+    // Fallback: find employee by email
+    if (!employeeData && user?.email) {
       const empSnap = await get(ref(db, 'employees'));
       const emps = empSnap.val() || {};
-      userData = Object.values(emps).find(e =>
-        (e.email || '').toLowerCase() === user.email.toLowerCase()
+
+      employeeData = Object.values(emps).find(e =>
+        String(e.email || '').toLowerCase() === user.email.toLowerCase()
       ) || null;
     }
 
-    if (!userData) return;
+    if (!userData && !employeeData) return;
 
-    isAdmin = (user.email || '').toLowerCase() === 'kumonchamps@gmail.com';
+    isAdmin = String(user.email || '').toLowerCase() === 'kumonchamps@gmail.com';
 
-    // 3) Normalized set of granted keys (fixes key-name mismatches)
-    const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    // Merge permissions.
+    // Employee permissions are placed after user permissions, so they override user permissions.
+    const mergedDashboardCards = normalizeDashboardPermissions({
+      ...(userData?.permissions?.dashboardCards || {}),
+      ...(employeeData?.permissions?.dashboardCards || {})
+    });
+
     const granted = new Set(
-      Object.entries(userData.permissions?.dashboardCards || {})
+      Object.entries(mergedDashboardCards)
         .filter(([_, v]) => v === true)
         .map(([k]) => norm(k))
     );
-    const has = (...aliases) => isAdmin || aliases.some(a => granted.has(norm(a)));
 
-    console.log('[PERMS] dashboardCards =', userData.permissions?.dashboardCards);
+    const has = (...aliases) =>
+      isAdmin || aliases.some(a => granted.has(norm(a)));
 
-    // 4) Show/hide cards (aliases cover old + new key names)
+    console.log('[PERMS] merged dashboardCards =', mergedDashboardCards);
+
     const cardRules = {
       'card-studentManagement': ['studentManagement'],
-      'card-newStudentList':    ['newStudentList', 'newStudent', 'studentList'],
-      'card-timetable':         ['timetable'],
-      'card-monthlyReports':    ['monthlyReports'],
-      'card-progressCharts':    ['progressCharts'],
-      'card-attendance':        ['attendance'],
-      'card-followUps':         ['followUps'],
-      'card-dropBook':          ['dropBook'],
-      'card-bulletin':          ['bulletin', 'centreBulletin', 'centerBulletin'],
-      'card-labelEditor':       ['labelEditor'],
-      'card-changeClasses':     ['changeClasses'],
+      'card-newStudentList': ['newStudentList', 'newStudent', 'studentList'],
+      'card-timetable': ['timetable'],
+      'card-monthlyReports': ['monthlyReports'],
+      'card-progressCharts': ['progressCharts'],
+      'card-attendance': ['attendance'],
+      'card-followUps': ['followUps'],
+      'card-dropBook': ['dropBook'],
+      'card-bulletin': ['bulletin', 'centreBulletin', 'centerBulletin'],
+      'card-labelEditor': ['labelEditor'],
+      'card-changeClasses': ['changeClasses']
     };
 
     for (const [cardId, aliases] of Object.entries(cardRules)) {
@@ -525,8 +592,19 @@ async function applyDashboardPermissions(user) {
     if (fabChangeClasses) {
       fabChangeClasses.style.display = has('changeClasses') ? 'flex' : 'none';
     }
+
+    // Optional:
+    // If "Edit Student Details" should control access to searching/opening student edit form,
+    // you can also hide the Search Student FAB.
+    // Remove this if you do not want that behavior.
+    const fabSearchStudent = document.getElementById('fabSearchStudent');
+    if (fabSearchStudent) {
+      fabSearchStudent.style.display =
+        has('editStudentDetails', 'studentManagement') ? 'flex' : 'none';
+    }
+
   } catch (err) {
-    console.error("Error applying dashboard permissions:", err);
+    console.error('Error applying dashboard permissions:', err);
   }
 }
 

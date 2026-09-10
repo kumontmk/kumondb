@@ -33,6 +33,47 @@ const EXPIRE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const SNAPSHOT_VERSION = 2; // bump whenever snapshot shape changes
 
 // ============================================
+// PERMISSION NORMALIZATION HELPERS
+// ============================================
+const DASHBOARD_PERMISSION_ALIASES = {
+  changeclasses: 'changeClasses',
+  changeclass: 'changeClasses',
+  changeClasses: 'changeClasses'
+};
+
+function normalizePermissionKey(key) {
+  return String(key || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function hasChangeClassesPermission(userData, employeeData, userEmail) {
+  // Admin override
+  if (String(userEmail || '').toLowerCase() === 'kumonchamps@gmail.com') return true;
+
+  const checkPerms = (perms) => {
+    if (!perms || !perms.dashboardCards) return false;
+    const dashCards = perms.dashboardCards;
+    
+    // 1. Check exact match
+    if (dashCards.changeClasses === true) return true;
+    
+    // 2. Check normalized aliases (e.g. 'changeclasses' -> 'changeClasses')
+    for (const [key, value] of Object.entries(dashCards)) {
+      if (value === true) {
+        const normKey = normalizePermissionKey(key);
+        if (DASHBOARD_PERMISSION_ALIASES[normKey] === 'changeClasses') return true;
+      }
+    }
+    return false;
+  };
+
+  // Check both user and employee records
+  if (checkPerms(userData?.permissions)) return true;
+  if (checkPerms(employeeData?.permissions)) return true;
+
+  return false;
+}
+
+// ============================================
 // INIT
 // ============================================
 document.addEventListener('DOMContentLoaded', async () => {
@@ -44,11 +85,52 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!centerId) { window.location.href = 'centers.html'; return; }
 
     try {
-      const userSnap = await get(ref(db, `users/${user.uid}`));
-      if (!userSnap.exists()) { window.location.href = 'index.html'; return; }
-      const userData = userSnap.val();
-      const isAdmin = user.email?.toLowerCase() === 'kumonchamps@gmail.com';
-      const hasAccess = isAdmin || userData.permissions?.dashboardCards?.changeClasses === true;
+      let userData = null;
+      let employeeData = null;
+      let uid = user.uid;
+
+      // 1. Load user record by UID
+      if (uid) {
+        const userSnap = await get(ref(db, `users/${uid}`));
+        if (userSnap.exists()) userData = userSnap.val();
+      }
+
+      // 2. Fallback: find user by email if UID didn't match
+      if (!userData && user.email) {
+        const usersSnap = await get(ref(db, 'users'));
+        const users = usersSnap.val() || {};
+        const matchingUid = Object.keys(users).find(u =>
+          String(users[u].email || '').toLowerCase() === user.email.toLowerCase()
+        );
+        if (matchingUid) {
+          uid = matchingUid;
+          userData = users[matchingUid];
+        }
+      }
+
+      // 3. Load employee record by UID
+      if (uid) {
+        const empSnap = await get(ref(db, `employees/${uid}`));
+        if (empSnap.exists()) employeeData = empSnap.val();
+      }
+
+      // 4. Fallback: find employee by email
+      if (!employeeData && user.email) {
+        const empSnap = await get(ref(db, 'employees'));
+        const emps = empSnap.val() || {};
+        employeeData = Object.values(emps).find(e =>
+          String(e.email || '').toLowerCase() === user.email.toLowerCase()
+        ) || null;
+      }
+
+      if (!userData && !employeeData) {
+        window.location.href = 'index.html'; 
+        return;
+      }
+
+      // 5. Check robust permissions
+      const hasAccess = hasChangeClassesPermission(userData, employeeData, user.email);
+      
       if (!hasAccess) {
         document.getElementById('accessDenied').classList.remove('hidden');
         document.getElementById('page-loader').classList.add('hidden');
