@@ -176,3 +176,42 @@ button { font-family: inherit; }
   letter-spacing: 0.3px;
   display: block;
 }
+
+/* ============================================
+🛠 FIX — Preferred Date / Time overlap (iOS)
+============================================ */
+/* 1) Let the two columns shrink below their content's min-width */
+.field-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: end;                 /* keeps both controls on the same line even when a label wraps to 2 lines */
+}
+.field-row > * { min-width: 0; }    /* grid children may shrink past content size */
+
+/* 2) Cap every form control to its container */
+.field input,
+.field select,
+.field textarea {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* 3) iOS date/time controls refuse to shrink unless we tame their intrinsic size */
+.field input[type="date"],
+.field input[type="time"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  font-size: 0.95rem;
+  padding: 0.8rem 0.5rem;
+  text-align: center;
+  background: #fff;
+  border: 1.5px solid #dbeafe;
+  border-radius: 10px;
+}
+.field input[type="date"]:focus,
+.field input[type="time"]:focus { outline: none; border-color: var(--primary); }
+
+/* 4) Very narrow phones: stack instead of squeeze (keeps your existing 380px behaviour) */
+@media (max-width: 480px) {
+  .field-row { grid-template-columns: 1fr; align-items: stretch; }
+}
