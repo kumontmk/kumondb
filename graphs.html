@@ -1,97 +1,158 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-      <!-- Shows the logo in the browser tab -->
-  <link rel="icon" type="image/svg+xml" href="favicon.svg">
-
-  <!-- Optional: PNG fallback for older browsers -->
-  <link rel="icon" type="image/png" sizes="512x512" href="dblogo-maskable-512.png">
-
-  <!-- Optional: icon when saved to iOS home screen -->
-  <link rel="apple-touch-icon" href="dblogo-maskable-512.png">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Progress Charts - Kumon DB</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="graph.css">
-    <!-- Plotly.js for Charts -->
-    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Progress Charts - Kumon DB</title>
+<link rel="stylesheet" href="graph.css">
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
 </head>
 <body>
-    <!-- 🔐 ACCESS DENIED OVERLAY -->
-    <div id="accessDenied" class="access-denied hidden">
-        <div class="access-denied-content">
-            <h2>🔐 Access Restricted</h2>
-            <p>You do not have permission to view Progress Charts.</p>
-            <button id="backToDashboardBtn" class="primary" style="margin-top:1rem">← Back to Dashboard</button>
-        </div>
+
+<!-- 🔐 ACCESS DENIED -->
+<div id="accessDenied" class="access-denied hidden">
+  <div class="access-denied-content">
+    <h2>🔐 Access Restricted</h2>
+    <p>You do not have permission to view Progress Charts.</p>
+    <button id="backToDashboardBtn" class="primary">← Back to Dashboard</button>
+  </div>
+</div>
+
+<!-- ⏳ LOADER -->
+<div id="loadingOverlay">
+  <div class="loading-spinner"></div>
+  <p>Loading graphs...</p>
+</div>
+
+<header>
+  <nav>
+    <a href="dashboard.html">← Dashboard</a>
+  </nav>
+  <nav>
+      <h2>📈 Progress Charts</h2>
+  </nav>
+</header>
+
+<div id="mainContent" class="hidden">
+  <div class="graphs-page">
+
+    <!-- 🗂 PAGE TABS -->
+    <div class="page-tabs">
+      <button class="page-tab active" id="tabBtnIndividual" data-tab="individual">👤 Individual Progress</button>
+      <button class="page-tab" id="tabBtnCenter" data-tab="center">🏫 Center Progress Map</button>
     </div>
 
-    <!-- Loading Overlay -->
-    <div id="loadingOverlay" class="hidden">
-        <div class="loading-spinner"></div>
-        <p>Loading graphs...</p>
-    </div>
+    <!-- ============================================
+         TAB 1 : INDIVIDUAL STUDENT PROGRESS
+    ============================================= -->
+    <section id="tab-individual" class="tab-panel active">
+      <div class="chart-container">
+        <div class="chart-head-row">
+          <h2>Individual Student Progress</h2>
+          <input type="text" id="studentSearchInput" class="search-input" placeholder="Search student name / ID...">
+        </div>
+        <div class="table-wrapper">
+          <table class="analytics-table" style="width:100%; border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th>Student Name</th>
+                <th>Student ID</th>
+                <th>Subjects</th>
+              </tr>
+            </thead>
+            <tbody id="analyticsStudentTable">
+              <tr><td>Loading students...</td><td>Loading students...</td><td>Loading students...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
 
-    <!-- ✅ MAIN CONTENT WRAPPER (Hidden by default until authorized) -->
-    <div id="mainContent" class="hidden">
-        
-        <header>
-            <nav>
-                <a href="dashboard.html">← Dashboard</a>
-            </nav>
-            <h2>📈 Progress Charts</h2>
-        </header>
+    <!-- ============================================
+         TAB 2 : CENTER PROGRESS MAP (WALL CHART)
+    ============================================= -->
+    <section id="tab-center" class="tab-panel">
 
-        <main class="graphs-page">
-            <!-- Individual Student Progress Table -->
-            <div class="chart-container" style="margin-bottom: 1.5rem;">
-                <h2>Individual Student Progress</h2>
-                <div style="margin-bottom: 1rem;">
-                    <input type="text" id="studentSearchInput" placeholder="🔍 Search by name or ID..." style="max-width: 300px;">
-                </div>
-                <div class="table-wrapper" style="max-height: 500px;">
-                    <table class="analytics-table">
-                        <thead>
-                            <tr>
-                                <th>Student Name</th>
-                                <th>Student ID</th>
-                                <th>Subjects</th>
-                            </tr>
-                        </thead>
-                        <tbody id="analyticsStudentTable">
-                            <tr><td colspan="3" style="text-align:center;">Loading students...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+      <!-- Stat cards -->
+      <div class="stats-grid">
+        <div class="stat-card stat-total"><div class="stat-icon">📍</div><div class="stat-body"><div class="stat-value" id="statPlotted">0</div><div class="stat-label">Plotted</div></div></div>
+        <div class="stat-card stat-completed"><div class="stat-icon">✅</div><div class="stat-body"><div class="stat-value" id="statAbove">0</div><div class="stat-label">At / Above Standard</div></div></div>
+        <div class="stat-card stat-ahead"><div class="stat-icon">🚀</div><div class="stat-body"><div class="stat-value" id="statAhead2">0</div><div class="stat-label">2+ Yrs Ahead</div></div></div>
+        <div class="stat-card stat-missed"><div class="stat-icon">⚠️</div><div class="stat-body"><div class="stat-value" id="statBelow">0</div><div class="stat-label">Below Standard</div></div></div>
+        <div class="stat-card stat-completer"><div class="stat-icon">🎓</div><div class="stat-body"><div class="stat-value" id="statCompleters">0</div><div class="stat-label">Completers</div></div></div>
+      </div>
 
-            <!-- Aggregate Chart -->
-            <div class="chart-container">
-                <div class="graph-header">
-                    <h2>Students per Month by Subject</h2>
-                    <div class="chart-navigation">
-                        <button id="prevMonths" class="nav-btn">◀ Previous</button>
-                        <span id="monthRange" class="month-range">Loading...</span>
-                        <button id="nextMonths" class="nav-btn">Next ▶</button>
-                    </div>
-                </div>
-                <div id="studentsChart" style="width:100%; height:400px;"></div>
-            </div>
-        </main>
-
-        <!-- Modal for Individual Chart -->
-        <div id="progressModal" class="modal hidden">
-            <div class="modal-content" style="max-width: 1200px;">
-                <span id="closeModalBtn" class="close-modal">&times;</span>
-                <h3 id="modalTitle" style="margin-bottom: 1rem; color: var(--primary-dark);">Student Progress</h3>
-                <div id="progressChartModal" style="width:100%; height:600px;"></div>
-            </div>
+      <!-- Controls -->
+      <div class="controls">
+        <div class="segmented" id="centerSubjectSegmented">
+          <button class="segment active" data-subject="Math">Math</button>
+          <button class="segment" data-subject="English EFL">English EFL</button>
+          <button class="segment" data-subject="English ERP">English ERP</button>
+          <button class="segment" data-subject="Chinese">Chinese</button>
         </div>
 
-    </div> <!-- ✅ End of mainContent wrapper -->
+        <div class="date-range-controls">
+          <button class="nav-btn" id="centerPrevMonth" title="Previous month">◀</button>
+          <select id="centerMonthSelect" title="Report month"></select>
+          <button class="nav-btn" id="centerNextMonth" title="Next month">▶</button>
+        </div>
 
-    <script type="module" src="graphs.js"></script>
-    <script type="module" src="./activity-logger-init.js"></script>
+        <select id="colorMode" title="Color mode">
+          <option value="uniform">🎨 Uniform</option>
+          <option value="standard">📏 Vs Standard</option>
+          <option value="density">🔥 Density</option>
+        </select>
+
+        <label class="check-chip"><input type="checkbox" id="toggleLines" checked> Reference lines</label>
+        <label class="check-chip"><input type="checkbox" id="toggleCompleters" checked> Completers</label>
+        <label class="check-chip"><input type="checkbox" id="toggleInactive"> Include inactive</label>
+
+        <input type="text" id="centerSearch" class="search-input" placeholder="🔍 Highlight student...">
+
+        <button class="export-btn" id="exportPngBtn">🖼 PNG</button>
+        <button class="export-btn" id="exportCsvBtn">📊 CSV</button>
+      </div>
+
+      <!-- Completers band -->
+      <div class="completers-band" id="completersBand">
+        <span class="completers-title">🎓 Completers</span>
+        <span class="completers-list" id="completersList"></span>
+      </div>
+
+      <!-- Wall chart -->
+      <div class="chart-container">
+        <div class="chart-head-row">
+          <h2 id="centerMapTitle">Center Progress Map</h2>
+          <span class="month-range" id="centerMapSubtitle"></span>
+        </div>
+        <div class="chart-scroll-wrapper">
+          <div id="centerMapChart"></div>
+        </div>
+        <p class="tab-hint">One cell = one grade + one level. Cells hold up to 9 names; more than 9 shows a numbered badge — click it for the full list. Click a name to open that student's individual chart.</p>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<!-- 📈 INDIVIDUAL PROGRESS MODAL -->
+<div id="progressModal" class="modal hidden">
+  <div class="modal-content">
+    <span class="close-modal" id="closeModalBtn">×</span>
+    <h2 id="modalTitle">Student Progress</h2>
+    <div id="progressChartModal"></div>
+  </div>
+</div>
+
+<!-- 🧾 CELL LIST MODAL -->
+<div id="cellModal" class="modal hidden">
+  <div class="modal-content cell-modal-content">
+    <span class="close-modal" id="closeCellModalBtn">×</span>
+    <h2 id="cellModalTitle">Students in cell</h2>
+    <div id="cellModalList" class="cell-modal-list"></div>
+  </div>
+</div>
+
+<script type="module" src="graphs.js"></script>
 </body>
 </html>
