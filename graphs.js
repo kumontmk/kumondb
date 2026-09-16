@@ -77,6 +77,7 @@ function initializeGraphs() {
     let individualSearchTerm = '';
     let currentSnapshot = [];
     let centerBuilt = false;
+    let nameDisplay = sessionStorage.getItem('graphsNameDisplay') || 'pinyin';
 
     // ----------------------------------------
     // 3. HELPERS
@@ -140,6 +141,43 @@ function initializeGraphs() {
     function diffYears(pt) {
         const cfg = SUBJECT_CONFIG[pt.subject];
         return (pt.row - kisRowAt(pt.subject, pt.gradeIdx)) / cfg.rowPerYear;
+    }
+
+    // 🈶 Name display helpers
+    const CJK_REGEX = /[\u2E80-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF]/;
+
+    function mapDisplayName(student) {
+        if (nameDisplay === 'chinese') {
+            const cn = (student.nameCn || '').trim();
+            if (cn) return cn;
+        }
+        return (student.namePinyin || student.nickname || student.nameCn || 'Unknown').toString().trim();
+    }
+
+    function mapLabel(student) {
+        if (nameDisplay === 'chinese') {
+            const cn = (student.nameCn || '').trim();
+            if (cn) return cn;
+        }
+        const base = (student.namePinyin || student.nickname || student.nameCn || 'Unknown')
+            .toString()
+            .toUpperCase()
+            .trim();
+        const parts = base.split(/\s+/);
+        if (parts.length === 1) return base;
+        return parts[0] + ' ' + parts.slice(1).map(p => p.charAt(0) + '.').join(' ');
+    }
+
+    function studentNameMatchesSearch(student, q) {
+        if (!q) return true;
+        return [
+            student.namePinyin,
+            student.nameCn,
+            student.nickname,
+            student.studentNumber
+        ]
+        .filter(Boolean)
+        .some(v => String(v).toLowerCase().includes(q));
     }
 
     // ----------------------------------------
@@ -292,6 +330,11 @@ function initializeGraphs() {
 
         const pts = currentSnapshot.filter(p => p.subject === activeSubject);
 
+        // 🈶 Update labels dynamically based on toggle state without refetching data
+        pts.forEach(p => {
+            p.label = mapLabel(p.student);
+        });
+
         // Group into cells
         const cells = {};
         pts.forEach(p => { (cells[`${p.gradeIdx}|${p.row}`] ||= []).push(p); });
@@ -299,7 +342,12 @@ function initializeGraphs() {
 
         const namePts = [], inactivePts = [], badges = [];
         const BASE_FONT = 9, GAP_PX = 3, PAD_PX = 2;
-        const widthOf = (p, f) => p.label.length * f * 0.62 + 2; // approx Arial width
+        
+        // 🈶 Adjust width calculation for Chinese characters
+        const widthOf = (p, f) => {
+            const isCJK = CJK_REGEX.test(p.label);
+            return p.label.length * f * (isCJK ? 1.05 : 0.62) + 2;
+        };
 
         Object.values(cells).forEach(arr => {
             if (arr.length > CELL_CAPACITY) { badges.push(arr); return; }
@@ -336,7 +384,7 @@ function initializeGraphs() {
 
         const q = centerSearchTerm.trim().toLowerCase();
         function hoverFor(p) {
-            return `<b>${fullName(p.student)}</b><br>Grade: ${gradeLabel(GRADE_AXIS[p.gradeIdx])} • Level: ${levels[p.row]} (WS ${p.ws})`
+            return `<b>${mapDisplayName(p.student)}</b><br>Grade: ${gradeLabel(GRADE_AXIS[p.gradeIdx])} • Level: ${levels[p.row]} (WS ${p.ws})`
                 + (p.carried ? '<br><i>(carried from earlier report)</i>' : '')
                 + (p.status !== 'current' ? `<br><i>(${p.status})</i>` : '');
         }
@@ -351,10 +399,10 @@ function initializeGraphs() {
             textposition: 'middle left',                 // ← always grows rightward from its own x
             textfont: {
                 family: 'Arial, Helvetica, sans-serif',
-                size: arr.map(p => (q && fullName(p.student).toLowerCase().includes(q)) ? p._fs + 1 : p._fs),
+                size: arr.map(p => (q && studentNameMatchesSearch(p.student, q)) ? p._fs + 1 : p._fs),
                 color: arr.map(p => {
                     if (fixedColor) return fixedColor;
-                    if (q) return fullName(p.student).toLowerCase().includes(q) ? '#d97706' : '#d8dee7';
+                    if (q) return studentNameMatchesSearch(p.student, q) ? '#d97706' : '#d8dee7';
                     if (colorMode === 'standard') {
                         const d = diffYears(p);
                         if (d >= 2) return '#15803d';
@@ -487,7 +535,7 @@ function initializeGraphs() {
         list.innerHTML = arr.map(p => `
             <div class="cell-row">
                 <div>
-                    <div class="cr-name">${fullName(p.student)}
+                    <div class="cr-name">${mapDisplayName(p.student)}
                         ${p.carried ? '<span class="carried-badge">CARRIED</span>' : ''}
                         ${p.status !== 'current' ? `<span class="inactive-badge">${p.status.toUpperCase()}</span>` : ''}
                     </div>
@@ -657,6 +705,18 @@ function initializeGraphs() {
     document.getElementById('toggleLines')?.addEventListener('change', (e) => { showLines = e.target.checked; renderCenterChart(); });
     document.getElementById('toggleCompleters')?.addEventListener('change', (e) => { showCompleters = e.target.checked; renderCompleters(); });
     document.getElementById('toggleInactive')?.addEventListener('change', (e) => { showInactive = e.target.checked; refreshCenter(); });
+    
+    // 🈶 Chinese Name Toggle Control
+    const chineseNameToggle = document.getElementById('chineseNameToggle');
+    if (chineseNameToggle) {
+        chineseNameToggle.checked = nameDisplay === 'chinese';
+        chineseNameToggle.addEventListener('change', () => {
+            nameDisplay = chineseNameToggle.checked ? 'chinese' : 'pinyin';
+            sessionStorage.setItem('graphsNameDisplay', nameDisplay);
+            renderCenterChart(); // Re-render map efficiently without rebuilding snapshot
+        });
+    }
+
     document.getElementById('centerSearch')?.addEventListener('input', (e) => { centerSearchTerm = e.target.value; renderCenterChart(); });
     document.getElementById('studentSearchInput')?.addEventListener('input', (e) => { individualSearchTerm = e.target.value; renderStudentTable(individualSearchTerm); });
 
