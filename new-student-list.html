@@ -1,6 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Shows the logo in the browser tab -->
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <!-- Optional: PNG fallback for older browsers -->
+  <link rel="icon" type="image/png" sizes="512x512" href="dblogo-maskable-512.png">
+  <!-- Optional: icon when saved to iOS home screen -->
+  <link rel="apple-touch-icon" href="dblogo-maskable-512.png">
+    
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title data-i18n="nsl.title">New Student List - Kumon DB</title>
@@ -133,6 +140,19 @@
     </div>
   </div>
 
+  <!-- Floating Save Bar -->
+  <div id="saveActionBar" class="save-action-bar hidden" aria-live="polite">
+    <span id="saveStatusText"></span>
+
+    <button id="discardChangesBtn" type="button" class="secondary">
+      Discard
+    </button>
+
+    <button id="saveChangesBtn" type="button" class="primary">
+      Save Changes
+    </button>
+  </div>
+  
   <!-- Translate all static [data-i18n] elements once translations are ready -->
   <script type="module">
     import { i18nReady, applyI18n } from './new-student-list-i18n.js';

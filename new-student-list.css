@@ -440,3 +440,91 @@ button.secondary { background: #6c757d; color: #fff; border: none; padding: 0.5r
   .enrolled-pill { max-width: none; }
   .card-meta { gap: 0.4rem 0.75rem; }
 }
+
+/* ============ Floating Save Bar ============ */
+.save-action-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #0f172a;
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 999px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+  z-index: 3000;
+  max-width: calc(100vw - 24px);
+}
+
+.save-action-bar.hidden {
+  display: none;
+}
+
+#saveStatusText {
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.save-action-bar button {
+  min-height: 40px;
+  border-radius: 999px;
+  padding: 0 16px;
+  border: none;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.save-action-bar button.primary {
+  background: #22c55e;
+  color: #052e16;
+}
+
+.save-action-bar button.secondary {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.save-action-bar button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Dirty / unsaved field styling */
+.inline-save.dirty {
+  outline: 2px solid #f59e0b;
+  outline-offset: -1px;
+  background: #fffbeb !important;
+  border-radius: 6px;
+}
+
+/* Saved flash */
+.inline-save.saved-flash {
+  outline: 2px solid #22c55e;
+  background: #dcfce7 !important;
+  border-radius: 6px;
+}
+
+/* Mobile */
+@media (max-width: 900px) {
+  .save-action-bar {
+    left: 12px;
+    right: 12px;
+    transform: none;
+    justify-content: space-between;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    border-radius: 16px;
+    flex-wrap: wrap;
+  }
+
+  #saveStatusText {
+    width: 100%;
+    margin-bottom: 4px;
+  }
+}

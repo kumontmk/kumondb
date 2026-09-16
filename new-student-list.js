@@ -22,6 +22,11 @@ let activeTabMonth = null;
 let activeTabYear = null;
 let currentDtContext = null;
 
+// === NEW DIRTY TRACKING VARIABLES ===
+let dirtyChanges = new Map();
+let isSaving = false;
+let hideSaveBarTimer = null;
+
 // 1. Auth & Permission Check
 onAuthStateChanged(auth, async (user) => {
     if (!user) { window.location.href = 'index.html'; return; }
@@ -64,6 +69,12 @@ function initApp() {
     const cardList = document.getElementById('cardList');
     const dataArea = document.getElementById('dataArea');
     const resultCount = document.getElementById('resultCount');
+
+    // === NEW SAVE BAR ELEMENTS ===
+    const saveActionBar = document.getElementById('saveActionBar');
+    const saveChangesBtn = document.getElementById('saveChangesBtn');
+    const discardChangesBtn = document.getElementById('discardChangesBtn');
+    const saveStatusText = document.getElementById('saveStatusText');
 
     document.getElementById('logoutBtn')?.addEventListener('click', logout);
 
@@ -176,11 +187,117 @@ function initApp() {
         }
     }
 
+    /* ================= SUBJECT HELPERS ================= */
+    function getSubjectEntries(student) {
+        const subjects = student?.subjects;
+        if (!subjects) return [];
+        if (Array.isArray(subjects)) {
+            return subjects.map((value, key) => ({ key: String(key), value: value || {} }));
+        }
+        return Object.entries(subjects).map(([key, value]) => ({ key: String(key), value: value || {} }));
+    }
+
+    /* ================= DIRTY TRACKING ================= */
+    function getChangeKey(el) {
+        return `${el.dataset.sid}|${el.dataset.subkey}|${el.dataset.field}`;
+    }
+
+    function markDirty(el) {
+        const sid = el.dataset.sid;
+        const subkey = el.dataset.subkey;
+        const field = el.dataset.field;
+        if (!sid || !subkey || !field) return;
+
+        const key = getChangeKey(el);
+        dirtyChanges.set(key, { sid, subkey, field, value: el.value });
+        el.classList.add('dirty');
+        updateSaveBar();
+    }
+
+    function restoreDirtyValues() {
+        if (dirtyChanges.size === 0) return;
+        dirtyChanges.forEach((change) => {
+            const selector = `.inline-save[data-sid="${CSS.escape(change.sid)}"][data-subkey="${CSS.escape(change.subkey)}"][data-field="${CSS.escape(change.field)}"]`;
+            const el = dataArea.querySelector(selector);
+            if (!el) return;
+            el.value = change.value;
+            el.classList.add('dirty');
+            if (change.field === 'enrolled') {
+                updateEnrolledVisual(el);
+            }
+        });
+    }
+
+    function updateEnrolledVisual(el) {
+        const yes = el.value === 'Yes';
+        const row = el.closest('tr');
+        if (row) {
+            row.classList.remove('row-enrolled-yes', 'row-enrolled-no');
+            row.classList.add(yes ? 'row-enrolled-yes' : 'row-enrolled-no');
+        }
+        const card = el.closest('.student-card');
+        if (card) {
+            card.classList.remove('card-enrolled-yes', 'card-enrolled-no');
+            card.classList.add(yes ? 'card-enrolled-yes' : 'card-enrolled-no');
+        }
+    }
+
+    /* ================= SAVE BAR UI ================= */
+    function refreshSaveControls() {
+        if (!saveChangesBtn || !discardChangesBtn) return;
+        saveChangesBtn.disabled = isSaving || dirtyChanges.size === 0;
+        discardChangesBtn.disabled = isSaving || dirtyChanges.size === 0;
+    }
+
+    function showSaveBar(message) {
+        if (!saveActionBar || !saveStatusText) return;
+        clearTimeout(hideSaveBarTimer);
+        saveStatusText.textContent = message;
+        saveActionBar.classList.remove('hidden');
+    }
+
+    function updateSaveBar() {
+        refreshSaveControls();
+        if (isSaving) {
+            showSaveBar('Saving...');
+            return;
+        }
+        const count = dirtyChanges.size;
+        if (count > 0) {
+            showSaveBar(`${count} unsaved change${count === 1 ? '' : 's'}`);
+        }
+    }
+
+    /* ================= LOCAL DATA SYNC ================= */
+    function updateLocalFromChange(change) {
+        const student = allStudentsData.find(s => s.id === change.sid);
+        if (!student) return;
+        const entry = getSubjectEntries(student).find(e => e.key === change.subkey);
+        if (!entry) return;
+
+        if (change.value === '') {
+            delete entry.value[change.field];
+        } else {
+            entry.value[change.field] = change.value;
+        }
+        entry.value.updatedAt = new Date().toISOString();
+
+        if (Array.isArray(student.subjects)) {
+            const idx = Number(change.subkey);
+            if (Number.isInteger(idx)) {
+                student.subjects[idx] = entry.value;
+            }
+        } else if (student.subjects && typeof student.subjects === 'object') {
+            student.subjects[change.subkey] = entry.value;
+        } else {
+            student.subjects = { [change.subkey]: entry.value };
+        }
+    }
+
     function getFilteredEntries() {
         const entries = [];
         allStudentsData.forEach(student => {
-            const subjects = Array.isArray(student.subjects) ? student.subjects : Object.values(student.subjects || {});
-            subjects.forEach((sub, index) => {
+            getSubjectEntries(student).forEach(({ key, value: sub }) => {
                 if (!sub.enrolDate) return;
                 const date = new Date(sub.enrolDate);
                 const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -202,7 +319,7 @@ function initApp() {
                     }
                 }
                 if (match) {
-                    entries.push({ student, subject: sub, subjectIndex: index, enrolMonth: month, enrolYear: year });
+                    entries.push({ student, subject: sub, subjectKey: key, enrolMonth: month, enrolYear: year });
                 }
             });
         });
@@ -236,24 +353,22 @@ function initApp() {
     function renderTable() {
         const entries = getFilteredEntries();
 
-        // ✅ Safely inside renderTable() where `entries` exists
         if (resultCount) {
             resultCount.textContent = t('nsl.recordCount', { count: entries.length });
         }
 
-        // --- Desktop table ---
         tbody.innerHTML = '';
         if (entries.length === 0) {
             tbody.innerHTML = `<tr><td colspan="22" style="text-align:center; padding:2rem;">${t('nsl.noNewStudents')}</td></tr>`;
         } else {
             entries.forEach((entry, idx) => {
-                const { student, subject: sub, subjectIndex } = entry;
+                const { student, subject: sub, subjectKey } = entry;
                 const enrolledVal = sub.enrolled || 'No';
                 const rowClass = enrolledVal === 'Yes' ? 'row-enrolled-yes' : 'row-enrolled-no';
 
-                let dtDisplay = `<button class="dt-cell-btn" data-student="${student.id}" data-subidx="${subjectIndex}">${t('nsl.selectDT')}<br><small>${sub.name || ''}</small></button>`;
+                let dtDisplay = `<button class="dt-cell-btn" data-student="${student.id}" data-subkey="${subjectKey}">${t('nsl.selectDT')}<br><small>${sub.name || ''}</small></button>`;
                 if (sub.selectedDT) {
-                    dtDisplay = `<button class="dt-cell-btn has-dt" data-student="${student.id}" data-subidx="${subjectIndex}">
+                    dtDisplay = `<button class="dt-cell-btn has-dt" data-student="${student.id}" data-subkey="${subjectKey}">
                         <strong>${sub.name || '-'}</strong><br>
                         <span>${sub.selectedDT.date || '-'}</span><br>
                         <small>${sub.selectedDT.test || ''}</small>
@@ -266,14 +381,14 @@ function initApp() {
                     <td>${idx + 1}</td>
                     <td>${getDisplayName(student)}</td>
                     <td>
-                        <select class="inline-save" data-field="refCode" data-sid="${student.id}" data-subidx="${subjectIndex}">
+                        <select class="inline-save" data-field="refCode" data-sid="${student.id}" data-subkey="${subjectKey}">
                             <option value="" ${!sub.refCode ? 'selected' : ''}>-</option>
                             <option value="IT" ${sub.refCode === 'IT' ? 'selected' : ''}>IT</option>
                             <option value="EO" ${sub.refCode === 'EO' ? 'selected' : ''}>EO</option>
                         </select>
                     </td>
                     <td>
-                        <select class="inline-save" data-field="enrolled" data-sid="${student.id}" data-subidx="${subjectIndex}">
+                        <select class="inline-save" data-field="enrolled" data-sid="${student.id}" data-subkey="${subjectKey}">
                             <option value="No" ${enrolledVal === 'No' ? 'selected' : ''}>${t('nsl.enrolledNo')}</option>
                             <option value="Yes" ${enrolledVal === 'Yes' ? 'selected' : ''}>${t('nsl.enrolledYes')}</option>
                         </select>
@@ -286,29 +401,29 @@ function initApp() {
                     <td>${getPoComment(student)}</td>
                     <td><strong>${sub.name || '-'}</strong></td>
                     <td>${formatSchedule(sub.timeslots)}</td>
-                    <td><input type="date" class="inline-save" data-field="startDate" data-sid="${student.id}" data-subidx="${subjectIndex}" value="${sub.startDate || sub.enrolDate || ''}"></td>
+                    <td><input type="date" class="inline-save" data-field="startDate" data-sid="${student.id}" data-subkey="${subjectKey}" value="${sub.startDate || sub.enrolDate || ''}"></td>
                     <td>
-                        <select class="inline-save" data-field="paymentType" data-sid="${student.id}" data-subidx="${subjectIndex}">
+                        <select class="inline-save" data-field="paymentType" data-sid="${student.id}" data-subkey="${subjectKey}">
                             <option value="" ${!sub.paymentType ? 'selected' : ''}>-</option>
                             <option value="Whole" ${sub.paymentType === 'Whole' ? 'selected' : ''}>${t('nsl.paymentWhole')}</option>
                             <option value="Half" ${sub.paymentType === 'Half' ? 'selected' : ''}>${t('nsl.paymentHalf')}</option>
                         </select>
                     </td>
-                    <td><input type="text" class="inline-save" data-field="cd1" data-sid="${student.id}" data-subidx="${subjectIndex}" value="${sub.cd1 || ''}" style="width:60px;"></td>
-                    <td><input type="text" class="inline-save" data-field="cd2" data-sid="${student.id}" data-subidx="${subjectIndex}" value="${sub.cd2 || ''}" style="width:60px;"></td>
+                    <td><input type="text" class="inline-save" data-field="cd1" data-sid="${student.id}" data-subkey="${subjectKey}" value="${sub.cd1 || ''}" style="width:60px;"></td>
+                    <td><input type="text" class="inline-save" data-field="cd2" data-sid="${student.id}" data-subkey="${subjectKey}" value="${sub.cd2 || ''}" style="width:60px;"></td>
                     <td>${dtDisplay}</td>
                     <td>${sub.enrolDate || '-'}</td>
                     <td>
-                        <select class="inline-save" data-field="admFee" data-sid="${student.id}" data-subidx="${subjectIndex}">
+                        <select class="inline-save" data-field="admFee" data-sid="${student.id}" data-subkey="${subjectKey}">
                             <option value="" ${!sub.admFee ? 'selected' : ''}>-</option>
                             <option value="Y" ${sub.admFee === 'Y' ? 'selected' : ''}>Y</option>
                             <option value="N" ${sub.admFee === 'N' ? 'selected' : ''}>N</option>
                         </select>
                     </td>
-                    <td><input type="number" class="inline-save" data-field="payment1" data-sid="${student.id}" data-subidx="${subjectIndex}" value="${sub.payment1 || ''}"></td>
-                    <td><input type="number" class="inline-save" data-field="payment2" data-sid="${student.id}" data-subidx="${subjectIndex}" value="${sub.payment2 || ''}"></td>
+                    <td><input type="number" class="inline-save" data-field="payment1" data-sid="${student.id}" data-subkey="${subjectKey}" value="${sub.payment1 || ''}"></td>
+                    <td><input type="number" class="inline-save" data-field="payment2" data-sid="${student.id}" data-subkey="${subjectKey}" value="${sub.payment2 || ''}"></td>
                     <td>
-                        <select class="inline-save" data-field="bag" data-sid="${student.id}" data-subidx="${subjectIndex}">
+                        <select class="inline-save" data-field="bag" data-sid="${student.id}" data-subkey="${subjectKey}">
                             <option value="" ${!sub.bag ? 'selected' : ''}>-</option>
                             <option value="Y" ${sub.bag === 'Y' ? 'selected' : ''}>Y</option>
                             <option value="N" ${sub.bag === 'N' ? 'selected' : ''}>N</option>
@@ -319,23 +434,23 @@ function initApp() {
             });
         }
 
-        // --- Mobile cards ---
         renderCards(entries);
+        restoreDirtyValues(); // Restore unsaved changes if table/cards re-rendered
     }
 
     /* ================= MOBILE CARD BUILDER ================= */
     function buildCard(entry, idx) {
-        const { student, subject: sub, subjectIndex } = entry;
+        const { student, subject: sub, subjectKey } = entry;
         const enrolledVal = sub.enrolled || 'No';
         const cardClass = enrolledVal === 'Yes' ? 'card-enrolled-yes' : 'card-enrolled-no';
         const sid = student.id;
 
         const dtBtn = sub.selectedDT
-            ? `<button type="button" class="dt-cell-btn has-dt" data-student="${sid}" data-subidx="${subjectIndex}">
+            ? `<button type="button" class="dt-cell-btn has-dt" data-student="${sid}" data-subkey="${subjectKey}">
                 <strong>${sub.name || '-'}</strong><br>
                 <span>${sub.selectedDT.date || '-'}</span> · <small>${sub.selectedDT.test || ''}</small>
             </button>`
-            : `<button type="button" class="dt-cell-btn" data-student="${sid}" data-subidx="${subjectIndex}">
+            : `<button type="button" class="dt-cell-btn" data-student="${sid}" data-subkey="${subjectKey}">
                 ${t('nsl.selectDT')}<br><small>${sub.name || ''}</small>
             </button>`;
 
@@ -352,7 +467,7 @@ function initApp() {
                         </div>
                     </div>
                 </div>
-                <select class="inline-save enrolled-pill" data-field="enrolled" data-sid="${sid}" data-subidx="${subjectIndex}">
+                <select class="inline-save enrolled-pill" data-field="enrolled" data-sid="${sid}" data-subkey="${subjectKey}">
                     <option value="No" ${enrolledVal === 'No' ? 'selected' : ''}>${t('nsl.enrolledNo')}</option>
                     <option value="Yes" ${enrolledVal === 'Yes' ? 'selected' : ''}>${t('nsl.enrolledYes')}</option>
                 </select>
@@ -374,17 +489,17 @@ function initApp() {
             <div class="card-details"><div class="details-inner">
                 <div class="field-grid">
                     <label class="field"><span class="lbl">${t('nsl.cardRef')}</span>
-                        <select class="inline-save" data-field="refCode" data-sid="${sid}" data-subidx="${subjectIndex}">
+                        <select class="inline-save" data-field="refCode" data-sid="${sid}" data-subkey="${subjectKey}">
                             <option value="" ${!sub.refCode ? 'selected' : ''}>-</option>
                             <option value="IT" ${sub.refCode === 'IT' ? 'selected' : ''}>IT</option>
                             <option value="EO" ${sub.refCode === 'EO' ? 'selected' : ''}>EO</option>
                         </select>
                     </label>
                     <label class="field"><span class="lbl">${t('nsl.cardStartDate')}</span>
-                        <input type="date" class="inline-save" data-field="startDate" data-sid="${sid}" data-subidx="${subjectIndex}" value="${sub.startDate || sub.enrolDate || ''}">
+                        <input type="date" class="inline-save" data-field="startDate" data-sid="${sid}" data-subkey="${subjectKey}" value="${sub.startDate || sub.enrolDate || ''}">
                     </label>
                     <label class="field"><span class="lbl">${t('nsl.cardPayment')}</span>
-                        <select class="inline-save" data-field="paymentType" data-sid="${sid}" data-subidx="${subjectIndex}">
+                        <select class="inline-save" data-field="paymentType" data-sid="${sid}" data-subkey="${subjectKey}">
                             <option value="" ${!sub.paymentType ? 'selected' : ''}>-</option>
                             <option value="Whole" ${sub.paymentType === 'Whole' ? 'selected' : ''}>${t('nsl.paymentWhole')}</option>
                             <option value="Half" ${sub.paymentType === 'Half' ? 'selected' : ''}>${t('nsl.paymentHalf')}</option>
@@ -394,30 +509,30 @@ function initApp() {
                         <span class="readonly-value">${sub.enrolDate || '-'}</span>
                     </div>
                     <label class="field"><span class="lbl">${t('nsl.cardCd1')}</span>
-                        <input type="text" class="inline-save" data-field="cd1" data-sid="${sid}" data-subidx="${subjectIndex}" value="${sub.cd1 || ''}">
+                        <input type="text" class="inline-save" data-field="cd1" data-sid="${sid}" data-subkey="${subjectKey}" value="${sub.cd1 || ''}">
                     </label>
                     <label class="field"><span class="lbl">${t('nsl.cardCd2')}</span>
-                        <input type="text" class="inline-save" data-field="cd2" data-sid="${sid}" data-subidx="${subjectIndex}" value="${sub.cd2 || ''}">
+                        <input type="text" class="inline-save" data-field="cd2" data-sid="${sid}" data-subkey="${subjectKey}" value="${sub.cd2 || ''}">
                     </label>
                     <label class="field"><span class="lbl">${t('nsl.cardAdmFee')}</span>
-                        <select class="inline-save" data-field="admFee" data-sid="${sid}" data-subidx="${subjectIndex}">
+                        <select class="inline-save" data-field="admFee" data-sid="${sid}" data-subkey="${subjectKey}">
                             <option value="" ${!sub.admFee ? 'selected' : ''}>-</option>
                             <option value="Y" ${sub.admFee === 'Y' ? 'selected' : ''}>Y</option>
                             <option value="N" ${sub.admFee === 'N' ? 'selected' : ''}>N</option>
                         </select>
                     </label>
                     <label class="field"><span class="lbl">${t('nsl.cardBag')}</span>
-                        <select class="inline-save" data-field="bag" data-sid="${sid}" data-subidx="${subjectIndex}">
+                        <select class="inline-save" data-field="bag" data-sid="${sid}" data-subkey="${subjectKey}">
                             <option value="" ${!sub.bag ? 'selected' : ''}>-</option>
                             <option value="Y" ${sub.bag === 'Y' ? 'selected' : ''}>Y</option>
                             <option value="N" ${sub.bag === 'N' ? 'selected' : ''}>N</option>
                         </select>
                     </label>
                     <label class="field"><span class="lbl">${t('nsl.cardPay1')}</span>
-                        <input type="number" inputmode="decimal" class="inline-save" data-field="payment1" data-sid="${sid}" data-subidx="${subjectIndex}" value="${sub.payment1 || ''}">
+                        <input type="number" inputmode="decimal" class="inline-save" data-field="payment1" data-sid="${sid}" data-subkey="${subjectKey}" value="${sub.payment1 || ''}">
                     </label>
                     <label class="field"><span class="lbl">${t('nsl.cardPay2')}</span>
-                        <input type="number" inputmode="decimal" class="inline-save" data-field="payment2" data-sid="${sid}" data-subidx="${subjectIndex}" value="${sub.payment2 || ''}">
+                        <input type="number" inputmode="decimal" class="inline-save" data-field="payment2" data-sid="${sid}" data-subkey="${subjectKey}" value="${sub.payment2 || ''}">
                     </label>
                     <div class="field field-full"><span class="lbl">${t('nsl.cardDt')}</span>${dtBtn}</div>
                 </div>
@@ -434,32 +549,17 @@ function initApp() {
         cardList.innerHTML = entries.map(buildCard).join('');
     }
 
-    /* ===== Inline Save + interactions (covers BOTH table and cards) ===== */
-    dataArea.addEventListener('change', async (e) => {
-        if (!e.target.classList.contains('inline-save')) return;
-        await saveField(e.target);
-
-        // Dynamically update color when 'enrolled' changes (row or card)
-        if (e.target.dataset.field === 'enrolled') {
-            const yes = e.target.value === 'Yes';
-            const row = e.target.closest('tr');
-            if (row) {
-                row.classList.remove('row-enrolled-yes', 'row-enrolled-no');
-                row.classList.add(yes ? 'row-enrolled-yes' : 'row-enrolled-no');
-            }
-            const card = e.target.closest('.student-card');
-            if (card) {
-                card.classList.remove('card-enrolled-yes', 'card-enrolled-no');
-                card.classList.add(yes ? 'card-enrolled-yes' : 'card-enrolled-no');
-            }
+    /* ================= DIRTY FIELD LISTENERS ================= */
+    function handleDirtyFieldEdit(e) {
+        const el = e.target.closest('.inline-save');
+        if (!el) return;
+        markDirty(el);
+        if (el.dataset.field === 'enrolled') {
+            updateEnrolledVisual(el);
         }
-    });
-
-    dataArea.addEventListener('blur', async (e) => {
-        if (e.target.classList.contains('inline-save') && e.target.tagName === 'INPUT') {
-            await saveField(e.target);
-        }
-    }, true);
+    }
+    dataArea.addEventListener('input', handleDirtyFieldEdit);
+    dataArea.addEventListener('change', handleDirtyFieldEdit);
 
     dataArea.addEventListener('click', (e) => {
         // Card accordion toggle
@@ -475,38 +575,96 @@ function initApp() {
         if (btn) {
             currentDtContext = {
                 studentId: btn.dataset.student,
-                subjectIndex: parseInt(btn.dataset.subidx)
+                subjectKey: btn.dataset.subkey
             };
             openDtModal();
         }
     });
 
-    async function saveField(el) {
-        const studentId = el.dataset.sid;
-        const subjectIndex = parseInt(el.dataset.subidx);
-        const field = el.dataset.field;
-        const value = el.value;
+    /* ================= SAVE ALL CHANGES ================= */
+    async function saveAllChanges() {
+        if (isSaving) return;
+        if (!centerId) {
+            showSaveBar('No center selected');
+            return;
+        }
+        if (document.activeElement?.classList?.contains('inline-save')) {
+            markDirty(document.activeElement);
+        }
+        if (dirtyChanges.size === 0) return;
+
+        isSaving = true;
+        updateSaveBar();
+
+        const updates = {};
+        const now = new Date().toISOString();
+
+        dirtyChanges.forEach(change => {
+            const value = change.value === '' ? null : change.value;
+            updates[`${change.sid}/subjects/${change.subkey}/${change.field}`] = value;
+            updates[`${change.sid}/updatedAt`] = now;
+        });
+
         try {
-            const studentRef = ref(db, `centers/${centerId}/students/${studentId}`);
-            const snap = await get(studentRef);
-            if (!snap.exists()) return;
-            const studentData = snap.val();
-            let subjects = Array.isArray(studentData.subjects) ? studentData.subjects : Object.values(studentData.subjects || {});
-            if (subjects[subjectIndex]) {
-                subjects[subjectIndex][field] = value;
-                subjects[subjectIndex].updatedAt = new Date().toISOString();
-                studentData.subjects = subjects;
-                await update(studentRef, { subjects: studentData.subjects, updatedAt: new Date().toISOString() });
-                const localStudent = allStudentsData.find(s => s.id === studentId);
-                if (localStudent) localStudent.subjects = subjects;
-                el.style.backgroundColor = '#dcfce7';
-                setTimeout(() => el.style.backgroundColor = '', 500);
-            }
+            await update(ref(db, `centers/${centerId}/students`), updates);
+            dirtyChanges.forEach(change => updateLocalFromChange(change));
+
+            dataArea.querySelectorAll('.inline-save.dirty').forEach(el => {
+                el.classList.remove('dirty');
+                el.classList.add('saved-flash');
+                setTimeout(() => { el.classList.remove('saved-flash'); }, 700);
+            });
+
+            dirtyChanges.clear();
+            isSaving = false;
+            refreshSaveControls();
+            showSaveBar('All changes saved');
+
+            clearTimeout(hideSaveBarTimer);
+            hideSaveBarTimer = setTimeout(() => {
+                if (dirtyChanges.size === 0 && !isSaving) {
+                    saveActionBar?.classList.add('hidden');
+                }
+            }, 2500);
         } catch (err) {
-            console.error("Save error:", err);
-            alert(t('nsl.failedSave', { message: err.message }));
+            console.error('Save all error:', err);
+            isSaving = false;
+            refreshSaveControls();
+            showSaveBar(`Save failed: ${err.message}`);
         }
     }
+
+    /* ================= DISCARD CHANGES ================= */
+    function discardAllChanges() {
+        if (isSaving || dirtyChanges.size === 0) return;
+        const confirmed = confirm('Discard unsaved changes?');
+        if (!confirmed) return;
+        dirtyChanges.clear();
+        renderTable();
+        refreshSaveControls();
+        saveActionBar?.classList.add('hidden');
+    }
+
+    saveChangesBtn?.addEventListener('click', saveAllChanges);
+    discardChangesBtn?.addEventListener('click', discardAllChanges);
+
+    window.addEventListener('beforeunload', (e) => {
+        if (dirtyChanges.size > 0 && !isSaving) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        const link = e.target.closest('a');
+        if (!link) return;
+        if (dirtyChanges.size > 0 && !isSaving) {
+            const leave = confirm('You have unsaved changes. Leave anyway?');
+            if (!leave) {
+                e.preventDefault();
+            }
+        }
+    });
 
     /* ===== DT Modal Logic ===== */
     const dtModal = document.getElementById('dtModal');
@@ -515,8 +673,9 @@ function initApp() {
     function openDtModal() {
         const student = allStudentsData.find(s => s.id === currentDtContext.studentId);
         if (!student) return;
-        let subjects = Array.isArray(student.subjects) ? student.subjects : Object.values(student.subjects || {});
-        const currentSubject = subjects[currentDtContext.subjectIndex];
+        
+        const entries = getSubjectEntries(student);
+        const currentSubject = entries.find(e => e.key === currentDtContext.subjectKey)?.value;
         const subjectName = currentSubject?.name || 'Unknown Subject';
         const studentName = getDisplayName(student);
 
@@ -532,8 +691,8 @@ function initApp() {
         } else {
             dts.forEach((dt) => {
                 const tr = document.createElement('tr');
-                const isSelected = student.subjects[currentDtContext.subjectIndex]?.selectedDT?.date === dt.date &&
-                                   student.subjects[currentDtContext.subjectIndex]?.selectedDT?.test === dt.test;
+                const isSelected = currentSubject?.selectedDT?.date === dt.date &&
+                                   currentSubject?.selectedDT?.test === dt.test;
                 if (isSelected) tr.classList.add('selected');
                 tr.innerHTML = `
                     <td>${dt.date || '-'}</td>
@@ -552,28 +711,44 @@ function initApp() {
 
     async function selectDt(dt) {
         if (!currentDtContext) return;
-        const { studentId, subjectIndex } = currentDtContext;
+        const { studentId, subjectKey } = currentDtContext;
+        if (!centerId || !studentId || !subjectKey) return;
+
         try {
             const studentRef = ref(db, `centers/${centerId}/students/${studentId}`);
-            const snap = await get(studentRef);
-            if (!snap.exists()) return;
-            const studentData = snap.val();
-            let subjects = Array.isArray(studentData.subjects) ? studentData.subjects : Object.values(studentData.subjects || {});
-            if (subjects[subjectIndex]) {
-                subjects[subjectIndex].selectedDT = {
-                    date: dt.date,
-                    test: dt.test,
-                    time: dt.time,
-                    score: dt.score,
-                    startLvl: dt.suggestedStart || dt.actualStart
-                };
-                studentData.subjects = subjects;
-                await update(studentRef, { subjects: studentData.subjects, updatedAt: new Date().toISOString() });
-                const localStudent = allStudentsData.find(s => s.id === studentId);
-                if (localStudent) localStudent.subjects = subjects;
-                closeDtModal();
-                renderTable();
+            const selectedDT = {
+                date: dt.date,
+                test: dt.test,
+                time: dt.time,
+                score: dt.score,
+                startLvl: dt.suggestedStart || dt.actualStart
+            };
+
+            await update(studentRef, {
+                [`subjects/${subjectKey}/selectedDT`]: selectedDT,
+                updatedAt: new Date().toISOString()
+            });
+
+            const localStudent = allStudentsData.find(s => s.id === studentId);
+            if (localStudent) {
+                const entry = getSubjectEntries(localStudent).find(e => e.key === subjectKey);
+                if (entry) {
+                    entry.value.selectedDT = selectedDT;
+                    entry.value.updatedAt = new Date().toISOString();
+                    if (Array.isArray(localStudent.subjects)) {
+                        const idx = Number(subjectKey);
+                        if (Number.isInteger(idx)) {
+                            localStudent.subjects[idx] = entry.value;
+                        }
+                    } else if (localStudent.subjects && typeof localStudent.subjects === 'object') {
+                        localStudent.subjects[subjectKey] = entry.value;
+                    } else {
+                        localStudent.subjects = { [subjectKey]: entry.value };
+                    }
+                }
             }
+            closeDtModal();
+            renderTable();
         } catch (err) {
             console.error("DT Save error:", err);
             alert(t('nsl.failedSaveDT', { message: err.message }));
