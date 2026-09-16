@@ -49,6 +49,19 @@ const TYPE_META = {
 };
 const ENTITLEMENT_FIELDS = { annualUsed: 'annual', sickUsed: 'sick', timeOffUsed: 'timeOff' };
 
+// 🆕 Status-aware fill colors for same-day split cells (mirrors leave.css tokens)
+const LV_COLORS = {
+    'lv-annual': { solid: '#4682B4', faint: '#dbeafe' },
+    'lv-sick':   { solid: '#eab308', faint: '#fef9c3' },
+    'lv-unpaid': { solid: '#f97316', faint: '#ffedd5' },
+    'lv-pt':     { solid: '#ec4899', faint: '#fce7f3' }
+};
+const LV_ABBR = { annual: 'AL', sick: 'SL', unpaid: 'UL', pt: 'PT' };
+const LV_OVERLAY = {
+    annual: 'rgba(70,130,180,0.28)', sick: 'rgba(234,179,8,0.30)',
+    unpaid: 'rgba(249,115,22,0.30)', pt: 'rgba(236,72,153,0.28)'
+};
+
 let employees = {}, leaves = {}, currentUser = null;
 let statusFilter = 'all', monthFilter = 'all';
 let currentYear = new Date().getFullYear();
@@ -349,45 +362,116 @@ async function countLeaveDays(empId, from, to) {
   return { days, skipped, weeklyOffDays, daysPerYear };
 }
 
-// 🆕 Splits a date range into paid and unpaid chronological working days
-async function getSplitLeaveRanges(empId, from, to, maxPaidDays) {
+// 🆕 Splits a day-range request into paid + unpaid records. A fractional paid
+// balance (e.g. 0.25 day left) is converted into HOURLY leave on the next
+// working day: the first N hours of that day's shift become paid leave and the
+// remaining shift hours become hourly unpaid leave, so the day stays covered.
+// Returns an array of complete leave payloads ready to push.
+// Throws if the fractional day has no shift to anchor the hours to.
+async function getSplitLeaveRanges(empId, from, to, availableDays, baseLeaveData, type) {
     const weeklyOffDays = getWeeklyOffDays(empId);
     const offDates = await getOffDates(empId);
     if (!Object.keys(centerCalendars).length) await loadCenterCalendars();
 
-    let paidCount = 0;
-    let paidFrom = null, paidTo = null;
-    let unpaidFrom = null, unpaidTo = null;
-    let skippedPaid = [], skippedUnpaid = [];
-    let daysPerYear_paid = {}, daysPerYear_unpaid = {};
-
+    const working = [], skipped = [];
     eachDate(from, to, d => {
         const ds = fmtISO(d);
-        const yr = d.getFullYear();
-        
-        if (weeklyOffDays.has(d.getDay()) || offDates.has(ds) || isHoliday(empId, ds)) {
-            if (paidCount < maxPaidDays) skippedPaid.push(ds);
-            else skippedUnpaid.push(ds);
-            return;
-        }
-
-        paidCount++;
-        if (paidCount <= maxPaidDays) {
-            if (!paidFrom) paidFrom = ds;
-            paidTo = ds;
-            daysPerYear_paid[yr] = (daysPerYear_paid[yr] || 0) + 1;
-        } else {
-            if (!unpaidFrom) unpaidFrom = ds;
-            unpaidTo = ds;
-            daysPerYear_unpaid[yr] = (daysPerYear_unpaid[yr] || 0) + 1;
-        }
+        if (weeklyOffDays.has(d.getDay()) || offDates.has(ds) || isHoliday(empId, ds)) skipped.push(ds);
+        else working.push(ds);
     });
 
-    return {
-        paid: paidFrom ? { from: paidFrom, to: paidTo, days: Math.min(paidCount, maxPaidDays), daysPerYear: daysPerYear_paid, skipped: skippedPaid } : null,
-        unpaid: unpaidFrom ? { from: unpaidFrom, to: unpaidTo, days: Math.max(0, paidCount - maxPaidDays), daysPerYear: daysPerYear_unpaid, skipped: skippedUnpaid } : null,
-        totalDays: paidCount
+    const daysPerYearOf = dates => {
+        const o = {};
+        dates.forEach(ds => { const y = parseInt(ds.slice(0, 4), 10); o[y] = (o[y] || 0) + 1; });
+        return o;
     };
+    const skippedWithin = (a, b) => skipped.filter(ds => ds >= a && ds <= b).join(', ');
+    const toHM = mins => `${pad(Math.floor(mins / 60))}:${pad(mins % 60)}`;
+
+    const records = [];
+    const wholePaid = Math.floor(availableDays + 0.0001);
+    const fraction = round2(availableDays - wholePaid);
+
+    const paidFullDays = working.slice(0, wholePaid);
+    const fracDay = fraction > 0 ? working[wholePaid] : null;
+    const unpaidFullDays = working.slice(fraction > 0 ? wholePaid + 1 : wholePaid);
+
+    // 1) Whole paid days (original leave type, day-based)
+    if (paidFullDays.length) {
+        const dFrom = paidFullDays[0], dTo = paidFullDays[paidFullDays.length - 1];
+        records.push({
+            ...baseLeaveData,
+            type, typeLabel: TYPE_META[type].label,
+            dateFrom: dFrom, dateTo: dTo,
+            amount: paidFullDays.length, deductDays: paidFullDays.length,
+            restDaysExcluded: skippedWithin(dFrom, dTo),
+            daysPerYear: daysPerYearOf(paidFullDays),
+            year: parseInt(dFrom.slice(0, 4), 10)
+        });
+    }
+
+    // 2) Fractional balance → hourly paid slice on the next working day
+    if (fracDay) {
+        const sched = await getEmpScheduleForDate(empId, fracDay);
+        const workShifts = (sched.shifts || [])
+            .filter(s => (s.type || 'work') === 'work' && isValidTimeString(s.start) && isValidTimeString(s.end) && timeToMinutes(s.end) > timeToMinutes(s.start))
+            .sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
+        if (!workShifts.length) {
+            throw new Error(t('splitNoShiftAlert', { name: baseLeaveData.empName || '', date: fmtDate(fracDay) }));
+        }
+
+        const totalWorkHours = round1(workShifts.reduce((sum, s) => sum + (timeToMinutes(s.end) - timeToMinutes(s.start)), 0) / 60);
+        const paidHours = Math.min(round1(fraction * 8), totalWorkHours); // never more hours than the shift has
+        const startMin = timeToMinutes(workShifts[0].start);
+        const paidFromTime = toHM(startMin);
+        const paidToTime = toHM(startMin + Math.round(paidHours * 60));
+        const yearNum = parseInt(fracDay.slice(0, 4), 10);
+
+        records.push({
+            ...baseLeaveData,
+            type, typeLabel: TYPE_META[type].label,
+            durationType: 'hours',
+            dateFrom: fracDay, dateTo: fracDay,
+            timeFrom: paidFromTime, timeTo: paidToTime,
+            amount: paidHours, deductDays: round2(paidHours / 8),
+            restDaysExcluded: '',
+            daysPerYear: { [yearNum]: round2(paidHours / 8) },
+            year: yearNum
+        });
+
+        // 2b) Remainder of that day's shift → hourly unpaid (keeps the day fully covered)
+        const unpaidHours = round1(totalWorkHours - paidHours);
+        if (unpaidHours > 0) {
+            const dayEndMin = Math.max(...workShifts.map(s => timeToMinutes(s.end)));
+            records.push({
+                ...baseLeaveData,
+                type: 'unpaid', typeLabel: TYPE_META.unpaid.label,
+                durationType: 'hours',
+                dateFrom: fracDay, dateTo: fracDay,
+                timeFrom: paidToTime, timeTo: toHM(dayEndMin),
+                amount: unpaidHours, deductDays: round2(unpaidHours / 8),
+                restDaysExcluded: '',
+                daysPerYear: { [yearNum]: round2(unpaidHours / 8) },
+                year: yearNum
+            });
+        }
+    }
+
+    // 3) Remaining whole days → unpaid (day-based)
+    if (unpaidFullDays.length) {
+        const dFrom = unpaidFullDays[0], dTo = unpaidFullDays[unpaidFullDays.length - 1];
+        records.push({
+            ...baseLeaveData,
+            type: 'unpaid', typeLabel: TYPE_META.unpaid.label,
+            dateFrom: dFrom, dateTo: dTo,
+            amount: unpaidFullDays.length, deductDays: unpaidFullDays.length,
+            restDaysExcluded: skippedWithin(dFrom, dTo),
+            daysPerYear: daysPerYearOf(unpaidFullDays),
+            year: parseInt(dFrom.slice(0, 4), 10)
+        });
+    }
+
+    return records;
 }
 
 async function getEmpScheduleForDate(empId, dateStr) {
@@ -1010,9 +1094,29 @@ async function renderOverview() {
       if (pub) html += `<td class="od-holiday ${extraCls}" title="🎌 ${escapeHtml(pub.name || t('publicHoliday'))}">🎌</td>`;
       else if (isOff) html += `<td class="od-off ${extraCls}" title="${escapeHtml(DOW_NAMES[dow])}">${escapeHtml(t('off'))}</td>`;
       else if (lv) {
-        const meta = TYPE_META[lv.type] || { cls: '' };
-        const titleText = `${emp.englishName || ''} — ${meta.label || ''} (${statusLabel(lv.status)})\n${fmtDate(lv.dateFrom)} → ${fmtDate(lv.dateTo)} · ${durationText(lv)}\n${escapeHtml(t('thReason'))}: ${lv.reason || ''}`;
-        html += `<td class="lv ${meta.cls} ${lv.status} ${extraCls}" title="${escapeHtml(titleText)}">${lv.durationType === 'hours' ? `${lv.amount}h` : ''}</td>`;
+          const meta = TYPE_META[lv.type] || { cls: '' };
+          // 🆕 Tooltip lists ALL leaves covering this day, not just the first
+          const titleText = covering.map(l => {
+              const m = TYPE_META[l.type] || { label: l.typeLabel || l.type };
+              const timePart = l.durationType === 'hours' && l.timeFrom && l.timeTo ? ` (${l.timeFrom}–${l.timeTo})` : '';
+              return `${m.label || ''} (${statusLabel(l.status)}) ${fmtDate(l.dateFrom)} → ${fmtDate(l.dateTo)} · ${durationText(l)}${timePart}\n${escapeHtml(t('thReason'))}: ${l.reason || ''}`;
+          }).join('\n──────────\n');
+          const fullName = `${emp.englishName || ''}\n`;
+          if (covering.length === 1) {
+              html += `<td class="lv ${meta.cls} ${lv.status} ${extraCls}" title="${escapeHtml(fullName + titleText)}">${lv.durationType === 'hours' ? ` ${lv.amount}h ` : ''}</td>`;
+          } else {
+              // 🆕 Diagonal split cell: top-left = 1st leave (approved first), bottom-right = 2nd
+              const a = covering[0], b = covering[1];
+              const ca = LV_COLORS[(TYPE_META[a.type] || {}).cls] || LV_COLORS['lv-annual'];
+              const cb = LV_COLORS[(TYPE_META[b.type] || {}).cls] || LV_COLORS['lv-annual'];
+              const bgA = a.status === 'approved' ? ca.solid : ca.faint;
+              const bgB = b.status === 'approved' ? cb.solid : cb.faint;
+              const token = l => l.durationType === 'hours' ? `${l.amount}h` : (LV_ABBR[l.type] || (l.type || '').toUpperCase());
+              const mixed = a.status !== b.status;
+              const style = `background-image:linear-gradient(135deg, ${bgA} 0%, ${bgA} 49.5%, #ffffff 49.5%, #ffffff 50.5%, ${bgB} 50.5%, ${bgB} 100%);`
+                  + (mixed ? `color:#1f2937;text-shadow:0 1px 2px rgba(255,255,255,0.7);` : '');
+              html += `<td class="lv lv-split ${extraCls}" style="${style}" title="${escapeHtml(fullName + titleText)}">${escapeHtml(covering.map(token).join('+'))}</td>`;
+          }
       } else html += `<td class="${extraCls}"></td>`;
     }
     html += `</tr>`;
@@ -1151,19 +1255,24 @@ async function openEmpScheduleModal(empId) {
         const dayLeaves = empLeaves.filter(l => l.dateFrom <= ds && l.dateTo >= ds);
         if (dayLeaves.length > 0) {
             // Prioritize approved over pending if both somehow exist on the same day
-            const approved = dayLeaves.find(l => l.status === 'approved');
-            const pending = dayLeaves.find(l => l.status === 'pending');
-            const lv = approved || pending;
-            
+            dayLeaves.sort((a, b) => (a.status === 'approved' ? -1 : 1) - (b.status === 'approved' ? -1 : 1));
+            const lv = dayLeaves[0];
             let overlayClass = 'leave-overlay ' + lv.status;
             let overlayText = typeAbbr[lv.type] || (lv.type || '').toUpperCase();
-            
-            if (lv.durationType === 'hours') {
+            let overlayStyle = '';
+            if (dayLeaves.length > 1) {
+                // 🆕 Combined overlay: diagonal split of both type colors + combined text
+                const tok = l => `${l.durationType === 'hours' ? l.amount + 'h ' : ''}${typeAbbr[l.type] || (l.type || '').toUpperCase()}`;
+                const cA = LV_OVERLAY[dayLeaves[0].type] || 'rgba(70,130,180,0.25)';
+                const cB = LV_OVERLAY[dayLeaves[1].type] || 'rgba(70,130,180,0.25)';
+                const stripes = lv.status === 'pending' ? 'repeating-linear-gradient(45deg, rgba(180,83,9,0.15) 0 4px, transparent 4px 8px), ' : '';
+                overlayStyle = ` style="background:${stripes}linear-gradient(135deg, ${cA} 0 50%, ${cB} 50% 100%);font-size:0.72rem;"`;
+                overlayText = dayLeaves.map(tok).join(' + ');
+            } else if (lv.durationType === 'hours') {
                 overlayClass += ' hourly';
                 overlayText = `${lv.amount}h ${overlayText}`;
             }
-            
-            html += `<div class="${overlayClass}">${overlayText}</div>`;
+            html += `<div class="${overlayClass}"${overlayStyle}>${overlayText}</div>`;
         }
         
         html += `</div>`; // end cell
@@ -1431,38 +1540,18 @@ async function submitLeave() {
             totalAvailableBalance += (ledgerField === 'annualUsed' ? yBal.annual : yBal.sick).balance;
         }
         
-        const paidDays = Math.max(0, totalAvailableBalance);
-        const unpaidDays = round2(amount - paidDays);
-
-        if (unpaidDays > 0 && paidDays > 0) {
-            const split = await getSplitLeaveRanges(empId, dateFrom, dateTo, paidDays);
-            
-            // 1. Paid Record
-            if (split.paid) {
-                leaveRecordsToPush.push({
-                    ...baseLeaveData,
-                    type, typeLabel: TYPE_META[type].label,
-                    dateFrom: split.paid.from, dateTo: split.paid.to,
-                    amount: split.paid.days, deductDays: split.paid.days,
-                    restDaysExcluded: split.paid.skipped.join(', ') || '',
-                    daysPerYear: split.paid.daysPerYear,
-                    year: parseInt(split.paid.from.slice(0, 4), 10)
-                });
-            }
-            
-            // 2. Unpaid Record
-            if (split.unpaid) {
-                leaveRecordsToPush.push({
-                    ...baseLeaveData,
-                    type: 'unpaid', typeLabel: TYPE_META.unpaid.label,
-                    dateFrom: split.unpaid.from, dateTo: split.unpaid.to,
-                    amount: split.unpaid.days, deductDays: split.unpaid.days,
-                    restDaysExcluded: split.unpaid.skipped.join(', ') || '',
-                    daysPerYear: split.unpaid.daysPerYear,
-                    year: parseInt(split.unpaid.from.slice(0, 4), 10)
-                });
-            }
-        } else if (unpaidDays > 0 && paidDays === 0) {
+     const paidDays = Math.max(0, round2(totalAvailableBalance));
+     const unpaidDays = round2(amount - paidDays);
+     if (unpaidDays > 0 && paidDays > 0) {
+         try {
+             // Returns 2–4 records: whole paid days, hourly paid slice,
+             // hourly unpaid slice (same day), remaining unpaid days
+             leaveRecordsToPush = await getSplitLeaveRanges(empId, dateFrom, dateTo, paidDays, baseLeaveData, type);
+         } catch (err) {
+             // Fractional day has no shift → abort instead of silently dropping the paid slice
+             return alert(err.message);
+         }
+     } else if (unpaidDays > 0 && paidDays === 0) {
             // Edge case: 0 balance, all days become unpaid
             leaveRecordsToPush.push({
                 ...baseLeaveData,
@@ -1498,15 +1587,12 @@ async function submitLeave() {
         closeModal('applyModal');
         
         // Custom success message if split
-        if (leaveRecordsToPush.length > 1) {
-            const paidRec = leaveRecordsToPush.find(r => r.type !== 'unpaid');
-            const unpaidRec = leaveRecordsToPush.find(r => r.type === 'unpaid');
-            alert(t('splitLeaveSuccess', { 
-                paid: paidRec?.amount || 0, 
-                type: TYPE_META[paidRec?.type]?.label || '', 
-                unpaid: unpaidRec?.amount || 0 
-            }));
-        } else {
+     if (leaveRecordsToPush.length > 1) {
+         const parts = leaveRecordsToPush
+             .map(r => `${r.amount} ${r.durationType === 'hours' ? t('hrUnit') : t('dayUnit')} ${r.typeLabel}`)
+             .join(' + ');
+         alert(t('splitLeaveSuccessParts', { parts }));
+     } else {
             alert(t('submitted'));
         }
     } catch (err) {

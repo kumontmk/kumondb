@@ -227,6 +227,18 @@ function getTemplateForDate(empId, dateStr) {
   return tmpl;
 }
 
+// 🆕 DISPLAY-ONLY pattern fallback:
+//  - Shows the weekly pattern on ANY date (including past) when no explicit schedule exists
+//  - Never shows on public/center holidays or approved leave days ("except holidays and leaves")
+function getPatternForDisplay(empId, dateStr) {
+    const tmpl = templates[empId]?.[parseDate(dateStr).getDay()];
+    if (!tmpl) return null;
+    const hol = getHolidayForDate(dateStr);
+    if (hol && !hol.muc) return null;          // holiday → don't repeat pattern
+    if (hasApprovedLeave(empId, dateStr)) return null; // approved leave → don't repeat pattern
+    return tmpl;
+}
+
 // ============================================
 // GLOBAL STATE
 // ============================================
@@ -741,7 +753,7 @@ function renderAdminBody(dates) {
       const td = document.createElement('td');
       td.className = 'schedule-cell';
       const sched = mergedSchedules[emp.uid]?.[dateStr];
-      const tmpl = getTemplateForDate(emp.uid, dateStr);
+      const tmpl = getPatternForDisplay(emp.uid, dateStr);
       if (sched) {
         renderMergedScheduleCell(td, sched, emp.uid, dateStr);
       } else if (tmpl) {
@@ -1074,7 +1086,7 @@ function renderEmployeeCalendar(dates, empId) {
     cell.appendChild(num);
 
     const sched = mergedSchedules[empId]?.[dateStr];
-    const tmpl = getTemplateForDate(empId, dateStr);
+    const tmpl = getPatternForDisplay(empId, dateStr);
     const holder = document.createElement('div');
     holder.className = 'emp-cal-body';
     if (sched) {
@@ -1126,7 +1138,7 @@ function renderEmployeeMobileList(dates, empId) {
   dates.forEach(dateStr => {
     const dateObj = parseDate(dateStr);
     const dow = dateObj.getDay();
-    const data = mergedSchedules[empId]?.[dateStr] || getTemplateForDate(empId, dateStr);
+    const data = mergedSchedules[empId]?.[dateStr] || getPatternForDisplay(empId, dateStr);
     const item = document.createElement('div');
     item.className = 'mobile-schedule-item';
     let detailsHTML = '';
@@ -1290,7 +1302,7 @@ function renderSubjectBody(dates) {
         const td = document.createElement('td');
         td.className = 'schedule-cell';
         const sched = mergedSchedules[emp.uid]?.[dateStr];
-        const tmpl = getTemplateForDate(emp.uid, dateStr);
+        const tmpl = getPatternForDisplay(emp.uid, dateStr);
         if (sched) {
           renderMergedScheduleCell(td, sched, emp.uid, dateStr);
           const shifts = sched._shifts || extractShifts(sched);
@@ -1398,7 +1410,7 @@ function printSubjectSchedule() {
           </td>`;
       dates.forEach(dateStr => {
         const sched = mergedSchedules[emp.uid]?.[dateStr];
-        const tmpl = getTemplateForDate(emp.uid, dateStr);
+        const tmpl = getPatternForDisplay(emp.uid, dateStr);
         let shifts = [];
         let status = 'scheduled';
         let notes = '';
@@ -1673,7 +1685,9 @@ function openEditModal(empId, dateStr) {
   calendarViewDate = new Date(dateObj.getFullYear(), dateObj.getMonth(), 1);
   selectedPatternDates = new Set();
   const patternCb = document.getElementById('saveAsPatternCb');
-  if (patternCb) patternCb.checked = false;
+  // 🆕 Auto-repeat ON by default when plotting a NEW day (or re-plotting a cleared day).
+  // Editing an existing explicit schedule keeps it a one-off override unless ticked.
+  if (patternCb) patternCb.checked = !sched || !!sched.cleared;
   renderPatternCalendar();
   checkModalWarnings(empId, dateStr);
   // 🆕 Mobile-only mini calendar at the bottom of the modal
@@ -2029,6 +2043,8 @@ async function applyPatternsToMonth() {
                 if (isPastDate(dateStr)) continue;
                 // 🆕 NEVER stamp a pattern over an approved leave day
                 if (hasApprovedLeave(empId, dateStr)) { skipped++; continue; }
+                const hol = getHolidayForDate(dateStr);
+                if (hol && !hol.muc) { skipped++; continue; }  // 🆕 never stamp patterns onto holidays
                 const dow = dateObj.getDay();
                 const existingSched = mergedSchedules[empId]?.[dateStr];
                 if (existingSched) {
@@ -2223,7 +2239,7 @@ function renderCenterEmployeeRow(emp, dates, tbody, dailyCounts, centerCalEvents
     const isToday = dateObj.getTime() === today.getTime();
     if (isToday) td.style.outline = '2px solid #27ae60';
     const sched = mergedSchedules[emp.uid]?.[dateStr];
-    const tmpl = getTemplateForDate(emp.uid, dateStr);
+    const tmpl = getPatternForDisplay(emp.uid, dateStr);
     let shifts = [];
     let status = 'scheduled';
     let notes = '';
@@ -2303,7 +2319,7 @@ function getCenterPrintRowHtml(emp, dates, selectedCenterId, centerCalEvents, cl
     if (isToday) cellCls += ' today-cell';
     else if (isWeekend) cellCls += ' weekend-cell';
     const sched = mergedSchedules[emp.uid]?.[dateStr];
-    const tmpl = getTemplateForDate(emp.uid, dateStr);
+    const tmpl = getPatternForDisplay(emp.uid, dateStr);
     let shifts = [];
     let status = 'scheduled';
     let notes = '';
@@ -2374,7 +2390,7 @@ function renderCenterBody(dates) {
       const dateObj = parseDate(dateStr);
       const dow = dateObj.getDay();
       const sched = mergedSchedules[emp.uid]?.[dateStr];
-      const tmpl = getTemplateForDate(emp.uid, dateStr);
+      const tmpl = getPatternForDisplay(emp.uid, dateStr);
       let currentShifts = [];
       let currentStatus = 'scheduled';
       let sourceCenter = null;
@@ -2503,7 +2519,7 @@ function generateCenterPrintHTML() {
     let hasShift = false;
     for (const dateStr of dates) {
       const sched = mergedSchedules[emp.uid]?.[dateStr];
-      const tmpl = getTemplateForDate(emp.uid, dateStr);
+      const tmpl = getPatternForDisplay(emp.uid, dateStr);
       let currentShifts = [];
       let currentStatus = 'scheduled';
       let sourceCenter = null;
@@ -2739,7 +2755,7 @@ function renderModalMiniCalendar() {
 
         const data =
             mergedSchedules[editingEmpId]?.[dateStr] ||
-            getTemplateForDate(editingEmpId, dateStr);
+            getPatternForDisplay(editingEmpId, dateStr);
 
         if (data) {
             const status = data.status || 'scheduled';
@@ -2941,7 +2957,7 @@ function renderAdminMobileCalendar() {
         cell.appendChild(dayNum);
 
         const sched = mergedSchedules[adminMobileCurrentEmpId]?.[dateStr];
-        const tmpl = getTemplateForDate(adminMobileCurrentEmpId, dateStr);
+        const tmpl = getPatternForDisplay(adminMobileCurrentEmpId, dateStr);
         const data = sched || tmpl;
 
         const contentWrap = document.createElement('div');
@@ -3016,7 +3032,7 @@ function getCenterEmployeesWithShifts(dates) {
         let hasShiftHere = false;
         for (const dateStr of dates) {
             const sched = mergedSchedules[emp.uid]?.[dateStr];
-            const tmpl = getTemplateForDate(emp.uid, dateStr);
+            const tmpl = getPatternForDisplay(emp.uid, dateStr);
             let currentShifts = [];
             let currentStatus = 'scheduled';
             let sourceCenter = null;
@@ -3040,7 +3056,7 @@ function getCenterEmployeesWithShifts(dates) {
 /** Today's work shifts for an emp at the selected center (falls back to pattern) */
 function getTodayCenterSlots(empId) {
     const todayStr = formatDateStr(new Date());
-    const data = mergedSchedules[empId]?.[todayStr] || getTemplateForDate(empId, todayStr);
+    const data = mergedSchedules[empId]?.[todayStr] || getPatternForDisplay(empId, todayStr);
     if (!data || (data.status || 'scheduled') !== 'scheduled') return [];
     return (data._shifts || extractShifts(data))
         .filter(s => s.type === 'work' && s.center === selectedCenterForView)
@@ -3209,7 +3225,7 @@ function renderCenterMobileCalendar() {
 
         const data =
             mergedSchedules[centerMobileCurrentEmpId]?.[dateStr] ||
-            getTemplateForDate(centerMobileCurrentEmpId, dateStr);
+            getPatternForDisplay(centerMobileCurrentEmpId, dateStr);
 
         let rendered = false;
 
@@ -3453,7 +3469,7 @@ function handleExportExcel() {
             // Get schedule data. Note: getTemplateForDate ignores past dates, 
             // which is correct for historical exports (shows actual scheduled data).
             const sched = mergedSchedules[uid]?.[dateStr];
-            const tmpl = getTemplateForDate(uid, dateStr);
+            const tmpl = getPatternForDisplay(uid, dateStr);
             const data = sched || tmpl;
             
             let cellText = '';

@@ -96,6 +96,8 @@ export default {
   thBal: "餘額",
   applyExcessUnpaid: "將超出的 {{days}} 天申請為無薪假",
   splitLeaveSuccess: "✅ 休假已提交！已拆分為 {{paid}} 天 {{type}} 和 {{unpaid}} 天無薪假。",
+  splitLeaveSuccessParts: "✅ 假已送出！已拆分為：{{parts}}。",
+  splitNoShiftAlert: "⚠️ {{name}} 在 {{date}} 沒有排班，無法自動將剩餘帶薪餘額轉換為小時。請改以「小時」手動申請該時段。",
   tabWeeklyReports: "📋 每週報告",
   wrThisWeekBtn: "本週",
   wrCopy: "📋 複製",

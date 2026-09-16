@@ -96,6 +96,8 @@ export default {
   thBal: "Bal",
   applyExcessUnpaid: "Apply {{days}} excess day(s) as Unpaid Leave",
   splitLeaveSuccess: "✅ Leave submitted! Split into {{paid}} day(s) {{type}} and {{unpaid}} day(s) Unpaid.",
+  splitLeaveSuccessParts: "✅ Leave submitted! Split into {{parts}}.",
+  splitNoShiftAlert: "⚠️ {{name}} has no shift scheduled on {{date}}, so the remaining paid balance can't be auto-converted to hours. Please apply for that portion as Hourly leave manually.",
   tabWeeklyReports: "📋 Weekly Reports",
   wrThisWeekBtn: "This Week",
   wrCopy: "📋 Copy",
