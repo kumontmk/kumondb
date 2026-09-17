@@ -228,8 +228,9 @@ function initializeGraphs() {
                 if (row < 0) return;
                 const gradeIdxNow = GRADE_AXIS.indexOf(String(st.grade || '').trim());
                 if (gradeIdxNow < 0) return;
-                const steps = academicIndex(now) - academicIndex(month);
-                const gradeIdx = Math.max(0, Math.min(GRADE_AXIS.length - 1, gradeIdxNow - steps));
+                // ✅ Plot at the student's CURRENT grade (same as Students list & Monthly Reports).
+                //    Only the level/WS is taken from the selected report month.
+                const gradeIdx = gradeIdxNow;
                 pts.push({
                     studentId: st.id, student: st, dbName: (sub.name || '').trim(), subject: chartSub,
                     gradeIdx, row, ws: entry.currWS ?? sub.currentWS ?? 0,
@@ -396,7 +397,7 @@ function initializeGraphs() {
             x: arr.map(p => p.gradeIdx - 0.5 + p._dx),   // ← left edge of cell + packed offset
             y: arr.map(p => p.row + p._dy),
             text: arr.map(p => p.label),
-            textposition: 'middle left',                 // ← always grows rightward from its own x
+            textposition: 'middle right',   // text box's LEFT edge sits at x → name grows rightward into its own cell
             textfont: {
                 family: 'Arial, Helvetica, sans-serif',
                 size: arr.map(p => (q && studentNameMatchesSearch(p.student, q)) ? p._fs + 1 : p._fs),
