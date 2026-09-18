@@ -1,5 +1,5 @@
 export default {
-  documentTitle: "Leave - Kumon DB", pageTitle: "🏖️ Leave", logout: "Logout", backToCenters: "← Back to Centers",
+  documentTitle: "Leave - Kumon DB", pageTitle: "🏖️ Leave", logout: "Logout", backToCenters: "← Centers",
   loginFirst: "🔐 Please log in first", noSession: "No user session found.", noProfile: "⛔ No Employee Profile",
   noProfileMsg: "{{email}} has no employee record.", loadingRecords: "⏳ Loading leave records...",
   tabApplication: "📝 Application", tabOverview: "📅 Overview",

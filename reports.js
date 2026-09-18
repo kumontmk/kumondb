@@ -51,14 +51,21 @@ function initializeReports() {
 
     const studentsRef = ref(db, `centers/${centerId}/students`);
 
+    //  Students/subjects with these statuses must NOT appear in monthly reports
+    const HIDDEN_STUDENT_STATUSES = ['drop', 'pause', 'completer', 'completed', 'complete'];
+    const HIDDEN_SUBJECT_STATUSES = ['drop', 'pause', 'inquiry', 'completer', 'completed', 'complete'];
+    const isHiddenStudent = (data) => HIDDEN_STUDENT_STATUSES.includes(String(data?.status || '').toLowerCase());
+    const isHiddenSubject = (sub) => HIDDEN_SUBJECT_STATUSES.includes(String(sub?.status || '').toLowerCase());
+
     let cachedStudents = [];
     let isDataLoaded = false;
     let activeSubject = 'all';
     let draftEdits = {};      // month -> studentId -> subjectName -> edited values
     let renderedMonth = null; // month the currently-visible DOM was rendered for
 
-    const CACHE_KEY = `students_cache_${centerId}`;
-    const CACHE_TIME_KEY = `students_cache_time_${centerId}`;
+    const CACHE_VERSION = 'v2'; // bump whenever filtering rules change
+    const CACHE_KEY = `students_cache_${CACHE_VERSION}_${centerId}`;
+    const CACHE_TIME_KEY = `students_cache_time_${CACHE_VERSION}_${centerId}`;
     const CACHE_DURATION = 5 * 60 * 1000;
 
     function getCachedStudents() {
@@ -202,59 +209,61 @@ function initializeReports() {
 
     async function loadStudents(forceRefresh = false) {
         if (isDataLoaded && !forceRefresh) return;
-
         if (forceRefresh) {
             localStorage.removeItem(CACHE_KEY);
             localStorage.removeItem(CACHE_TIME_KEY);
         } else {
             const cached = getCachedStudents();
-
             if (cached) {
-                cachedStudents = cached;
+                // ✅ Re-apply status filters so changes made elsewhere (e.g. marking
+                // a student as completer) take effect immediately, even from stale cache
+                cachedStudents = cached
+                    .filter(({ data }) => !isHiddenStudent(data))
+                    .map(({ id, data }) => ({
+                        id,
+                        data: {
+                            ...data,
+                            subjects: (Array.isArray(data.subjects)
+                                ? data.subjects
+                                : Object.values(data.subjects || {})
+                            ).filter(sub => sub && !isHiddenSubject(sub))
+                        }
+                    }));
                 isDataLoaded = true;
                 console.log('✅ Loaded from cache (0 Firebase bandwidth used)');
                 return;
             }
         }
-
         showLoader();
         cachedStudents = [];
-
         try {
             const snap = await get(studentsRef);
-
             if (snap.exists()) {
                 snap.forEach(child => {
                     const data = child.val();
-
-                    if (data.status === 'drop' || data.status === 'pause') return;
-
+                    if (isHiddenStudent(data)) return;   // ← completer now excluded
                     const rawSubjects = Array.isArray(data.subjects)
                         ? data.subjects
                         : Object.values(data.subjects || {});
                     const rawKeys = Array.isArray(data.subjects)
                         ? data.subjects.map((_, i) => i)
                         : Object.keys(data.subjects || {});
-
                     // Tag each subject with its REAL DB index/key before filtering
                     data.subjects = rawSubjects
                         .map((sub, i) => {
                             if (sub && typeof sub === 'object') sub.__dbKey = rawKeys[i];
                             return sub;
                         })
-                        .filter(sub => sub && !['drop', 'pause', 'inquiry'].includes(sub.status));
-
+                        .filter(sub => sub && !isHiddenSubject(sub));  // ← completer now excluded
                     cachedStudents.push({ id: child.key, data });
                 });
             }
-
             cacheStudents(cachedStudents);
             isDataLoaded = true;
         } catch (err) {
             console.error('❌ Load failed:', err);
             alert(t('reports.loadFailed'));
         }
-
         hideLoader();
     }
 

@@ -1,5 +1,5 @@
 export default {
-  documentTitle: "請假 - Kumon DB", pageTitle: "🏖️ 請假", logout: "登出", backToCenters: "← 返回中心",
+  documentTitle: "請假 - Kumon DB", pageTitle: "🏖️ 請假", logout: "登出", backToCenters: "← 中心",
   loginFirst: "🔐 請先登入", noSession: "找不到使用者工作階段。", noProfile: "⛔ 無員工檔案",
   noProfileMsg: "{{email}} 沒有員工記錄。", loadingRecords: "⏳ 正在載入請假記錄...",
   tabApplication: "📝 請假申請", tabOverview: "📅 行事曆總覽",

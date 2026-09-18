@@ -228,9 +228,11 @@ function initializeGraphs() {
                 if (row < 0) return;
                 const gradeIdxNow = GRADE_AXIS.indexOf(String(st.grade || '').trim());
                 if (gradeIdxNow < 0) return;
-                // ✅ Plot at the student's CURRENT grade (same as Students list & Monthly Reports).
-                //    Only the level/WS is taken from the selected report month.
-                const gradeIdx = gradeIdxNow;
+                // ⏳ Time-travel: the stored grade is the CURRENT grade (auto-promoted each
+                //    Aug 15 by student-form.js), so walk back one grade per academic year
+                //    between the selected report month and today.
+                const steps = academicIndex(now) - academicIndex(month);
+                const gradeIdx = Math.max(0, Math.min(GRADE_AXIS.length - 1, gradeIdxNow - steps));
                 pts.push({
                     studentId: st.id, student: st, dbName: (sub.name || '').trim(), subject: chartSub,
                     gradeIdx, row, ws: entry.currWS ?? sub.currentWS ?? 0,
