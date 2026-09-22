@@ -62,6 +62,25 @@ function initializeReports() {
     let activeSubject = 'all';
     let draftEdits = {};      // month -> studentId -> subjectName -> edited values
     let renderedMonth = null; // month the currently-visible DOM was rendered for
+    const dirtyRecords = new Set(); // Tracks which specific records have been modified
+
+    function makeDirtyKey(month, studentId, subjectName) {
+        return `${month}|${studentId}|${subjectName}`;
+    }
+
+    function markRecordDirty(el) {
+        const record = el.closest('[data-student-id][data-subject-name]');
+        if (!record || !renderedMonth) return;
+
+        const studentId = record.dataset.studentId;
+        const subjectName = record.dataset.subjectName;
+
+        if (!studentId || !subjectName) return;
+
+        const key = makeDirtyKey(renderedMonth, studentId, subjectName);
+        dirtyRecords.add(key);
+        record.classList.add('dirty');
+    }
 
     const CACHE_VERSION = 'v2'; // bump whenever filtering rules change
     const CACHE_KEY = `students_cache_${CACHE_VERSION}_${centerId}`;
@@ -103,6 +122,24 @@ function initializeReports() {
     const clearSearchBtn = document.getElementById('clearSearchBtn');
     let searchQuery = '';
     let searchDebounce = null;
+
+    // 🔥 Dirty tracking event listeners
+    if (reportOutput) {
+        reportOutput.addEventListener('input', (e) => {
+            if (e.target.matches('.report-input')) {
+                markRecordDirty(e.target);
+            }
+        });
+
+        reportOutput.addEventListener('click', (e) => {
+            if (
+                e.target.matches('.add-at-btn') ||
+                e.target.matches('.remove-at-btn')
+            ) {
+                markRecordDirty(e.target);
+            }
+        });
+    }
 
     function showLoader() {
         document.getElementById('page-loader')?.classList.remove('hidden');
@@ -465,17 +502,21 @@ function initializeReports() {
 
         toggleTests();
     }
+    
     function setDraft(month, studentId, subjectName, patch) {
         const m = (draftEdits[month] ||= {});
         const s = (m[studentId] ||= {});
         s[subjectName] = { ...s[subjectName], ...patch };
     }
+    
     function getDraft(month, studentId, subjectName) {
         return draftEdits[month]?.[studentId]?.[subjectName];
     }
+    
     function captureDraftsFromDOM() {
         if (!renderedMonth || !reportOutput) return;
-        const records = reportOutput.querySelectorAll('[data-student-id][data-subject-name]');
+        // 🔥 Only capture records that are explicitly marked as dirty
+        const records = reportOutput.querySelectorAll('[data-student-id][data-subject-name].dirty');
         records.forEach(row => {
             const studentId = row.dataset.studentId;
             const subjectName = row.dataset.subjectName;
@@ -515,6 +556,7 @@ function initializeReports() {
             setDraft(renderedMonth, studentId, subjectName, patch);
         });
     }
+    
     function buildReport() {
         if (!isDataLoaded) return;
         captureDraftsFromDOM();          // ← save what the user typed BEFORE re-rendering
@@ -621,6 +663,13 @@ function initializeReports() {
             const row = document.createElement('tr');
             row.dataset.studentId = studentId;
             row.dataset.subjectName = subjectKey;
+            
+            // 🔥 Re-apply dirty class if the record was previously modified
+            const key = makeDirtyKey(month, studentId, subjectKey);
+            if (dirtyRecords.has(key)) {
+                row.classList.add('dirty');
+            }
+            
             let rowHTML = '';
             if (isPencil) {
                 rowHTML = `
@@ -721,6 +770,13 @@ function initializeReports() {
             card.className = 'report-card';
             card.dataset.studentId = studentId;
             card.dataset.subjectName = subjectKey;
+            
+            // 🔥 Re-apply dirty class if the record was previously modified
+            const key = makeDirtyKey(month, studentId, subjectKey);
+            if (dirtyRecords.has(key)) {
+                card.classList.add('dirty');
+            }
+            
             // Extra data used only for desktop-format printing
             card.dataset.subjectKey = subName;
             card.dataset.isPencil = isPencil ? 'true' : '';
@@ -997,107 +1053,148 @@ function initializeReports() {
 
     if (saveBtn) {
         saveBtn.addEventListener('click', async () => {
-        captureDraftsFromDOM();
-        const month = renderedMonth || reportMonthInput?.value;
-        const monthDrafts = draftEdits[month] || {};
-        const pending = [];
-        Object.entries(monthDrafts).forEach(([studentId, subs]) =>
-            Object.entries(subs).forEach(([subjectName, draft]) =>
-                pending.push({ studentId, subjectName, draft })));
-        if (pending.length === 0) return alert(t('reports.noDataToSave'));
-        if (!confirm(t('reports.confirmSave'))) return;
-        showLoader();
-        saveBtn.disabled = true;
-        saveBtn.textContent = t('reports.saving');
-        const batchUpdates = {};
-        try {
-            for (const { studentId, subjectName, draft } of pending) {
-                const cachedStudent = cachedStudents.find(s => s.id === studentId);
-                if (!cachedStudent) continue;
-                const student = cachedStudent.data;
-                const subjects = student.subjects || {};
-                let subjectKey = null, subjectData = null;
-                const matchSubject = (dbName) => subjectName === 'Chinese'
-                    ? ['Chinese (Trad)', 'Chinese (Simp)', 'Chinese'].includes(dbName)
-                    : dbName === subjectName;
-                if (Array.isArray(subjects)) {
-                    const filteredIdx = subjects.findIndex(s => matchSubject((s.name || '').trim()));
-                    subjectData = filteredIdx !== -1 ? subjects[filteredIdx] : null;
-                    // Use the ORIGINAL DB index, not the filtered-array index
-                    subjectKey = subjectData ? (subjectData.__dbKey ?? filteredIdx) : null;
-                } else {
-                    for (const key in subjects) {
-                        if (matchSubject((subjects[key]?.name || '').trim())) { subjectKey = key; subjectData = subjects[key]; break; }
+            captureDraftsFromDOM();
+            const month = renderedMonth || reportMonthInput?.value;
+            const monthDrafts = draftEdits[month] || {};
+            const pending = [];
+            
+            // 🔥 Only process drafts that are explicitly marked as dirty
+            Object.entries(monthDrafts).forEach(([studentId, subs]) =>
+                Object.entries(subs).forEach(([subjectName, draft]) => {
+                    const key = makeDirtyKey(month, studentId, subjectName);
+                    if (dirtyRecords.has(key)) {
+                        pending.push({ studentId, subjectName, draft });
                     }
+                })
+            );
+            
+            if (pending.length === 0) return alert(t('reports.noDataToSave'));
+            if (!confirm(t('reports.confirmSave'))) return;
+            
+            showLoader();
+            saveBtn.disabled = true;
+            saveBtn.textContent = t('reports.saving');
+            const batchUpdates = {};
+            
+            try {
+                for (const { studentId, subjectName, draft } of pending) {
+                    const cachedStudent = cachedStudents.find(s => s.id === studentId);
+                    if (!cachedStudent) continue;
+                    const student = cachedStudent.data;
+                    const subjects = student.subjects || {};
+                    let subjectKey = null, subjectData = null;
+                    const matchSubject = (dbName) => subjectName === 'Chinese'
+                        ? ['Chinese (Trad)', 'Chinese (Simp)', 'Chinese'].includes(dbName)
+                        : dbName === subjectName;
+                    if (Array.isArray(subjects)) {
+                        const filteredIdx = subjects.findIndex(s => matchSubject((s.name || '').trim()));
+                        subjectData = filteredIdx !== -1 ? subjects[filteredIdx] : null;
+                        // Use the ORIGINAL DB index, not the filtered-array index
+                        subjectKey = subjectData ? (subjectData.__dbKey ?? filteredIdx) : null;
+                    } else {
+                        for (const key in subjects) {
+                            if (matchSubject((subjects[key]?.name || '').trim())) { subjectKey = key; subjectData = subjects[key]; break; }
+                        }
+                    }
+                    if (!subjectData) continue;
+                    const basePath = `centers/${centerId}/students/${studentId}/subjects/${subjectKey}`;
+                    const isPencilDraft = 'pencilLevel' in draft;
+                    if (!isPencilDraft) {
+                        if (draft.currLevel && draft.currLevel !== subjectData.currentLevel) {
+                            batchUpdates[`${basePath}/currentLevel`] = draft.currLevel;
+                            subjectData.currentLevel = draft.currLevel;
+                        }
+                        const newWS = (draft.currWS || '').trim() !== '' ? parseInt(draft.currWS) : 0;
+                        if (newWS !== subjectData.currentWS) {
+                            batchUpdates[`${basePath}/currentWS`] = newWS;
+                            subjectData.currentWS = newWS;
+                        }
+                    } else {
+                        const pLevel = draft.pencilLevel || '', pWS = draft.pencilWS || '';
+                        const oldPencil = subjectData.pencilSkill || {};
+                        if (pLevel !== '' || pWS !== '') {
+                            if (pLevel !== oldPencil.level) batchUpdates[`${basePath}/pencilSkill/level`] = pLevel;
+                            const newPWS = pWS !== '' ? (parseInt(pWS) || 0) : '';
+                            if (newPWS !== oldPencil.ws) batchUpdates[`${basePath}/pencilSkill/ws`] = newPWS;
+                            subjectData.pencilSkill = { level: pLevel, ws: newPWS };
+                        } else if (subjectData.pencilSkill) {
+                            batchUpdates[`${basePath}/pencilSkill`] = null;
+                            delete subjectData.pencilSkill;
+                        }
+                        continue; // pencil has no monthly progress entry
+                    }
+                    let progArr = Array.isArray(subjectData.progress) ? subjectData.progress : Object.values(subjectData.progress || {});
+                    const existing = progArr.find(p => p?.month === month);
+                    const entry = { month };
+                    if (draft.prevLevel) entry.prevLevel = draft.prevLevel;
+                    if (draft.prevWS) entry.prevWS = parseInt(draft.prevWS);
+                    if (draft.currLevel) entry.currLevel = draft.currLevel;
+                    if ((draft.currWS || '').trim() !== '') entry.currWS = parseInt(draft.currWS) || 0;
+                    // If tests were locked (not captured), preserve what's already stored
+                    entry.tests = draft.tests !== undefined ? draft.tests : (existing?.tests || []);
+                    const idx = progArr.findIndex(p => p?.month === month);
+                    if (idx >= 0) {
+                        const changed = Object.keys(entry).some(k => JSON.stringify(progArr[idx][k]) !== JSON.stringify(entry[k]));
+                        if (changed) {
+                            progArr[idx] = { ...progArr[idx], ...entry };
+                            batchUpdates[`${basePath}/progress/${idx}`] = progArr[idx];
+                        }
+                    } else {
+                        progArr.push(entry);
+                        batchUpdates[`${basePath}/progress/${progArr.length - 1}`] = entry;
+                    }
+                    subjectData.progress = progArr;
                 }
-                if (!subjectData) continue;
-                const basePath = `centers/${centerId}/students/${studentId}/subjects/${subjectKey}`;
-                const isPencilDraft = 'pencilLevel' in draft;
-                if (!isPencilDraft) {
-                    if (draft.currLevel && draft.currLevel !== subjectData.currentLevel) {
-                        batchUpdates[`${basePath}/currentLevel`] = draft.currLevel;
-                        subjectData.currentLevel = draft.currLevel;
+                console.log('🧾 REPORT SAVE batchUpdates:', JSON.parse(JSON.stringify(batchUpdates)));
+                if (Object.keys(batchUpdates).length > 0) {
+                    await update(ref(db), batchUpdates);
+                    alert(t('reports.savedSuccess'));
+                    
+                    // 🔥 Clear dirty state only for the records that were actually saved
+                    pending.forEach(({ studentId, subjectName }) => {
+                        const key = makeDirtyKey(month, studentId, subjectName);
+                        dirtyRecords.delete(key);
+                        
+                        if (draftEdits[month]?.[studentId]) {
+                            delete draftEdits[month][studentId][subjectName];
+                            if (Object.keys(draftEdits[month][studentId]).length === 0) {
+                                delete draftEdits[month][studentId];
+                            }
+                        }
+                    });
+                    
+                    if (draftEdits[month] && Object.keys(draftEdits[month]).length === 0) {
+                        delete draftEdits[month];
                     }
-                    const newWS = (draft.currWS || '').trim() !== '' ? parseInt(draft.currWS) : 0;
-                    if (newWS !== subjectData.currentWS) {
-                        batchUpdates[`${basePath}/currentWS`] = newWS;
-                        subjectData.currentWS = newWS;
-                    }
+
+                    reportOutput.querySelectorAll('[data-student-id][data-subject-name].dirty').forEach(el => {
+                        el.classList.remove('dirty');
+                    });
+
+                    cacheStudents(cachedStudents);
+                    setTimeout(buildReport, 300);
                 } else {
-                    const pLevel = draft.pencilLevel || '', pWS = draft.pencilWS || '';
-                    const oldPencil = subjectData.pencilSkill || {};
-                    if (pLevel !== '' || pWS !== '') {
-                        if (pLevel !== oldPencil.level) batchUpdates[`${basePath}/pencilSkill/level`] = pLevel;
-                        const newPWS = pWS !== '' ? (parseInt(pWS) || 0) : '';
-                        if (newPWS !== oldPencil.ws) batchUpdates[`${basePath}/pencilSkill/ws`] = newPWS;
-                        subjectData.pencilSkill = { level: pLevel, ws: newPWS };
-                    } else if (subjectData.pencilSkill) {
-                        batchUpdates[`${basePath}/pencilSkill`] = null;
-                        delete subjectData.pencilSkill;
-                    }
-                    continue; // pencil has no monthly progress entry
+                    alert(t('reports.noChanges'));
+                    
+                    // 🔥 If nothing actually changed in DB, still clear the dirty flags
+                    pending.forEach(({ studentId, subjectName }) => {
+                        const key = makeDirtyKey(month, studentId, subjectName);
+                        dirtyRecords.delete(key);
+                    });
+                    
+                    reportOutput.querySelectorAll('[data-student-id][data-subject-name].dirty').forEach(el => {
+                        el.classList.remove('dirty');
+                    });
                 }
-                let progArr = Array.isArray(subjectData.progress) ? subjectData.progress : Object.values(subjectData.progress || {});
-                const existing = progArr.find(p => p?.month === month);
-                const entry = { month };
-                if (draft.prevLevel) entry.prevLevel = draft.prevLevel;
-                if (draft.prevWS) entry.prevWS = parseInt(draft.prevWS);
-                if (draft.currLevel) entry.currLevel = draft.currLevel;
-                if ((draft.currWS || '').trim() !== '') entry.currWS = parseInt(draft.currWS) || 0;
-                // If tests were locked (not captured), preserve what's already stored
-                entry.tests = draft.tests !== undefined ? draft.tests : (existing?.tests || []);
-                const idx = progArr.findIndex(p => p?.month === month);
-                if (idx >= 0) {
-                    const changed = Object.keys(entry).some(k => JSON.stringify(progArr[idx][k]) !== JSON.stringify(entry[k]));
-                    if (changed) {
-                        progArr[idx] = { ...progArr[idx], ...entry };
-                        batchUpdates[`${basePath}/progress/${idx}`] = progArr[idx];
-                    }
-                } else {
-                    progArr.push(entry);
-                    batchUpdates[`${basePath}/progress/${progArr.length - 1}`] = entry;
-                }
-                subjectData.progress = progArr;
+            } catch (err) {
+                console.error('Save error:', err);
+                alert(t('reports.saveFailed', { message: err.message }));
+            } finally {
+                hideLoader();
+                saveBtn.disabled = false;
+                saveBtn.textContent = t('reports.saveChanges');
             }
-            console.log('🧾 REPORT SAVE batchUpdates:', JSON.parse(JSON.stringify(batchUpdates)));
-            if (Object.keys(batchUpdates).length > 0) {
-                await update(ref(db), batchUpdates);
-                alert(t('reports.savedSuccess'));
-                delete draftEdits[month];
-                cacheStudents(cachedStudents);
-                setTimeout(buildReport, 300);
-            } else {
-                alert(t('reports.noChanges'));
-            }
-        } catch (err) {
-            console.error('Save error:', err);
-            alert(t('reports.saveFailed', { message: err.message }));
-        } finally {
-            hideLoader();
-            saveBtn.disabled = false;
-            saveBtn.textContent = t('reports.saveChanges');
-        }
-    });
+        });
     }
 
     setTimeout(() => loadStudents().then(buildReport), 200);
