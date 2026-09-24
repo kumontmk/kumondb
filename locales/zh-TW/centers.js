@@ -25,7 +25,9 @@ export default {
     manageCenterCalendar: "中心行事曆管理",
     manageCenterCalendarDesc: "假日、年度行事曆與課程時間表",
     employeeActivityLog: "員工活動紀錄",
-    employeeActivityLogDesc: "查看員工姓名、日期/時間、中心、頁面與操作"
+    employeeActivityLogDesc: "查看員工姓名、日期/時間、中心、頁面與操作",
+    ashr: "ASHR",
+    ashrDesc: "公文式超學年優秀生頒獎典禮管理",
   },
   bulletin: {
     title: "📢 佈告欄",

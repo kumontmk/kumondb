@@ -25,8 +25,9 @@ export default {
     manageCenterCalendar: "Manage Center Calendar",
     manageCenterCalendarDesc: "Holidays, annual calendar & class schedules",
     employeeActivityLog: "Employee Activity Log",
-    employeeActivityLogDesc: "View employee name, date/time, center, page, and action"
-
+    employeeActivityLogDesc: "View employee name, date/time, center, page, and action",
+    ashr: "ASHR",
+    ashrDesc: "Advanced Student Honour Roll ceremony management",
   },
   bulletin: {
     title: "📢 Bulletin Board",

@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Shows the logo in the browser tab -->
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <!-- Optional: PNG fallback for older browsers -->
+  <link rel="icon" type="image/png" sizes="512x512" href="dblogo-maskable-512.png">
+  <!-- Optional: icon when saved to iOS home screen -->
+  <link rel="apple-touch-icon" href="dblogo-maskable-512.png">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASHR - Kumon DB</title>
+<link rel="stylesheet" href="ashr.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+<div id="page-loader">
+  <div class="spinner"></div>
+  <p data-i18n="page.loading">Loading ASHR...</p>
+</div>
+
+<header>
+  <div style="display:flex;gap:1rem;align-items:center;">
+    <a href="centers.html" data-i18n="page.back">← Centers</a>
+    <span class="page-title" data-i18n="page.title">🏅 ASHR — Advanced Student Honour Roll</span>
+  </div>
+  <nav>
+    <label style="color:white;font-weight:600;display:flex;align-items:center;gap:0.5rem;">
+      <span data-i18n="page.event">Event:</span>
+      <select id="eventSelect" style="padding:0.3rem;border-radius:6px;border:none;"></select>
+    </label>
+    <button id="newEventBtn" data-i18n="page.newEvent">+ New Event</button>
+    <span id="eventStatusBadge" class="event-status"></span>
+  </nav>
+</header>
+
+<div class="dashboard" id="mainContent" style="display:none;">
+  <div class="event-bar">
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="control" data-i18n="tabs.control">⚙️ Control Panel</button>
+      <button class="tab-btn" data-tab="honorees" data-i18n="tabs.honorees">🏆 Honorees</button>
+      <button class="tab-btn" data-tab="links" data-i18n="tabs.links">🔗 Links</button>
+      <button class="tab-btn" data-tab="rsvps" data-i18n="tabs.rsvps">📊 RSVPs & Reports</button>
+      <button class="tab-btn" data-tab="checkin" data-i18n="tabs.checkin">✅ Check-in</button>
+    </div>
+  </div>
+
+  <!-- ⚙️ CONTROL PANEL -->
+  <div id="tab-control" class="tab-content active">
+    <div class="card">
+      <h3 data-i18n="cp.title">Event Settings</h3>
+      <div class="form-grid settings-grid">
+        <div class="field"><label data-i18n="cp.name">Event Name</label><input type="text" id="setEventName"></div>
+        <div class="field"><label data-i18n="cp.date">Event Date</label><input type="date" id="setEventDate"></div>
+        <div class="field"><label data-i18n="cp.venue">Venue</label><input type="text" id="setVenue"></div>
+        <div class="field"><label data-i18n="cp.deadline">RSVP Deadline</label><input type="date" id="setRsvpDeadline"></div>
+        <div class="field"><label data-i18n="cp.capacity">Default Slot Capacity (students)</label><input type="number" id="setDefaultCapacity" value="30"></div>
+        <div class="field"><label data-i18n="cp.active">Event Active?</label>
+          <select id="setIsActive">
+            <option value="true" data-i18n="cp.yes">Yes</option>
+            <option value="false" data-i18n="cp.no">No</option>
+          </select>
+        </div>
+      </div>
+      <button class="primary" id="saveSettingsBtn" data-i18n="cp.save">💾 Save Settings</button>
+    </div>
+
+    <div class="card">
+      <h3 data-i18n="cp.slotsTitle">Timeslot Manager</h3>
+      <p class="hint" data-i18n="cp.slotsHint">Add, edit, disable or delete timeslots. Capacity counts students only.</p>
+      <div id="timeslotList" class="timeslot-list"></div>
+      <div class="add-slot-row">
+        <input type="time" id="newSlotStart">
+        <span data-i18n="cp.to">to</span>
+        <input type="time" id="newSlotEnd">
+        <input type="number" id="newSlotCap" placeholder="Capacity" value="30" style="width:100px;">
+        <button class="primary" id="addSlotBtn" data-i18n="cp.addSlot">+ Add Slot</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🏆 HONOREES -->
+  <div id="tab-honorees" class="tab-content">
+    <div class="card">
+      <h3 data-i18n="hon.importTitle">Import from Excel</h3>
+      <p class="hint" data-i18n="hon.importHint">Imports: Math 1–5★, Chinese 1–5★, ERP 1–5★, EFL 3–5★ only. Other subjects are skipped. Only students with a Gold (3★+) award are kept.</p>
+      <input type="file" id="excelFileInput" accept=".xlsx,.xls" class="hidden">
+      <button class="primary" id="importExcelBtn" data-i18n="hon.choose">📂 Choose Excel File</button>
+      <div id="importProgress" class="hidden" style="margin-top:1rem;">
+        <div class="progress-bar"><div id="importProgressFill" class="progress-fill"></div></div>
+        <p id="importStatusText" class="hint"></p>
+      </div>
+      <div id="importSummary" class="hidden" style="margin-top:1rem;"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h3 data-i18n="hon.unmatchedTitle">Unmatched Records</h3>
+        <button class="btn-small danger" id="clearUnmatchedBtn" data-i18n="hon.clearUnmatched">🧹 Clear List</button>
+      </div>
+      <p class="hint" data-i18n="hon.unmatchedHint">Excel rows that could not be matched to the database.</p>
+      <div id="unmatchedList"></div>
+    </div>
+
+    <div class="card">
+      <h3 data-i18n="hon.addManual">Add Honoree Manually</h3>
+      <div class="manual-add-row">
+        <input type="text" id="manualSearchInput" placeholder="Search student by name or ID...">
+        <div id="manualSearchDropdown" class="search-dropdown hidden"></div>
+      </div>
+      <div id="manualAwardForm" class="hidden" style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-top:0.5rem;">
+        <select id="manualSubject" style="padding:0.5rem;border-radius:6px;border:1px solid #cbd5e1;">
+          <option>Math</option><option>Chinese</option><option>EFL</option><option>ERP</option>
+        </select>
+        <select id="manualStars" style="padding:0.5rem;border-radius:6px;border:1px solid #cbd5e1;">
+          <option value="1">★ (Bronze)</option><option value="2">★★ (Silver)</option>
+          <option value="3">★★★ (Gold)</option><option value="4">★★★★ (Gold)</option><option value="5">★★★★★ (Gold)</option>
+        </select>
+        <button class="primary" id="manualAddBtn" data-i18n="hon.addAward">+ Add Award</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h3><span data-i18n="hon.allTitle">All Honorees</span> <span id="honoreeCount" style="color:var(--text-light);font-weight:400;font-size:0.9rem;">(0)</span></h3>
+        <button class="btn-small danger" id="deleteAllHonoreesBtn" data-i18n="hon.deleteAll">🗑 Delete All Honorees</button>
+      </div>
+      <div class="filter-row">
+        <input type="text" id="honoreeSearch" placeholder="Filter by name or ID...">
+        <select id="honoreeCenterFilter">
+          <option value="" data-i18n="hon.allCenters">All Centers</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr>
+            <th data-i18n="th.student">Student</th>
+            <th data-i18n="th.center">Center</th>
+            <th data-i18n="th.awards">Awards</th>
+            <th data-i18n="th.actions">Actions</th>
+          </tr></thead>
+          <tbody id="honoreeTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🔗 LINKS -->
+  <div id="tab-links" class="tab-content">
+    <div class="card">
+      <h3 data-i18n="links.title">Family Invitation Links</h3>
+      <p class="hint" data-i18n="links.hint">Families are grouped using the student-form Family tab (sibling links). Only Gold (3★+) honorees receive a medal and an invitation.</p>
+      <div class="filter-row">
+        <input type="text" id="linkSearch" placeholder="Search family...">
+        <select id="linkFilter">
+          <option value="all" data-i18n="links.all">All</option>
+          <option value="hasLink" data-i18n="links.hasLink">Has Link</option>
+          <option value="noLink" data-i18n="links.noLink">No Link</option>
+          <option value="disabled" data-i18n="links.disabled">Disabled</option>
+        </select>
+        <button class="btn-small primary" id="generateAllLinksBtn" data-i18n="links.genAll">✨ Generate All Missing Links</button>
+        <button class="btn-small secondary" id="printAllCardsBtn" data-i18n="links.printAll">🖨️ Print All Cards</button>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr>
+            <th data-i18n="th.family">Family</th>
+            <th data-i18n="th.honorees">Honorees</th>
+            <th data-i18n="th.status">Status</th>
+            <th data-i18n="th.actions">Actions</th>
+          </tr></thead>
+          <tbody id="linkTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 📊 RSVPS -->
+  <div id="tab-rsvps" class="tab-content">
+    <div class="card">
+      <h3 data-i18n="rsvp.summary">RSVP Summary</h3>
+      <div id="rsvpStats" class="stat-grid"></div>
+    </div>
+    <div class="card">
+      <h3 data-i18n="rsvp.slotCap">Timeslot Capacity</h3>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr>
+            <th data-i18n="th.timeslot">Timeslot</th>
+            <th data-i18n="th.students">Students</th>
+            <th data-i18n="th.capacity">Capacity</th>
+            <th data-i18n="th.guests">Guests</th>
+            <th data-i18n="th.totalPeople">Total People</th>
+            <th data-i18n="th.status">Status</th>
+          </tr></thead>
+          <tbody id="slotCapacityBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <h3 data-i18n="rsvp.confirmed">All Families</h3>
+        <button class="btn-small primary" id="exportRsvpBtn" data-i18n="rsvp.export">📊 Export Excel</button>
+      </div>
+      <div class="filter-row">
+        <select id="rsvpFilter">
+          <option value="all" data-i18n="rsvp.all">All</option>
+          <option value="attending" data-i18n="st.attending">Attending</option>
+          <option value="declined" data-i18n="st.declined">Declined</option>
+          <option value="pending" data-i18n="st.pending">No Response</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr>
+            <th data-i18n="th.family">Family</th>
+            <th data-i18n="th.students">Students</th>
+            <th data-i18n="th.status">Status</th>
+            <th data-i18n="th.timeslot">Timeslot(s)</th>
+            <th data-i18n="th.guests">Guests</th>
+            <th data-i18n="th.submitted">Submitted</th>
+          </tr></thead>
+          <tbody id="rsvpTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ✅ CHECK-IN -->
+  <div id="tab-checkin" class="tab-content">
+    <div class="card">
+      <h3 data-i18n="ci.title">Scan to Check In</h3>
+      <div class="scan-row">
+        <input type="text" id="scanInput" placeholder="Scan barcode or type ID..." autocomplete="off">
+        <button class="btn-small secondary" id="phoneScanBtn" data-i18n="ci.phone">📷 Scan with Phone</button>
+      </div>
+      <div id="scanResult"></div>
+    </div>
+    <div class="card">
+      <h3 data-i18n="ci.bySlot">Check-in by Timeslot</h3>
+      <div id="checkinSlotList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ✏️ Edit Honoree Modal -->
+<div id="editHonoreeModal" class="modal hidden">
+  <div class="modal-content">
+    <button class="close-btn" id="closeEditHonoree">&times;</button>
+    <h2 data-i18n="hon.editTitle">✏️ Edit Honoree</h2>
+    <p id="editHonoreeName" style="font-weight:700;color:var(--primary-dark);margin:0.5rem 0 1rem;"></p>
+    <div id="editAwardsList"></div>
+    <button class="btn-small primary" id="addAwardRowBtn" style="margin-top:0.5rem;" data-i18n="hon.addAward">+ Add Award</button>
+    <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1.5rem;">
+      <button class="secondary" id="cancelEditHonoree" data-i18n="common.cancel">Cancel</button>
+      <button class="primary" id="saveEditHonoree" data-i18n="common.save">💾 Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- 📷 Camera Modal -->
+<div id="cameraModal" class="modal hidden">
+  <div class="modal-content" style="max-width:400px;text-align:center;">
+    <button class="close-btn" id="closeCameraModal">&times;</button>
+    <h2 data-i18n="ci.scanTitle">Scan Barcode</h2>
+    <div id="cameraReader" style="width:100%;margin-top:1rem;"></div>
+  </div>
+</div>
+
+<!-- 📇 Family Invitation Card Modal -->
+<div id="linkCardModal" class="modal hidden">
+  <div class="modal-content" style="max-width:520px;">
+    <button class="close-btn" id="closeLinkCard">&times;</button>
+
+    <div class="card-toolbar">
+      <button class="btn-small primary" id="lcDownloadPng" data-i18n="inv.downloadPng">🖼️ Download PNG</button>
+      <button class="btn-small secondary" id="lcWa">💬 WhatsApp</button>
+      <button class="btn-small secondary" id="lcCopy" data-i18n="inv.copyLink">📋 Copy Invite Link</button>
+    </div>
+
+    <div id="invitationCard" class="invitation-card">
+      <div class="inv-header">
+        <div class="inv-logo">🏅</div>
+        <div class="inv-title-block">
+          <div class="inv-event-name" id="icEventName">Kumon ASHR 2026</div>
+          <div class="inv-subtitle"><span class="en">Advanced Student Honour Roll</span> <span class="zh">進階學生榮譽榜</span></div>
+        </div>
+      </div>
+
+      <div class="inv-divider"></div>
+
+      <div class="inv-body">
+        <div class="inv-label">Honoured Student(s) <span class="zh">獲獎學生</span></div>
+        <div id="icStudents" class="inv-students"></div>
+
+        <div class="inv-details-grid">
+          <div class="inv-detail">
+            <div class="inv-detail-label">📅 Date <span class="zh">日期</span></div>
+            <div class="inv-detail-value" id="icDate">—</div>
+          </div>
+          <div class="inv-detail">
+            <div class="inv-detail-label">🕐 Time <span class="zh">時間</span></div>
+            <div class="inv-detail-value" id="icTime">—</div>
+          </div>
+          <div class="inv-detail" style="grid-column:1/-1;">
+            <div class="inv-detail-label">📍 Venue <span class="zh">地點</span></div>
+            <div class="inv-detail-value" id="icVenue">—</div>
+          </div>
+        </div>
+
+        <div class="inv-barcode-section">
+          <div class="inv-label">Check-in Barcode(s) <span class="zh">報到條碼</span></div>
+          <div id="icBarcodes" class="inv-barcodes"></div>
+        </div>
+
+        <div class="inv-qr-section">
+          <div class="inv-label">RSVP / Details <span class="zh">回覆與詳情</span></div>
+          <div id="icQr" class="inv-qr"></div>
+          <div class="inv-qr-hint">Scan to confirm attendance <span class="zh">掃描以確認出席</span></div>
+        </div>
+      </div>
+
+      <div class="inv-footer">
+        <div class="inv-footer-text">Please present this card at check-in<span class="zh">請於報到時出示此卡</span></div>
+        <div class="inv-footer-code" id="icFamilyCode">—</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 🏷️ Barcodes Print Modal -->
+<div id="barcodesModal" class="modal hidden">
+  <div class="modal-content" style="max-width:800px;">
+    <button class="close-btn" id="closeBarcodes">&times;</button>
+    <h2 data-i18n="ci.barcodes">🏷️ Honoree Barcodes</h2>
+    <div id="barcodeContent" class="barcode-grid"></div>
+    <div style="text-align:right;margin-top:1rem;">
+      <button class="primary" id="printBarcodesBtn" data-i18n="ci.print">🖨️ Print</button>
+    </div>
+  </div>
+</div>
+
+<!-- ✏️ Resolve Unmatched Modal -->
+<div id="unmatchedEditModal" class="modal hidden">
+  <div class="modal-content">
+    <button class="close-btn" id="closeUnmatchedEdit">&times;</button>
+    <h2 data-i18n="um.title">✏️ Resolve Unmatched Record</h2>
+    <div class="form-grid settings-grid" style="margin-top:1rem;">
+      <div class="field"><label data-i18n="th.center">Center</label><select id="umCenter"></select></div>
+      <div class="field um-search-wrap" style="position:relative;grid-column:1/-1;">
+        <label data-i18n="um.studentLabel">Student (search database)</label>
+        <input type="text" id="umSearch" placeholder="Type name or ID...">
+        <div id="umDropdown" class="search-dropdown hidden"></div>
+        <div id="umSelectedInfo" class="hidden" style="margin-top:0.5rem;font-size:0.9rem;color:var(--green);"></div>
+      </div>
+      <div class="field" style="grid-column:1/-1;">
+        <label data-i18n="um.awardsLabel">Awards (subject & medals)</label>
+        <div id="umAwardsList"></div>
+        <button class="btn-small secondary" id="umAddAwardBtn" style="margin-top:0.5rem;" data-i18n="hon.addAward">+ Add Award</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1.5rem;">
+      <button class="secondary" id="umCancelBtn" data-i18n="common.cancel">Cancel</button>
+      <button class="primary" id="umSaveBtn" data-i18n="um.save">💾 Save as Honoree</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+<script type="module" src="ashr.js"></script>
+</body>
+</html>

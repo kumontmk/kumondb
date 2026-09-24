@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASHR Invitation - Kumon</title>
+<link rel="stylesheet" href="ashr-invite.css">
+</head>
+<body>
+
+<div class="screen" id="screenLoading">
+  <div class="spinner"></div>
+  <p data-i18n="inv.loading">Loading invitation...</p>
+</div>
+
+<div class="screen hidden" id="screenInvalid">
+  <div class="auth-card">
+    <div class="big-icon">🔗</div>
+    <h2 data-i18n="inv.invalidTitle">Invalid Link</h2>
+    <p data-i18n="inv.invalidMsg">This invitation link is invalid or has been disabled. Please contact your Kumon center.</p>
+    <p class="invalid-reason hidden" id="invalidReason"></p>
+    <button class="btn-secondary" id="retryBtn" data-i18n="inv.retry">🔄 Retry</button>
+  </div>
+</div>
+
+<div class="screen hidden" id="screenExpired">
+  <div class="auth-card">
+    <div class="big-icon">⏰</div>
+    <h2 data-i18n="inv.expiredTitle">RSVP Deadline Passed</h2>
+    <p data-i18n="inv.expiredMsg">The RSVP deadline has passed and no response was recorded. Please contact your Kumon center.</p>
+  </div>
+</div>
+
+<div class="screen hidden" id="screenMain">
+  <header class="invite-header">
+    <div class="invite-brand">
+      <span class="invite-logo">🏅</span>
+      <div>
+        <h1>Kumon Advanced Student Honour Roll</h1>
+        <small id="eventNameLabel"></small>
+      </div>
+    </div>
+    <button class="lang-btn" id="langToggle">中文</button>
+  </header>
+
+  <main class="invite-main">
+    <div class="invite-card celebration">
+      <h2 data-i18n="inv.congrats">🎉 Congratulations!</h2>
+      <p id="congratsText"></p>
+      <div id="studentAwardsList"></div>
+    </div>
+
+    <div class="invite-card">
+      <h2 data-i18n="inv.details">📅 Event Details</h2>
+      <div id="eventDetails"></div>
+    </div>
+
+    <div class="invite-card" id="rsvpCard">
+      <h2 data-i18n="inv.attendQ">✋ Will you attend?</h2>
+      <div class="rsvp-choice">
+        <button class="rsvp-btn attending" id="btnAttending" data-i18n="inv.yes">✅ Yes, we'll attend!</button>
+        <button class="rsvp-btn declined" id="btnDeclined" data-i18n="inv.no">❌ Sorry, we can't make it</button>
+      </div>
+    </div>
+
+    <div class="invite-card hidden" id="timeslotCard">
+      <h2 data-i18n="inv.slotTitle">🕐 Choose Timeslot</h2>
+      <div class="slot-mode-toggle">
+        <label><input type="radio" name="slotMode" value="same" checked> <span data-i18n="inv.sameMode">Same timeslot for all</span></label>
+        <label><input type="radio" name="slotMode" value="separate"> <span data-i18n="inv.sepMode">Separate per student</span></label>
+      </div>
+      <div id="timeslotList"></div>
+    </div>
+
+    <div class="invite-card hidden" id="guestCard">
+      <h2 data-i18n="inv.guestTitle">👨‍‍‍👦 Who's coming with you?</h2>
+      <div class="guest-grid">
+        <label class="guest-toggle"><input type="checkbox" id="guestMom"> <span data-i18n="inv.mom">👩 Mom</span></label>
+        <label class="guest-toggle"><input type="checkbox" id="guestDad"> <span data-i18n="inv.dad">👨 Dad</span></label>
+        <label class="guest-toggle"><input type="checkbox" id="guestGrandma"> <span data-i18n="inv.grandma">👵 Grandma</span></label>
+        <label class="guest-toggle"><input type="checkbox" id="guestGrandpa"> <span data-i18n="inv.grandpa">👴 Grandpa</span></label>
+        <div class="guest-count">
+          <label data-i18n="inv.siblings">Siblings</label>
+          <input type="number" id="guestSiblings" min="0" value="0">
+        </div>
+        <div class="guest-count">
+          <label data-i18n="inv.others">Others</label>
+          <input type="number" id="guestOthers" min="0" value="0">
+        </div>
+      </div>
+    </div>
+
+    <div class="invite-card hidden" id="submitCard">
+      <button class="btn-primary btn-big" id="submitRsvpBtn" data-i18n="inv.submit">Submit RSVP</button>
+    </div>
+
+    <div class="invite-card hidden" id="confirmationCard">
+      <h2 data-i18n="inv.confirmedTitle">✅ RSVP Confirmed!</h2>
+      <div id="confirmationDetails"></div>
+      <button class="btn-secondary" id="editRsvpBtn" data-i18n="inv.edit">✏️ Edit Response</button>
+    </div>
+  </main>
+</div>
+
+<div id="toast" class="invite-toast hidden"></div>
+
+<script type="module" src="ashr-invite.js"></script>
+</body>
+</html>
