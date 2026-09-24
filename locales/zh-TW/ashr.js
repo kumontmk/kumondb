@@ -1,6 +1,6 @@
 export default {
   page: {
-    title: '🏅 ASHR — 進階學生榮譽榜',
+    title: '🏅 Kumon ASHR ',
     back: '← 返回中心',
     loading: '正在載入 ASHR...',
     event: '活動：',

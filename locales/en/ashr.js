@@ -1,6 +1,6 @@
 export default {
   page: {
-    title: '🏅 ASHR — Advanced Student Honour Roll',
+    title: '🏅 KumonASHR ',
     back: '← Centers',
     loading: 'Loading ASHR...',
     event: 'Event:',
