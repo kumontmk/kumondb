@@ -72,6 +72,13 @@ function eventDisplayName() {
   return /^kumon\b/i.test(base) ? base : `Kumon ${base}`;
 }
 
+// ✅ Compact CODE128 payload: 8 chars → crisp at width:3
+function shortScanCode(value) {
+  let h = 5381;
+  for (let i = 0; i < value.length; i++) h = ((h << 5) + h + value.charCodeAt(i)) >>> 0;
+  return 'K' + h.toString(36).toUpperCase().padStart(7, '0');
+}
+
 // ✅ Render a barcode to a PNG data-URL (export/print-safe <img>)
 function barcodeDataUrl(value, opts = {}) {
   if (typeof JsBarcode === 'undefined' || !value) return '';
@@ -79,7 +86,7 @@ function barcodeDataUrl(value, opts = {}) {
   try {
     JsBarcode(canvas, value, Object.assign({
       format: 'CODE128', displayValue: true, fontSize: 14, margin: 8,
-      height: 70, width: 2, background: '#ffffff', lineColor: '#000000'
+      height: 70, width: 3, background: '#ffffff', lineColor: '#000000' // width bumped to 3 for crispness
     }, opts));
     return canvas.toDataURL('image/png');
   } catch (err) { console.error('Barcode render error:', err); return ''; }
@@ -308,8 +315,13 @@ function renderControlPanel() {
 
 function updateEventStatus() {
   const badge = $('eventStatusBadge');
-  if (eventSettings.isActive !== false) { badge.textContent = '● Active'; badge.className = 'event-status active'; }
-  else { badge.textContent = '● Inactive'; badge.className = 'event-status inactive'; }
+  if (eventSettings.isActive !== false) {
+    badge.textContent = `● ${t('st.active', 'Active')}`;
+    badge.className = 'event-status active';
+  } else {
+    badge.textContent = `● ${t('st.inactive', 'Inactive')}`;
+    badge.className = 'event-status inactive';
+  }
 }
 
 async function saveSettings() {
@@ -1080,11 +1092,11 @@ async function openLinkCard(fam) {
   barcodesDiv.innerHTML = '';
   fam.members.forEach(m => {
     const value = m.barcodeValue || `ASHR${currentEventId}_${m.honoreeKey}`;
-    const dataUrl = barcodeDataUrl(value);
+    const dataUrl = barcodeDataUrl(shortScanCode(value)); // ✅ Short code used here
     const item = document.createElement('div');
     item.className = 'inv-barcode-item';
     item.innerHTML = (dataUrl
-      ? `<img class="inv-barcode-img" src="${dataUrl}" alt="${escapeHtml(value)}">`
+      ? `<img class="inv-barcode-img" src="${dataUrl}" alt="${escapeHtml(value)}" style="image-rendering: pixelated; width: auto; max-width: 100%; height: auto;">`
       : `<div class="inv-barcode-fallback">${escapeHtml(value)}</div>`) +
       `<div class="inv-barcode-student">${escapeHtml(m.nameCn || m.nameEn || m.studentNumber || '')}</div>`;
     barcodesDiv.appendChild(item);
@@ -1128,7 +1140,7 @@ async function downloadCardAsPng(fam) {
     // 1) preload barcode + QR images
     const bcImgs = [];
     for (const m of fam.members) {
-      const du = barcodeDataUrl(m.barcodeValue || `ASHR${currentEventId}_${m.honoreeKey}`);
+      const du = barcodeDataUrl(shortScanCode(m.barcodeValue || `ASHR${currentEventId}_${m.honoreeKey}`)); // ✅ Short code
       bcImgs.push(await loadImg(du));
     }
     let qrImg = null;
@@ -1142,7 +1154,7 @@ async function downloadCardAsPng(fam) {
     const detH = 132;
     const iw = W - 2 * pad - 2 * secPad;
     const bcItems = bcImgs.map(img => {
-      const bw = iw - 32;
+      const bw = Math.min(img.naturalWidth, iw - 32); // ✅ Prevent stretching beyond natural width
       const bh = Math.round(bw * (img.naturalHeight / img.naturalWidth));
       return { bw, bh, itemH: 12 + bh + 24 + 12 };
     });
@@ -1156,6 +1168,7 @@ async function downloadCardAsPng(fam) {
     canvas.width = W * S; canvas.height = H * S;
     const ctx = canvas.getContext('2d');
     ctx.scale(S, S);
+    ctx.imageSmoothingEnabled = false; // ✅ Crisp pixel rendering
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
 
     let y = 0;
@@ -1300,9 +1313,9 @@ async function printAllCards() {
 
     const barcodesHtml = fam.members.map(m => {
       const value = m.barcodeValue || `ASHR${currentEventId}_${m.honoreeKey}`;
-      const dataUrl = barcodeDataUrl(value);
+      const dataUrl = barcodeDataUrl(shortScanCode(value)); // ✅ Short code
       return `<div class="inv-barcode-item">
-        ${dataUrl ? `<img class="inv-barcode-img" src="${dataUrl}">` : `<div class="inv-barcode-fallback">${escapeHtml(value)}</div>`}
+        ${dataUrl ? `<img class="inv-barcode-img" src="${dataUrl}" style="image-rendering: pixelated; width: auto; max-width: 100%; height: auto;">` : `<div class="inv-barcode-fallback">${escapeHtml(value)}</div>`}
         <div class="inv-barcode-student">${escapeHtml(m.nameCn || m.nameEn || '')}</div>
       </div>`;
     }).join('');
@@ -1561,9 +1574,14 @@ function setupCheckin() {
 async function handleScanValue(value) {
   if (!value) return;
   const result = $('scanResult');
-  const entry = Object.entries(honorees).find(([key, h]) =>
-    h.barcodeValue === value || key === value || h.studentId === value || String(h.studentNumber || '') === value
-  );
+  
+  // ✅ Match against short code, long code, ID, or student number
+  const entry = Object.entries(honorees).find(([key, h]) => {
+    const bv = h.barcodeValue || `ASHR${currentEventId}_${key}`;
+    return bv === value || key === value || h.studentId === value || 
+           String(h.studentNumber || '') === value || shortScanCode(bv) === value;
+  });
+  
   if (!entry) {
     result.className = 'error';
     result.textContent = `${t('toast.unknownCode', '❌ Unknown barcode')}: ${escapeHtml(value)}`;
@@ -1647,26 +1665,86 @@ function renderCheckinSlots() {
 }
 
 async function startCameraScan() {
+  if (typeof Html5Qrcode === 'undefined') {
+    showToast('Scanner library missing — check the html5-qrcode script tag', 'error');
+    return;
+  }
   $('cameraModal').classList.remove('hidden');
+  const reader = $('cameraReader');
+  reader.style.height = '';                    // clear leftover sizing from last session
+
+  if (html5QrCode && html5QrCode.isScanning) {
+    try { await html5QrCode.stop(); } catch (e) {}
+  }
   try {
-    if (!html5QrCode) html5QrCode = new Html5Qrcode('cameraReader');
+    if (!html5QrCode) {
+      const ctorOpts = {};
+      if (typeof Html5QrcodeSupportedFormats !== 'undefined') {
+        ctorOpts.formatsToSupport = [
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.ITF,
+          Html5QrcodeSupportedFormats.QR_CODE
+        ];
+      }
+      html5QrCode = new Html5Qrcode('cameraReader', ctorOpts);
+    }
+    await new Promise(r => requestAnimationFrame(r));  // let modal lay out
+
     await html5QrCode.start(
       { facingMode: 'environment' },
-      { fps: 10, qrbox: { width: 250, height: 120 } },
+      {
+        fps: 15,
+        // vw/vh = the rendered viewfinder size; clamp so the box can
+        // never exceed the video (that's what caused the spill-over)
+        qrbox: (vw, vh) => ({
+          width:  Math.floor(Math.min(vw * 0.85, 420)),
+          height: Math.floor(Math.min(vw * 0.85 * 0.45, vh * 0.55))
+        }),
+        videoConstraints: {
+          facingMode: 'environment',
+          width:  { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+        // ⚠️ no aspectRatio here — forcing it letterboxes the video
+      },
       (decodedText) => { handleScanValue(decodedText); stopCameraScan(); },
-      () => {}
+      (errMsg) => {
+        if (!startCameraScan._t || Date.now() - startCameraScan._t > 3000) {
+          console.warn('[scanner]', errMsg);
+          startCameraScan._t = Date.now();
+        }
+      }
     );
     cameraActive = true;
+
+    // 🔧 Snap the container to the real video height so the grey overlay
+    //    and brackets can never extend past the preview again
+    requestAnimationFrame(() => {
+      const video = reader.querySelector('video');
+      if (!video) return;
+      const apply = () => { reader.style.height = video.getBoundingClientRect().height + 'px'; };
+      apply();
+      video.addEventListener('loadedmetadata', apply, { once: true });
+      video.addEventListener('resize', apply, { once: true });
+    });
   } catch (err) {
-    showToast(`${t('toast.cameraErr', 'Camera error')}: ${err.message}`, 'error');
+    console.error('Camera start failed:', err);
+    showToast(`${t('toast.cameraErr', 'Camera error')}: ${err.message || err}`, 'error');
     $('cameraModal').classList.add('hidden');
   }
 }
 
 async function stopCameraScan() {
-  if (html5QrCode && cameraActive) { try { await html5QrCode.stop(); } catch (e) {} }
-  cameraActive = false;
   $('cameraModal').classList.add('hidden');
+  if (html5QrCode) {
+    try { if (html5QrCode.isScanning) await html5QrCode.stop(); } catch (e) {}
+  }
+  cameraActive = false;
+  $('cameraReader').style.height = '';
 }
 
 // ============================================
