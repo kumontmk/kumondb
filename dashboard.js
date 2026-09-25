@@ -3964,49 +3964,56 @@ async function saveDashboardAbsence() {
         continue;
       }
 
-      const payload = {
-        studentId: String(student.id || ''),
-        studentNumber: String(student.studentNumber || ''),
-        nameCn: String(student.nameCn || student.name || '-'),
-        nickname: String(student.nickname || '-'),
-        grade: String(student.grade || '-'),
-        school: String(student.school || '-'),
-        pinyin: String(getDashAttendancePinyin(student) || ''),
-        nameEn: String(student.nameEn || student.englishName || ''),
+const payload = {
+  studentId: String(student.id || ''),
+  studentNumber: String(student.studentNumber || ''),
+  nameCn: String(student.nameCn || student.name || '-'),
+  nickname: String(student.nickname || '-'),
+  grade: String(student.grade || '-'),
+  school: String(student.school || '-'),
+  pinyin: String(getDashAttendancePinyin(student) || ''),
+  nameEn: String(student.nameEn || student.englishName || ''),
+  subject: String(item.subject || ''),
+  subjectLevel: String(item.level || ''),
+  type: item.type,
+  absenceDate,
+  originalDay: item.originalDay || '',
+  originalTime: item.originalTime || '',
+  replacementDate: item.isCC ? item.replacementDate : '',
+  replacementTime: item.isCC ? item.replacementTime : '',
 
-        subject: String(item.subject || ''),
-        subjectLevel: String(item.level || ''),
+  // ✅ FIX:
+  // CC = scheduled replacement class
+  // MC / MC_PU = missed class, should show as "missed"
+  replacementStatus: item.isCC ? 'scheduled' : 'missed',
 
-        type: item.type,
-        absenceDate,
-        originalDay: item.originalDay || '',
-        originalTime: item.originalTime || '',
+  homeworkPickedUp: item.homeworkPickedUp,
+  note,
+  history: [],
+  homeCenterId: String(student.homeCenterId || ''),
+  homeCenterName: String(student.homeCenterName || ''),
+  isVisiting: isVisitingStudent(student),
 
-        replacementDate: item.isCC ? item.replacementDate : '',
-        replacementTime: item.isCC ? item.replacementTime : '',
-        replacementStatus: item.isCC ? 'scheduled' : 'none',
+  // ✅ Useful so you can distinguish staff-created records
+  source: 'staff',
 
-        homeworkPickedUp: item.homeworkPickedUp,
-        note,
+  createdAt: Date.now(),
+  createdBy: auth.currentUser?.uid || '',
+  updatedAt: Date.now()
+};
 
-        history: [],
+// ✅ FIX: safer Firebase write
+const classChangeRef = ref(db, `centers/${centerId}/classChanges`);
+const newRef = push(classChangeRef);
 
-        homeCenterId: String(student.homeCenterId || ''),
-        homeCenterName: String(student.homeCenterName || ''),
-        isVisiting: isVisitingStudent(student),
+await update(newRef, payload);
 
-        createdAt: Date.now(),
-        createdBy: auth.currentUser?.uid || '',
-        updatedAt: Date.now()
-      };
+classChangesCache.push({
+  ...payload,
+  id: newRef.key
+});
 
-      const newRef = push(ref(db, `centers/${centerId}/classChanges`), payload);
-      await newRef;
-
-      classChangesCache.push({
-        ...payload,
-        id: newRef.key
-      });
+console.log('[CC/MC] Saved class change record:', newRef.key, payload);
     }
 
     if (Object.keys(updates).length > 0) {

@@ -11,7 +11,20 @@ let classChangesCache = [];
 let allStudents = [];
 let allStudentsMap = new Map();
 let ccUnsub = null;
-let currentFilter = { status: 'all', type: 'all', subject: 'all', search: '', dateFrom: '', dateTo: '' };
+
+// 🆕 Default view = "Active" (Scheduled + Missed) for the CURRENT MONTH only.
+//    Completed / Cancelled remain accessible via their own tabs or "All".
+let currentFilter = {
+  status: 'active',            // 'active' | 'all' | 'scheduled' | 'completed' | 'missed' | 'cancelled'
+  type: 'all',
+  subject: 'all',
+  search: '',
+  dateFrom: '',
+  dateTo: '',
+  month: currentYearMonth(),   // 'YYYY-MM', or '' = all months
+  monthField: 'absence'        // 'absence' | 'replacement' — which date the month filter uses
+};
+
 let selectedIds = new Set();
 let editingId = null;
 let selectedStudent = null;
@@ -28,9 +41,47 @@ let currentCardFamilyKey = null;
 let currentRejectReq = null;
 let knownPendingIds = null;
 let pendingPrimed = false;
+
 const BASE_TITLE = document.title;
 const EXPIRE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const SNAPSHOT_VERSION = 2; // bump whenever snapshot shape changes
+
+// ============================================
+// 🆕 SMALL HELPERS (month, overdue, safe i18n)
+// ============================================
+function currentYearMonth() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function localISODate() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function monthLabel(ym) {
+  const [y, m] = String(ym).split('-').map(Number);
+  if (!y || !m) return ym;
+  return new Date(y, m - 1, 1).toLocaleDateString(undefined, { year: 'numeric', month: 'long' });
+}
+
+// Scheduled records whose replacement date has already passed
+function isOverdue(r) {
+  return r.replacementStatus === 'scheduled' && !!r.replacementDate && r.replacementDate < localISODate();
+}
+
+// Safe translation: falls back to English if the locale key doesn't exist yet
+function tt(key, fallback, vars) {
+  let out = fallback;
+  try {
+    const v = t(key, vars);
+    if (v && v !== key) out = v;
+  } catch (e) { /* keep fallback */ }
+  if (vars) Object.entries(vars).forEach(([k, v]) => {
+    out = String(out).split(`{{${k}}}`).join(v);
+  });
+  return out;
+}
 
 // ============================================
 // PERMISSION NORMALIZATION HELPERS
@@ -46,17 +97,11 @@ function normalizePermissionKey(key) {
 }
 
 function hasChangeClassesPermission(userData, employeeData, userEmail) {
-  // Admin override
   if (String(userEmail || '').toLowerCase() === 'kumonchamps@gmail.com') return true;
-
   const checkPerms = (perms) => {
     if (!perms || !perms.dashboardCards) return false;
     const dashCards = perms.dashboardCards;
-    
-    // 1. Check exact match
     if (dashCards.changeClasses === true) return true;
-    
-    // 2. Check normalized aliases (e.g. 'changeclasses' -> 'changeClasses')
     for (const [key, value] of Object.entries(dashCards)) {
       if (value === true) {
         const normKey = normalizePermissionKey(key);
@@ -65,11 +110,8 @@ function hasChangeClassesPermission(userData, employeeData, userEmail) {
     }
     return false;
   };
-
-  // Check both user and employee records
   if (checkPerms(userData?.permissions)) return true;
   if (checkPerms(employeeData?.permissions)) return true;
-
   return false;
 }
 
@@ -89,32 +131,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       let employeeData = null;
       let uid = user.uid;
 
-      // 1. Load user record by UID
       if (uid) {
         const userSnap = await get(ref(db, `users/${uid}`));
         if (userSnap.exists()) userData = userSnap.val();
       }
-
-      // 2. Fallback: find user by email if UID didn't match
       if (!userData && user.email) {
         const usersSnap = await get(ref(db, 'users'));
         const users = usersSnap.val() || {};
         const matchingUid = Object.keys(users).find(u =>
           String(users[u].email || '').toLowerCase() === user.email.toLowerCase()
         );
-        if (matchingUid) {
-          uid = matchingUid;
-          userData = users[matchingUid];
-        }
+        if (matchingUid) { uid = matchingUid; userData = users[matchingUid]; }
       }
-
-      // 3. Load employee record by UID
       if (uid) {
         const empSnap = await get(ref(db, `employees/${uid}`));
         if (empSnap.exists()) employeeData = empSnap.val();
       }
-
-      // 4. Fallback: find employee by email
       if (!employeeData && user.email) {
         const empSnap = await get(ref(db, 'employees'));
         const emps = empSnap.val() || {};
@@ -122,15 +154,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           String(e.email || '').toLowerCase() === user.email.toLowerCase()
         ) || null;
       }
+      if (!userData && !employeeData) { window.location.href = 'index.html'; return; }
 
-      if (!userData && !employeeData) {
-        window.location.href = 'index.html'; 
-        return;
-      }
-
-      // 5. Check robust permissions
       const hasAccess = hasChangeClassesPermission(userData, employeeData, user.email);
-      
       if (!hasAccess) {
         document.getElementById('accessDenied').classList.remove('hidden');
         document.getElementById('page-loader').classList.add('hidden');
@@ -156,9 +182,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     buildFamilies();
     startRealtimeSync();
     startPortalsSync();
-
     wirePageTabs();
     wireFilters();
+    wireMonthFilter();      // 🆕
     wireAddEditModal();
     wireDetailModal();
     wireConfirmModal();
@@ -167,7 +193,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     wireSelectAll();
     wireLinks();
     wirePending();
-
     document.getElementById('page-loader').classList.add('hidden');
   });
 });
@@ -214,9 +239,11 @@ function normalizeSubjects(student) {
   if (raw && typeof raw === 'object') return Object.values(raw);
   return [];
 }
+
 function getCurrentSubjects(student) {
   return normalizeSubjects(student).filter(s => s && s.status === 'current' && s.name);
 }
+
 function hasCurrentSubjects(student) { return getCurrentSubjects(student).length > 0; }
 
 function computeStudentStatus(subjects) {
@@ -262,15 +289,17 @@ function buildFamilies() {
       const [cid, studentId] = key.split('/');
       return { centerId: cid, studentId, data: allCentersData[cid]?.students?.[studentId] || null };
     }).filter(m => m.data);
+
     // Hide families where everyone is Drop/Completer
     const anyActive = members.some(m => !['Drop', 'Completer'].includes(computeStudentStatus(m.data.subjects)));
     if (!anyActive) return;
-    // Same-center members first
+
     members.sort((a, b) => {
       const ac = a.centerId === centerId ? 0 : 1, bc = b.centerId === centerId ? 0 : 1;
       if (ac !== bc) return ac - bc;
       return (a.data.namePinyin || '').localeCompare(b.data.namePinyin || '');
     });
+
     const key = members.map(m => `${m.centerId}|${m.studentId}`).sort().join('|');
     familiesCache.push({ key, members });
   });
@@ -281,8 +310,8 @@ function buildFamilies() {
 function familyDisplayName(fam) {
   return fam.members.map(m => m.data.nameCn || m.data.namePinyin || '?').join('、');
 }
+
 // ✅ members are stored NESTED: { centerId: { studentId: true } }
-//    because RTDB keys cannot contain "/", "#", "$", ".", "[", "]"
 function buildMembersMap(fam) {
   const members = {};
   fam.members.forEach(m => {
@@ -291,6 +320,7 @@ function buildMembersMap(fam) {
   });
   return members;
 }
+
 function membersToKeyList(membersMap) {
   const out = [];
   Object.entries(membersMap || {}).forEach(([cid, sids]) => {
@@ -298,9 +328,11 @@ function membersToKeyList(membersMap) {
   });
   return out.sort();
 }
+
 function familyKeyOfMembers(membersMap) {
   return membersToKeyList(membersMap).join('|');
 }
+
 function portalForFamily(fam) {
   return Object.entries(portalsCache).find(([_, p]) => familyKeyOfMembers(p.meta?.members) === fam.key)?.[1] || null;
 }
@@ -350,50 +382,147 @@ function wirePageTabs() {
 }
 
 // ============================================
-// 🔄 CHANGE CLASSES (original logic, stats removed)
+// 🔄 CHANGE CLASSES — REALTIME + FILTERING
 // ============================================
 function startRealtimeSync() {
   if (ccUnsub) return;
   const ccRef = ref(db, `centers/${centerId}/classChanges`);
   ccUnsub = onValue(ccRef, (snap) => {
     classChangesCache = [];
-    if (snap.exists()) snap.forEach(child => classChangesCache.push({ ...child.val(), id: child.key }));
+    if (snap.exists()) {
+      snap.forEach(child => {
+        const record = child.val() || {};
+        // ✅ FIX legacy dashboard records
+        if (record.replacementStatus === 'none' || !record.replacementStatus) {
+          record.replacementStatus = String(record.type || '').startsWith('CC') ? 'scheduled' : 'missed';
+        }
+        classChangesCache.push({ ...record, id: child.key });
+      });
+    }
     renderAll();
   }, (err) => console.error('Realtime sync error:', err));
 }
 
-function renderAll() { renderTable(); renderCards(); updateBulkBar(); }
+function renderAll() {
+  const records = getFilteredRecords();
+  renderTable(records);
+  renderCards(records);
+  updateBulkBar();
+  updateSegmentCounts();     // 🆕
+  updateResultsCount(records); // 🆕
+}
+
+// Everything EXCEPT the status filter (used for the tab counters)
+function matchesBaseFilters(r) {
+  if (currentFilter.type !== 'all' && r.type !== currentFilter.type) return false;
+  if (currentFilter.subject !== 'all') {
+    const sub = (r.subject || '').toLowerCase();
+    if (!sub.includes(currentFilter.subject.toLowerCase())) return false;
+  }
+  if (currentFilter.search) {
+    const q = currentFilter.search.toLowerCase();
+    const haystack = [r.nameCn, r.nameEn, r.nickname, r.pinyin, r.studentNumber, r.subject, r.grade, r.school].filter(Boolean).join(' ').toLowerCase();
+    if (!haystack.includes(q)) return false;
+  }
+  if (currentFilter.dateFrom) { const d = r.absenceDate || r.replacementDate || ''; if (d < currentFilter.dateFrom) return false; }
+  if (currentFilter.dateTo) { const d = r.absenceDate || r.replacementDate || ''; if (d > currentFilter.dateTo) return false; }
+
+  // 🆕 Month filter (by absence date or replacement date)
+  if (currentFilter.month) {
+    const d = currentFilter.monthField === 'replacement' ? (r.replacementDate || '') : (r.absenceDate || '');
+    if (!d || String(d).slice(0, 7) !== currentFilter.month) return false;
+  }
+  return true;
+}
+
+function matchesStatusFilter(r) {
+  if (currentFilter.status === 'all') return true;
+  // 🆕 "Active" = Scheduled + Missed (the default view)
+  if (currentFilter.status === 'active') return r.replacementStatus === 'scheduled' || r.replacementStatus === 'missed';
+  return r.replacementStatus === currentFilter.status;
+}
 
 function getFilteredRecords() {
-  return classChangesCache.filter(r => {
-    if (currentFilter.status !== 'all' && r.replacementStatus !== currentFilter.status) return false;
-    if (currentFilter.type !== 'all' && r.type !== currentFilter.type) return false;
-    if (currentFilter.subject !== 'all') {
-      const sub = (r.subject || '').toLowerCase();
-      if (!sub.includes(currentFilter.subject.toLowerCase())) return false;
-    }
-    if (currentFilter.search) {
-      const q = currentFilter.search.toLowerCase();
-      const haystack = [r.nameCn, r.nameEn, r.nickname, r.pinyin, r.studentNumber, r.subject, r.grade, r.school].filter(Boolean).join(' ').toLowerCase();
-      if (!haystack.includes(q)) return false;
-    }
-    if (currentFilter.dateFrom) { const d = r.absenceDate || r.replacementDate || ''; if (d < currentFilter.dateFrom) return false; }
-    if (currentFilter.dateTo) { const d = r.absenceDate || r.replacementDate || ''; if (d > currentFilter.dateTo) return false; }
-    return true;
-  }).sort((a, b) => {
-    const order = { scheduled: 0, completed: 1, missed: 2, cancelled: 3 };
-    const sa = order[a.replacementStatus] ?? 4, sb = order[b.replacementStatus] ?? 4;
-    if (sa !== sb) return sa - sb;
-    return (b.absenceDate || '').localeCompare(a.absenceDate || '');
+  return classChangesCache
+    .filter(r => matchesBaseFilters(r) && matchesStatusFilter(r))
+    .sort((a, b) => {
+      const order = { scheduled: 0, missed: 1, completed: 2, cancelled: 3 };
+      const sa = order[a.replacementStatus] ?? 4, sb = order[b.replacementStatus] ?? 4;
+      if (sa !== sb) return sa - sb;
+      return (b.absenceDate || '').localeCompare(a.absenceDate || '');
+    });
+}
+
+// 🆕 Live counters on each status tab
+function updateSegmentCounts() {
+  const base = classChangesCache.filter(matchesBaseFilters);
+  const counts = { active: 0, all: base.length, scheduled: 0, completed: 0, missed: 0, cancelled: 0 };
+  base.forEach(r => {
+    const s = r.replacementStatus;
+    if (Object.prototype.hasOwnProperty.call(counts, s)) counts[s]++;
+    if (s === 'scheduled' || s === 'missed') counts.active++;
+  });
+  Object.keys(counts).forEach(k => {
+    const el = document.getElementById(`cnt-${k}`);
+    if (el) el.textContent = counts[k];
   });
 }
 
-function renderTable() {
+// 🆕 "September 2026 · Showing 8 of 142 records"
+function updateResultsCount(records) {
+  const el = document.getElementById('resultsCount');
+  if (!el) return;
+  const scope = currentFilter.month ? monthLabel(currentFilter.month) : tt('cc.allMonths', 'All months');
+  const msg = tt('cc.showingRecords', 'Showing {{shown}} of {{total}} records', { shown: records.length, total: classChangesCache.length });
+  el.textContent = `${scope} · ${msg}`;
+}
+
+// ============================================
+// 🗓 MONTH FILTER WIRING
+// ============================================
+function wireMonthFilter() {
+  const picker = document.getElementById('monthPicker');
+  picker.value = currentFilter.month || '';
+
+  picker.addEventListener('change', (e) => { currentFilter.month = e.target.value; renderAll(); });
+  document.getElementById('monthPrev').addEventListener('click', () => shiftMonth(-1));
+  document.getElementById('monthNext').addEventListener('click', () => shiftMonth(1));
+
+  document.getElementById('monthTodayBtn').addEventListener('click', () => {
+    currentFilter.month = currentYearMonth();
+    picker.value = currentFilter.month;
+    renderAll();
+  });
+
+  document.getElementById('monthClearBtn').addEventListener('click', () => {
+    currentFilter.month = '';
+    picker.value = '';
+    renderAll();
+  });
+
+  document.getElementById('monthField').addEventListener('change', (e) => {
+    currentFilter.monthField = e.target.value;
+    renderAll();
+  });
+}
+
+function shiftMonth(delta) {
+  const base = currentFilter.month || currentYearMonth();
+  const [y, m] = base.split('-').map(Number);
+  const d = new Date(y, (m - 1) + delta, 1);
+  currentFilter.month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  document.getElementById('monthPicker').value = currentFilter.month;
+  renderAll();
+}
+
+// ============================================
+// RENDER — TABLE (desktop)
+// ============================================
+function renderTable(records) {
   const tbody = document.getElementById('ccTableBody');
   const empty = document.getElementById('emptyState');
-  const records = getFilteredRecords();
   tbody.innerHTML = '';
-  if (records.length === 0) { empty.classList.remove('hidden'); return; }
+  if (!records.length) { empty.classList.remove('hidden'); return; }
   empty.classList.add('hidden');
 
   records.forEach(r => {
@@ -401,9 +530,14 @@ function renderTable() {
     tr.dataset.id = r.id;
     if (selectedIds.has(r.id)) tr.classList.add('selected');
     tr.classList.add(`row-${r.replacementStatus || 'none'}`);
+
+    const overdue = isOverdue(r);
+    if (overdue) tr.classList.add('row-overdue');
+
     const student = allStudentsMap.get(r.studentId);
     const isVisiting = student && student.homeCenterId && student.homeCenterId !== centerId;
     const parentBadge = r.source === 'parent' ? `<span class="parent-src" title="${t('cc.parentBadgeTitle')}">📲</span>` : '';
+
     tr.innerHTML = `
       <td><input type="checkbox" class="row-check" data-id="${r.id}" ${selectedIds.has(r.id) ? 'checked' : ''}></td>
       <td>
@@ -420,7 +554,7 @@ function renderTable() {
       <td>${escapeHtml(r.subject || '-')} ${r.subjectLevel ? `(${escapeHtml(r.subjectLevel)})` : ''}</td>
       <td><span class="type-badge ${getTypeClass(r.type)}">${escapeHtml(formatType(r.type))}</span></td>
       <td>${formatDate(r.absenceDate)} ${r.originalTime ? `<br><small style="color:var(--text-light);">${escapeHtml(r.originalTime)}</small>` : ''}</td>
-      <td>${formatReplacementCell(r)}</td>
+      <td class="${overdue ? 'overdue-cell' : ''}">${formatReplacementCell(r)}${overdue ? ` <span class="overdue-flag" title="${tt('cc.overdueTip', 'Overdue — replacement date has passed')}">⚠️</span>` : ''}</td>
       <td><span class="status-badge status-${r.replacementStatus || 'none'}">${formatStatus(r.replacementStatus)}</span></td>
       <td><span class="pu-badge ${r.homeworkPickedUp ? 'pu-yes' : 'pu-no'}">${r.homeworkPickedUp ? '✓' : '—'}</span></td>
       <td>
@@ -450,21 +584,26 @@ function renderTable() {
   });
 }
 
-function renderCards() {
+// ============================================
+// RENDER — CARDS (mobile)
+// ============================================
+function renderCards(records) {
   const container = document.getElementById('cardsContainer');
-  const records = getFilteredRecords();
   container.innerHTML = '';
-  if (records.length === 0) {
+  if (!records.length) {
     container.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>${t('cc.emptyState')}</p></div>`;
     return;
   }
+
   records.forEach(r => {
     const student = allStudentsMap.get(r.studentId);
     const isVisiting = student && student.homeCenterId && student.homeCenterId !== centerId;
+    const overdue = isOverdue(r);
     const typeClass = r.type && r.type.startsWith('CC') ? 'cc-type-cc' : 'cc-type-mc';
     const parentBadge = r.source === 'parent' ? `<span class="parent-src" title="${t('cc.parentBadgeTitle')}">📲</span>` : '';
+
     const card = document.createElement('div');
-    card.className = `cc-card ${typeClass} cc-${r.replacementStatus || 'none'}`;
+    card.className = `cc-card ${typeClass} cc-${r.replacementStatus || 'none'}${overdue ? ' cc-overdue' : ''}`;
     card.dataset.id = r.id;
     card.innerHTML = `
       <div class="cc-card-top">
@@ -480,6 +619,7 @@ function renderCards() {
         <div class="cc-card-badges">
           <span class="type-badge ${getTypeClass(r.type)}">${escapeHtml(formatType(r.type))}</span>
           <span class="status-badge status-${r.replacementStatus || 'none'}">${formatStatus(r.replacementStatus)}</span>
+          ${overdue ? `<span class="status-badge status-overdue">⚠️ ${tt('cc.overdue', 'Overdue')}</span>` : ''}
         </div>
       </div>
       <div class="cc-card-dates">
@@ -495,6 +635,7 @@ function renderCards() {
       </div>`;
     container.appendChild(card);
   });
+
   container.querySelectorAll('button[data-action]').forEach(btn => {
     btn.addEventListener('click', (e) => { e.stopPropagation(); handleRowAction(btn.dataset.action, btn.dataset.id); });
   });
@@ -529,13 +670,12 @@ function randomCode() {
   const a = new Uint8Array(4); crypto.getRandomValues(a);
   return [...a].map(x => chars[x % chars.length]).join('');
 }
-// 🔑 Parent code = last 4 digits of phone (Mom → Dad → Own).
-//    For multi-child families, first member with a phone wins.
+
+// 🔑 Parent code = last 4 digits of phone (Mom → Dad → Own)
 function lastFourDigits(raw) {
-  const digits = String(raw || '').replace(/\D/g, ''); // strips spaces, dashes, +853
+  const digits = String(raw || '').replace(/\D/g, '');
   return digits.length >= 4 ? digits.slice(-4) : '';
 }
-
 function familyPhoneCode(fam) {
   for (const m of (fam?.members || [])) {
     const p = m?.data?.phone || {};
@@ -552,7 +692,7 @@ function parentPageUrl(token) {
 }
 
 // ============================================
-// FILTERS / BULK / ROW ACTIONS (unchanged logic)
+// FILTERS / BULK / ROW ACTIONS
 // ============================================
 function wireFilters() {
   document.querySelectorAll('#statusSegmented .segment').forEach(seg => {
@@ -578,9 +718,10 @@ function wireSelectAll() {
   document.getElementById('selectAllCheck').addEventListener('change', (e) => {
     const records = getFilteredRecords();
     if (e.target.checked) records.forEach(r => selectedIds.add(r.id)); else selectedIds.clear();
-    renderTable(); updateBulkBar();
+    renderAll();
   });
 }
+
 function updateSelectAllCheck() {
   const records = getFilteredRecords();
   const allCheck = document.getElementById('selectAllCheck');
@@ -589,6 +730,7 @@ function updateSelectAllCheck() {
   allCheck.checked = cnt === records.length;
   allCheck.indeterminate = cnt > 0 && cnt < records.length;
 }
+
 function wireBulkActions() {
   document.getElementById('bulkCompleteBtn').addEventListener('click', async () => {
     if (!selectedIds.size) return;
@@ -601,9 +743,10 @@ function wireBulkActions() {
     await bulkUpdateStatus('cancelled');
   });
   document.getElementById('bulkClearBtn').addEventListener('click', () => {
-    selectedIds.clear(); renderTable(); updateBulkBar(); updateSelectAllCheck();
+    selectedIds.clear(); renderAll();
   });
 }
+
 function updateBulkBar() {
   const bar = document.getElementById('bulkActions');
   if (selectedIds.size > 0) {
@@ -611,6 +754,7 @@ function updateBulkBar() {
     document.getElementById('bulkCount').textContent = t('cc.selectedCount', { count: selectedIds.size });
   } else bar.classList.add('hidden');
 }
+
 async function bulkUpdateStatus(status) {
   const updates = {}; const now = new Date().toISOString();
   selectedIds.forEach(id => {
@@ -645,13 +789,14 @@ async function handleRowAction(action, id) {
     }
   }
 }
+
 async function updateRecord(id, updates) {
   try { await update(ref(db, `centers/${centerId}/classChanges/${id}`), updates); }
   catch (err) { console.error('Update failed:', err); showToast(t('cc.updateFailed'), 'error'); }
 }
 
 // ============================================
-// ADD / EDIT MODAL (unchanged)
+// ADD / EDIT MODAL
 // ============================================
 function wireAddEditModal() {
   document.getElementById('addRequestBtn').addEventListener('click', () => openAddEditModal(null));
@@ -661,6 +806,7 @@ function wireAddEditModal() {
 
   const searchInput = document.getElementById('studentSearch');
   const resultsDiv = document.getElementById('studentResults');
+
   searchInput.addEventListener('input', (e) => {
     const q = e.target.value.trim().toLowerCase();
     if (!q) { resultsDiv.classList.add('hidden'); return; }
@@ -692,6 +838,7 @@ function wireAddEditModal() {
 
   document.getElementById('ccForm').addEventListener('submit', handleFormSubmit);
 }
+
 function renderStudentResults(matches) {
   const div = document.getElementById('studentResults');
   div.innerHTML = '';
@@ -703,13 +850,15 @@ function renderStudentResults(matches) {
   matches.forEach(s => {
     const item = document.createElement('div');
     item.className = 'search-result-item';
-    item.innerHTML = `<div class="search-result-name">${escapeHtml(s.nameCn || 'Unknown')} ${s.nickname ? `(${escapeHtml(s.nickname)})` : ''}</div>
+    item.innerHTML = `
+      <div class="search-result-name">${escapeHtml(s.nameCn || 'Unknown')} ${s.nickname ? `(${escapeHtml(s.nickname)})` : ''}</div>
       <div class="search-result-meta">${s.namePinyin || ''} ${s.grade ? `• G${s.grade}` : ''} ${s.studentNumber ? `• #${s.studentNumber}` : ''}</div>`;
     item.addEventListener('click', () => selectStudentForForm(s));
     div.appendChild(item);
   });
   div.classList.remove('hidden');
 }
+
 function selectStudentForForm(s) {
   selectedStudent = s;
   document.getElementById('selectedStudentId').value = s.id;
@@ -720,6 +869,7 @@ function selectStudentForForm(s) {
   document.getElementById('selectedStudentInfo').classList.remove('hidden');
   populateSubjects(s);
 }
+
 function populateSubjects(student) {
   const select = document.getElementById('subjectSelect');
   select.innerHTML = `<option value="">${t('cc.selectSubject')}</option>`;
@@ -732,6 +882,7 @@ function populateSubjects(student) {
     select.appendChild(opt);
   });
 }
+
 function openAddEditModal(id) {
   editingId = id;
   const form = document.getElementById('ccForm');
@@ -742,6 +893,7 @@ function openAddEditModal(id) {
   document.getElementById('selectedStudentInfo').classList.add('hidden');
   document.getElementById('selectedStudentId').value = '';
   document.getElementById('subjectSelect').innerHTML = `<option value="">${t('cc.selectSubject')}</option>`;
+
   if (id) {
     const r = classChangesCache.find(x => x.id === id);
     if (!r) return;
@@ -769,34 +921,41 @@ function openAddEditModal(id) {
   } else {
     document.getElementById('ccModalTitle').textContent = t('cc.addTitle');
     document.getElementById('statusSelect').value = 'scheduled';
+    document.getElementById('absenceDate').value = localISODate(); // 🆕 sensible default
   }
   document.getElementById('ccModal').classList.remove('hidden');
 }
+
 function closeAddEditModal() {
   document.getElementById('ccModal').classList.add('hidden');
   editingId = null; selectedStudent = null;
 }
+
 async function handleFormSubmit(e) {
   e.preventDefault();
   const studentId = document.getElementById('selectedStudentId').value;
   if (!studentId) return showToast(t('cc.selectStudentFirst'), 'error');
   const student = allStudentsMap.get(studentId);
   if (!student) return;
+
   const subjectSelect = document.getElementById('subjectSelect');
   const subject = subjectSelect.value;
   const subjectLevel = subjectSelect.selectedOptions[0]?.dataset?.level || '';
   if (!subject) return showToast(t('cc.selectSubjectFirst'), 'error');
+
   const type = document.getElementById('typeSelect').value;
   const isCC = type.startsWith('CC');
   const absenceDate = document.getElementById('absenceDate').value;
   const originalTime = document.getElementById('originalTime').value;
   const replacementDate = isCC ? document.getElementById('replacementDate').value : '';
   const replacementTime = isCC ? document.getElementById('replacementTime').value : '';
+
   if (!absenceDate) return showToast(t('cc.selectAbsenceDate'), 'error');
   if (isCC && (!replacementDate || !replacementTime)) return showToast(t('cc.selectReplacement'), 'error');
 
   const saveBtn = document.getElementById('saveCcBtn');
   saveBtn.disabled = true; saveBtn.textContent = t('common.saving');
+
   try {
     const now = new Date().toISOString();
     const payload = {
@@ -818,6 +977,7 @@ async function handleFormSubmit(e) {
       isVisiting: !!(student.homeCenterId && student.homeCenterId !== centerId),
       updatedAt: now
     };
+
     if (editingId) {
       const existing = classChangesCache.find(r => r.id === editingId);
       const history = Array.isArray(existing?.history) ? [...existing.history] : [];
@@ -844,7 +1004,7 @@ async function handleFormSubmit(e) {
 }
 
 // ============================================
-// DETAIL MODAL (unchanged)
+// DETAIL MODAL
 // ============================================
 function wireDetailModal() {
   document.getElementById('closeDetailModal').addEventListener('click', closeDetailModal);
@@ -865,10 +1025,12 @@ function wireDetailModal() {
     } catch (err) { console.error('Delete failed:', err); showToast(t('cc.deleteFailed'), 'error'); }
   });
 }
+
 function openDetail(id) {
   const r = classChangesCache.find(x => x.id === id);
   if (!r) return;
   currentDetailId = id;
+
   const history = Array.isArray(r.history) ? r.history : [];
   const historyHtml = history.length > 0
     ? `<div class="history-timeline">${history.slice().reverse().map(h => `
@@ -877,7 +1039,9 @@ function openDetail(id) {
           <div class="history-reason">${escapeHtml(h.by || '')}</div>
         </div>`).join('')}</div>`
     : `<div class="history-empty">${t('cc.noHistory')}</div>`;
+
   const parentLine = r.source === 'parent' ? `<div class="detail-item full-width"><strong>${t('cc.parentBadgeTitle')}</strong><span>📲 ${escapeHtml(r.parentRequestId || '')}</span></div>` : '';
+
   document.getElementById('detailContent').innerHTML = `
     <div class="detail-section"><h4>👤 ${t('cc.detailStudent')}</h4>
       <div class="detail-grid">
@@ -904,6 +1068,7 @@ function openDetail(id) {
     <div class="detail-section"><h4>📜 ${t('cc.historyTimeline')}</h4>${historyHtml}</div>`;
   document.getElementById('detailModal').classList.remove('hidden');
 }
+
 function closeDetailModal() {
   document.getElementById('detailModal').classList.add('hidden');
   currentDetailId = null;
@@ -912,9 +1077,12 @@ function closeDetailModal() {
 // ============================================
 // EXPORT (CC)
 // ============================================
-function wireExport() { document.getElementById('exportBtn').addEventListener('click', exportToExcel); }
+function wireExport() {
+  document.getElementById('exportBtn').addEventListener('click', exportToExcel);
+}
+
 function exportToExcel() {
-  const records = getFilteredRecords();
+  const records = getFilteredRecords(); // 🆕 respects month/status filters
   if (records.length === 0) return showToast(t('cc.nothingToExport'), 'error');
   const rows = records.map(r => ({
     'Student': r.nameCn || r.nameEn || '', 'Nickname': r.nickname || '', 'Pinyin': r.pinyin || '',
@@ -928,6 +1096,7 @@ function exportToExcel() {
   downloadExcel(rows, `Change_Classes_${new Date().toISOString().slice(0, 10)}.xls`);
   showToast(t('cc.exportSuccess'), 'success');
 }
+
 function downloadExcel(rows, filename) {
   if (!rows.length) return;
   const headers = Object.keys(rows[0]);
@@ -963,7 +1132,6 @@ function wireLinks() {
     });
   });
   document.getElementById('linksSearch').addEventListener('input', (e) => { linksFilter.search = e.target.value.trim(); renderLinks(); });
-
   document.getElementById('closeLinkCard').addEventListener('click', () => document.getElementById('linkCardModal').classList.add('hidden'));
   document.getElementById('linkCardModal').addEventListener('click', (e) => { if (e.target.id === 'linkCardModal') e.target.classList.add('hidden'); });
   document.getElementById('closePhoneModal').addEventListener('click', () => document.getElementById('phoneModal').classList.add('hidden'));
@@ -990,7 +1158,6 @@ function renderLinks() {
   const empty = document.getElementById('linksEmpty');
   const fams = getVisibleFamilies();
   tbody.innerHTML = ''; cards.innerHTML = '';
-
   if (fams.length === 0) { empty.classList.remove('hidden'); return; }
   empty.classList.add('hidden');
 
@@ -1004,11 +1171,7 @@ function renderLinks() {
         <span class="family-sub">${fam.members.map(m => escapeHtml(m.data.namePinyin || '')).filter(Boolean).join(', ')}</span>
       </div></td>
       <td>${fam.members.length}</td>
-      <td>${portal
-        ? (portal.meta.active === false
-          ? `<span class="link-status-badge ls-disabled">${t('links.statusDisabled')}</span>`
-          : `<span class="link-status-badge ls-active">${t('links.statusActive')}</span>`)
-        : `<span class="link-status-badge ls-none">${t('links.statusNoLink')}</span>`}</td>
+      <td>${portal ? (portal.meta.active === false ? `<span class="link-status-badge ls-disabled">${t('links.statusDisabled')}</span>` : `<span class="link-status-badge ls-active">${t('links.statusActive')}</span>`) : `<span class="link-status-badge ls-none">${t('links.statusNoLink')}</span>`}</td>
       <td>${portal ? `<span class="code-chip">${escapeHtml(portal.meta.code || '')}</span>` : '—'}</td>
       <td>${portal?.meta.createdAt ? new Date(portal.meta.createdAt).toLocaleDateString() : '—'}</td>
       <td><div class="link-actions">
@@ -1077,7 +1240,7 @@ function buildSnapshot(fam) {
   return students;
 }
 
-// 🩺 Auto-repair stale snapshots (e.g. links created before center info existed)
+// 🩺 Auto-repair stale snapshots
 async function autoHealSnapshots() {
   try {
     for (const [token, p] of Object.entries(portalsCache)) {
@@ -1098,7 +1261,7 @@ async function generateOrRegenerate(fam) {
   const uid = auth.currentUser?.uid || '';
   const membersMap = buildMembersMap(fam);
   const phoneCode = familyPhoneCode(fam);
-  const newCode = phoneCode || randomCode();   // fallback: don't lock families out
+  const newCode = phoneCode || randomCode();
   if (!phoneCode) showToast('⚠️ No phone number on record — a random code was used instead', 'error');
 
   if (existing) {
@@ -1106,11 +1269,11 @@ async function generateOrRegenerate(fam) {
     const newToken = randomToken();
     const base = `publicFamilyLinks/${centerId}`;
     const updates = {};
-    updates[ `${base}/${newToken}/meta` ] = {
-    ...existing.meta, code: newCode, active: true,  
-    createdAt: now, createdBy: uid, familyKey: fam.key, members: membersMap,
-    centerName: allCentersData[centerId]?.name || ''
-  };
+    updates[`${base}/${newToken}/meta`] = {
+      ...existing.meta, code: newCode, active: true,
+      createdAt: now, createdBy: uid, familyKey: fam.key, members: membersMap,
+      centerName: allCentersData[centerId]?.name || ''
+    };
     updates[`${base}/${newToken}/students`] = buildSnapshot(fam);
     Object.entries(existing.requests || {}).forEach(([rid, r]) => { updates[`${base}/${newToken}/requests/${rid}`] = r; });
     updates[`${base}/${existing.token}`] = null;
@@ -1122,7 +1285,7 @@ async function generateOrRegenerate(fam) {
     const token = randomToken();
     const payload = {
       meta: {
-        familyId: 'fam_' + randomToken(8), code: newCode, active: true,   
+        familyId: 'fam_' + randomToken(8), code: newCode, active: true,
         createdAt: now, createdBy: uid, familyKey: fam.key, members: membersMap,
         centerName: allCentersData[centerId]?.name || ''
       },
@@ -1149,16 +1312,17 @@ async function togglePortal(fam) {
   } catch (err) { console.error(err); showToast(t('cc.saveFailed'), 'error'); }
 }
 
-// — Link card modal —
 function openLinkCardModal(fam) {
   const portal = portalForFamily(fam);
   if (!portal) return;
   currentCardFamilyKey = fam.key;
   const modal = document.getElementById('linkCardModal');
+
   document.getElementById('lcFamilyName').textContent = familyDisplayName(fam);
   document.getElementById('lcStatusRow').innerHTML = portal.meta.active === false
     ? `<span class="link-status-badge ls-disabled">${t('links.statusDisabled')}</span>`
     : `<span class="link-status-badge ls-active">${t('links.statusActive')}</span>`;
+
   const url = parentPageUrl(portal.token);
   document.getElementById('lcLink').value = url;
   document.getElementById('lcCode').value = portal.meta.code || '';
@@ -1196,7 +1360,11 @@ function openLinkCardModal(fam) {
       } catch (err) { console.error(err); showToast(t('cc.saveFailed'), 'error'); }
     }
   };
-  document.getElementById('lcToggleActive').onclick = async () => { await togglePortal(fam); const f2 = familiesCache.find(f => f.key === fam.key); if (f2) openLinkCardModal(f2); };
+  document.getElementById('lcToggleActive').onclick = async () => {
+    await togglePortal(fam);
+    const f2 = familiesCache.find(f => f.key === fam.key);
+    if (f2) openLinkCardModal(f2);
+  };
   document.getElementById('lcRegenerate').onclick = async () => {
     await generateOrRegenerate(fam);
     modal.classList.add('hidden');
@@ -1209,6 +1377,7 @@ function buildShareMessage(fam, portal) {
   const url = parentPageUrl(portal.token);
   return `📎 Kumon 調堂申請連結 / Change-Class Request Link\n👨‍👩‍👧 ${names}\n🔗 ${url}\n🔑 Code 密碼: ${portal.meta.code}\n請妥善保管，請勿外傳 / Please keep this link private.`;
 }
+
 function collectFamilyPhones(fam) {
   const out = [];
   fam.members.forEach(m => {
@@ -1218,13 +1387,14 @@ function collectFamilyPhones(fam) {
       if (!raw) return;
       let digits = raw.replace(/\D/g, '');
       if (!digits) return;
-      if (digits.length === 8) digits = '853' + digits;       // ✅ Macau prefix
+      if (digits.length === 8) digits = '853' + digits; // ✅ Macau prefix
       const num = '+' + digits;
       if (!out.some(x => x.num === num)) out.push({ num, label: `${m.data.nameCn || m.data.namePinyin || ''} — ${label}` });
     });
   });
   return out;
 }
+
 function sendViaPhone(fam, mode) {
   const portal = portalForFamily(fam);
   if (!portal) return;
@@ -1247,6 +1417,7 @@ function sendViaPhone(fam, mode) {
   });
   document.getElementById('phoneModal').classList.remove('hidden');
 }
+
 function sendViaEmail(fam) {
   const portal = portalForFamily(fam);
   if (!portal) return;
@@ -1255,23 +1426,26 @@ function sendViaEmail(fam) {
   const msg = buildShareMessage(fam, portal);
   window.open(`mailto:${emails[0]}?subject=${encodeURIComponent(t('links.shareMsgTitle'))}&body=${encodeURIComponent(msg)}`, '_self');
 }
+
 function printLinkCard(fam, portal) {
   const url = parentPageUrl(portal.token);
   const area = document.getElementById('printArea');
-  area.innerHTML = `<div class="print-card">
-    <h2>Kumon</h2>
-    <div class="pc-names">${escapeHtml(familyDisplayName(fam))}</div>
-    <div class="pc-qr" id="printQr"></div>
-    <div>🔑 Code 密碼</div>
-    <div class="pc-code">${escapeHtml(portal.meta.code || '')}</div>
-    <div class="pc-link">${escapeHtml(url)}</div>
-    <div class="pc-note">🔒 ${escapeHtml(t('links.printNote'))}</div>
-  </div>`;
+  area.innerHTML = `
+    <div class="print-card">
+      <h2>Kumon</h2>
+      <div class="pc-names">${escapeHtml(familyDisplayName(fam))}</div>
+      <div class="pc-qr" id="printQr"></div>
+      <div>🔑 Code 密碼</div>
+      <div class="pc-code">${escapeHtml(portal.meta.code || '')}</div>
+      <div class="pc-link">${escapeHtml(url)}</div>
+      <div class="pc-note">🔒 ${escapeHtml(t('links.printNote'))}</div>
+    </div>`;
   if (typeof QRCode !== 'undefined') {
     new QRCode(document.getElementById('printQr'), { text: url, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
   }
   setTimeout(() => window.print(), 250);
 }
+
 async function copyText(text, okMsg) {
   try { await navigator.clipboard.writeText(text); showToast(okMsg, 'success'); }
   catch {
@@ -1295,6 +1469,7 @@ function wirePending() {
     });
   });
   document.getElementById('pendingExportBtn').addEventListener('click', exportPending);
+
   const notifyBtn = document.getElementById('notifyBtn');
   if (localStorage.getItem('cc_notify') === 'on' && 'Notification' in window && Notification.permission === 'granted') {
     notifyBtn.classList.add('on');
@@ -1309,6 +1484,7 @@ function wirePending() {
       notifyBtn.innerHTML = `🔔 <span>${t('pending.notifyOn')}</span>`;
     }
   });
+
   document.getElementById('closeRejectModal').addEventListener('click', () => document.getElementById('rejectModal').classList.add('hidden'));
   document.getElementById('cancelRejectBtn').addEventListener('click', () => document.getElementById('rejectModal').classList.add('hidden'));
   document.getElementById('confirmRejectBtn').addEventListener('click', confirmReject);
@@ -1341,8 +1517,7 @@ function renderPending() {
     const cBadge = otherCenter ? `<span class="center-visit-badge" title="${escapeHtml(r.studentCenterName || '')}">🏫 ${escapeHtml(getCenterAbbr(r.studentCenterName || ''))}</span>` : '';
     const statusPill = `<span class="req-status rq-${r.status || 'pending'}">${reqStatusLabel(r.status)}</span>`;
     const actions = r.status === 'pending'
-      ? `<button class="action-btn action-complete" data-pa="approve" data-rid="${r.id}">✅ ${t('pending.approve')}</button>
-         <button class="action-btn action-cancel" data-pa="reject" data-rid="${r.id}">🚫 ${t('pending.reject')}</button>`
+      ? `<button class="action-btn action-complete" data-pa="approve" data-rid="${r.id}">✅ ${t('pending.approve')}</button> <button class="action-btn action-cancel" data-pa="reject" data-rid="${r.id}">🚫 ${t('pending.reject')}</button>`
       : `<button class="action-btn action-view" data-pa="view" data-rid="${r.id}">👁 ${t('pending.view')}</button>`;
 
     const tr = document.createElement('tr');
@@ -1388,6 +1563,7 @@ function renderPending() {
       if (btn.dataset.pa === 'view') openReqDetail(r);
     });
   });
+
   tbody.querySelectorAll('tr').forEach(tr => {
     tr.addEventListener('click', (e) => {
       if (e.target.tagName === 'BUTTON') return;
@@ -1401,10 +1577,12 @@ function renderPending() {
 function reqStatusLabel(s) {
   return { pending: t('pending.statusPending'), approved: t('pending.statusApproved'), rejected: t('pending.statusRejected'), expired: t('pending.statusExpired'), cancelled: t('pending.statusCancelled') }[s] || s || '—';
 }
+
 function rejectReasonText(r) {
   if (r.rejectReasonKey && r.rejectReasonKey !== 'other') return t(`pending.tpl${r.rejectReasonKey.charAt(0).toUpperCase()}${r.rejectReasonKey.slice(1)}`);
   return r.rejectReason || '';
 }
+
 function getCenterAbbr(name) {
   if (!name) return '?';
   const lower = name.toLowerCase();
@@ -1412,14 +1590,16 @@ function getCenterAbbr(name) {
   for (const [m, a] of rules) if (lower.includes(m)) return a;
   return (name.replace(/^kumon[\s.-]*/i, '').trim() || name).substring(0, 2).toUpperCase();
 }
+
 function cleanName(n) { return (n && n !== '-') ? n : ''; }
+
 function centerKeyAbbr(key) {
   return { 'mei keng': 'MK', 'pac tat': 'PT', 'champs': 'C', 'tap siac': 'TS' }[key] || (key || '').substring(0, 2).toUpperCase();
 }
 
 async function approveRequest(r) {
   const msg = `${r.studentName || ''} — ${r.subject || ''}\n${t('cc.absenceDate')}: ${r.absenceDate} ${r.originalTime || ''}\n${t('cc.replacementDate')}: ${r.preferredDate} ${r.preferredTime || ''}`;
-  // Duplicate check in the STUDENT's center
+
   let dup = false;
   try {
     const snap = await get(ref(db, `centers/${r.studentCenterId || centerId}/classChanges`));
@@ -1430,6 +1610,7 @@ async function approveRequest(r) {
       });
     }
   } catch {}
+
   const warn = dup ? `${t('pending.duplicateWarn')}\n\n` : '';
   if (!await showConfirm(t('pending.approveTitle'), warn + msg)) return;
 
@@ -1438,6 +1619,7 @@ async function approveRequest(r) {
     const email = auth.currentUser?.email || '';
     const targetCenter = r.studentCenterId || centerId;
     const stu = r.portal.students?.[r.studentId] || {};
+
     const ccPayload = {
       studentId: r.studentId,
       studentNumber: stu.studentNumber || '',
@@ -1454,6 +1636,7 @@ async function approveRequest(r) {
       createdAt: now, createdBy: auth.currentUser?.uid || '',
       history: [{ at: now, by: email, action: 'created from parent request' }]
     };
+
     const newRef = push(ref(db, `centers/${targetCenter}/classChanges`));
     await set(newRef, ccPayload);
     await update(ref(db, `publicFamilyLinks/${centerId}/${r.token}/requests/${r.id}`), {
@@ -1469,6 +1652,7 @@ function openRejectModal(r) {
   document.getElementById('rejectCustom').value = '';
   document.getElementById('rejectModal').classList.remove('hidden');
 }
+
 async function confirmReject() {
   if (!currentRejectReq) return;
   const key = document.getElementById('rejectTemplateSel').value;
@@ -1495,7 +1679,9 @@ function openReqDetail(r) {
   if (r.status === 'rejected') timeline.push({ at: r.reviewedAt, label: `🚫 ${t('pending.timelineRejected')}`, by: r.reviewedBy });
   if (r.status === 'expired') timeline.push({ at: r.expiredAt || r.reviewedAt, label: `⌛ ${t('pending.timelineExpired')}`, by: '' });
   if (r.parentEditedAt) timeline.push({ at: r.parentEditedAt, label: `✏️ ${t('pending.timelineEdited')}`, by: '' });
-  timeline.sort((a, b) => String(a.at || '').localeCompare(String(b.at || '')));  document.getElementById('reqDetailContent').innerHTML = `
+  timeline.sort((a, b) => String(a.at || '').localeCompare(String(b.at || '')));
+
+  document.getElementById('reqDetailContent').innerHTML = `
     <div class="detail-section"><h4>📋 ${t('pending.detailTitle')}</h4>
       <div class="detail-grid">
         <div class="detail-item"><strong>${t('pending.colStudent')}</strong><span>${escapeHtml(r.studentName || '')} ${escapeHtml(r.studentNameEn || '')}</span></div>
@@ -1509,7 +1695,11 @@ function openReqDetail(r) {
     </div>
     <div class="detail-section"><h4>📜 ${t('cc.historyTimeline')}</h4>
       <div class="history-timeline">
-        ${timeline.filter(x => x.at).map(x => `<div class="history-item"><div class="history-date">${new Date(x.at).toLocaleString()} — ${x.label}</div><div class="history-reason">${escapeHtml(x.by || '')}</div></div>`).join('')}
+        ${timeline.filter(x => x.at).map(x => `
+          <div class="history-item">
+            <div class="history-date">${new Date(x.at).toLocaleString()} — ${x.label}</div>
+            <div class="history-reason">${escapeHtml(x.by || '')}</div>
+          </div>`).join('')}
       </div>
     </div>`;
   document.getElementById('reqDetailModal').classList.remove('hidden');
@@ -1552,6 +1742,7 @@ function updatePendingNotifications() {
   const badge = document.getElementById('pendingBadge');
   if (pendings.length > 0) { badge.textContent = pendings.length; badge.classList.remove('hidden'); }
   else badge.classList.add('hidden');
+
   document.title = pendings.length > 0 ? `(${pendings.length}) ${BASE_TITLE}` : BASE_TITLE;
 
   if (pendingPrimed && knownPendingIds) {
@@ -1570,6 +1761,7 @@ function updatePendingNotifications() {
 // CONFIRM MODAL & TOAST
 // ============================================
 let confirmResolver = null;
+
 function wireConfirmModal() {
   document.getElementById('confirmCancelBtn').addEventListener('click', () => {
     document.getElementById('confirmModal').classList.add('hidden');
@@ -1580,6 +1772,7 @@ function wireConfirmModal() {
     if (confirmResolver) confirmResolver(true);
   });
 }
+
 function showConfirm(title, message) {
   return new Promise(resolve => {
     document.getElementById('confirmTitle').textContent = title;
@@ -1588,6 +1781,7 @@ function showConfirm(title, message) {
     confirmResolver = resolve;
   });
 }
+
 let toastTimer = null;
 function showToast(message, type = 'success') {
   const toast = document.getElementById('toast');

@@ -1,0 +1,111 @@
+/* ============================================================
+   🎬 ASHR STAGE — shared 16:9 ceremony screen styles
+   Used by ashr-display.html and the presenter's live preview.
+   All sizes scale from --sw (stage width in px, set by JS).
+   ============================================================ */
+:root { --stage-font: 'Segoe UI', 'PingFang TC', 'Microsoft JhengHei', Roboto, sans-serif; }
+
+.stage {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  width: min(100vw, calc(100vh * (16 / 9)));
+  background: #020617;
+  overflow: hidden;
+  min-height: 0;               /* ✅ never let tall content stretch the 16:9 box */
+  --sw: 960px;
+  font-family: var(--stage-font);
+  user-select: none;
+}
+.stage-mini { width: 100%; border-radius: 12px; }
+
+/* Backdrop (fallback gradient shows if backdrop.jpg is missing) */
+.stage-backdrop {
+  position: absolute; inset: 0;
+  background:
+    url('backdrop.jpg') center / cover no-repeat,
+    radial-gradient(120% 120% at 50% 0%, #1e3a5f 0%, #0b1f3a 55%, #020617 100%);
+  transition: filter .5s;
+}
+
+/* Soft scrim behind the student block for readability on any backdrop */
+.stage-scrim {
+  position: absolute; inset: 0; opacity: 0; transition: opacity .6s;
+  background: radial-gradient(ellipse 46% 62% at 26% 42%, rgba(2, 6, 23, .55), rgba(2, 6, 23, 0) 75%);
+}
+.stage.has-student .stage-scrim { opacity: 1; }
+
+/* Content layer — left-anchored column (photo-safe zone) */
+.stage-content {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start;
+  /* ✅ top padding .12 reserves room for the backdrop's top-center title */
+  padding: calc(var(--sw) * .12) calc(var(--sw) * .06) calc(var(--sw) * .05);
+  overflow: hidden;            /* ✅ clip, never stretch */
+  transition: opacity .45s ease, transform .45s ease;
+}
+.stage-content.is-hidden { opacity: 0; transform: scale(.985); pointer-events: none; }
+
+.st-block {
+  display: flex; flex-direction: column; align-items: flex-start;
+  gap: calc(var(--sw) * .01);
+  max-width: 52%;              /* keeps the right half clear for photo subjects */
+  max-height: 100%;
+  min-height: 0;
+  text-align: left;
+}
+.st-name-cn {
+  font-size: calc(var(--sw) * .078); font-weight: 800; line-height: 1.15;
+  color: #fff; text-shadow: 0 4px 26px rgba(0, 0, 0, .55), 0 1px 3px rgba(0, 0, 0, .4);
+}
+.st-name-en {
+  font-size: calc(var(--sw) * .03); font-weight: 600; letter-spacing: .14em;
+  text-transform: uppercase; color: rgba(241, 245, 249, .92);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, .5);
+}
+.st-name-en:empty { display: none; }
+
+/* ✅ Compact award pills — sized so even 5 awards fit inside 16:9 */
+.st-awards {
+  display: flex; flex-direction: column; align-items: flex-start;
+  gap: calc(var(--sw) * .01);
+  margin-top: calc(var(--sw) * .03);
+  min-height: 0;
+}
+.st-award {
+  display: inline-flex; align-items: center; gap: .4em;
+  font-size: calc(var(--sw) * .019); font-weight: 800;
+  padding: .34em .95em; border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, .55);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .3);
+  white-space: nowrap;
+}
+/* ✅ 4+ awards: shrink a step so the stack always fits */
+.stage.awards-many .st-award { font-size: calc(var(--sw) * .016); padding: .3em .8em; }
+.stage.awards-many .st-awards { gap: calc(var(--sw) * .008); margin-top: calc(var(--sw) * .024); }
+
+.st-stars { font-size: .85em; letter-spacing: .1em; opacity: .9; }
+.tier-gold   { background: linear-gradient(135deg, #fde047, #f59e0b); color: #78350f; }
+.tier-silver { background: linear-gradient(135deg, #f8fafc, #94a3b8); color: #1e293b; }
+.tier-bronze { background: linear-gradient(135deg, #fdba74, #ea580c); color: #fff; }
+
+/* Entrance animations (replayed by toggling .anim-in) */
+.stage.anim-in .st-name-cn     { animation: stRise 0.75s cubic-bezier(.18, .89, .32, 1.15) .08s both; }
+.stage.anim-in .st-name-en     { animation: stRise 0.7s ease .22s both; }
+.stage.anim-in .st-award       { animation: stPop 0.6s cubic-bezier(.34, 1.56, .64, 1) both; }
+.stage.anim-in .tier-gold      { animation: stPop 0.6s cubic-bezier(.34, 1.56, .64, 1) both, goldPulse 2.4s ease-in-out 1.2s infinite; }
+
+@keyframes stRise { from { opacity: 0; transform: translateY(calc(var(--sw) * .04)); } to { opacity: 1; transform: none; } }
+@keyframes stPop  { 0% { opacity: 0; transform: scale(.4); } 70% { opacity: 1; transform: scale(1.07); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes goldPulse {
+  0%, 100% { box-shadow: 0 6px 20px rgba(0, 0, 0, .3), 0 0 0 rgba(253, 224, 71, 0); }
+  50%      { box-shadow: 0 6px 20px rgba(0, 0, 0, .3), 0 0 calc(var(--sw) * .035) rgba(253, 224, 71, .9); }
+}
+
+/* Layers above content */
+.stage-confetti { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.stage-black { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity .6s; }
+.stage.is-blank .stage-black { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .stage *, .stage { animation: none !important; transition: none !important; }
+}

@@ -28,6 +28,8 @@ export default {
     employeeActivityLogDesc: "View employee name, date/time, center, page, and action",
     ashr: "ASHR",
     ashrDesc: "Advanced Student Honour Roll ceremony management",
+    ashrPres: "ASHR Stage Presenter",
+    ashrPresDesc: "Stage presenter for ASHR ceremonies",
   },
   bulletin: {
     title: "📢 Bulletin Board",

@@ -28,6 +28,8 @@ export default {
     employeeActivityLogDesc: "查看員工姓名、日期/時間、中心、頁面與操作",
     ashr: "ASHR",
     ashrDesc: "公文式超學年優秀生頒獎典禮管理",
+    ashrPres: "ASHR 舞台主持人",
+    ashrPresDesc: "舞台主持人，負責 ASHR 典禮的主持工作",
   },
   bulletin: {
     title: "📢 佈告欄",

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASHR Stage Presenter — Kumon DB</title>
+<link rel="stylesheet" href="ashr.css">
+<link rel="stylesheet" href="ashr-stage.css">
+<link rel="stylesheet" href="ashr-present.css">
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+
+<div id="page-loader"><div class="spinner"></div><div>Loading Stage Presenter…</div></div>
+
+<div id="mainContent" style="display:none">
+  <header>
+    <div>
+      <a href="centers.html">← Centers</a>
+      <span class="page-title">🎬 ASHR Stage Presenter</span>
+    </div>
+    <nav>
+      <label>Event: <select id="eventSelect" style="padding:.4rem .6rem;border-radius:6px;border:1px solid #cbd5e1;"></select></label>
+      <button id="newEventBtn">+ New Event</button>
+      <button id="openDisplayBtn">🖥 Open Audience Display</button>
+      <span id="connDot" class="conn-dot" title="Firebase connection"></span>
+    </nav>
+  </header>
+
+  <div class="dashboard presenter">
+    <div class="pres-grid">
+
+      <!-- ══ LEFT COLUMN ══ -->
+      <div class="pres-left">
+
+        <section class="card">
+          <h3>🎛 Live Control</h3>
+          <div class="now-bar">
+            <span class="now-label">ON SCREEN</span>
+            <span id="nowName" class="now-name m-backdrop">🖼 Backdrop only</span>
+            <span id="nowTime" class="now-time"></span>
+          </div>
+
+          <div style="position:relative">
+            <div class="scan-row">
+              <input id="presScan" placeholder="Scan barcode or type student name / ID…" autocomplete="off">
+              <button id="camBtn" class="secondary" title="Scan with phone camera">📷</button>
+            </div>
+            <div id="searchDrop" class="search-dropdown hidden"></div>
+          </div>
+
+          <div id="presFeedback"></div>
+
+          <div class="ctrl-actions">
+            <button id="nextBtn" class="primary">▶ Show Next in Queue</button>
+            <button id="prevBtn" class="secondary">◀ Back</button>
+          </div>
+          <div class="ctrl-actions">
+            <button id="clearBtn" class="secondary">🧹 Clear to Backdrop <kbd>C</kbd></button>
+            <button id="blankBtn" class="secondary">⬛ Blank Screen <kbd>B</kbd></button>
+          </div>
+
+          <div class="toggles">
+            <label class="switch"><input type="checkbox" id="fxToggle" checked> 🎉 Confetti</label>
+            <label class="switch"><input type="checkbox" id="soundToggle"> 🔊 Fanfare sound</label>
+          </div>
+          <p class="hint" style="margin:.6rem 0 0">Shortcuts: <kbd>Enter</kbd> show · <kbd>←</kbd><kbd>→</kbd> queue · <kbd>C</kbd> clear · <kbd>B</kbd> blank</p>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <h3>📋 Ceremony Queue</h3>
+            <div style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:center">
+              <span id="queueProgress" class="hint" style="margin:0"></span>
+              <button id="qAddShownBtn" class="btn-small secondary" title="Add the student currently on screen">＋ On-screen</button>
+              <button id="qResetBtn" class="btn-small secondary" title="Reset progress to replay">↺ Reset</button>
+              <button id="qClearBtn" class="btn-small danger">🗑 Clear</button>
+            </div>
+          </div>
+          <ul id="queueList" class="q-list"></ul>
+        </section>
+      </div>
+
+      <!-- ══ RIGHT COLUMN ══ -->
+      <div class="pres-right">
+        <section class="card">
+          <div class="card-head">
+            <h3>🖼 Live Preview</h3>
+            <span class="hint" style="margin:0">Mirror of the audience screen</span>
+          </div>
+          <div id="previewHost"></div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <h3>🕘 Recently Shown</h3>
+            <button id="recentClearBtn" class="btn-small secondary">🗑 Clear</button>
+          </div>
+          <div id="recentChips" class="recent-wrap"></div>
+        </section>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Camera scan modal -->
+<div id="cameraModal" class="modal hidden">
+  <div class="modal-content">
+    <button class="close-btn" id="closeCameraModal">×</button>
+    <h3>📷 Scan Student Barcode</h3>
+    <div id="cameraReader"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script type="module" src="ashr-present.js"></script>
+</body>
+</html>

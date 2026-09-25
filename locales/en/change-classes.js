@@ -7,6 +7,7 @@ export default {
   cc: {
     tabClasses: "Change Classes",
     parentBadgeTitle: "Submitted by parent via link",
+    filterActive: "Active",                                    // 🆕 default tab (Scheduled + Missed)
     filterAll: "All", filterScheduled: "Scheduled", filterCompleted: "Completed",
     filterMissed: "Missed", filterCancelled: "Cancelled",
     searchPlaceholder: "Search student, subject...", from: "From", to: "To",
@@ -16,6 +17,7 @@ export default {
     statusScheduled: "Scheduled", statusCompleted: "Completed", statusMissed: "Missed", statusCancelled: "Cancelled",
     emptyState: "No change class records found.",
     view: "View", edit: "Edit", markComplete: "Complete", cancel: "Cancel", delete: "Delete",
+    markCompletedBtn: "Mark Completed",                        // 🆕 bulk button
     selectedCount: "{{count}} selected", clearSelection: "Clear Selection",
     addTitle: "Add Change Class", editTitle: "Edit Change Class",
     student: "Student *", searchStudent: "Search student by name, pinyin, number...", changeStudent: "Change",
@@ -39,7 +41,17 @@ export default {
     detailTitle: "Change Class Details", detailStudent: "Student Information", detailChangeClass: "Change Class Details",
     name: "Name", pinyin: "Pinyin", grade: "Grade", studentNumber: "Student #", school: "School", homeCenter: "Home Center",
     historyTimeline: "History Timeline", noHistory: "No history recorded.",
-    nothingToExport: "No records to export.", exportSuccess: "✅ Exported successfully."
+    nothingToExport: "No records to export.", exportSuccess: "✅ Exported successfully.",
+    // 🆕 Month filter + extras
+    allMonths: "All months",
+    thisMonth: "This month",
+    prevMonth: "Previous month",
+    nextMonth: "Next month",
+    monthByAbsence: "By absence date",
+    monthByReplacement: "By replacement date",
+    overdue: "Overdue",
+    overdueTip: "Overdue — replacement date has passed",
+    showingRecords: "Showing {{shown}} of {{total}} records"
   },
   links: {
     tabTitle: "Links",
@@ -77,6 +89,7 @@ export default {
     duplicateWarn: "⚠️ This student already has a change-class record for this absence date. Approve anyway?",
     rejectTitle: "Reject Request", rejectTemplate: "Reason",
     tplSlotFull: "Slot full", tplAnotherDay: "Please choose another day", tplCenterClosed: "Center closed", tplOther: "Other",
+    customReason: "Custom reason (if \"Other\")",              // 🆕
     rejectReasonPh: "Write a custom reason...",
     approvedMsg: "✅ Approved — added to Change Classes.", rejectedMsg: "✅ Request rejected.",
     emptyState: "No parent requests.",

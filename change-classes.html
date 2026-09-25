@@ -1,383 +1,410 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Change Classes - Kumon DB</title>
-<link rel="stylesheet" href="change-classes.css">
-<link rel="icon" href="favicon.svg">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Change Classes - Kumon DB</title>
+  <link rel="stylesheet" href="change-classes.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
 
-<div id="page-loader"><div class="spinner"></div></div>
-
-<!-- 🔐 ACCESS DENIED -->
-<div id="accessDenied" class="access-denied hidden">
-  <div class="access-denied-content">
-    <h2>🔐 <span data-i18n="common.accessDenied">Access Denied</span></h2>
-    <p data-i18n="common.noPermission">You do not have permission to view this page.</p>
-    <button id="backToDashboardBtn" class="primary"><span data-i18n="common.backToDashboard">← Dashboard</span></button>
-  </div>
-</div>
-
-<div id="mainContent" class="hidden">
-<header>
-  <nav>
-    <a href="dashboard.html" data-i18n="common.backToDashboard">← Dashboard</a>
-  </nav>
-  <div class="header-user">
-      <h2>🔄 <span data-i18n="cc.tabClasses">Change Classes</span></h2>
-  </div>
-</header>
-
-<div class="form-container" id="mainContainer">
-
-  <!-- ══════════ PAGE TABS ══════════ -->
-  <div class="page-tabs">
-    <button class="page-tab active" data-ptab="cc">🔄 <span data-i18n="cc.tabClasses">Change Classes</span></button>
-    <button class="page-tab" data-ptab="links">🔗 <span data-i18n="links.tabTitle">Links</span></button>
-    <button class="page-tab" data-ptab="pending">⏳ <span data-i18n="pending.tabTitle">Pending</span> <span id="pendingBadge" class="tab-badge hidden">0</span></button>
+  <!-- Loader -->
+  <div id="page-loader">
+    <div class="spinner"></div>
+    <p data-i18n="common.loading">Loading...</p>
   </div>
 
-  <!-- ══════════ TAB 1: CHANGE CLASSES ══════════ -->
-  <div id="ptab-cc">
-    <div class="controls">
-      <div class="segmented" id="statusSegmented">
-        <button class="segment active" data-status="all" data-i18n="cc.filterAll">All</button>
-        <button class="segment" data-status="scheduled" data-i18n="cc.filterScheduled">Scheduled</button>
-        <button class="segment" data-status="completed" data-i18n="cc.filterCompleted">Completed</button>
-        <button class="segment" data-status="missed" data-i18n="cc.filterMissed">Missed</button>
-        <button class="segment" data-status="cancelled" data-i18n="cc.filterCancelled">Cancelled</button>
-      </div>
-      <input type="text" id="searchInput" class="search-input" data-i18n-placeholder="cc.searchPlaceholder" placeholder="Search student, subject...">
-      <div class="date-range-controls">
-        <label data-i18n="cc.from">From</label><input type="date" id="dateFrom">
-        <label data-i18n="cc.to">To</label><input type="date" id="dateTo">
-        <button id="clearDatesBtn" class="clear-dates-btn" title="Clear">✕</button>
-      </div>
-      <select id="typeFilter">
-        <option value="all" data-i18n="cc.typeAll">All Types</option>
-        <option value="CC_PU">CC PU</option>
-        <option value="CC_NO_PU">CC No PU</option>
-        <option value="MC">MC</option>
-        <option value="MC_PU">MC PU</option>
-      </select>
-      <select id="subjectFilter">
-        <option value="all" data-i18n="cc.subjectAll">All Subjects</option>
-        <option value="math">Math</option>
-        <option value="english">English</option>
-        <option value="chinese">Chinese</option>
-      </select>
-      <button id="exportBtn" class="export-btn">📊 <span data-i18n="cc.export">Export</span></button>
-      <button id="addRequestBtn" class="add-request-btn"><span class="fab-text" data-i18n="cc.addNew">+ Add Change Class</span><span class="fab-icon">＋</span></button>
+  <!-- Access denied -->
+  <div id="accessDenied" class="access-denied hidden">
+    <div class="access-denied-content">
+      <h2 data-i18n="common.accessDenied">Access Denied</h2>
+      <p data-i18n="common.noPermission">You do not have permission to view this page.</p>
+      <button id="backToDashboardBtn" class="primary" data-i18n="common.backToDashboard">← Dashboard</button>
     </div>
-
-    <div id="bulkActions" class="bulk-actions hidden">
-      <span id="bulkCount" class="bulk-count"></span>
-      <button id="bulkCompleteBtn" class="bulk-btn bulk-complete">✅ <span data-i18n="cc.markComplete">Mark Completed</span></button>
-      <button id="bulkCancelBtn" class="bulk-btn bulk-cancel">🚫 <span data-i18n="cc.cancel">Cancel</span></button>
-      <button id="bulkClearBtn" class="bulk-btn bulk-clear" data-i18n="cc.clearSelection">Clear Selection</button>
-    </div>
-
-    <div class="table-wrapper">
-      <table id="ccTable">
-        <thead>
-          <tr>
-            <th><input type="checkbox" id="selectAllCheck"></th>
-            <th data-i18n="cc.colStudent">Student</th>
-            <th data-i18n="cc.colSubject">Subject</th>
-            <th data-i18n="cc.colType">Type</th>
-            <th data-i18n="cc.colAbsence">Absence Date</th>
-            <th data-i18n="cc.colReplacement">Replacement</th>
-            <th data-i18n="cc.colStatus">Status</th>
-            <th data-i18n="cc.colPU">PU</th>
-            <th data-i18n="cc.colActions">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="ccTableBody"></tbody>
-      </table>
-      <div id="emptyState" class="empty-state hidden">
-        <div class="empty-icon">📭</div>
-        <p data-i18n="cc.emptyState">No change class records found.</p>
-      </div>
-    </div>
-
-    <div class="cards-container" id="cardsContainer"></div>
   </div>
 
-  <!-- ══════════ TAB 2: LINKS ══════════ -->
-  <div id="ptab-links" class="hidden">
-    <div class="controls">
-      <div class="segmented" id="linksSegmented">
-        <button class="segment active" data-lseg="all" data-i18n="links.filterAll">All</button>
-        <button class="segment" data-lseg="hasLink" data-i18n="links.filterHasLink">With Link</button>
-        <button class="segment" data-lseg="noLink" data-i18n="links.filterNoLink">No Link</button>
-        <button class="segment" data-lseg="disabled" data-i18n="links.filterDisabled">Disabled</button>
+  <header>
+    <nav>
+      <a href="dashboard.html" data-i18n="common.backToDashboard">← Dashboard</a>
+    </nav>
+    <h2>🔄 <span data-i18n="cc.tabClasses">Change Classes</span></h2>
+  </header>
+
+  <div id="mainContent" class="hidden">
+    <div class="form-container hidden" id="mainContainer">
+
+      <!-- Page tabs -->
+      <div class="page-tabs">
+        <button class="page-tab active" data-ptab="cc">🔄 <span data-i18n="cc.tabClasses">Change Classes</span></button>
+        <button class="page-tab" data-ptab="links">🔗 <span data-i18n="links.tabTitle">Links</span></button>
+        <button class="page-tab" data-ptab="pending">⏳ <span data-i18n="pending.tabTitle">Pending</span> <span id="pendingBadge" class="tab-badge hidden">0</span></button>
       </div>
-      <input type="text" id="linksSearch" class="search-input" data-i18n-placeholder="links.searchPlaceholder" placeholder="Search family / student...">
-    </div>
-    <p class="tab-hint" data-i18n="links.hint">Generate a private link + code for each family. Parents use it to request change classes.</p>
 
-    <div class="table-wrapper">
-      <table id="linksTable">
-        <thead>
-          <tr>
-            <th data-i18n="links.colFamily">Family</th>
-            <th data-i18n="links.colStudents">Students</th>
-            <th data-i18n="links.colStatus">Link Status</th>
-            <th data-i18n="links.colCode">Code</th>
-            <th data-i18n="links.colCreated">Created</th>
-            <th data-i18n="links.colActions">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="linksTableBody"></tbody>
-      </table>
-      <div id="linksEmpty" class="empty-state hidden">
-        <div class="empty-icon">🔗</div>
-        <p data-i18n="links.noFamilies">No families found.</p>
-      </div>
-    </div>
-    <div class="cards-container" id="linksCards"></div>
-  </div>
+      <!-- ================= TAB 1: CHANGE CLASSES ================= -->
+      <section id="ptab-cc">
+        <div class="controls">
 
-  <!-- ══════════ TAB 3: PENDING ══════════ -->
-  <div id="ptab-pending" class="hidden">
-    <div class="controls">
-      <div class="segmented" id="pendingSegmented">
-        <button class="segment active" data-pseg="pending" data-i18n="pending.filterPending">Pending</button>
-        <button class="segment" data-pseg="all" data-i18n="pending.filterAll">All</button>
-        <button class="segment" data-pseg="approved" data-i18n="pending.filterApproved">Approved</button>
-        <button class="segment" data-pseg="rejected" data-i18n="pending.filterRejected">Rejected</button>
-        <button class="segment" data-pseg="expired" data-i18n="pending.filterExpired">Expired</button>
-        <button class="segment" data-pseg="cancelled" data-i18n="pending.filterCancelled">Cancelled</button>
-      </div>
-      <button id="notifyBtn" class="notify-btn">🔔 <span data-i18n="pending.notifyBtn">Enable Notifications</span></button>
-      <button id="pendingExportBtn" class="export-btn">📊 <span data-i18n="pending.export">Export</span></button>
-    </div>
-    <p class="tab-hint" data-i18n="pending.hint">Approve or reject change-class requests submitted by parents. Requests auto-expire after 30 days.</p>
-
-    <div class="table-wrapper">
-      <table id="pendingTable">
-        <thead>
-          <tr>
-            <th data-i18n="pending.colReceived">Received</th>
-            <th data-i18n="pending.colStudent">Student</th>
-            <th data-i18n="pending.colSubject">Subject</th>
-            <th data-i18n="pending.colAbsence">Absence</th>
-            <th data-i18n="pending.colPreferred">Preferred</th>
-            <th data-i18n="pending.colReason">Reason</th>
-            <th data-i18n="pending.colStatus">Status</th>
-            <th data-i18n="pending.colActions">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="pendingTableBody"></tbody>
-      </table>
-      <div id="pendingEmpty" class="empty-state hidden">
-        <div class="empty-icon">🎉</div>
-        <p data-i18n="pending.emptyState">No parent requests.</p>
-      </div>
-    </div>
-    <div class="cards-container" id="pendingCards"></div>
-  </div>
-
-</div>
-</div>
-
-<!-- ══════════ ADD / EDIT CC MODAL ══════════ -->
-<div id="ccModal" class="modal hidden">
-  <div class="modal-content dropbook-modal-content">
-    <span class="close-modal" id="closeCcModal">×</span>
-    <h2 id="ccModalTitle">Add Change Class</h2>
-    <form id="ccForm">
-      <div class="modal-grid">
-        <div class="info-group full-width">
-          <label data-i18n="cc.student">Student *</label>
-          <div class="search-wrapper">
-            <input type="text" id="studentSearch" autocomplete="off" data-i18n-placeholder="cc.searchStudent" placeholder="Search student by name, pinyin, number...">
-            <div id="studentResults" class="search-results hidden"></div>
+          <div class="segmented" id="statusSegmented">
+            <button class="segment active" data-status="active"><span data-i18n="cc.filterActive">Active</span> <span class="seg-count" id="cnt-active">0</span></button>
+            <button class="segment" data-status="all"><span data-i18n="cc.filterAll">All</span> <span class="seg-count" id="cnt-all">0</span></button>
+            <button class="segment" data-status="scheduled"><span data-i18n="cc.filterScheduled">Scheduled</span> <span class="seg-count" id="cnt-scheduled">0</span></button>
+            <button class="segment" data-status="missed"><span data-i18n="cc.filterMissed">Missed</span> <span class="seg-count" id="cnt-missed">0</span></button>
+            <button class="segment" data-status="completed"><span data-i18n="cc.filterCompleted">Completed</span> <span class="seg-count" id="cnt-completed">0</span></button>
+            <button class="segment" data-status="cancelled"><span data-i18n="cc.filterCancelled">Cancelled</span> <span class="seg-count" id="cnt-cancelled">0</span></button>
           </div>
-          <button type="button" id="changeStudentBtn" class="change-student-btn" data-i18n="cc.changeStudent">Change</button>
-          <div id="selectedStudentInfo" class="selected-student-info hidden">
-            <div>
-              <h3 id="selectedStudentName"></h3>
-              <div id="selectedStudentMeta" class="student-meta"></div>
-            </div>
+
+          <input type="text" id="searchInput" class="search-input" data-i18n-placeholder="cc.searchPlaceholder" placeholder="Search student, subject...">
+
+          <!-- 🆕 Month filter -->
+          <div class="month-filter">
+            <button type="button" id="monthPrev" class="month-nav" data-i18n-title="cc.prevMonth" title="Previous month">◀</button>
+            <input type="month" id="monthPicker" data-i18n-title="cc.monthByAbsence" title="Filter by month">
+            <button type="button" id="monthNext" class="month-nav" data-i18n-title="cc.nextMonth" title="Next month">▶</button>
+            <select id="monthField">
+              <option value="absence" data-i18n="cc.monthByAbsence">By absence date</option>
+              <option value="replacement" data-i18n="cc.monthByReplacement">By replacement date</option>
+            </select>
+            <button type="button" id="monthTodayBtn" class="month-clear" data-i18n="cc.thisMonth">This month</button>
+            <button type="button" id="monthClearBtn" class="month-clear" data-i18n="cc.allMonths">All months</button>
           </div>
-          <input type="hidden" id="selectedStudentId">
-        </div>
-        <div class="info-group">
-          <label data-i18n="cc.subject">Subject *</label>
-          <select id="subjectSelect" required><option value="" data-i18n="cc.selectSubject">Select subject</option></select>
-        </div>
-        <div class="info-group">
-          <label data-i18n="cc.type">Type *</label>
-          <select id="typeSelect" required>
-            <option value="CC_PU">CC PU (Class Change + Pick Up)</option>
-            <option value="CC_NO_PU" selected>CC No PU</option>
-            <option value="MC">MC (Missed Class)</option>
+
+          <div class="date-range-controls">
+            <label for="dateFrom" data-i18n="cc.from">From</label>
+            <input type="date" id="dateFrom">
+            <label for="dateTo" data-i18n="cc.to">To</label>
+            <input type="date" id="dateTo">
+            <button id="clearDatesBtn" class="clear-dates-btn" title="✕">✕</button>
+          </div>
+
+          <select id="typeFilter">
+            <option value="all" data-i18n="cc.typeAll">All Types</option>
+            <option value="CC_PU">CC PU</option>
+            <option value="CC_NO_PU">CC No PU</option>
+            <option value="MC">MC</option>
             <option value="MC_PU">MC PU</option>
           </select>
-        </div>
-        <div class="info-group">
-          <label data-i18n="cc.absenceDate">Absence Date *</label>
-          <input type="date" id="absenceDate" required>
-        </div>
-        <div class="info-group">
-          <label data-i18n="cc.originalTime">Original Time</label>
-          <input type="time" id="originalTime">
-        </div>
-        <div class="info-group replacement-field">
-          <label data-i18n="cc.replacementDate">Replacement Date *</label>
-          <input type="date" id="replacementDate">
-        </div>
-        <div class="info-group replacement-field">
-          <label data-i18n="cc.replacementTime">Replacement Time *</label>
-          <input type="time" id="replacementTime">
-        </div>
-        <div class="info-group">
-          <label data-i18n="cc.status">Status</label>
-          <select id="statusSelect">
-            <option value="scheduled">Scheduled</option>
-            <option value="completed">Completed</option>
-            <option value="missed">Missed</option>
-            <option value="cancelled">Cancelled</option>
+
+          <select id="subjectFilter">
+            <option value="all" data-i18n="cc.subjectAll">All Subjects</option>
+            <option value="Math">Math</option>
+            <option value="English">English</option>
+            <option value="Chinese">Chinese</option>
           </select>
+
+          <button id="exportBtn" class="export-btn">📊 <span data-i18n="cc.export">Export</span></button>
+          <button id="addRequestBtn" class="add-request-btn">
+            <span class="fab-text" data-i18n="cc.addNew">+ Add Change Class</span><span class="fab-icon">＋</span>
+          </button>
         </div>
-        <div class="info-group">
-          <label class="checkbox-label"><input type="checkbox" id="homeworkPU"> <span data-i18n="cc.homeworkPU">Homework Picked Up</span></label>
+
+        <div id="bulkActions" class="bulk-actions hidden">
+          <span id="bulkCount" class="bulk-count"></span>
+          <button id="bulkCompleteBtn" class="bulk-btn bulk-complete">✅ <span data-i18n="cc.markCompletedBtn">Mark Completed</span></button>
+          <button id="bulkCancelBtn" class="bulk-btn bulk-cancel">🚫 <span data-i18n="cc.cancel">Cancel</span></button>
+          <button id="bulkClearBtn" class="bulk-btn bulk-clear" data-i18n="cc.clearSelection">Clear Selection</button>
         </div>
-        <div class="info-group full-width">
-          <label data-i18n="cc.note">Note</label>
-          <textarea id="noteInput" rows="2" data-i18n-placeholder="cc.notePlaceholder" placeholder="Optional note..."></textarea>
+
+        <div id="resultsCount" class="results-count"></div>
+
+        <div class="table-wrapper">
+          <table id="ccTable">
+            <thead>
+              <tr>
+                <th><input type="checkbox" id="selectAllCheck"></th>
+                <th data-i18n="cc.colStudent">Student</th>
+                <th data-i18n="cc.colSubject">Subject</th>
+                <th data-i18n="cc.colType">Type</th>
+                <th data-i18n="cc.colAbsence">Absence Date</th>
+                <th data-i18n="cc.colReplacement">Replacement</th>
+                <th data-i18n="cc.colStatus">Status</th>
+                <th data-i18n="cc.colPU">PU</th>
+                <th data-i18n="cc.colActions">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="ccTableBody"></tbody>
+          </table>
+          <div id="emptyState" class="empty-state hidden">
+            <div class="empty-icon">📭</div>
+            <p data-i18n="cc.emptyState">No change class records found.</p>
+          </div>
         </div>
+
+        <div id="cardsContainer" class="cards-container"></div>
+      </section>
+
+      <!-- ================= TAB 2: LINKS ================= -->
+      <section id="ptab-links" class="hidden">
+        <p class="tab-hint" data-i18n="links.hint">Generate a private link + code for each family. Parents use it to request change classes.</p>
+        <div class="controls">
+          <div class="segmented" id="linksSegmented">
+            <button class="segment active" data-lseg="all" data-i18n="links.filterAll">All</button>
+            <button class="segment" data-lseg="hasLink" data-i18n="links.filterHasLink">With Link</button>
+            <button class="segment" data-lseg="noLink" data-i18n="links.filterNoLink">No Link</button>
+            <button class="segment" data-lseg="disabled" data-i18n="links.filterDisabled">Disabled</button>
+          </div>
+          <input type="text" id="linksSearch" class="search-input" data-i18n-placeholder="links.searchPlaceholder" placeholder="Search family...">
+        </div>
+        <div class="table-wrapper">
+          <table id="linksTable">
+            <thead>
+              <tr>
+                <th data-i18n="links.colFamily">Family</th>
+                <th data-i18n="links.colStudents">Students</th>
+                <th data-i18n="links.colStatus">Link Status</th>
+                <th data-i18n="links.colCode">Code</th>
+                <th data-i18n="links.colCreated">Created</th>
+                <th data-i18n="links.colActions">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="linksTableBody"></tbody>
+          </table>
+          <div id="linksEmpty" class="empty-state hidden">
+            <div class="empty-icon">🔗</div>
+            <p data-i18n="links.noFamilies">No families found.</p>
+          </div>
+        </div>
+        <div id="linksCards" class="cards-container"></div>
+      </section>
+
+      <!-- ================= TAB 3: PENDING ================= -->
+      <section id="ptab-pending" class="hidden">
+        <p class="tab-hint" data-i18n="pending.hint">Approve or reject change-class requests submitted by parents. Requests auto-expire after 30 days.</p>
+        <div class="controls">
+          <div class="segmented" id="pendingSegmented">
+            <button class="segment active" data-pseg="pending" data-i18n="pending.filterPending">Pending</button>
+            <button class="segment" data-pseg="all" data-i18n="pending.filterAll">All</button>
+            <button class="segment" data-pseg="approved" data-i18n="pending.filterApproved">Approved</button>
+            <button class="segment" data-pseg="rejected" data-i18n="pending.filterRejected">Rejected</button>
+            <button class="segment" data-pseg="expired" data-i18n="pending.filterExpired">Expired</button>
+            <button class="segment" data-pseg="cancelled" data-i18n="pending.filterCancelled">Cancelled</button>
+          </div>
+          <button id="notifyBtn" class="notify-btn">🔔 <span data-i18n="pending.notifyBtn">Enable Notifications</span></button>
+          <button id="pendingExportBtn" class="export-btn">📊 <span data-i18n="pending.export">Export</span></button>
+        </div>
+        <div class="table-wrapper">
+          <table id="pendingTable">
+            <thead>
+              <tr>
+                <th data-i18n="pending.colReceived">Received</th>
+                <th data-i18n="pending.colStudent">Student</th>
+                <th data-i18n="pending.colSubject">Subject</th>
+                <th data-i18n="pending.colAbsence">Absence</th>
+                <th data-i18n="pending.colPreferred">Preferred</th>
+                <th data-i18n="pending.colReason">Reason</th>
+                <th data-i18n="pending.colStatus">Status</th>
+                <th data-i18n="pending.colActions">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="pendingTableBody"></tbody>
+          </table>
+          <div id="pendingEmpty" class="empty-state hidden">
+            <div class="empty-icon">🎉</div>
+            <p data-i18n="pending.emptyState">No parent requests.</p>
+          </div>
+        </div>
+        <div id="pendingCards" class="cards-container"></div>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- ================= MODALS ================= -->
+
+  <!-- Add / Edit -->
+  <div id="ccModal" class="modal hidden">
+    <div class="modal-content dropbook-modal-content">
+      <span class="close-modal" id="closeCcModal">×</span>
+      <h2 id="ccModalTitle" data-i18n="cc.addTitle">Add Change Class</h2>
+      <form id="ccForm" class="cc-form">
+        <div class="modal-grid">
+          <div class="info-group full-width">
+            <label data-i18n="cc.student">Student *</label>
+            <div class="search-wrapper">
+              <input type="text" id="studentSearch" data-i18n-placeholder="cc.searchStudent" placeholder="Search student..." autocomplete="off">
+              <div id="studentResults" class="search-results hidden"></div>
+            </div>
+            <div id="selectedStudentInfo" class="selected-student-info hidden">
+              <div>
+                <h3 id="selectedStudentName"></h3>
+                <div class="student-meta" id="selectedStudentMeta"></div>
+              </div>
+              <button type="button" id="changeStudentBtn" class="change-student-btn" data-i18n="cc.changeStudent">Change</button>
+            </div>
+            <input type="hidden" id="selectedStudentId">
+          </div>
+
+          <div class="info-group">
+            <label for="subjectSelect" data-i18n="cc.subject">Subject *</label>
+            <select id="subjectSelect" required><option value="" data-i18n="cc.selectSubject">Select subject</option></select>
+          </div>
+
+          <div class="info-group">
+            <label for="typeSelect" data-i18n="cc.type">Type *</label>
+            <select id="typeSelect" required>
+              <option value="CC_PU">CC PU (Class Change + Pick Up)</option>
+              <option value="CC_NO_PU" selected>CC No PU</option>
+              <option value="MC">MC (Missed Class)</option>
+              <option value="MC_PU">MC PU</option>
+            </select>
+          </div>
+
+          <div class="info-group">
+            <label for="absenceDate" data-i18n="cc.absenceDate">Absence Date *</label>
+            <input type="date" id="absenceDate" required>
+          </div>
+
+          <div class="info-group">
+            <label for="originalTime" data-i18n="cc.originalTime">Original Time</label>
+            <input type="time" id="originalTime">
+          </div>
+
+          <div class="info-group replacement-field">
+            <label for="replacementDate" data-i18n="cc.replacementDate">Replacement Date *</label>
+            <input type="date" id="replacementDate">
+          </div>
+
+          <div class="info-group replacement-field">
+            <label for="replacementTime" data-i18n="cc.replacementTime">Replacement Time *</label>
+            <input type="time" id="replacementTime">
+          </div>
+
+          <div class="info-group">
+            <label for="statusSelect" data-i18n="cc.status">Status</label>
+            <select id="statusSelect">
+              <option value="scheduled" data-i18n="cc.statusScheduled">Scheduled</option>
+              <option value="completed" data-i18n="cc.statusCompleted">Completed</option>
+              <option value="missed" data-i18n="cc.statusMissed">Missed</option>
+              <option value="cancelled" data-i18n="cc.statusCancelled">Cancelled</option>
+            </select>
+          </div>
+
+          <div class="info-group">
+            <label class="checkbox-label"><input type="checkbox" id="homeworkPU"> <span data-i18n="cc.homeworkPU">Homework Picked Up</span></label>
+          </div>
+
+          <div class="info-group full-width">
+            <label for="noteInput" data-i18n="cc.note">Note</label>
+            <textarea id="noteInput" rows="2" data-i18n-placeholder="cc.notePlaceholder" placeholder="Optional note about this change class..."></textarea>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="cancelCcBtn" class="secondary" data-i18n="common.cancel">Cancel</button>
+          <button type="submit" id="saveCcBtn" class="primary" data-i18n="cc.save">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Detail -->
+  <div id="detailModal" class="modal hidden">
+    <div class="modal-content dropbook-modal-content">
+      <span class="close-modal" id="closeDetailModal">×</span>
+      <h2 data-i18n="cc.detailTitle">Change Class Details</h2>
+      <div id="detailContent"></div>
+      <div class="modal-actions">
+        <button id="deleteDetailBtn" class="cancel-request-btn modal-left-btn">🗑 <span data-i18n="cc.delete">Delete</span></button>
+        <button id="editDetailBtn" class="primary">✏️ <span data-i18n="cc.edit">Edit</span></button>
+        <button id="closeDetailBtn" class="secondary" data-i18n="common.close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Family link card -->
+  <div id="linkCardModal" class="modal hidden">
+    <div class="modal-content dropbook-modal-content">
+      <span class="close-modal" id="closeLinkCard">×</span>
+      <h2>📇 <span data-i18n="links.cardTitle">Family Link Card</span></h2>
+      <h3 id="lcFamilyName"></h3>
+      <div id="lcStatusRow" style="margin-bottom:0.75rem;"></div>
+      <div class="link-card-grid">
+        <div class="lc-qr-wrap"><div id="lcQr"></div></div>
+        <div class="lc-info">
+          <label for="lcLink" data-i18n="links.link">Link</label>
+          <input type="text" id="lcLink" readonly>
+          <label for="lcCode" data-i18n="links.code">Code</label>
+          <input type="text" id="lcCode" class="lc-code-input" readonly>
+          <div class="lc-share-row">
+            <button class="action-btn" id="lcCopyLink">📋 <span data-i18n="links.copyLink">Copy Link</span></button>
+            <button class="action-btn" id="lcCopyCode">🔑 <span data-i18n="links.copyCode">Copy Code</span></button>
+            <button class="action-btn lc-wa" id="lcWhatsapp">💬 WhatsApp</button>
+            <button class="action-btn lc-sms" id="lcSms">✉️ <span data-i18n="links.sms">SMS</span></button>
+            <button class="action-btn lc-mail" id="lcEmail">📧 <span data-i18n="links.emailBtn">Email</span></button>
+            <button class="action-btn lc-share" id="lcShare">📱 <span data-i18n="links.share">Share</span></button>
+            <button class="action-btn" id="lcPrint">🖨 <span data-i18n="links.print">Print Card</span></button>
+          </div>
+          <div class="lc-share-row">
+            <button class="action-btn" id="lcSync">🔄 <span data-i18n="links.sync">Sync Student Data</span></button>
+            <button class="action-btn lc-regen" id="lcRegenerate">♻️ <span data-i18n="links.regenerate">Regenerate</span></button>
+            <button class="action-btn action-cancel" id="lcToggleActive"></button>
+          </div>
+        </div>
+      </div>
+      <p class="lc-note">🔒 <span data-i18n="links.printNote">Please keep this link and code private.</span></p>
+    </div>
+  </div>
+
+  <!-- Phone chooser -->
+  <div id="phoneModal" class="modal hidden">
+    <div class="modal-content">
+      <span class="close-modal" id="closePhoneModal">×</span>
+      <h2 data-i18n="links.choosePhone">Choose a number to send to</h2>
+      <div id="phoneList" class="phone-list"></div>
+    </div>
+  </div>
+
+  <!-- Reject request -->
+  <div id="rejectModal" class="modal hidden">
+    <div class="modal-content">
+      <span class="close-modal" id="closeRejectModal">×</span>
+      <h2 data-i18n="pending.rejectTitle">Reject Request</h2>
+      <div class="info-group" style="text-align:left;margin:1rem 0;">
+        <label for="rejectTemplateSel" data-i18n="pending.rejectTemplate">Reason</label>
+        <select id="rejectTemplateSel">
+          <option value="slotFull" data-i18n="pending.tplSlotFull">Slot full</option>
+          <option value="anotherDay" data-i18n="pending.tplAnotherDay">Please choose another day</option>
+          <option value="centerClosed" data-i18n="pending.tplCenterClosed">Center closed</option>
+          <option value="other" data-i18n="pending.tplOther">Other</option>
+        </select>
+      </div>
+      <div class="info-group" style="text-align:left;">
+        <label for="rejectCustom" data-i18n="pending.customReason">Custom reason (if "Other")</label>
+        <textarea id="rejectCustom" rows="2" data-i18n-placeholder="pending.rejectReasonPh" placeholder="Write a custom reason..."></textarea>
       </div>
       <div class="modal-actions">
-        <button type="button" id="cancelCcBtn" class="secondary" data-i18n="common.cancel">Cancel</button>
-        <button type="submit" id="saveCcBtn" class="primary" data-i18n="cc.save">Save</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<!-- ══════════ DETAIL MODAL ══════════ -->
-<div id="detailModal" class="modal hidden">
-  <div class="modal-content dropbook-modal-content">
-    <span class="close-modal" id="closeDetailModal">×</span>
-    <h2 data-i18n="cc.detailTitle">Change Class Details</h2>
-    <div id="detailContent"></div>
-    <div class="modal-actions">
-      <button type="button" id="deleteDetailBtn" class="cancel-request-btn modal-left-btn">🗑 <span data-i18n="cc.delete">Delete</span></button>
-      <button type="button" id="editDetailBtn" class="primary">✏️ <span data-i18n="cc.edit">Edit</span></button>
-      <button type="button" id="closeDetailBtn" class="secondary" data-i18n="common.close">Close</button>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════ LINK CARD MODAL ══════════ -->
-<div id="linkCardModal" class="modal hidden">
-  <div class="modal-content dropbook-modal-content">
-    <span class="close-modal" id="closeLinkCard">×</span>
-    <h2>📇 <span data-i18n="links.cardTitle">Family Link Card</span></h2>
-    <div id="lcStatusRow" style="margin-bottom:0.75rem;"></div>
-    <div class="link-card-grid">
-      <div class="lc-qr-wrap"><div id="lcQr"></div></div>
-      <div class="lc-info">
-        <h3 id="lcFamilyName"></h3>
-        <div class="info-group">
-          <label data-i18n="links.link">Link</label>
-          <input type="text" id="lcLink" readonly>
-        </div>
-        <div class="info-group">
-          <label data-i18n="links.code">Code</label>
-          <input type="text" id="lcCode" readonly class="lc-code-input">
-        </div>
-        <div class="lc-share-row">
-          <button type="button" id="lcCopyLink" class="action-btn action-edit">📋 <span data-i18n="links.copyLink">Copy Link</span></button>
-          <button type="button" id="lcCopyCode" class="action-btn action-edit">🔑 <span data-i18n="links.copyCode">Copy Code</span></button>
-        </div>
-        <div class="lc-share-row">
-          <button type="button" id="lcWhatsapp" class="action-btn lc-wa">💬 WhatsApp</button>
-          <button type="button" id="lcSms" class="action-btn lc-sms">✉️ <span data-i18n="links.sms">SMS</span></button>
-          <button type="button" id="lcEmail" class="action-btn lc-mail">📧 <span data-i18n="links.emailBtn">Email</span></button>
-          <button type="button" id="lcShare" class="action-btn lc-share">📱 <span data-i18n="links.share">Share</span></button>
-        </div>
-        <div class="lc-share-row">
-          <button type="button" id="lcPrint" class="action-btn action-view">🖨 <span data-i18n="links.print">Print Card</span></button>
-          <button type="button" id="lcSync" class="action-btn action-view">🔄 <span data-i18n="links.sync">Sync Student Data</span></button>
-        </div>
-        <div class="lc-share-row">
-          <button type="button" id="lcToggleActive" class="action-btn action-cancel"></button>
-          <button type="button" id="lcRegenerate" class="action-btn lc-regen">♻️ <span data-i18n="links.regenerate">Regenerate</span></button>
-        </div>
+        <button id="cancelRejectBtn" class="secondary" data-i18n="common.cancel">Cancel</button>
+        <button id="confirmRejectBtn" class="cancel-request-btn" data-i18n="pending.reject">Reject</button>
       </div>
     </div>
-    <p class="lc-note">🔒 <span data-i18n="links.printNote">Please keep this link and code private.</span></p>
   </div>
-</div>
 
-<!-- ══════════ PHONE CHOOSER MODAL ══════════ -->
-<div id="phoneModal" class="modal hidden">
-  <div class="modal-content confirm-modal-content">
-    <span class="close-modal" id="closePhoneModal">×</span>
-    <h3 data-i18n="links.choosePhone">Choose a number to send to</h3>
-    <div id="phoneList" class="phone-list"></div>
-  </div>
-</div>
-
-<!-- ══════════ REJECT MODAL ══════════ -->
-<div id="rejectModal" class="modal hidden">
-  <div class="modal-content confirm-modal-content">
-    <span class="close-modal" id="closeRejectModal">×</span>
-    <h3 data-i18n="pending.rejectTitle">Reject Request</h3>
-    <div class="info-group" style="text-align:left;margin-bottom:0.75rem;">
-      <label data-i18n="pending.rejectTemplate">Reason</label>
-      <select id="rejectTemplateSel">
-        <option value="slotFull" data-i18n="pending.tplSlotFull">Slot full</option>
-        <option value="anotherDay" data-i18n="pending.tplAnotherDay">Please choose another day</option>
-        <option value="centerClosed" data-i18n="pending.tplCenterClosed">Center closed</option>
-        <option value="other" data-i18n="pending.tplOther">Other</option>
-      </select>
-    </div>
-    <div class="info-group" style="text-align:left;">
-      <textarea id="rejectCustom" rows="2" data-i18n-placeholder="pending.rejectReasonPh" placeholder="Write a custom reason..."></textarea>
-    </div>
-    <div class="modal-actions">
-      <button type="button" id="cancelRejectBtn" class="secondary" data-i18n="common.cancel">Cancel</button>
-      <button type="button" id="confirmRejectBtn" class="cancel-request-btn" data-i18n="pending.reject">Reject</button>
+  <!-- Parent request detail -->
+  <div id="reqDetailModal" class="modal hidden">
+    <div class="modal-content dropbook-modal-content">
+      <span class="close-modal" id="closeReqDetail">×</span>
+      <h2 data-i18n="pending.detailTitle">Request Details</h2>
+      <div id="reqDetailContent"></div>
+      <div class="modal-actions">
+        <button id="closeReqDetailBtn" class="secondary" data-i18n="common.close">Close</button>
+      </div>
     </div>
   </div>
-</div>
 
-<!-- ══════════ REQUEST DETAIL MODAL ══════════ -->
-<div id="reqDetailModal" class="modal hidden">
-  <div class="modal-content dropbook-modal-content">
-    <span class="close-modal" id="closeReqDetail">×</span>
-    <h2 data-i18n="pending.detailTitle">Request Details</h2>
-    <div id="reqDetailContent"></div>
-    <div class="modal-actions">
-      <button type="button" id="closeReqDetailBtn" class="secondary" data-i18n="common.close">Close</button>
+  <!-- Confirm -->
+  <div id="confirmModal" class="modal hidden">
+    <div class="modal-content confirm-modal-content">
+      <h3 id="confirmTitle" data-i18n="common.confirm">Confirm</h3>
+      <p id="confirmMessage" class="confirm-message"></p>
+      <div class="modal-actions" style="justify-content:center;">
+        <button id="confirmCancelBtn" class="secondary" data-i18n="common.cancel">Cancel</button>
+        <button id="confirmOkBtn" class="primary" data-i18n="common.confirm">Confirm</button>
+      </div>
     </div>
   </div>
-</div>
 
-<!-- ══════════ CONFIRM MODAL ══════════ -->
-<div id="confirmModal" class="modal hidden">
-  <div class="modal-content confirm-modal-content">
-    <h3 id="confirmTitle">Confirm</h3>
-    <p id="confirmMessage" class="confirm-message"></p>
-    <div class="modal-actions">
-      <button type="button" id="confirmCancelBtn" class="secondary" data-i18n="common.cancel">Cancel</button>
-      <button type="button" id="confirmOkBtn" class="primary" data-i18n="common.confirm">Confirm</button>
-    </div>
-  </div>
-</div>
+  <div id="toast" class="toast hidden"></div>
+  <div id="printArea"></div>
 
-<!-- 🖨 PRINT AREA (link card) -->
-<div id="printArea"></div>
-
-<div id="toast" class="toast hidden"></div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script type="module" src="change-classes.js"></script>
+  <script type="module" src="./change-classes.js"></script>
 </body>
 </html>

@@ -21,6 +21,7 @@ export default {
     removeOther: "Remove other event",
     noOtherEvents: "No other events.",
     editCalendarOtherBtn: "🩷 Edit Holidays / Other Events for this Date",
+    
 
     dtWarning: {
       publicHoliday: "{{date}} is a public holiday{{name}}",

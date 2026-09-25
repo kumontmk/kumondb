@@ -7,6 +7,7 @@ export default {
   cc: {
     tabClasses: "調堂",
     parentBadgeTitle: "家長透過連結提交",
+    filterActive: "待跟進",                                    // 🆕 預設分頁（已安排＋缺席）
     filterAll: "全部", filterScheduled: "已安排", filterCompleted: "已完成",
     filterMissed: "缺席", filterCancelled: "已取消",
     searchPlaceholder: "搜尋學生、科目...", from: "由", to: "至",
@@ -16,6 +17,7 @@ export default {
     statusScheduled: "已安排", statusCompleted: "已完成", statusMissed: "缺席", statusCancelled: "已取消",
     emptyState: "沒有調堂記錄。",
     view: "查看", edit: "編輯", markComplete: "完成", cancel: "取消", delete: "刪除",
+    markCompletedBtn: "標記完成",                              // 🆕 批次按鈕
     selectedCount: "已選 {{count}} 項", clearSelection: "清除選擇",
     addTitle: "新增調堂", editTitle: "編輯調堂",
     student: "學生 *", searchStudent: "以姓名、拼音、學號搜尋...", changeStudent: "更換",
@@ -39,7 +41,17 @@ export default {
     detailTitle: "調堂詳情", detailStudent: "學生資料", detailChangeClass: "調堂詳情",
     name: "姓名", pinyin: "拼音", grade: "年級", studentNumber: "學號", school: "學校", homeCenter: "所屬中心",
     historyTimeline: "記錄時間線", noHistory: "暫無記錄。",
-    nothingToExport: "沒有可匯出的記錄。", exportSuccess: "✅ 已成功匯出。"
+    nothingToExport: "沒有可匯出的記錄。", exportSuccess: "✅ 已成功匯出。",
+    // 🆕 月份篩選＋其他
+    allMonths: "全部月份",
+    thisMonth: "本月",
+    prevMonth: "上個月",
+    nextMonth: "下個月",
+    monthByAbsence: "按缺席日期",
+    monthByReplacement: "按補堂日期",
+    overdue: "已過期",
+    overdueTip: "已過期——補堂日期已過",
+    showingRecords: "顯示 {{shown}}／共 {{total}} 筆記錄"
   },
   links: {
     tabTitle: "連結",
@@ -77,6 +89,7 @@ export default {
     duplicateWarn: "⚠️ 該學生在此缺席日期已有調堂記錄。仍要批准嗎？",
     rejectTitle: "拒絕申請", rejectTemplate: "原因",
     tplSlotFull: "該時段已滿", tplAnotherDay: "請選擇其他日子", tplCenterClosed: "中心暫停開放", tplOther: "其他",
+    customReason: "自訂原因（如選「其他」）",                  // 🆕
     rejectReasonPh: "輸入自訂原因...",
     approvedMsg: "✅ 已批准 — 已加入調堂記錄。", rejectedMsg: "✅ 已拒絕申請。",
     emptyState: "沒有家長申請。",

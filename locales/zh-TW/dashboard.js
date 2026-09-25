@@ -121,7 +121,8 @@ export default {
       myNotesDesc: "個人備註與提醒",
       labelEditor: "標籤編輯器",
       labelEditorDesc: "產生並列印學生標籤（A4、24 格）",
-      
+      changeClasses: "調整班級",
+      changeClassesDesc: "管理 CC/MC 請求、替代與報告",
     },
 
     links: {
