@@ -741,7 +741,8 @@ input[type="date"]::-webkit-datetime-edit {
   border-radius: 70%;
   background: transparent;
   cursor: pointer;
-  user-select: none;
+  -webkit-user-select: none;
+    user-select: none;
   -webkit-tap-highlight-color: transparent;
   transition: transform .18s cubic-bezier(.2,.8,.2,1);
 }
@@ -753,7 +754,11 @@ input[type="date"]::-webkit-datetime-edit {
 .tap-log-btn::before {
   content: '';
   position: absolute;
-  inset: 0;
+    top: 0; 
+    left: 0; 
+    right: 0; 
+    bottom: 0; 
+    inset: 0; /* Keep inset for modern browsers, the above 4 act as fallback */
   border-radius: 50%;
   pointer-events: none;
   animation: tapPing 2.6s cubic-bezier(0,0,.2,1) infinite;
@@ -765,7 +770,11 @@ input[type="date"]::-webkit-datetime-edit {
 }
 .tap-face {
   position: absolute;
-  inset: 0;
+    top: 0; 
+    left: 0; 
+    right: 0; 
+    bottom: 0; 
+    inset: 0; /* Keep inset for modern browsers, the above 4 act as fallback */
   border-radius: 50%;
   overflow: hidden;
   display: flex;

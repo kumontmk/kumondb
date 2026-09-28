@@ -2,11 +2,33 @@
 import { db, logout, requireAuth } from './auth.js';
 import { ref, get, update, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { i18nReady, t } from './timecard-i18n.js';
 
-await i18nReady.catch(() => {});
-
+// 🌐 Safe i18n boot (No top-level await, prevents old iOS parse deaths)
+let t = (key, fallback) => fallback || key;
+const i18nBoot = (async () => {
+  try {
+    const mod = await Promise.race([
+      import('./timecard-i18n.js'),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('i18n timeout')), 2500))
+    ]);
+    t = mod.t;
+    await Promise.race([
+      Promise.resolve(mod.i18nReady).catch(() => {}),
+      new Promise(res => setTimeout(res, 1500))
+    ]);
+    
+    // 🛡️ Only re-render if the app has fully booted (prevents "Cannot access before initialization" errors)
+    if (window.__TC_BOOTED) {
+      if (typeof renderTimecardTable === 'function') renderTimecardTable();
+      if (typeof updateTapButton === 'function') updateTapButton();
+    }
+  } catch (err) {
+    console.warn('⚠️ i18n unavailable, using fallback strings:', err);
+  }
+})();
+const bootStart = Date.now();
 if (!requireAuth()) throw new Error("Auth required");
+
 const auth = getAuth();
 const logoutBtn = document.getElementById('logoutBtn');
 if (logoutBtn) logoutBtn.addEventListener('click', logout);
@@ -48,10 +70,17 @@ let timecardLoading = true;
 let timecardLoadError = null;
 let activeTimecardKey = null;
 
+// 🛡️ Safe storage wrappers (prevents QuotaExceeded crashes on old iOS Private mode)
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function ssSet(k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} }
+function ssGet(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
+function ssRemove(k) { try { sessionStorage.removeItem(k); } catch (e) {} }
+
 function getAuthUid() {
   if (auth.currentUser?.uid) return auth.currentUser.uid;
   try {
-    const stored = sessionStorage.getItem('kumonUser');
+    const stored = ssGet('kumonUser');
     if (stored) {
       const parsed = JSON.parse(stored);
       if (parsed && parsed.uid) return parsed.uid;
@@ -62,25 +91,25 @@ function getAuthUid() {
 
 function cacheEmployee(dbKey, data) {
     const uid = getAuthUid();
-    if (uid) localStorage.setItem(CACHE_EMP_PREFIX + uid, JSON.stringify({ dbKey, data }));
+    if (uid) lsSet(CACHE_EMP_PREFIX + uid, JSON.stringify({ dbKey, data }));
 }
 
 function getCachedEmployee() {
     const uid = getAuthUid();
     if (!uid) return null;
-    const raw = localStorage.getItem(CACHE_EMP_PREFIX + uid);
+    const raw = lsGet(CACHE_EMP_PREFIX + uid);
     return raw ? JSON.parse(raw) : null;
 }
 
 function cacheUserLogs(empId, date, logs) {
     const uid = getAuthUid();
-    if (uid) localStorage.setItem(CACHE_LOGS_PREFIX + uid + '_' + date, JSON.stringify(logs));
+    if (uid) lsSet(CACHE_LOGS_PREFIX + uid + '_' + date, JSON.stringify(logs));
 }
 
 function getCachedUserLogs(date) {
     const uid = getAuthUid();
     if (!uid) return null;
-    const raw = localStorage.getItem(CACHE_LOGS_PREFIX + uid + '_' + date);
+    const raw = lsGet(CACHE_LOGS_PREFIX + uid + '_' + date);
     return raw ? JSON.parse(raw) : null;
 }
 
@@ -481,6 +510,36 @@ function setDataReady() {
     if (tapLogBtn) tapLogBtn.classList.remove('is-loading');
 }
 
+// 🐕 Watchdog: never leave the tap button spinning forever on old iOS
+function startBootWatchdog() {
+  setTimeout(() => {
+    if (!isDataReady) {
+      console.warn('⚠️ Boot watchdog: forcing UI ready state');
+      setDataReady();
+    }
+    if (!employeesLoaded) {
+      loadEmployees(); // one retry
+      setTimeout(() => {
+        if (!employeesLoaded) {
+          showResultModal(false, '⚠️ Could not load employee data. Check connection and refresh.');
+        }
+      }, 8000);
+    }
+  }, 6000);
+}
+
+// 🩺 On-device diagnostics: shows boot errors ON SCREEN
+function reportBootError(msg) {
+  if (Date.now() - bootStart < 15000) {
+    console.error('💥 Boot error:', msg);
+    if (typeof showResultModal === 'function') showResultModal(false, '⚠️ ' + msg);
+  }
+}
+window.addEventListener('error', (e) => reportBootError(e.message || 'Unknown error'));
+window.addEventListener('unhandledrejection', (e) =>
+  reportBootError((e.reason && e.reason.message) || 'Unhandled promise rejection')
+);
+
 function getI18nText(key, fallback) {
     try {
         const value = t(key);
@@ -546,17 +605,29 @@ function minutesToTime(mins) {
 if (datePicker && !datePicker.value) datePicker.value = getTodayStr();
 hydrateFromCache();
 
-window.addEventListener('DOMContentLoaded', () => {
-  // 🚨 FIX: Use local time instead of UTC
-  if (datePicker) datePicker.value = getTodayStr();
-  
-  hydrateFromCache(); 
-  
+let timecardInitStarted = false;
+function initTimecard() {
+  if (timecardInitStarted) return;
+  timecardInitStarted = true;
+  window.__TC_BOOTED = true; // Signal to HTML watchdog that we survived
+
+  if (datePicker && !datePicker.value) datePicker.value = getTodayStr();
+  hydrateFromCache();
   loadEmployees();
   loadFirebaseCenters();
   if (datePicker) setupTimecardListener(datePicker.value);
   checkNfcUrlClockIn();
-});
+  startBootWatchdog();
+}
+
+function onDomReady(fn) {
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', fn, { once: true });
+  } else {
+    fn(); // DCL already fired (happens on older Safari)
+  }
+}
+onDomReady(initTimecard);
 
 function loadFirebaseCenters() {
   onValue(ref(db, 'centers'), (snapshot) => {
@@ -1311,8 +1382,8 @@ function checkNfcUrlClockIn() {
   const params = new URLSearchParams(window.location.search);
   let centerId = params.get('center');
   let isNfcTrigger = params.get('nfc_clock') === '1';
-  if (isNfcTrigger && centerId) sessionStorage.setItem('pendingNfcCenter', centerId);
-  if (!centerId) centerId = sessionStorage.getItem('pendingNfcCenter');
+  if (isNfcTrigger && centerId) ssSet('pendingNfcCenter', centerId);
+  if (!centerId) centerId = ssGet('pendingNfcCenter');
 
   if (centerId) {
     showResultModal(true, '📡 NFC Tag Detected!<br>Loading data & verifying...');
@@ -1322,7 +1393,7 @@ function checkNfcUrlClockIn() {
       if (employeesLoaded && centersLoaded && authInitialized) {
         clearInterval(checkInterval);
         window.history.replaceState({}, document.title, window.location.pathname);
-        sessionStorage.removeItem('pendingNfcCenter');
+        ssRemove('pendingNfcCenter');
         if (!currentEmployeeId) {
           showResultModal(false, '🚫 You must be logged in.<br>Please log in to the web app, then tap the NFC tag again.');
           return;
@@ -1567,6 +1638,10 @@ if (tapLogBtn) {
       return;
     }
 
+    if (!employeesLoaded) {
+      showResultModal(false, '⏳ Still loading employee data, please wait a second...');
+      return;
+    }
     if (!currentEmployeeId || !currentEmployeeData) {
       showResultModal(false, t('timecard.tapLoginRequired'));
       return;

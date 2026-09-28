@@ -148,5 +148,21 @@
   <script type="module" src="timecard-i18n.js"></script>
   <script type="module" src="timecard.js"></script>
   <script type="module" src="./activity-logger-init.js"></script>
+
+  <script>
+  (function () {
+    setTimeout(function () {
+      if (window.__TC_BOOTED) return;
+      var btn = document.getElementById('tapLogBtn');
+      if (btn) btn.classList.remove('is-loading');
+      var m = navigator.userAgent.match(/OS (\d+[_.]\d+)/);
+      var banner = document.createElement('div');
+      banner.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:9999;background:#b91c1c;color:#fff;padding:10px 14px;font:600 14px -apple-system,sans-serif;text-align:center;';
+      banner.textContent = '⚠️ Timecard failed to start (iOS ' + (m ? m[1] : '?') + '). Please refresh, or update iOS if possible.';
+      document.body.appendChild(banner);
+    }, 12000);
+  })();
+  </script>
+
 </body>
 </html>
