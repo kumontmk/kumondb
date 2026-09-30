@@ -121,6 +121,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     await initPOCalendar();
     initCalendarNav();
+    initWeeklyReport(); 
     initFAB();
     initQuickInquiry();
     setupSchedulePOModalListeners();
@@ -629,7 +630,8 @@ async function initPOCalendar() {
               name: sub.name, 
               startLevel: sub.startLevel || '-', 
               startWS: sub.startWS || '-',
-              currentLevel: sub.currentLevel || '-' 
+              currentLevel: sub.currentLevel || '-',
+              timeslots: Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {}) // 🆕 For PO time fallback in reports
             }));
           poDataMap[dateKey].push({
             id,
@@ -644,21 +646,25 @@ async function initPOCalendar() {
           });
         }
       });
+      
       // Map Diagnostic Tests to dtDataMap
       dtDataMap = {};
       Object.entries(students).forEach(([id, s]) => {
-        if (s.diagnosticTests && Array.isArray(s.diagnosticTests)) {
-          s.diagnosticTests.forEach(dt => {
-            if (dt.date) {
-              if (!dtDataMap[dt.date]) dtDataMap[dt.date] = [];
-              dtDataMap[dt.date].push({
-                id: id,
-                studentData: s,
-                dtData: dt
-              });
-            }
-          });
-        }
+        // 🆕 Hardened: Firebase sometimes converts arrays to objects. Handle both safely.
+        const dtList = Array.isArray(s.diagnosticTests) 
+          ? s.diagnosticTests 
+          : Object.values(s.diagnosticTests || {});
+          
+        dtList.forEach(dt => {
+          if (dt.date) {
+            if (!dtDataMap[dt.date]) dtDataMap[dt.date] = [];
+            dtDataMap[dt.date].push({
+              id: id,
+              studentData: s,
+              dtData: dt
+            });
+          }
+        });
       });
     }
     const calSnap = await get(ref(db, `centers/${centerId}/calendar`));
@@ -673,6 +679,8 @@ async function initPOCalendar() {
     console.error("Error loading calendar data: ", err);
   }
 }
+
+
 
 function renderDualCalendar() {
     const today = new Date(); // Actual current date (used for highlighting "today")
@@ -731,6 +739,159 @@ function initCalendarNav() {
             renderDualCalendar();
         });
     }
+}
+
+// ============================================
+// 📋 WEEKLY DT & PO REPORT (today → +7 days)
+// ============================================
+const WR_CN_DOW = ['日','一','二','三','四','五','六'];
+const WR_EN_DOW = ['Sun','Mon','Tues','Weds','Thurs','Fri','Sat'];
+const WR_SUBJ_ABBR = { 'Math':'M', 'Chinese (Trad)':'Chi', 'Chinese (Simp)':'Chi', 'English ERP':'ERP', 'English EFL':'EFL' };
+const WR_REPORT_DAYS = 7; // today + 7 days inclusive
+
+function wrPad(n){ return String(n).padStart(2,'0'); }
+function wrISO(d){ return `${d.getFullYear()}-${wrPad(d.getMonth()+1)}-${wrPad(d.getDate())}`; }
+function wrTime12(t){ if(!t) return ''; const [h,m]=t.split(':').map(Number); if(isNaN(h)) return t; const h12=h%12===0?12:h%12; return `${h12}:${wrPad(m)}`; }
+function wrDob(b){ if(!b) return ''; const [y,mo,d]=b.split('-'); return `${Number(d)}-${Number(mo)}-${Number(y)}`; }
+function wrSchoolCode(school){ const s=(school||'').trim(); if(!s) return ''; const toks=s.split(/\s+/); const last=toks[toks.length-1]; return /^[A-Z]{2,5}$/.test(last)?last:s; }
+function wrName(s){ const cn=s.nameCn||'', py=s.namePinyin||s.nickname||''; return (cn ? (py?`${cn} ${py}`:cn) : py) || 'Unknown'; }
+function wrCenterAbbr(){ const n=(centerName||'').toLowerCase();
+  if(n.includes('mei keng'))return 'MK'; if(n.includes('pac tat'))return 'PT';
+  if(n.includes('tap siac'))return 'TS'; if(n.includes('champs'))return 'C';
+  if(n.includes('t11'))return 'T11'; if(n.includes('ao'))return 'AO'; if(n.includes('am'))return 'AM';
+  return (centerName||'').substring(0,2).toUpperCase(); }
+function wrDateLabel(ds, withEn){ const d=new Date(ds+'T00:00:00'); const cn=WR_CN_DOW[d.getDay()];
+  return withEn ? `${d.getDate()}/${d.getMonth()+1} (${cn}${WR_EN_DOW[d.getDay()]})` : `${d.getDate()}/${d.getMonth()+1}(${cn})`; }
+function wrPoTime(st, ds){ if (st.poTime) return wrTime12(st.poTime);
+  const dayName = new Date(ds+'T00:00:00').toLocaleDateString('en-US',{weekday:'long'});
+  const slots = (st.subjects||[]).flatMap(s=>s.timeslots||[]).filter(ts=>ts.day===dayName && ts.time).map(ts=>ts.time).sort();
+  return wrTime12(slots[0]||''); }
+
+function buildWeeklyReport() {
+  const days = [];
+  for (let i=0;i<=WR_REPORT_DAYS;i++){ const d=new Date(); d.setDate(d.getDate()+i); days.push(wrISO(d)); }
+  const out = [];
+  // ---- DT section ----
+  days.forEach(ds => {
+    const entries = dtDataMap[ds] || [];
+    if (!entries.length) return;
+    const groups = new Map(); // student + timeslot = one line, subjects merged with &
+    entries.forEach(e => {
+      const key = `${e.id}|${e.dtData.DTtimeslot||''}`;
+      if (!groups.has(key)) groups.set(key, { e, subjects: [] });
+      groups.get(key).subjects.push(e.dtData.subject);
+    });
+    const lines = [...groups.values()].sort((a,b)=>
+      (a.e.dtData.DTtimeslot||'').localeCompare(b.e.dtData.DTtimeslot||'') ||
+      wrName(a.e.studentData).localeCompare(wrName(b.e.studentData)));
+    out.push(`DT: ${wrDateLabel(ds, true)}`);
+    lines.forEach((g,i)=>{ const s=g.e.studentData;
+      out.push(`${i+1}) ${wrTime12(g.e.dtData.DTtimeslot)} ${s.grade||''} ${wrName(s)} (${wrSchoolCode(s.school)}) ${g.subjects.map(x=>WR_SUBJ_ABBR[x]||x).join('& ')} (${wrDob(s.birthday)})`); });
+    out.push('');
+  });
+  // ---- PO section ----
+  days.forEach(ds => {
+    const list = poDataMap[ds] || [];
+    if (!list.length) return;
+    const sorted = [...list].sort((a,b)=> (wrPoTime(a,ds)||'').localeCompare(wrPoTime(b,ds)||'') || wrName(a).localeCompare(wrName(b)));
+    sorted.forEach((st,i)=>{ const time = wrPoTime(st, ds);
+      out.push(`${wrDateLabel(ds,false)} ${time?time+' ':''}${i+1}) ${st.grade||''} ${st.nameCn||st.namePinyin||''}(${wrSchoolCode(st.school)}) ${(st.subjects||[]).map(x=>WR_SUBJ_ABBR[x.name]||x.name).join('& ')} (${wrCenterAbbr()})`); });
+  });
+  return out.length ? out.join('\n').trim() : 'No DTs or POs in the next 7 days.';
+}
+
+let weeklyReportRaw = '';
+
+function wrEscapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+
+// Turns the plain-text report into styled cards (copy still uses the raw text)
+function renderWeeklyReportHtml(text) {
+  const body = document.getElementById('weeklyReportBody');
+  if (!body) return;
+  if (!text || text.startsWith('No DTs')) {
+    body.innerHTML = '<div class="wr-empty">🗓️ Nothing scheduled in this window.</div>';
+    return;
+  }
+  let html = '', groupOpen = false, poDateKey = null;
+  const closeGroup = () => { if (groupOpen) { html += '</div>'; groupOpen = false; poDateKey = null; } };
+  text.split('\n').forEach(rawLine => {
+    const line = rawLine.trim();
+    if (!line) { closeGroup(); return; }
+    if (line.startsWith('DT:')) {                       // DT day header
+      closeGroup();
+      html += `<div class="wr-day-group wr-dt"><div class="wr-day-title">📝 ${wrEscapeHtml(line)}</div>`;
+      groupOpen = true;
+    } else if (/^\d+\)/.test(line)) {                    // numbered DT entry
+      if (!groupOpen) { html += '<div class="wr-day-group wr-dt">'; groupOpen = true; }
+      html += `<div class="wr-line">${wrEscapeHtml(line)}</div>`;
+    } else {                                             // PO line: "15/9(二) 10:30 1) ..."
+      const m = line.match(/^(\d{1,2}\/\d{1,2}\([^)]*\))\s*(.*)$/);
+      if (m && poDateKey === m[1]) {
+        html += `<div class="wr-line">${wrEscapeHtml(m[2])}</div>`;
+      } else {
+        closeGroup();
+        html += `<div class="wr-day-group wr-po"><div class="wr-day-title">👨‍👩‍👧 PO · ${wrEscapeHtml(m ? m[1] : line)}</div>`;
+        if (m && m[2]) html += `<div class="wr-line">${wrEscapeHtml(m[2])}</div>`;
+        groupOpen = true; poDateKey = m ? m[1] : null;
+      }
+    }
+  });
+  closeGroup();
+  body.innerHTML = html;
+}
+
+function initWeeklyReport() {
+  const btn = document.getElementById('calReportsBtn');
+  const modal = document.getElementById('weeklyReportModal');
+  if (!btn || !modal) return;
+  
+  btn.addEventListener('click', () => {
+    const now = new Date();
+    const end = new Date(); end.setDate(end.getDate() + WR_REPORT_DAYS);
+    const rangeEl = document.getElementById('weeklyReportRange');
+    if (rangeEl) rangeEl.textContent = `${now.getDate()}/${now.getMonth() + 1} – ${end.getDate()}/${end.getMonth() + 1}/${end.getFullYear()} · Today + ${WR_REPORT_DAYS} days`;
+    
+    weeklyReportRaw = buildWeeklyReport();
+    renderWeeklyReportHtml(weeklyReportRaw);
+    modal.classList.remove('hidden');
+  });
+  
+  document.getElementById('closeWeeklyReportModal')?.addEventListener('click', () => modal.classList.add('hidden'));
+  modal.addEventListener('click', e => { if (e.target === modal) modal.classList.add('hidden'); });
+  
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) modal.classList.add('hidden');
+  });
+  
+  document.getElementById('copyWeeklyReportBtn')?.addEventListener('click', async (e) => {
+    let ok = false;
+    try { 
+      await navigator.clipboard.writeText(weeklyReportRaw); 
+      ok = true; 
+    } catch {}
+    
+    if (!ok) {
+      const ta = document.createElement('textarea');
+      ta.value = weeklyReportRaw; 
+      ta.style.cssText = 'position:fixed;opacity:0;';
+      document.body.appendChild(ta); 
+      ta.select(); 
+      ok = document.execCommand('copy'); 
+      ta.remove();
+    }
+    
+    // 🆕 Show the toast notification if copy was successful
+    if (ok) {
+      showDashboardToast('📋 Report copied to clipboard!');
+    }
+
+    const b = e.currentTarget, orig = b.textContent;
+    b.textContent = '✅ Copied!'; 
+    b.disabled = true;
+    setTimeout(() => { b.textContent = orig; b.disabled = false; }, 1500);
+  });
 }
 
 function getClosedDaysForCenter(name) {

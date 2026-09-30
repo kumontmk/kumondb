@@ -54,6 +54,9 @@
               <button id="calPrevBtn" class="cal-nav-btn" title="Previous Month">&lt;</button>
               <button id="calTodayBtn" class="cal-nav-btn cal-today-btn" title="Jump to Current Month">Today</button>
               <button id="calNextBtn" class="cal-nav-btn" title="Next Month">&gt;</button>
+
+              <button id="calReportsBtn" class="cal-nav-btn cal-today-btn" title="DT & PO report for the next 7 days">📊 Reports</button>
+
             </div>
           </div>
             <div class="calendar-legend">
@@ -596,6 +599,24 @@
     <p id="dashAttendanceScanStatus" class="hint text-center" style="margin-top:1rem;">
       Point camera at QR code...
     </p>
+  </div>
+</div>
+
+<!-- 📋 WEEKLY DT/PO REPORT MODAL -->
+<div id="weeklyReportModal" class="modal-overlay hidden">
+  <div class="modal-content">
+    <span class="close-modal" id="closeWeeklyReportModal">&times;</span>
+    <div class="wr-header">
+      <div class="wr-header-icon">📊</div>
+      <div>
+        <h3>DT &amp; PO Report</h3>
+        <p class="wr-range" id="weeklyReportRange"></p>
+      </div>
+    </div>
+    <div id="weeklyReportBody" class="wr-body"></div>
+    <div class="modal-actions wr-actions">
+      <button class="wr-copy-btn" id="copyWeeklyReportBtn" type="button">Copy Report</button>
+    </div>
   </div>
 </div>
 

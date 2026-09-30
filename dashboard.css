@@ -2654,6 +2654,69 @@ header button:hover {
 }
 
 /* =========================================
+📊 WEEKLY DT/PO REPORT MODAL
+========================================= */
+#weeklyReportModal .modal-content {
+  max-width: 620px;
+  padding: 0;
+  overflow: hidden;
+}
+#weeklyReportModal .close-modal { color: rgba(255,255,255,0.85); top: 0.85rem; right: 1.1rem; z-index: 2; }
+#weeklyReportModal .close-modal:hover { color: #fff; }
+.wr-header {
+  display: flex; align-items: center; gap: 0.9rem;
+  padding: 1.25rem 1.5rem;
+  background: linear-gradient(135deg, var(--primary-dark) 0%, #6ba3d0 100%);
+  color: #fff;
+}
+.wr-header-icon {
+  width: 44px; height: 44px; flex: 0 0 44px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.18); border-radius: 12px; font-size: 1.35rem;
+}
+.wr-header h3 { margin: 0; font-size: 1.15rem; font-weight: 700; color: #fff; }
+.wr-range { margin: 0.15rem 0 0; font-size: 0.85rem; opacity: 0.92; font-weight: 500; }
+.wr-body {
+  padding: 1.25rem 1.5rem;
+  max-height: 52vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 0.9rem;
+  background: #f8fafc;
+}
+.wr-day-group {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+  overflow: hidden; box-shadow: 0 1px 3px rgba(15,23,42,0.06);
+}
+.wr-day-title {
+  padding: 0.6rem 0.9rem; font-weight: 700; font-size: 0.9rem;
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.wr-dt { border-left: 4px solid #e65100; }
+.wr-dt .wr-day-title { background: #fff3e0; color: #b34000; }
+.wr-po { border-left: 4px solid #1565c0; }
+.wr-po .wr-day-title { background: #e3f2fd; color: #0d47a1; }
+.wr-line {
+  padding: 0.55rem 0.9rem; border-top: 1px solid #f1f5f9;
+  font-size: 0.9rem; color: #334155; line-height: 1.5;
+}
+.wr-day-title + .wr-line { border-top: none; }
+.wr-empty { text-align: center; color: #94a3b8; padding: 2rem 1rem; font-weight: 600; }
+.wr-actions { padding: 1rem 1.5rem; margin: 0; background: #fff; border-top: 1px solid #e2e8f0; }
+.wr-copy-btn {
+  width: 100%;
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+  background: var(--primary-dark); color: #fff; border: none;
+  border-radius: var(--radius); padding: 0.8rem 1.4rem;
+  font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: background 0.2s;
+}
+.wr-copy-btn:hover { background: var(--primary); }
+.wr-copy-btn:disabled { background: #16a34a; cursor: default; }
+@media (max-width: 768px) {
+  .wr-header { padding: 1rem; }
+  .wr-body { padding: 1rem; }
+  .wr-actions { padding: 0.9rem 1rem; }
+}
+
+/* =========================================
 🌐 TRADITIONAL CHINESE FONT SUPPORT
 ========================================= */
 :lang(zh-TW) body,
