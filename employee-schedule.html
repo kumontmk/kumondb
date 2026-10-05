@@ -284,6 +284,67 @@
     </div>
   </div>
 
+  <!-- ==================== 📷 EXPORT JPEG OPTIONS MODAL ==================== -->
+  <div class="modal-overlay hidden" id="exportJpegModal">
+    <div class="modal-box" style="max-width: 480px;">
+      <div class="modal-header">
+        <h2>📷 Export Schedule as JPEG</h2>
+        <button class="modal-close" id="closeExportJpegModalBtn" type="button">×</button>
+      </div>
+      <div class="modal-body">
+
+        <!-- 1. Duration -->
+        <fieldset class="shift-group">
+          <legend>1. Select Duration</legend>
+          <label class="export-option-row">
+            <input type="radio" name="jpegDuration" value="7">
+            <span>
+              <span class="option-title">📅 1 Week</span>
+              <span class="option-desc">7 days — compact, ideal for notice boards</span>
+            </span>
+          </label>
+          <label class="export-option-row">
+            <input type="radio" name="jpegDuration" value="14" checked>
+            <span>
+              <span class="option-title">🗓️ 2 Weeks</span>
+              <span class="option-desc">14 days — full fortnight (current behaviour)</span>
+            </span>
+          </label>
+        </fieldset>
+
+        <!-- 2. Start date -->
+        <fieldset class="shift-group">
+          <legend>2. Starting From</legend>
+          <input type="date" id="jpegStartDate">
+          <div style="display:flex; gap:0.5rem; margin-top:0.5rem; flex-wrap:wrap;">
+            <button type="button" class="nav-btn" id="jpegThisWeekBtn">This Week</button>
+            <button type="button" class="nav-btn" id="jpegNextWeekBtn">Next Week</button>
+          </div>
+          <div class="jpeg-preview-box" style="margin-top:0.75rem;">
+            <strong>Export range:</strong> <span id="jpegRangePreview">—</span><br>
+            <strong>File name:</strong> <span id="jpegFilePreview" style="word-break:break-all;">—</span>
+          </div>
+        </fieldset>
+
+        <!-- 3. Options -->
+        <fieldset class="shift-group">
+          <legend>3. Options</legend>
+          <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.85rem; cursor:pointer;">
+            <input type="checkbox" id="jpegGroupBySubject" style="accent-color:var(--primary-dark); width:16px; height:16px;">
+            Group employees by subject (English / Math / Chinese / Admin)
+          </label>
+        </fieldset>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="cancelExportJpegBtn" type="button">Cancel</button>
+        <div class="modal-footer-right">
+          <button class="btn-primary" id="confirmExportJpegBtn" type="button">📷 Export JPEG</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="printArea"></div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script type="module" src="employee-schedule-i18n.js"></script>

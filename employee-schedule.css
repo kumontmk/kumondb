@@ -1772,6 +1772,58 @@ textarea {
 }
 
 /* =========================================
+📷 EXPORT JPEG OPTIONS MODAL
+========================================= */
+.export-option-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  background: var(--white);
+}
+.export-option-row:last-child { margin-bottom: 0; }
+.export-option-row:hover { border-color: var(--primary); background: #f5fbff; }
+.export-option-row.selected { border-color: var(--primary-dark); background: #e8f4fd; }
+.export-option-row input[type="radio"] {
+  accent-color: var(--primary-dark);
+  width: 16px; height: 16px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.export-option-row .option-title { display: block; font-weight: 600; font-size: 0.9rem; color: var(--text); }
+.export-option-row .option-desc  { display: block; font-size: 0.75rem; color: var(--text-light); margin-top: 1px; }
+
+.jpeg-preview-box {
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+#jpegStartDate {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+#jpegStartDate:focus {
+  outline: none;
+  border-color: var(--primary-dark);
+  box-shadow: 0 0 0 2px rgba(70, 130, 180, 0.2);
+}
+
+/* =========================================
    🌐 TRADITIONAL CHINESE FONT SUPPORT
 ========================================= */
 :lang(zh-TW) body,

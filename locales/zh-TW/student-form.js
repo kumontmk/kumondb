@@ -1,5 +1,10 @@
 export default {
   studentForm: {
+    deleted: "✅ 學生已刪除。",
+    transferSuccess: "✅ 學生轉校成功。",
+    transferError: "❌ 轉校學生時發生錯誤：",
+    transferConfirm: "您確定要將此學生轉移到另一個中心嗎？",
+    transferConfirmDetails: "此操作將把學生及其所有資料移動到選定的中心。您將無法撤消此操作。",
     documentTitle: "學生表單 - KUMON 資料庫",
     accessRestricted: "🔐 存取受限",
     accessDeniedMsg: "您沒有權限檢視學生管理。",

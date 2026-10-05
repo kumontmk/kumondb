@@ -1,5 +1,10 @@
 export default {
   studentForm: {
+    deleted: "✅ Student deleted.",
+    transferSuccess: "✅ Student transferred successfully.",
+    transferError: "❌ Error transferring student: ",
+    transferConfirm: "Are you sure you want to transfer this student to another center?",
+    transferConfirmDetails: "This action will move the student and all their data to the selected center. You will not be able to undo this action.",
     documentTitle: "Student Form - Kumon DB",
     accessRestricted: "🔐 Access Restricted",
     accessDeniedMsg: "You do not have permission to view Student Management.",

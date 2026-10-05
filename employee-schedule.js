@@ -2103,7 +2103,7 @@ function setupCenterNav() {
   document.getElementById('centerNextBtn')?.addEventListener('click', () => { centerViewDate = addDays(centerViewDate, 14); renderCenterView(); });
   document.getElementById('centerTodayBtn')?.addEventListener('click', () => { centerViewDate = getMonday(new Date()); renderCenterView(); });
   document.getElementById('printCenterBtn')?.addEventListener('click', printCenterSchedule);
-  document.getElementById('exportJpegBtn')?.addEventListener('click', exportCenterAsJpeg);
+  document.getElementById('exportJpegBtn')?.addEventListener('click', openExportJpegModal);
   document.getElementById('centerGroupBySubject')?.addEventListener('change', (e) => { centerGroupBySubject = e.target.checked; renderCenterView(); });
   document.getElementById('centerMobileBackBtn')?.addEventListener('click', closeCenterMobileDetail);
   document.getElementById('centerMobileCalPrev')?.addEventListener('click', () => {
@@ -2118,11 +2118,12 @@ function setupCenterNav() {
   if (centerBackBtn) centerBackBtn.textContent = t('schedule.back');
 }
 
-function get14Days(start) {
+function getNDays(start, n) {
   const dates = [];
-  for (let i = 0; i < 14; i++) dates.push(formatDateStr(addDays(start, i)));
+  for (let i = 0; i < n; i++) dates.push(formatDateStr(addDays(start, i)));
   return dates;
 }
+function get14Days(start) { return getNDays(start, 14); }
 
 function renderCenterView() {
     if (!selectedCenterForView) return;
@@ -2313,7 +2314,7 @@ function getCenterPrintRowHtml(emp, dates, selectedCenterId, centerCalEvents, cl
     const event = centerCalEvents[dateStr];
     const isHoliday = isHolidayEvent(event);
     const isClosed = closedDays.includes(dow) && !isHoliday;
-    const isWeek2 = idx === 7;
+    const isWeek2 = dates.length > 7 && idx === 7;
     let cellCls = '';
     if (isWeek2) cellCls += ' week-sep';
     if (isToday) cellCls += ' today-cell';
@@ -2501,11 +2502,14 @@ function renderCenterShiftCell(td, shifts, isHoliday, event) {
   td.innerHTML = html;
 }
 
-function generateCenterPrintHTML() {
+function generateCenterPrintHTML(opts = {}) {
   if (!selectedCenterForView) return '';
+  const dayCount = opts.days === 7 ? 7 : 14;
+  const startDate = opts.startDate || centerViewDate;
+  const groupBySubject = (typeof opts.groupBySubject === 'boolean') ? opts.groupBySubject : centerGroupBySubject;
   const centerObj = allCenters.find(c => c.id === selectedCenterForView);
   const centerNamePrint = centerObj ? centerObj.name : 'Center';
-  const dates = get14Days(centerViewDate);
+  const dates = getNDays(startDate, dayCount);
   const firstDate = parseDate(dates[0]);
   const lastDate = parseDate(dates[dates.length - 1]);
   const dateRangeStr = `${firstDate.getDate()} ${MONTH_NAMES[firstDate.getMonth()]} — ${lastDate.getDate()} ${MONTH_NAMES[lastDate.getMonth()]} ${lastDate.getFullYear()}`;
@@ -2545,7 +2549,7 @@ function generateCenterPrintHTML() {
     const isToday = dateObj.getTime() === today.getTime();
     const event = centerCalEvents[d];
     const isHoliday = isHolidayEvent(event);
-    const isWeek2 = idx === 7;
+    const isWeek2 = dayCount === 14 && idx === 7;
     let cls = '';
     if (isHoliday) cls = 'style="background:#e74c3c !important;"';
     else if (isToday) cls = 'class="today-col"';
@@ -2558,7 +2562,7 @@ function generateCenterPrintHTML() {
   dates.forEach(d => dailyCounts[d] = 0);
   const countedEmpIdsByDate = {};
   dates.forEach(d => countedEmpIdsByDate[d] = new Set());
-  if (centerGroupBySubject) {
+  if (groupBySubject) {
     const groups = groupEmployeesBySubject(employeesWithShifts, selectedCenterForView);
     groups.forEach(group => {
       const config = SUBJECT_CONFIG[group.subject] || { label: group.subject, icon: '👤', color: '#8e44ad' };
@@ -2586,7 +2590,7 @@ function generateCenterPrintHTML() {
   }
   html += `<tr class="summary-row"><td>${t('schedule.staffCount')}</td>`;
   dates.forEach((d, idx) => {
-    const sep = idx === 7 ? ' week-sep' : '';
+    const sep = (dayCount === 14 && idx === 7) ? ' week-sep' : '';
     html += `<td class="${sep}">${dailyCounts[d]}</td>`;
   });
   html += '</tr></tbody></table></div>';
@@ -2597,15 +2601,17 @@ function generateCenterPrintHTML() {
   return html;
 }
 
-async function exportCenterAsJpeg() {
+async function exportCenterAsJpeg(opts = {}) {
   if (!selectedCenterForView) { alert(t('schedule.selectCenterFirst')); return; }
   if (typeof html2canvas === 'undefined') { alert(t('schedule.exportLibNotLoaded')); return; }
+  const dayCount = opts.days === 7 ? 7 : 14;
+  const captureWidth = dayCount === 7 ? 950 : 1400; // 1-week export doesn't need 1400px
   const btn = document.getElementById('exportJpegBtn');
   const originalText = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = `<span class="spinner-small"></span> ${t('schedule.generating')}`;
   try {
-    const html = generateCenterPrintHTML();
+    const html = generateCenterPrintHTML(opts);
     const printArea = document.getElementById('printArea');
     if (!printArea) throw new Error('Print area element not found');
     printArea.innerHTML = html;
@@ -2613,7 +2619,7 @@ async function exportCenterAsJpeg() {
     printArea.style.setProperty('position', 'absolute', 'important');
     printArea.style.setProperty('left', '0', 'important');
     printArea.style.setProperty('top', '0', 'important');
-    printArea.style.setProperty('width', '1400px', 'important');
+    printArea.style.setProperty('width', captureWidth + 'px', 'important');
     printArea.style.setProperty('background', '#ffffff', 'important');
     printArea.style.setProperty('z-index', '99999', 'important');
     printArea.style.setProperty('padding', '20px', 'important');
@@ -2650,7 +2656,7 @@ async function exportCenterAsJpeg() {
     await new Promise(resolve => setTimeout(resolve, 300));
     const canvas = await html2canvas(printArea, {
       scale: 3, useCORS: true, allowTaint: true, backgroundColor: '#ffffff',
-      width: 1400, windowWidth: 1400, windowHeight: printArea.scrollHeight
+      width: captureWidth, windowWidth: captureWidth, windowHeight: printArea.scrollHeight
     });
     document.head.removeChild(tempStyle);
     printArea.innerHTML = '';
@@ -2663,8 +2669,9 @@ async function exportCenterAsJpeg() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       const centerName = allCenters.find(c => c.id === selectedCenterForView)?.name || 'Center';
-      const timestamp = new Date().toISOString().slice(0, 10);
-      link.download = `${centerName.replace(/\s+/g, '_')}_Schedule_${timestamp}.jpeg`;
+      const startDate = opts.startDate || centerViewDate;
+      const suffix = dayCount === 7 ? '1wk' : '2wk';
+      link.download = `${centerName.replace(/\s+/g, '_')}_Schedule_${formatDateStr(startDate)}_${suffix}.jpeg`;
       link.href = url;
       document.body.appendChild(link);
       link.click();
@@ -3362,6 +3369,124 @@ function getPrintDividerClass(subject) {
   };
   return map[subject] || 'other';
 }
+
+// ============================================
+// 📷 EXPORT JPEG — OPTIONS MODAL
+// ============================================
+const JPEG_PREFS_KEY = 'kumonJpegExportPrefs';
+
+function getJpegPrefs() {
+  try { return JSON.parse(localStorage.getItem(JPEG_PREFS_KEY)) || {}; } catch (e) { return {}; }
+}
+function saveJpegPrefs(prefs) {
+  try { localStorage.setItem(JPEG_PREFS_KEY, JSON.stringify(prefs)); } catch (e) {}
+}
+function getSelectedJpegDuration() {
+  const checked = document.querySelector('input[name="jpegDuration"]:checked');
+  return checked ? Number(checked.value) : 14;
+}
+
+function openExportJpegModal() {
+  if (!selectedCenterForView) {
+    alert(t('schedule.selectCenterFirst'));
+    return;
+  }
+  const prefs = getJpegPrefs();
+
+  // Duration (remembered between sessions, default 14)
+  const days = prefs.days === 7 ? 7 : 14;
+  document.querySelectorAll('input[name="jpegDuration"]').forEach(r => {
+    r.checked = Number(r.value) === days;
+  });
+
+  // Start date defaults to the week currently on screen (always a Monday)
+  const startInput = document.getElementById('jpegStartDate');
+  if (startInput) startInput.value = formatDateStr(centerViewDate);
+
+  // Group-by-subject: remembered preference, else mirror the toolbar toggle
+  const groupCb = document.getElementById('jpegGroupBySubject');
+  if (groupCb) {
+    groupCb.checked = (typeof prefs.groupBySubject === 'boolean')
+      ? prefs.groupBySubject
+      : centerGroupBySubject;
+  }
+
+  updateJpegPreview();
+  document.getElementById('exportJpegModal')?.classList.remove('hidden');
+}
+
+function closeExportJpegModal() {
+  document.getElementById('exportJpegModal')?.classList.add('hidden');
+}
+
+function updateJpegPreview() {
+  const days = getSelectedJpegDuration();
+  const startStr = document.getElementById('jpegStartDate')?.value;
+  const rangeEl = document.getElementById('jpegRangePreview');
+  const fileEl = document.getElementById('jpegFilePreview');
+
+  // Highlight the selected duration card
+  document.querySelectorAll('.export-option-row').forEach(row => {
+    const radio = row.querySelector('input[type="radio"]');
+    row.classList.toggle('selected', !!(radio && radio.checked));
+  });
+
+  if (!startStr) {
+    if (rangeEl) rangeEl.textContent = '—';
+    if (fileEl) fileEl.textContent = '—';
+    return;
+  }
+  const start = parseDate(startStr);
+  const end = addDays(start, days - 1);
+  if (rangeEl) {
+    rangeEl.textContent =
+      `${DAY_SHORT[start.getDay()]} ${start.getDate()} ${MONTH_NAMES[start.getMonth()]} ${start.getFullYear()}` +
+      ` — ${DAY_SHORT[end.getDay()]} ${end.getDate()} ${MONTH_NAMES[end.getMonth()]} ${end.getFullYear()}`;
+  }
+  if (fileEl) {
+    const centerName = allCenters.find(c => c.id === selectedCenterForView)?.name || 'Center';
+    fileEl.textContent =
+      `${centerName.replace(/\s+/g, '_')}_Schedule_${startStr}_${days === 7 ? '1wk' : '2wk'}.jpeg`;
+  }
+}
+
+async function handleExportJpegConfirm() {
+  const startStr = document.getElementById('jpegStartDate')?.value;
+  if (!startStr) {
+    alert('Please choose a start date for the export.');
+    return;
+  }
+  const days = getSelectedJpegDuration();
+  const startDate = parseDate(startStr);
+  const groupBySubject = document.getElementById('jpegGroupBySubject')?.checked || false;
+
+  saveJpegPrefs({ days, groupBySubject });
+  closeExportJpegModal();
+  await exportCenterAsJpeg({ days, startDate, groupBySubject });
+}
+
+// ── Wiring ──────────────────────────────────
+document.getElementById('closeExportJpegModalBtn')?.addEventListener('click', closeExportJpegModal);
+document.getElementById('cancelExportJpegBtn')?.addEventListener('click', closeExportJpegModal);
+document.getElementById('confirmExportJpegBtn')?.addEventListener('click', handleExportJpegConfirm);
+document.getElementById('exportJpegModal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'exportJpegModal') closeExportJpegModal();
+});
+document.getElementById('jpegStartDate')?.addEventListener('change', updateJpegPreview);
+document.querySelectorAll('input[name="jpegDuration"]').forEach(r =>
+  r.addEventListener('change', updateJpegPreview)
+);
+document.getElementById('jpegThisWeekBtn')?.addEventListener('click', () => {
+  const el = document.getElementById('jpegStartDate');
+  if (el) { el.value = formatDateStr(getMonday(new Date())); updateJpegPreview(); }
+});
+document.getElementById('jpegNextWeekBtn')?.addEventListener('click', () => {
+  const el = document.getElementById('jpegStartDate');
+  if (el) { el.value = formatDateStr(addDays(getMonday(new Date()), 7)); updateJpegPreview(); }
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeExportJpegModal();
+});
 
 // ============================================
 // 📊 EXPORT TO EXCEL
