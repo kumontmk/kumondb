@@ -12,6 +12,48 @@ const mainContent = document.getElementById('mainContent');
 const accessDenied = document.getElementById('accessDenied');
 
 // ============================================
+// 🏢 EMPLOYER CENTER ADDRESS MAP (autofill)
+// ============================================
+const EMPLOYER_CENTERS = {
+  "Centro de Educação Kumon Champs": {
+    chinese: "澳門荷蘭園大馬路113B號荷蘭花園C舖地下",
+    english: "Ave Do Conselheiro Ferreira, De Almeida No. 113B R/C, C, Edf Ho Lan Fa Un"
+  },
+  "Centro de Educação Kumon Taipa Pac Tat": {
+    chinese: "澳門氹仔永誠街120號, 百達花園第二座地下M座",
+    english: "Rua De Viseu N˚ 120, Fast Garden, r/c, M, Taipa"
+  },
+  "Centro de Educação Kumon Tap Siac": {
+    chinese: "澳門亞豐素街22B 翠麗大廈地下A舖",
+    english: "Rua Afonso de Albuquerque, No. 22B RC-ARC Edif. Choi Lai"
+  },
+  "Centro de Educação Kumon Taipa Mei Keng": {
+    chinese: "澳門氹仔柯維納馬路美景花園美德閣地下AU座",
+    english: "NA TAIPA, ESTRADA GOVERNADOR ALBANO DE OLIVEIRA N° 24, MEI KENG FA UN RÉS-DO-CHÃO AU"
+  },
+  "Centro de Educação Long Kei": {
+    chinese: "",
+    english: ""
+  }, // ⚠️ address not provided yet — send it and I'll add it
+  "Centro de Educação Kei Hok Fong": {
+    chinese: "澳門氹仔柯維納馬路20號美景花園地下AO座",
+    english: "Estrada Governador Albano de Oliveira, n.º20, Mei Keng Fa Un, r/c, AO, Taipa"
+  },
+  "Centro de Educação Oi Hok Fong 2 (EL Taipa)": {
+    chinese: "氹仔基馬拉斯大馬路47號, 美景花園地下R座",
+    english: "Avenida De Guimaraes 47, Mei Keng Fa Un, Res-Do-Chao R, Taipa, Macau"
+  },
+  "Centro de Educação Delight Learning (EL Macau)": {
+    chinese: "澳門羅神父街14B-14C號其昌大廈地下A座(荷里活餐廳對面)",
+    english: "Macau, Rua Do Padre Antonio Roliz Nos 14B-14C, Kei Cheong Res-Do-Chao A"
+  },
+  "Centro de Educação Wai Si (Wise Kids)": {
+    chinese: "氹仔飛能便街72號地庫B座信虹花園第二期",
+    english: ""
+  }
+};
+
+// ============================================
 // PERMISSION NORMALIZATION
 // ============================================
 const DASHBOARD_PERMISSION_ALIASES = {
@@ -169,6 +211,154 @@ function initApp() {
     const el = document.getElementById(id);
     if (el) { el.classList.add('hidden'); el.style.display = 'none'; }
   }
+
+  // ============================================
+// 👁️ VIEW / ✏️ EDIT MODE + 📄 CONTRACT DETAILS
+// ============================================
+let modalMode = 'edit';   // 'view' | 'edit'
+let modalIsAdmin = true;
+
+function setVal(id, v) { const el = document.getElementById(id); if (el) el.value = v ?? ''; }
+
+function populateEmployerOptions() {
+  const sel = document.getElementById('empEmployerName');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Select center...</option>' +
+    Object.keys(EMPLOYER_CENTERS).map(n => `<option value="${n}">${n}</option>`).join('');
+}
+
+function onEmployerChange(e) {
+  const addr = document.getElementById('empEmployerAddress');
+  if (!addr) return;
+  const info = EMPLOYER_CENTERS[e.target.value];
+  if (info && (info.chinese || info.english)) {
+    addr.value = [info.chinese, info.english].filter(Boolean).join('\n');
+  } else if (e.target.value) {
+    addr.value = '';
+    addr.placeholder = 'Address not on file — enter manually';
+  }
+}
+
+// Shows Contract Type / Start / Expiration ONLY for Non-Resident workers
+function toggleResidencyFields() {
+  const status = document.getElementById('empResidencyStatus')?.value;
+  const isNonResident = status === 'Non-Resident';
+  ['contractTypeGroup', 'contractStartGroup', 'contractExpirationGroup'].forEach(gid => {
+    const g = document.getElementById(gid);
+    if (g) g.style.display = isNonResident ? '' : 'none';
+  });
+  if (isNonResident) {
+    const docType = document.getElementById('empIdentityDocType');
+    if (docType && !docType.value) docType.value = "Non-Resident Worker's Identification Card";
+  }
+}
+
+// 🚨 Alert banner inside the Details tab
+function updateContractExpiryBadge() {
+  const banner = document.getElementById('contractExpiryBanner');
+  if (!banner) return;
+  const status = document.getElementById('empResidencyStatus')?.value;
+  const exp = document.getElementById('empContractExpirationDate')?.value;
+  if (status !== 'Non-Resident' || !exp) {
+    banner.style.display = 'none'; banner.textContent = ''; banner.className = '';
+    return;
+  }
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const days = Math.ceil((new Date(exp + 'T00:00:00') - today) / 86400000);
+  banner.style.display = 'block';
+  if (days < 0)        { banner.className = 'expired'; banner.textContent = `⛔ Contract EXPIRED ${Math.abs(days)} day(s) ago (${exp})`; }
+  else if (days === 0) { banner.className = 'expired'; banner.textContent = `⛔ Contract expires TODAY (${exp})`; }
+  else if (days <= 30) { banner.className = 'urgent';  banner.textContent = `⏰ Contract expires in ${days} day(s) (${exp})`; }
+  else if (days <= 90) { banner.className = 'warn';    banner.textContent = `⏳ Contract expires in ${days} day(s) (${exp})`; }
+  else                 { banner.className = 'ok';      banner.textContent = `✅ Contract valid — expires ${exp} (${days} days)`; }
+}
+
+// 🏷️ Small badge shown next to the name in the employee list
+function getContractExpiryBadge(emp) {
+  if (!emp || emp.residencyStatus !== 'Non-Resident') return '';
+  const exp = emp.contract?.contractExpirationDate;
+  if (!exp) return '';
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const days = Math.ceil((new Date(exp + 'T00:00:00') - today) / 86400000);
+  if (days < 0)   return `<span class="contract-badge expired" title="Expired ${exp}">⛔ Expired</span>`;
+  if (days <= 30) return `<span class="contract-badge urgent" title="Expires ${exp}">⏰ ${days}d</span>`;
+  if (days <= 90) return `<span class="contract-badge warn" title="Expires ${exp}">⏳ ${days}d</span>`;
+  return '';
+}
+
+function populateContractFields(e) {
+  const c = e.contract || {};
+  setVal('empResidencyStatus', e.residencyStatus || '');
+  setVal('empEmployerName', c.employerName || '');
+  setVal('empEmployerContactNo', c.employerContactNo || '');
+  setVal('empEmployerAddress', c.employerAddress || '');
+  setVal('empIdentityDocType', c.identityDocType || '');
+  setVal('empIdentityDocNo', c.identityDocNo || '');
+  setVal('empIdentityDocIssueDate', c.identityDocIssueDate || '');
+  setVal('empContractStartDate', c.contractStartDate || '');
+  setVal('empContractType', c.contractType || '');
+  setVal('empContractExpirationDate', c.contractExpirationDate || '');
+  setVal('empEmergencyContactName', c.emergencyContactName || '');
+  setVal('empEmergencyContactNumber', c.emergencyContactNumber || '');
+  setVal('empWorkerAddress', c.workerAddress || '');
+  toggleResidencyFields();
+  updateContractExpiryBadge();
+}
+
+function resetContractFields() {
+  ['empResidencyStatus','empEmployerName','empEmployerContactNo','empEmployerAddress',
+   'empIdentityDocType','empIdentityDocNo','empIdentityDocIssueDate','empContractStartDate',
+   'empContractType','empContractExpirationDate','empEmergencyContactName',
+   'empEmergencyContactNumber','empWorkerAddress'].forEach(id => setVal(id, ''));
+  toggleResidencyFields();
+  updateContractExpiryBadge();
+}
+
+function applyModalMode() {
+  const isView = modalMode === 'view';
+  const modalContent = document.querySelector('#employeeModal .modal-content');
+  if (modalContent) modalContent.classList.toggle('view-mode', isView);
+
+  const editBtn = document.getElementById('editModeBtn');
+  const saveBtnEl = document.getElementById('saveEmployee');
+  const cancelBtnEl = document.getElementById('cancelModal');
+  const title = document.getElementById('modalTitle');
+
+  if (editBtn) editBtn.style.display = isView ? 'inline-flex' : 'none';
+  if (saveBtnEl) saveBtnEl.style.display = isView ? 'none' : 'inline-flex';
+  if (cancelBtnEl) cancelBtnEl.textContent = isView ? 'Close' : 'Cancel';
+  if (title) {
+    const empId = document.getElementById('empId')?.value;
+    title.textContent = isView ? 'View Employee' : (empId ? 'Edit Employee' : 'Add Employee');
+  }
+
+  // Lock / unlock form fields
+  document.querySelectorAll('#tab-details input, #tab-details select, #tab-details textarea, #tab-leave input')
+    .forEach(el => { el.disabled = isView; });
+
+  document.querySelectorAll('#tab-leave .edit-entitled-btn').forEach(b => b.disabled = isView);
+
+  // Permissions stay admin-gated
+  document.querySelectorAll('#tab-permissions input').forEach(input => {
+    input.disabled = isView || !modalIsAdmin;
+  });
+}
+
+function setupContractListeners() {
+  populateEmployerOptions();
+  document.getElementById('empEmployerName')?.addEventListener('change', onEmployerChange);
+  document.getElementById('empResidencyStatus')?.addEventListener('change', () => {
+    toggleResidencyFields();
+    updateContractExpiryBadge();
+  });
+  document.getElementById('empContractExpirationDate')?.addEventListener('input', updateContractExpiryBadge);
+  document.getElementById('editModeBtn')?.addEventListener('click', () => {
+    modalMode = 'edit';
+    applyModalMode();
+    const empId = document.getElementById('empId')?.value;
+    if (empId) loadTimeclock(empId, timeclockDateFilter?.value || null);
+  });
+}
 
   const searchInput = document.getElementById('searchEmployee');
   const tableBody = document.getElementById('employeeTableBody');
@@ -941,7 +1131,7 @@ window.addEventListener('beforeunload', (e) => {
   natSelect?.addEventListener('change', e => natOther.classList.toggle('visible', e.target.value === 'Others'));
   saveBtn?.addEventListener('click', saveEmployee);
   searchInput?.addEventListener('input', e => renderTable(e.target.value));
-  addBtn?.addEventListener('click', () => openEmployeeModal(null));
+  addBtn?.addEventListener('click', () => openEmployeeModal(null, true));
 
   timeclockDateFilter?.addEventListener('change', (e) => {
     if (currentTimeclockEmpId) loadTimeclock(currentTimeclockEmpId, e.target.value || null);
@@ -1151,6 +1341,7 @@ window.addEventListener('beforeunload', (e) => {
   setupTabs();
   seedMasterAdmin();
   setupLeaveEntitlementListeners();
+  setupContractListeners();
 
 function renderTable(filter = '') {
   const lower = filter.toLowerCase();
@@ -1175,18 +1366,18 @@ function renderTable(filter = '') {
     const toggleBtnText = isDisabled ? 'Enable' : 'Disable';
     const toggleBtnClass = isDisabled ? 'secondary' : 'danger';
     const positionsText = getEmpPositions(e).join(', ') || '-';
-
+    const expiryBadge = getContractExpiryBadge(e);
     const row = document.createElement('tr');
     row.className = rowClass;
     row.innerHTML = `
-      <td data-label="Name">${e.englishName || ''} ${statusBadge}</td>
+      <td data-label="Name">${e.englishName || ''} ${statusBadge}${expiryBadge}</td>
       <td data-label="Chinese">${e.chineseName || '-'}</td>
       <td data-label="Email">${e.email || '-'}</td>
       <td data-label="Position">${positionsText}</td>
       <td data-label="Terms">${e.terms || ''}</td>
       <td data-label="">
         <div class="student-actions">
-          <button class="secondary" onclick="window.editEmp('${id}')">✏️ Edit</button>
+          <button class="secondary" onclick="window.viewEmp('${id}')">👁️ View</button>
           <button class="secondary" onclick="window.resetPassword('${e.email}')" title="Send Password Reset Email" style="background:#f8f9fa;color:#4682B4;border:1px solid #cbd5e1;">🔑 Reset</button>
           <button class="${toggleBtnClass}" onclick="window.toggleEmpStatus('${id}', ${!isDisabled})">${toggleBtnText}</button>
         </div>
@@ -1196,7 +1387,8 @@ function renderTable(filter = '') {
   });
 }
 
-  async function openEmployeeModal(id) {
+  async function openEmployeeModal(id, startInEditMode = false) {
+    modalMode = startInEditMode ? 'edit' : (id ? 'view' : 'edit');
     openModal('employeeModal');
     document.getElementById('modalTitle').textContent = id ? 'Edit Employee' : 'Add Employee';
     document.querySelectorAll('#employeeModal .tab-btn').forEach(b => b.classList.remove('active'));
@@ -1243,6 +1435,7 @@ function renderTable(filter = '') {
       loadTimeclock(id, selectedDate);
 
       if (id) loadLeaveEntitlement(id);
+      populateContractFields(e);
 
       const perms = e.permissions || {};
       const centerPerms = perms.centers || {};
@@ -1273,6 +1466,7 @@ function renderTable(filter = '') {
       document.getElementById('partTimeUsed').textContent = '0';
 
       currentQrData = `EMP_${crypto.randomUUID().slice(0, 8)}`;
+      resetContractFields();
       document.querySelectorAll('#empPositionsGroup input').forEach(cb => cb.checked = false);
       setTimeout(() => {
         document.querySelectorAll('#tab-permissions input').forEach(cb => cb.checked = false);
@@ -1280,7 +1474,8 @@ function renderTable(filter = '') {
     }
 
     const currentUserEmail = auth.currentUser?.email?.toLowerCase();
-    let isAdmin = currentUserEmail === 'kumonchamps@gmail.com';
+     let isAdmin = currentUserEmail === 'kumonchamps@gmail.com';
+      modalIsAdmin = isAdmin;
     if (!isAdmin && auth.currentUser) {
       try {
         const userSnap = await get(ref(db, `users/${auth.currentUser.uid}`));
@@ -1320,6 +1515,7 @@ function renderTable(filter = '') {
       });
     }
     generateQR(currentQrData);
+    applyModalMode();
   }
 
   function generateQR(text) {
@@ -1488,6 +1684,29 @@ function renderTable(filter = '') {
       lastResetYear: existingLeave.lastResetYear || new Date().getFullYear()
     };
 
+
+     // ---- 📄 Contract / residency data ----
+    const residencyStatus = document.getElementById('empResidencyStatus')?.value || '';
+    const contract = {
+      employerName: document.getElementById('empEmployerName')?.value || '',
+      employerContactNo: document.getElementById('empEmployerContactNo')?.value.trim() || '',
+      employerAddress: document.getElementById('empEmployerAddress')?.value.trim() || '',
+      identityDocType: document.getElementById('empIdentityDocType')?.value || '',
+      identityDocNo: document.getElementById('empIdentityDocNo')?.value.trim() || '',
+      identityDocIssueDate: document.getElementById('empIdentityDocIssueDate')?.value || '',
+      contractStartDate: residencyStatus === 'Non-Resident' ? (document.getElementById('empContractStartDate')?.value || '') : '',
+      contractType: residencyStatus === 'Non-Resident' ? (document.getElementById('empContractType')?.value || '') : '',
+      contractExpirationDate: residencyStatus === 'Non-Resident' ? (document.getElementById('empContractExpirationDate')?.value || '') : '',
+      emergencyContactName: document.getElementById('empEmergencyContactName')?.value.trim() || '',
+      emergencyContactNumber: document.getElementById('empEmergencyContactNumber')?.value.trim() || '',
+      workerAddress: document.getElementById('empWorkerAddress')?.value.trim() || ''
+    };
+    if (residencyStatus === 'Non-Resident') {
+      if (!contract.contractType) return alert('⚠️ Please select the Contract Type (1 Year or 2 Years) for this Non-Resident worker.');
+      if (!contract.contractStartDate) return alert('⚠️ Please enter the Contract Start Date for this Non-Resident worker.');
+      if (!contract.contractExpirationDate) return alert('⚠️ Please enter the Contract Expiration Date for this Non-Resident worker.');
+    }
+
     const employeeData = {
       englishName,
       chineseName: chineseName || '',
@@ -1500,6 +1719,8 @@ function renderTable(filter = '') {
       qrCode: currentQrData,
       permissions: { centers, dashboardCards },
       leaveEntitlement: leaveEntitlement,
+      residencyStatus: residencyStatus,
+      contract: contract,
       updatedAt: new Date().toISOString()
     };
 
@@ -1878,7 +2099,7 @@ function renderTable(filter = '') {
         });
       });
       
-      // Add Button Logic
+   // Add Button Logic
       document.querySelectorAll('.add-log-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
           e.preventDefault();
@@ -1886,6 +2107,11 @@ function renderTable(filter = '') {
           showAddEntryModal(date, empId);
         });
       });
+      // 👁️ In View mode, lock timeclock editing
+      if (modalMode === 'view') {
+        timeclockBody.querySelectorAll('.edit-log-btn, .add-log-btn, .delete-log-btn')
+          .forEach(b => b.style.display = 'none');
+      }
     }).catch(err => {
       console.error("Error loading timeclock:", err);
       timeclockBody.innerHTML = '<tr><td colspan="9" class="empty-state">Error loading records</td></tr>';
@@ -2838,5 +3064,6 @@ async function loadIncompleteTimecards() {
     }
   });
 
-  window.editEmp = (id) => openEmployeeModal(id);
+window.viewEmp = (id) => openEmployeeModal(id, false); // 👁️ View (read-only)
+window.editEmp = (id) => openEmployeeModal(id, true);  // kept for compatibility
 }

@@ -264,6 +264,90 @@
             </div>
           </div>
 
+        <!-- ============ 📄 RESIDENCY / EMPLOYER / WORKER DETAILS ============ -->
+        <div id="contractExpiryBanner" style="display:none;"></div>
+
+        <h4 class="contract-section-header">🪪 Residency Status</h4>
+        <div class="form-grid">
+          <div>
+            <label for="empResidencyStatus">Residency Status *</label>
+            <select id="empResidencyStatus">
+              <option value="">Select...</option>
+              <option value="Resident">Resident</option>
+              <option value="Non-Resident">Non-Resident</option>
+            </select>
+          </div>
+        </div>
+
+        <h4 class="contract-section-header">🏢 Employer's Information</h4>
+        <div class="form-grid">
+          <div>
+            <label for="empEmployerName">Employer Name</label>
+            <select id="empEmployerName"><option value="">Select center...</option></select>
+          </div>
+          <div>
+            <label for="empEmployerContactNo">Contact No.</label>
+            <input type="tel" id="empEmployerContactNo" placeholder="e.g. 28XX XXXX">
+          </div>
+          <div style="grid-column:1/-1;">
+            <label for="empEmployerAddress">Office Address (auto-filled from center)</label>
+            <textarea id="empEmployerAddress" rows="3" placeholder="Select a center to auto-fill the address"></textarea>
+          </div>
+        </div>
+
+        <h4 class="contract-section-header">👤 Worker &amp; Contract Information</h4>
+        <div class="form-grid">
+          <div>
+            <label for="empIdentityDocType">Type of Identity Document</label>
+            <select id="empIdentityDocType">
+              <option value="">Select...</option>
+              <option>Non-Resident Worker's Identification Card</option>
+              <option>Passport</option>
+              <option>Others</option>
+            </select>
+          </div>
+          <div>
+            <label for="empIdentityDocNo">No. of Identity Document</label>
+            <input type="text" id="empIdentityDocNo" placeholder="Document number">
+          </div>
+          <div>
+            <label for="empIdentityDocIssueDate">Date of Issue</label>
+            <input type="date" id="empIdentityDocIssueDate">
+          </div>
+
+          <!-- ⬇️ BELOW 3 FIELDS: VISIBLE ONLY FOR NON-RESIDENT WORKERS -->
+          <div id="contractTypeGroup" style="display:none;">
+            <label for="empContractType">Contract Type *</label>
+            <select id="empContractType">
+              <option value="">Select...</option>
+              <option value="1 Year">1 Year</option>
+              <option value="2 Years">2 Years</option>
+            </select>
+          </div>
+          <div id="contractStartGroup" style="display:none;">
+            <label for="empContractStartDate">Contract Start Date *</label>
+            <input type="date" id="empContractStartDate">
+          </div>
+          <div id="contractExpirationGroup" style="display:none;">
+            <label for="empContractExpirationDate">Contract Expiration Date *</label>
+            <input type="date" id="empContractExpirationDate">
+          </div>
+
+          <div>
+            <label for="empEmergencyContactName">Emergency Contact Name</label>
+            <input type="text" id="empEmergencyContactName" placeholder="Contact person">
+          </div>
+          <div>
+            <label for="empEmergencyContactNumber">Emergency Contact Number</label>
+            <input type="tel" id="empEmergencyContactNumber" placeholder="Phone number">
+          </div>
+          <div style="grid-column:1/-1;">
+            <label for="empWorkerAddress">Worker's Address</label>
+            <textarea id="empWorkerAddress" rows="2" placeholder="Employee home address"></textarea>
+          </div>
+        </div>
+        <!-- ============ END NEW SECTION ============ -->
+
           <div id="qrContainer">
             <h4 style="color:#4682B4;margin-bottom:0.75rem;">📱 QR Code</h4>
             <img id="empQrImg" alt="QR Code" style="max-width:180px;margin:0 auto;display:block;">
@@ -411,6 +495,7 @@
       </div>
 
       <div style="display:flex;gap:0.75rem;margin-top:1.5rem;flex-wrap:wrap;">
+        <button type="button" id="editModeBtn" class="primary" style="display:none;">✏️ Edit Employee</button>
         <button type="button" id="cancelModal" class="secondary" style="flex:1;min-width:120px;">Cancel</button>
         <button type="button" id="saveEmployee" class="primary" style="flex:1;min-width:120px;">💾 Save Employee</button>
       </div>

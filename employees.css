@@ -1789,3 +1789,198 @@ tr.disabled-row td:first-child {
 .export-confirm { background: linear-gradient(135deg, #4682B4, #63a3d7); box-shadow: 0 4px 14px rgba(70,130,180,.35); font-weight: 700; }
 .export-confirm:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(70,130,180,.45); opacity: 1; }
 @media (max-width: 480px) { .range-grid { grid-template-columns: 1fr; } }
+
+/* ============================================
+   📄 CONTRACT SECTIONS (inside Details tab)
+============================================ */
+.contract-section-header {
+  font-size: 0.95rem;
+  color: var(--primary-dark);
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 0.25rem;
+  margin: 1.25rem 0 0.75rem;
+  font-weight: 600;
+  text-align: left;
+}
+#tab-details textarea {
+  width: 100%;
+  padding: 0.7rem;
+  border: 1px solid #ddd;
+  border-radius: var(--radius);
+  font-size: 16px;
+  font-family: inherit;
+  resize: vertical;
+}
+#tab-details textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.25);
+}
+
+/* 🚨 Contract expiry banner */
+#contractExpiryBanner {
+  padding: 0.65rem 0.9rem;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  margin: 1rem 0 0.5rem;
+  text-align: left;
+}
+#contractExpiryBanner.expired { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+#contractExpiryBanner.urgent  { background: #ffedd5; color: #9a3412; border: 1px solid #fed7aa; }
+#contractExpiryBanner.warn    { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+#contractExpiryBanner.ok      { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+
+/* 🏷️ Compact expiry badges in the employee list */
+.contract-badge {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin-left: 0.35rem;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.contract-badge.expired { background: #fee2e2; color: #991b1b; }
+.contract-badge.urgent  { background: #ffedd5; color: #9a3412; }
+.contract-badge.warn    { background: #fef3c7; color: #92400e; }
+
+/* ✏️ Edit button in modal footer */
+#editModeBtn {
+  background: linear-gradient(135deg, #4682B4, #5a9bd4);
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(70, 130, 180, .35);
+}
+#editModeBtn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(70, 130, 180, .45); opacity: 1; }
+
+/* 👁️ View mode: locked fields stay readable, not greyed out */
+#employeeModal .modal-content.view-mode input:disabled,
+#employeeModal .modal-content.view-mode select:disabled,
+#employeeModal .modal-content.view-mode textarea:disabled {
+  background: #f8fafc;
+  color: #334155;
+  border-color: #e2e8f0;
+  opacity: 1;
+  cursor: default;
+  -webkit-text-fill-color: #334155;
+}
+
+/* ============================================
+   📌 UX FIX 1: Pin ✏️ Edit button at the TOP of the modal
+============================================ */
+#editModeBtn {
+  position: absolute;
+  top: 14px;
+  right: 64px;              /* sits just left of the × close button */
+  z-index: 11;
+  min-height: 38px;
+  padding: 0.45rem 1rem;
+  font-size: 0.85rem;
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(70, 130, 180, .35);
+}
+/* Keep the title from sliding under the button */
+#employeeModal .modal-content.view-mode #modalTitle {
+  padding: 0 3.2rem;
+}
+/* On small phones, drop the title below the top button row */
+@media (max-width: 560px) {
+  #editModeBtn {
+    padding: 0.35rem 0.8rem;
+    font-size: 0.78rem;
+    min-height: 32px;
+  }
+  #employeeModal .modal-content.view-mode #modalTitle {
+    padding: 0;
+    margin-top: 2.2rem;
+  }
+}
+
+/* ============================================
+   ✅ UX FIX 2: Make checked Positions easy to see in View mode
+============================================ */
+/* Hide the greyed-out native checkboxes (read-only anyway) */
+#employeeModal .modal-content.view-mode .checkbox-group input[type="checkbox"] {
+  display: none;
+}
+#employeeModal .modal-content.view-mode .checkbox-group label {
+  cursor: default;
+}
+/* Highlight the positions this employee actually holds */
+#employeeModal .modal-content.view-mode .checkbox-group label:has(input:checked) {
+  background: #e8f0fe;
+  border-color: var(--primary-dark);
+  color: var(--primary-dark);
+  font-weight: 600;
+}
+/* Bold ✓ on the right side of each held position */
+#employeeModal .modal-content.view-mode .checkbox-group label:has(input:checked)::after {
+  content: '✓';
+  margin-left: auto;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--primary-dark);
+}
+
+/* ============================================
+   🔧 BUTTON APPEARANCE FIXES (final)
+============================================ */
+
+/* ✏️ Edit Employee — compact pill pinned top-right, right next to the × */
+#employeeModal #editModeBtn {
+  position: absolute !important;
+  top: 12px !important;
+  right: 62px !important;
+  left: auto !important;
+  margin: 0 !important;
+  z-index: 11;
+  flex: 0 0 auto !important;
+  width: auto !important;
+  min-height: 0 !important;
+  padding: 0.5rem 1.1rem !important;
+  font-size: 0.85rem !important;
+  border-radius: 999px !important;
+  background: linear-gradient(135deg, #4682B4, #5a9bd4) !important;
+  color: #fff !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 10px rgba(70, 130, 180, .4);
+}
+
+/* 💾 Save / Cancel — normal-sized, centered pair (no more stretching) */
+#employeeModal #saveEmployee,
+#employeeModal #cancelModal {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  min-width: 150px;
+  max-width: 300px;
+  min-height: 44px;
+  padding: 0.65rem 1.6rem !important;
+}
+#employeeModal #cancelModal  { margin-left: auto; }
+#employeeModal #saveEmployee { margin-right: auto; }
+
+/* 👁️ View mode: the single Close button fills the bar nicely */
+#employeeModal .modal-content.view-mode #cancelModal {
+  flex: 1 1 auto !important;
+  max-width: none;
+  margin: 0;
+}
+
+/* 📱 Small screens: keep big touch buttons */
+@media (max-width: 560px) {
+  #employeeModal #saveEmployee,
+  #employeeModal #cancelModal {
+    flex: 1 1 auto !important;
+    min-width: 0;
+    max-width: none;
+    margin: 0;
+  }
+  #employeeModal #editModeBtn {
+    top: 10px !important;
+    right: 58px !important;
+    padding: 0.4rem 0.9rem !important;
+    font-size: 0.78rem !important;
+  }
+}
