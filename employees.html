@@ -418,51 +418,101 @@
   </div>
 
   <!-- 📤 EXPORT OPTION MODAL -->
-<div id="exportModal" class="confirmation-modal" style="display: none;">
-  <div class="modal-content" style="text-align: left;">
+<div id="exportModal" class="modal export-modal" style="display:none;">
+  <div class="modal-content export-modal-content">
     <span class="close-btn" id="closeExportModal">&times;</span>
+    <h3 class="export-title">📤 Export Timeclock Records</h3>
+    <p class="export-subtitle">Choose a period and customize what's included in the Excel file.</p>
 
-    <h3>Export Timeclock Records</h3>
+    <!-- 1. PERIOD -->
+    <div class="export-section">
+      <div class="export-section-title">📅 Period</div>
+      <div class="segmented-control" id="exportModeSwitch">
+        <label class="segmented-option">
+          <input type="radio" name="exportMode" id="exportModeMonth" value="month" checked>
+          <span>🗓️ Month</span>
+        </label>
+        <label class="segmented-option">
+          <input type="radio" name="exportMode" id="exportModeRange" value="range">
+          <span>📆 Date Range</span>
+        </label>
+        <div class="segmented-thumb"></div>
+      </div>
 
-    <!-- Option 1: By Month -->
-    <label class="export-option">
-      <input type="radio" name="exportMode" id="exportModeMonth" checked>
-      <span>📅 Export per month</span>
-    </label>
-
-    <div id="exportMonthField" class="export-field active">
-      <label for="exportModalMonthPicker">Select Month</label>
-      <input type="month" id="exportModalMonthPicker">
-    </div>
-
-    <!-- Option 2: Date Range -->
-    <label class="export-option">
-      <input type="radio" name="exportMode" id="exportModeRange">
-      <span>📆 Export from date to date</span>
-    </label>
-
-    <div id="exportDateRangeField" class="export-field">
-      <div class="form-grid">
-        <div>
-          <label for="exportStartDate">Start Date</label>
-          <input type="date" id="exportStartDate">
+      <div class="export-field active" id="exportMonthField">
+        <label for="exportModalMonthPicker" class="mini-label">Select Month</label>
+        <input type="month" id="exportModalMonthPicker">
+      </div>
+      <div class="export-field" id="exportDateRangeField">
+        <div class="range-grid">
+          <div>
+            <label for="exportStartDate" class="mini-label">Start Date</label>
+            <input type="date" id="exportStartDate">
+          </div>
+          <div>
+            <label for="exportEndDate" class="mini-label">End Date</label>
+            <input type="date" id="exportEndDate">
+          </div>
         </div>
-
-        <div>
-          <label for="exportEndDate">End Date</label>
-          <input type="date" id="exportEndDate">
+        <div class="preset-chips">
+          <button type="button" class="chip" data-preset="today">Today</button>
+          <button type="button" class="chip" data-preset="week">This Week</button>
+          <button type="button" class="chip" data-preset="last30">Last 30 Days</button>
+          <button type="button" class="chip" data-preset="thisMonth">This Month</button>
+          <button type="button" class="chip" data-preset="lastMonth">Last Month</button>
         </div>
       </div>
     </div>
 
-    <!-- Actions -->
-    <div class="modal-actions export-modal-actions">
+    <!-- 2. CONTENT OPTIONS -->
+    <div class="export-section">
+      <div class="export-section-title">🧩 Content Options</div>
+
+      <label class="switch-row">
+        <span class="switch-text">
+          <strong>Separate Full-time & Part-time</strong>
+          <small>Creates a separate summary sheet for each employment term.</small>
+        </span>
+        <span class="switch"><input type="checkbox" id="exportSeparateTerms" checked><i></i></span>
+      </label>
+
+      <label class="switch-row">
+        <span class="switch-text">
+          <strong>Count days per center (Part-time)</strong>
+          <small>Adds a "PT Days per Center" sheet with days worked at each center.</small>
+        </span>
+        <span class="switch"><input type="checkbox" id="exportPTDays" checked><i></i></span>
+      </label>
+
+      <label class="switch-row">
+        <span class="switch-text">
+          <strong>Include detail sheets</strong>
+          <small>One sheet per employee/center with in–out cycles. Turn off for faster exports.</small>
+        </span>
+        <span class="switch"><input type="checkbox" id="exportDetailSheets" checked><i></i></span>
+      </label>
+
+      <label class="switch-row">
+        <span class="switch-text">
+          <strong>Exclude disabled employees</strong>
+          <small>Skip employees marked as disabled.</small>
+        </span>
+        <span class="switch"><input type="checkbox" id="exportExcludeDisabled" checked><i></i></span>
+      </label>
+    </div>
+
+    <!-- 3. LIVE PREVIEW -->
+    <div class="export-preview">
+      <span class="preview-dot"></span>
+      <span id="exportPreviewText">Select a period to preview the export.</span>
+    </div>
+
+    <div class="export-modal-actions">
       <button class="secondary" id="cancelExportBtn">Cancel</button>
-      <button class="primary" id="confirmExportBtn">Export</button>
+      <button class="primary export-confirm" id="confirmExportBtn">⬇ Export Excel</button>
     </div>
   </div>
 </div>
-
   <script type="module" src="employees.js"></script>
   <script>
     window.addEventListener('load', () => {

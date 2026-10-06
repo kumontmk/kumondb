@@ -2040,349 +2040,324 @@ function renderTable(filter = '') {
     }
   };
 
-  // ==========================================
-  // EXPORT & OTHER FUNCTIONS
-  // ==========================================
+// ==========================================
+// 📤 EXPORT v2 – MODERN MODAL, PRESETS, PREVIEW
+// ==========================================
+const EXPORT_SETTINGS_KEY = 'kumonExportSettingsV2';
+const exportSeparateTerms = document.getElementById('exportSeparateTerms');
+const exportPTDays = document.getElementById('exportPTDays');
+const exportDetailSheets = document.getElementById('exportDetailSheets');
+const exportExcludeDisabled = document.getElementById('exportExcludeDisabled');
+const exportModeSwitch = document.getElementById('exportModeSwitch');
+const exportPreviewText = document.getElementById('exportPreviewText');
+let timecardsCache = { data: null, fetchedAt: 0 };
 
-  function openExportModal() {
-    if (!exportModal) return;
+function isoDate(d) { return d.toISOString().split('T')[0]; }
 
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
+function getExportOptions() {
+  return {
+    separateTerms: exportSeparateTerms ? exportSeparateTerms.checked : true,
+    ptDays: exportPTDays ? exportPTDays.checked : true,
+    detailSheets: exportDetailSheets ? exportDetailSheets.checked : true,
+    excludeDisabled: exportExcludeDisabled ? exportExcludeDisabled.checked : true
+  };
+}
 
-    // Default month value
-    if (exportModalMonthPicker && !exportModalMonthPicker.value) {
-      exportModalMonthPicker.value = `${yyyy}-${mm}`;
-    }
+function openExportModal() {
+  if (!exportModal) return;
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  if (exportModalMonthPicker && !exportModalMonthPicker.value) exportModalMonthPicker.value = `${yyyy}-${mm}`;
+  if (exportStartDate && !exportStartDate.value) exportStartDate.value = `${yyyy}-${mm}-01`;
+  if (exportEndDate && !exportEndDate.value) exportEndDate.value = isoDate(now);
+  restoreExportSettings();
+  updateExportModeFields();
+  exportModal.style.display = 'flex';
+  updateExportPreview();
+}
+function closeExportModal() { if (exportModal) exportModal.style.display = 'none'; }
 
-    // Default date range values
-    if (exportStartDate && !exportStartDate.value) {
-      exportStartDate.value = `${yyyy}-${mm}-01`;
-    }
+function updateExportModeFields() {
+  const isMonthMode = exportModeMonth?.checked ?? true;
+  document.getElementById('exportMonthField')?.classList.toggle('active', isMonthMode);
+  document.getElementById('exportDateRangeField')?.classList.toggle('active', !isMonthMode);
+  exportModeSwitch?.classList.toggle('range-active', !isMonthMode);
+}
 
-    if (exportEndDate && !exportEndDate.value) {
-      exportEndDate.value = now.toISOString().split('T')[0];
-    }
+// ---------- Quick presets ----------
+function applyExportPreset(preset) {
+  const now = new Date();
+  let start = isoDate(now), end = isoDate(now);
+  if (preset === 'week') { const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); start = isoDate(d); }
+  else if (preset === 'last30') { const d = new Date(); d.setDate(d.getDate() - 29); start = isoDate(d); }
+  else if (preset === 'thisMonth') { start = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`; }
+  else if (preset === 'lastMonth') { start = isoDate(new Date(now.getFullYear(), now.getMonth() - 1, 1)); end = isoDate(new Date(now.getFullYear(), now.getMonth(), 0)); }
+  if (exportModeRange) exportModeRange.checked = true;
+  if (exportStartDate) exportStartDate.value = start;
+  if (exportEndDate) exportEndDate.value = end;
+  updateExportModeFields();
+  updateExportPreview();
+}
 
-    updateExportModeFields();
-    exportModal.style.display = 'flex';
-  }
-
-  function closeExportModal() {
-    if (exportModal) {
-      exportModal.style.display = 'none';
-    }
-  }
-
-  function updateExportModeFields() {
-    const isMonthMode = exportModeMonth?.checked ?? true;
-
-    const monthField = document.getElementById('exportMonthField');
-    const rangeField = document.getElementById('exportDateRangeField');
-
-    if (monthField) monthField.classList.toggle('active', isMonthMode);
-    if (rangeField) rangeField.classList.toggle('active', !isMonthMode); 
-  }
-
-  function handleExportConfirm() {
-    const isRangeMode = exportModeRange?.checked;
-
-    if (!isRangeMode) {
-      const selectedMonth = exportModalMonthPicker?.value;
-
-      if (!selectedMonth) {
-        alert('⚠️ Please select a month to export.');
-        return;
-      }
-
-      closeExportModal();
-      exportToExcel({
-        mode: 'month',
-        month: selectedMonth
+// ---------- Cached timecards + live preview ----------
+async function getTimecardsCached() {
+  if (timecardsCache.data && Date.now() - timecardsCache.fetchedAt < 60000) return timecardsCache.data;
+  const snap = await get(ref(db, 'timecards'));
+  timecardsCache = { data: snap.val() || {}, fetchedAt: Date.now() };
+  return timecardsCache.data;
+}
+function currentExportDateMatcher() {
+  const isRange = exportModeRange?.checked;
+  const month = exportModalMonthPicker?.value || '';
+  const start = exportStartDate?.value || '', end = exportEndDate?.value || '';
+  if (!isRange && !month) return null;
+  if (isRange && (!start || !end || start > end)) return null;
+  return (date) => (isRange ? (date >= start && date <= end) : date.startsWith(month));
+}
+async function updateExportPreview() {
+  if (!exportPreviewText) return;
+  const matcher = currentExportDateMatcher();
+  if (!matcher) { exportPreviewText.textContent = 'Select a period to preview the export.'; return; }
+  exportPreviewText.textContent = 'Scanning records…';
+  try {
+    const timecards = await getTimecardsCached();
+    let dayCount = 0, logCount = 0;
+    const empSet = new Set();
+    Object.entries(timecards).forEach(([date, dayData]) => {
+      if (!matcher(date)) return;
+      dayCount++;
+      Object.entries(dayData || {}).forEach(([empId, d]) => {
+        const n = (d?.logs || []).length;
+        if (n) { empSet.add(empId); logCount += n; }
       });
-    } else {
-      const start = exportStartDate?.value;
-      const end = exportEndDate?.value;
+    });
+    exportPreviewText.textContent = `${dayCount} day(s) • ${logCount} clock logs • ${empSet.size} employee(s) in the selected period`;
+  } catch (err) { console.error('Preview error:', err); exportPreviewText.textContent = 'Preview unavailable.'; }
+}
 
-      if (!start || !end) {
-        alert('⚠️ Please select both start and end dates.');
-        return;
-      }
+// ---------- Remember last settings ----------
+function saveExportSettings() {
+  try {
+    localStorage.setItem(EXPORT_SETTINGS_KEY, JSON.stringify({
+      mode: exportModeRange?.checked ? 'range' : 'month',
+      separateTerms: exportSeparateTerms?.checked,
+      ptDays: exportPTDays?.checked,
+      detailSheets: exportDetailSheets?.checked,
+      excludeDisabled: exportExcludeDisabled?.checked
+    }));
+  } catch (e) { /* storage unavailable */ }
+}
+function restoreExportSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem(EXPORT_SETTINGS_KEY) || 'null');
+    if (!s) return;
+    if (exportSeparateTerms) exportSeparateTerms.checked = s.separateTerms !== false;
+    if (exportPTDays) exportPTDays.checked = s.ptDays !== false;
+    if (exportDetailSheets) exportDetailSheets.checked = s.detailSheets !== false;
+    if (exportExcludeDisabled) exportExcludeDisabled.checked = s.excludeDisabled !== false;
+    if (s.mode === 'range' && exportModeRange) exportModeRange.checked = true;
+    else if (exportModeMonth) exportModeMonth.checked = true;
+  } catch (e) { /* ignore */ }
+}
 
-      if (start > end) {
-        alert('⚠️ Start date must be before or equal to end date.');
-        return;
-      }
+function handleExportConfirm() {
+  const isRangeMode = exportModeRange?.checked;
+  if (!isRangeMode) {
+    const selectedMonth = exportModalMonthPicker?.value;
+    if (!selectedMonth) return alert('⚠️ Please select a month to export.');
+    saveExportSettings(); closeExportModal();
+    exportToExcel({ mode: 'month', month: selectedMonth });
+  } else {
+    const start = exportStartDate?.value, end = exportEndDate?.value;
+    if (!start || !end) return alert('⚠️ Please select both start and end dates.');
+    if (start > end) return alert('⚠️ Start date must be before or equal to end date.');
+    saveExportSettings(); closeExportModal();
+    exportToExcel({ mode: 'range', start, end });
+  }
+}
 
-      closeExportModal();
-      exportToExcel({
-        mode: 'range',
-        start,
-        end
-      });
-    }
+// ---------- Listeners ----------
+closeExportModalBtn?.addEventListener('click', closeExportModal);
+cancelExportBtn?.addEventListener('click', closeExportModal);
+confirmExportBtn?.addEventListener('click', handleExportConfirm);
+exportModeMonth?.addEventListener('change', () => { updateExportModeFields(); updateExportPreview(); });
+exportModeRange?.addEventListener('change', () => { updateExportModeFields(); updateExportPreview(); });
+exportModalMonthPicker?.addEventListener('change', updateExportPreview);
+exportStartDate?.addEventListener('change', updateExportPreview);
+exportEndDate?.addEventListener('change', updateExportPreview);
+document.querySelectorAll('.preset-chips .chip').forEach(ch =>
+  ch.addEventListener('click', () => applyExportPreset(ch.dataset.preset)));
+exportModal?.addEventListener('click', (e) => { if (e.target === exportModal) closeExportModal(); });
+
+// ---------- EXPORT ENGINE v2 ----------
+async function exportToExcel(options = {}) {
+  if (typeof XLSX === 'undefined') return alert('❌ Excel library not loaded.');
+
+  const mode = options.mode === 'range' ? 'range' : 'month';
+  let selectedMonth = '', startDate = '', endDate = '';
+  if (mode === 'range') {
+    startDate = options.start || ''; endDate = options.end || '';
+    if (!startDate || !endDate) return alert('⚠️ Please select both start and end dates.');
+  } else {
+    selectedMonth = options.month || monthPicker?.value || '';
+    if (!selectedMonth) return alert('⚠️ Please select a month to export.');
   }
 
-  // Export modal listeners
-  closeExportModalBtn?.addEventListener('click', closeExportModal);
-  cancelExportBtn?.addEventListener('click', closeExportModal);
-  confirmExportBtn?.addEventListener('click', handleExportConfirm);
+  const opts = getExportOptions();
+  const originalText = exportBtn?.textContent || 'Export Excel';
+  if (exportBtn) { exportBtn.textContent = '⏳ Preparing…'; exportBtn.disabled = true; }
 
-  exportModeMonth?.addEventListener('change', updateExportModeFields);
-  exportModeRange?.addEventListener('change', updateExportModeFields);
+  try {
+    const timecards = await getTimecardsCached();
+    const employeesSnap = await get(ref(db, 'employees'));
+    const employeesData = employeesSnap.val() || {};
+    const matchesDate = (date) => (mode === 'range' ? (date >= startDate && date <= endDate) : date.startsWith(selectedMonth));
 
-  exportModal?.addEventListener('click', (e) => {
-    if (e.target === exportModal) {
-      closeExportModal();
-    }
-  });
+    const CENTER_ORDER = ['C', 'PT', 'MK', 'TS'];
+    const empData = {};
 
-  async function exportToExcel(options = {}) {
-    if (typeof XLSX === 'undefined') {
-      return alert('❌ Excel library not loaded.');
-    }
-
-    const mode = options.mode === 'range' ? 'range' : 'month';
-
-    let selectedMonth = '';
-    let startDate = '';
-    let endDate = '';
-
-    if (mode === 'range') {
-      startDate = options.start || '';
-      endDate = options.end || '';
-
-      if (!startDate || !endDate) {
-        return alert('⚠️ Please select both start and end dates.');
-      }
-    } else {
-      selectedMonth = options.month || monthPicker?.value || '';
-
-      if (!selectedMonth) {
-        return alert('⚠️ Please select a month to export.');
-      }
-    }
-
-    const originalText = exportBtn?.textContent || 'Export Excel';
-
-    if (exportBtn) {
-      exportBtn.textContent = 'Exporting...';
-      exportBtn.disabled = true;
-    }
-
-    try {
-      const timecardsSnap = await get(ref(db, 'timecards'));
-      const timecards = timecardsSnap.val() || {};
-
-      const employeesSnap = await get(ref(db, 'employees'));
-      const employeesData = employeesSnap.val() || {};
-
-      const empData = {};
-
-      const matchesDate = (date) => {
-        if (mode === 'range') {
-          return date >= startDate && date <= endDate;
+    Object.entries(timecards).forEach(([date, dayData]) => {
+      if (!matchesDate(date)) return;
+      Object.entries(dayData).forEach(([empId, empDayData]) => {
+        const empInfo = employeesData[empId] || {};
+        if (opts.excludeDisabled && empInfo.isDisabled === true) return;
+        if (!empData[empId]) {
+          empData[empId] = {
+            name: empInfo.englishName || 'Unknown',
+            position: getEmpPositions(empInfo).join(', ') || 'Unknown',
+            terms: empInfo.terms || 'Full-time',
+            totalMinutes: 0,
+            days: new Set(),
+            centers: {}
+          };
         }
-
-        return date.startsWith(selectedMonth);
-      };
-
-      Object.entries(timecards).forEach(([date, dayData]) => {
-        if (!matchesDate(date)) return;
-
-        Object.entries(dayData).forEach(([empId, empDayData]) => {
-          if (!empData[empId]) {
-            const emp = employeesData[empId] || {};
-
-            empData[empId] = {
-              name: emp.englishName || 'Unknown',
-              position: getEmpPositions(emp).join(', ') || 'Unknown',
-              totalMinutes: 0,
-              centers: {}
-            };
-          }
-
-          const rawLogs = empDayData.logs || [];
-          const { logs } = autoFixLogs(rawLogs, employeesData[empId]?.terms || 'Full-time');
-
-          const centerLogs = {};
-
-          logs.forEach(log => {
-            const abbr = getCenterAbbr(log.location);
-            if (abbr === 'Unknown') return;
-
-            if (!centerLogs[abbr]) centerLogs[abbr] = [];
-            centerLogs[abbr].push(log);
+        const rawLogs = empDayData.logs || [];
+        const { logs } = autoFixLogs(rawLogs, empInfo.terms || 'Full-time');
+        const centerLogs = {};
+        logs.forEach(log => {
+          const abbr = getCenterAbbr(log.location);
+          if (abbr === 'Unknown') return;
+          (centerLogs[abbr] = centerLogs[abbr] || []).push(log);
+        });
+        Object.entries(centerLogs).forEach(([abbr, cLogs]) => {
+          const c = empData[empId].centers[abbr] || (empData[empId].centers[abbr] = { minutes: 0, records: [], days: new Set() });
+          cLogs.sort((a, b) => a.time.localeCompare(b.time));
+          const rows = getLogsRows(cLogs);
+          let dayTotalMinutes = 0;
+          const cycles = [];
+          rows.forEach(row => {
+            if (row.inTime && row.outTime) {
+              const inM = timeToMinutes(row.inTime), outM = timeToMinutes(row.outTime);
+              if (inM !== null && outM !== null && outM >= inM) { dayTotalMinutes += (outM - inM); cycles.push({ in: row.inTime, out: row.outTime }); }
+            } else if (row.inTime && !row.outTime) cycles.push({ in: row.inTime, out: '' });
+            else if (!row.inTime && row.outTime) cycles.push({ in: '', out: row.outTime });
           });
-
-          Object.entries(centerLogs).forEach(([abbr, cLogs]) => {
-            if (!empData[empId].centers[abbr]) {
-              empData[empId].centers[abbr] = {
-                minutes: 0,
-                records: []
-              };
-            }
-
-            cLogs.sort((a, b) => a.time.localeCompare(b.time));
-
-            const rows = getLogsRows(cLogs);
-
-            let dayTotalMinutes = 0;
-            const cycles = [];
-
-            rows.forEach(row => {
-              if (row.inTime && row.outTime) {
-                const inMins = timeToMinutes(row.inTime);
-                const outMins = timeToMinutes(row.outTime);
-
-                if (inMins !== null && outMins !== null && outMins >= inMins) {
-                  dayTotalMinutes += (outMins - inMins);
-                  cycles.push({
-                    in: row.inTime,
-                    out: row.outTime
-                  });
-                }
-              } else if (row.inTime && !row.outTime) {
-                cycles.push({
-                  in: row.inTime,
-                  out: ''
-                });
-              } else if (!row.inTime && row.outTime) {
-                cycles.push({
-                  in: '',
-                  out: row.outTime
-                });
-              }
-            });
-
-            empData[empId].centers[abbr].minutes += dayTotalMinutes;
-            empData[empId].totalMinutes += dayTotalMinutes;
-
-            if (cycles.length > 0) {
-              empData[empId].centers[abbr].records.push({
-                date,
-                cycles
-              });
-            }
-          });
+          c.minutes += dayTotalMinutes;
+          c.days.add(date);                       // 📍 day counted at this center
+          empData[empId].totalMinutes += dayTotalMinutes;
+          empData[empId].days.add(date);          // 📍 unique day worked
+          if (cycles.length) c.records.push({ date, cycles });
         });
       });
+    });
 
-      if (Object.keys(empData).length === 0) {
-        alert('⚠️ No records found for the selected export period.');
-        return;
-      }
+    if (Object.keys(empData).length === 0) { alert('⚠️ No records found for the selected export period.'); return; }
+    if (exportBtn) exportBtn.textContent = '📄 Building sheets…';
 
-      const wb = XLSX.utils.book_new();
+    const wb = XLSX.utils.book_new();
+    const usedSheetNames = new Set();
+    const uniqueSheetName = (base) => {
+      let name = base.substring(0, 31);
+      let i = 2;
+      while (usedSheetNames.has(name)) name = `${base.substring(0, 27)} (${i++})`.substring(0, 31);
+      usedSheetNames.add(name);
+      return name;
+    };
 
-      const summaryData = [
-        ['Name', 'Position', 'Total Hours', 'C', 'PT', 'MK', 'TS']
-      ];
-
-      Object.values(empData).forEach(emp => {
-        summaryData.push([
-          emp.name,
-          emp.position,
-          formatExcelTime(emp.totalMinutes),
-          formatExcelTime(emp.centers['C']?.minutes || 0),
-          formatExcelTime(emp.centers['PT']?.minutes || 0),
-          formatExcelTime(emp.centers['MK']?.minutes || 0),
-          formatExcelTime(emp.centers['TS']?.minutes || 0)
-        ]);
+    const allAbbrs = [...new Set(Object.values(empData).flatMap(e => Object.keys(e.centers)))]
+      .sort((a, b) => {
+        const ia = CENTER_ORDER.indexOf(a), ib = CENTER_ORDER.indexOf(b);
+        return ((ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)) || a.localeCompare(b);
       });
 
-      XLSX.utils.book_append_sheet(
-        wb,
-        XLSX.utils.aoa_to_sheet(summaryData),
-        'Summary'
-      );
+    const sortedEmps = Object.values(empData).sort((a, b) => a.name.localeCompare(b.name));
+    const ftEmps = sortedEmps.filter(e => e.terms !== 'Part-time');
+    const ptEmps = sortedEmps.filter(e => e.terms === 'Part-time');
 
+    // --- Summary sheet(s) ---
+    const summaryHeader = ['Name', 'Position', 'Terms', 'Days Worked', 'Total Hours', 'Avg Hours/Day', ...allAbbrs];
+    const summaryRow = (e) => [
+      e.name, e.position, e.terms, e.days.size,
+      formatExcelTime(e.totalMinutes),
+      e.days.size ? formatDuration(Math.round(e.totalMinutes / e.days.size)) : '-',
+      ...allAbbrs.map(a => formatExcelTime(e.centers[a]?.minutes || 0))
+    ];
+    if (opts.separateTerms) {
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([summaryHeader, ...ftEmps.map(summaryRow)]), uniqueSheetName('Summary - Full-time'));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([summaryHeader, ...ptEmps.map(summaryRow)]), uniqueSheetName('Summary - Part-time'));
+    } else {
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([summaryHeader, ...sortedEmps.map(summaryRow)]), uniqueSheetName('Summary'));
+    }
+
+    // --- 🆕 PT days-per-center matrix ---
+    if (opts.ptDays && ptEmps.length) {
+      const ptHeader = ['Name', 'Position', ...allAbbrs.map(a => `${a} (days)`), 'Total Unique Days', 'Total Hours'];
+      const ptRows = ptEmps.map(e => [
+        e.name, e.position,
+        ...allAbbrs.map(a => e.centers[a]?.days.size || 0),
+        e.days.size,
+        formatExcelTime(e.totalMinutes)
+      ]);
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([ptHeader, ...ptRows]), uniqueSheetName('PT Days per Center'));
+    }
+
+    // --- Detail sheets (same as before, now optional) ---
+    if (opts.detailSheets) {
       Object.entries(empData).forEach(([empId, emp]) => {
         Object.entries(emp.centers).forEach(([abbr, centerData]) => {
-          if (centerData.records.length === 0) return;
-
+          if (!centerData.records.length) return;
           let maxCycles = 0;
-
-          centerData.records.forEach(rec => {
-            if (rec.cycles.length > maxCycles) {
-              maxCycles = rec.cycles.length;
-            }
-          });
-
+          centerData.records.forEach(rec => { if (rec.cycles.length > maxCycles) maxCycles = rec.cycles.length; });
           const headers = ['Date'];
-
-          for (let i = 1; i <= maxCycles; i++) {
-            headers.push(`In${i}`, `Out${i}`);
-          }
-
+          for (let i = 1; i <= maxCycles; i++) headers.push(`In${i}`, `Out${i}`);
           headers.push('Overall Total');
-
           const sheetData = [headers];
-
           centerData.records.forEach(rec => {
             const row = [rec.date];
-
             let dayMins = 0;
-
             for (let i = 0; i < maxCycles; i++) {
               const cycle = rec.cycles[i];
-
               if (cycle) {
                 row.push(cycle.in || '', cycle.out || '');
-
                 if (cycle.in && cycle.out) {
-                  const inM = timeToMinutes(cycle.in);
-                  const outM = timeToMinutes(cycle.out);
-
-                  if (inM !== null && outM !== null && outM >= inM) {
-                    dayMins += (outM - inM);
-                  }
+                  const inM = timeToMinutes(cycle.in), outM = timeToMinutes(cycle.out);
+                  if (inM !== null && outM !== null && outM >= inM) dayMins += (outM - inM);
                 }
-              } else {
-                row.push('', '');
-              }
+              } else row.push('', '');
             }
-
             row.push(formatExcelTime(dayMins));
             sheetData.push(row);
           });
-
-          const sheet = XLSX.utils.aoa_to_sheet(sheetData);
-
-          XLSX.utils.book_append_sheet(
-            wb,
-            sheet,
-            `${abbr}_${emp.name}`.substring(0, 31)
-          );
+          XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheetData), uniqueSheetName(`${abbr}_${emp.name}`));
         });
       });
-
-      let fileIdentifier;
-
-      if (mode === 'range') {
-        fileIdentifier = `${startDate}_to_${endDate}`;
-      } else {
-        const [year, month] = selectedMonth.split('-');
-        fileIdentifier = `${month}-${year}`;
-      }
-
-      XLSX.writeFile(
-        wb,
-        `Kumon_Timeclock_Records_${fileIdentifier}.xlsx`
-      );
-
-      alert('✅ Export successful!');
-    } catch (err) {
-      console.error('Export error:', err);
-      alert('❌ Failed to export. Check console for details.');
-    } finally {
-      if (exportBtn) {
-        exportBtn.textContent = originalText;
-        exportBtn.disabled = false;
-      }
     }
+
+    let fileIdentifier;
+    if (mode === 'range') fileIdentifier = `${startDate}_to_${endDate}`;
+    else { const [year, month] = selectedMonth.split('-'); fileIdentifier = `${month}-${year}`; }
+
+    XLSX.writeFile(wb, `Kumon_Timeclock_Records_${fileIdentifier}.xlsx`);
+    timecardsCache = { data: timecards, fetchedAt: Date.now() };
+    alert(`✅ Export successful! (${wb.SheetNames.length} sheet(s))`);
+  } catch (err) {
+    console.error('Export error:', err);
+    alert('❌ Failed to export. Check console for details.');
+  } finally {
+    if (exportBtn) { exportBtn.textContent = originalText; exportBtn.disabled = false; }
   }
+}
 
   function getCenterAbbr(location) {
     if (!location) return 'Unknown';
