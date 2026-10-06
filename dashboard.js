@@ -769,35 +769,56 @@ function wrPoTime(st, ds){ if (st.poTime) return wrTime12(st.poTime);
 
 function buildWeeklyReport() {
   const days = [];
-  for (let i=0;i<=WR_REPORT_DAYS;i++){ const d=new Date(); d.setDate(d.getDate()+i); days.push(wrISO(d)); }
-  const out = [];
-  // ---- DT section ----
+  for (let i = 0; i <= WR_REPORT_DAYS; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    days.push(wrISO(d));
+  }
+
+  const dtBlock = [];
+  const poBlock = [];
+
+  // ---- DT section (all DT days first) ----
   days.forEach(ds => {
     const entries = dtDataMap[ds] || [];
     if (!entries.length) return;
     const groups = new Map(); // student + timeslot = one line, subjects merged with &
     entries.forEach(e => {
-      const key = `${e.id}|${e.dtData.DTtimeslot||''}`;
+      const key = `${e.id}|${e.dtData.DTtimeslot || ''}`;
       if (!groups.has(key)) groups.set(key, { e, subjects: [] });
       groups.get(key).subjects.push(e.dtData.subject);
     });
-    const lines = [...groups.values()].sort((a,b)=>
-      (a.e.dtData.DTtimeslot||'').localeCompare(b.e.dtData.DTtimeslot||'') ||
+    const lines = [...groups.values()].sort((a, b) =>
+      (a.e.dtData.DTtimeslot || '').localeCompare(b.e.dtData.DTtimeslot || '') ||
       wrName(a.e.studentData).localeCompare(wrName(b.e.studentData)));
-    out.push(`DT: ${wrDateLabel(ds, true)}`);
-    lines.forEach((g,i)=>{ const s=g.e.studentData;
-      out.push(`${i+1}) ${wrTime12(g.e.dtData.DTtimeslot)} ${s.grade||''} ${wrName(s)} (${wrSchoolCode(s.school)}) ${g.subjects.map(x=>WR_SUBJ_ABBR[x]||x).join('& ')} (${wrDob(s.birthday)})`); });
-    out.push('');
+    dtBlock.push(wrDateLabel(ds, true)); // date on its OWN line, CN + EN weekday
+    lines.forEach((g, i) => {
+      const s = g.e.studentData;
+      dtBlock.push(`${i + 1}) ${wrTime12(g.e.dtData.DTtimeslot)} ${s.grade || ''} ${wrName(s)} (${wrSchoolCode(s.school)}) ${g.subjects.map(x => WR_SUBJ_ABBR[x] || x).join(' & ')} (${wrDob(s.birthday)})`);
+    });
   });
-  // ---- PO section ----
+
+  // ---- PO section (all PO days after DT) ----
   days.forEach(ds => {
     const list = poDataMap[ds] || [];
     if (!list.length) return;
-    const sorted = [...list].sort((a,b)=> (wrPoTime(a,ds)||'').localeCompare(wrPoTime(b,ds)||'') || wrName(a).localeCompare(wrName(b)));
-    sorted.forEach((st,i)=>{ const time = wrPoTime(st, ds);
-      out.push(`${wrDateLabel(ds,false)} ${time?time+' ':''}${i+1}) ${st.grade||''} ${st.nameCn||st.namePinyin||''}(${wrSchoolCode(st.school)}) ${(st.subjects||[]).map(x=>WR_SUBJ_ABBR[x.name]||x.name).join('& ')} (${wrCenterAbbr()})`); });
+    const sorted = [...list].sort((a, b) =>
+      (wrPoTime(a, ds) || '').localeCompare(wrPoTime(b, ds) || '') ||
+      wrName(a).localeCompare(wrName(b)));
+    poBlock.push(wrDateLabel(ds, true)); // date on its OWN line, CN + EN weekday
+    sorted.forEach((st, i) => {
+      const time = wrPoTime(st, ds); // time kept when available
+      poBlock.push(`${time ? time + ' ' : ''}${i + 1}) ${st.grade || ''} ${st.nameCn || st.namePinyin || ''}(${wrSchoolCode(st.school)}) ${(st.subjects || []).map(x => WR_SUBJ_ABBR[x.name] || x.name).join(' & ')} (${wrCenterAbbr()})`);
+    });
   });
-  return out.length ? out.join('\n').trim() : 'No DTs or POs in the next 7 days.';
+
+  // ---- Assemble: standalone headers; single blank line ONLY between DT and PO ----
+  const out = [];
+  if (dtBlock.length) { out.push('DT:'); out.push(...dtBlock); }
+  if (dtBlock.length && poBlock.length) out.push('');
+  if (poBlock.length) { out.push('PO:'); out.push(...poBlock); }
+
+  return out.length ? out.join('\n') : 'No DTs or POs in the next 7 days.';
 }
 
 let weeklyReportRaw = '';
@@ -814,29 +835,31 @@ function renderWeeklyReportHtml(text) {
     body.innerHTML = '<div class="wr-empty">🗓️ Nothing scheduled in this window.</div>';
     return;
   }
-  let html = '', groupOpen = false, poDateKey = null;
-  const closeGroup = () => { if (groupOpen) { html += '</div>'; groupOpen = false; poDateKey = null; } };
+  let html = '', groupOpen = false, section = 'dt';
+  const closeGroup = () => { if (groupOpen) { html += '</div>'; groupOpen = false; } };
   text.split('\n').forEach(rawLine => {
     const line = rawLine.trim();
-    if (!line) { closeGroup(); return; }
-    if (line.startsWith('DT:')) {                       // DT day header
+    if (!line) { closeGroup(); return; }                        // blank line = section separator
+    if (line.startsWith('DT:')) { section = 'dt'; closeGroup(); return; }
+    if (line.startsWith('PO:')) { section = 'po'; closeGroup(); return; }
+    if (/^\d{1,2}\/\d{1,2}/.test(line)) {                       // date header on its own line
       closeGroup();
-      html += `<div class="wr-day-group wr-dt"><div class="wr-day-title">📝 ${wrEscapeHtml(line)}</div>`;
+      const cls  = section === 'po' ? 'wr-po' : 'wr-dt';
+      const icon = section === 'po' ? '👨‍👩‍ PO · ' : ' DT · ';
+      html += `<div class="wr-day-group ${cls}"><div class="wr-day-title">${icon}${wrEscapeHtml(line)}</div>`;
       groupOpen = true;
-    } else if (/^\d+\)/.test(line)) {                    // numbered DT entry
-      if (!groupOpen) { html += '<div class="wr-day-group wr-dt">'; groupOpen = true; }
-      html += `<div class="wr-line">${wrEscapeHtml(line)}</div>`;
-    } else {                                             // PO line: "15/9(二) 10:30 1) ..."
-      const m = line.match(/^(\d{1,2}\/\d{1,2}\([^)]*\))\s*(.*)$/);
-      if (m && poDateKey === m[1]) {
-        html += `<div class="wr-line">${wrEscapeHtml(m[2])}</div>`;
-      } else {
-        closeGroup();
-        html += `<div class="wr-day-group wr-po"><div class="wr-day-title">👨‍👩‍👧 PO · ${wrEscapeHtml(m ? m[1] : line)}</div>`;
-        if (m && m[2]) html += `<div class="wr-line">${wrEscapeHtml(m[2])}</div>`;
-        groupOpen = true; poDateKey = m ? m[1] : null;
-      }
+      return;
     }
+    if (/^\d+\)/.test(line)) {                                  // numbered entry line
+      if (!groupOpen) {
+        html += `<div class="wr-day-group ${section === 'po' ? 'wr-po' : 'wr-dt'}">`;
+        groupOpen = true;
+      }
+      html += `<div class="wr-line">${wrEscapeHtml(line)}</div>`;
+      return;
+    }
+    if (!groupOpen) { html += '<div class="wr-day-group wr-dt">'; groupOpen = true; }
+    html += `<div class="wr-line">${wrEscapeHtml(line)}</div>`;
   });
   closeGroup();
   body.innerHTML = html;
