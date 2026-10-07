@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pay Slip Generator - Kumon DB</title>
+<link rel="stylesheet" href="payslip.css">
+</head>
+<body>
+
+<header>
+  <nav>
+    <a href="centers.html">← Centers</a>
+  </nav>
+      <span class="page-title">💵 Pay Slip Generator</span>
+</header>
+
+<div id="accessDenied" class="access-denied hidden">
+  <div class="access-denied-content">
+    <h2>🔐 Access Restricted</h2>
+    <p>This page is only accessible to Administrators and Managers.</p>
+    <button id="backToDashboard" class="primary">← Back to Centers</button>
+  </div>
+</div>
+
+<main id="mainContent" class="hidden">
+  <div class="workspace">
+
+    <!-- ============ LEFT: CONTROLS ============ -->
+    <aside class="controls">
+
+      <section class="card">
+        <h2>👤 Employee & Period</h2>
+        <div class="form-group">
+          <label for="empSelect">Employee (auto-fill from database)</label>
+          <select id="empSelect"><option value="">— Manual entry —</option></select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="payMonth">Remuneration Month *</label>
+            <input type="month" id="payMonth" required>
+          </div>
+          <div class="form-group">
+            <label>Position (fixed)</label>
+            <input type="text" value="Teacher Assistant" disabled title="Position is always Teacher Assistant on payslips">
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>🏢 Employer's Information</h2>
+        <div class="form-group">
+          <label for="employerName">Name</label>
+          <input id="employerName" list="employerList" placeholder="Select center or type...">
+          <datalist id="employerList"></datalist>
+        </div>
+        <div class="form-group">
+          <label for="employerContact">Contact No.</label>
+          <input id="employerContact">
+        </div>
+        <div class="form-group">
+          <label for="employerAddress">Office Address</label>
+          <textarea id="employerAddress" rows="2"></textarea>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>🛂 Non-resident Worker's Information</h2>
+        <div class="form-group">
+          <label for="workerName">Name</label>
+          <input id="workerName">
+        </div>
+        <div class="form-group">
+          <label for="idDocType">Type of Identity Document</label>
+          <select id="idDocType">
+            <option>Non-Resident Worker's Identification Card</option>
+            <option>Passport</option>
+            <option>Others</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="idDocNo">No. of Identity Document</label>
+            <input id="idDocNo">
+          </div>
+          <div class="form-group">
+            <label for="idDocIssue">Date of Issue</label>
+            <input type="date" id="idDocIssue">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="otherNumbers">Other Numbers According to Law⁵ (optional)</label>
+          <input id="otherNumbers" placeholder="Leave blank for empty line">
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>💰 Remuneration</h2>
+        <div id="remRows" class="rows"></div>
+        <button id="addRemBtn" class="secondary small" type="button">+ Add Item</button>
+      </section>
+
+      <section class="card">
+        <h2>✂️ Deductions</h2>
+        <div id="dedRows" class="rows"></div>
+        <button id="addDedBtn" class="secondary small" type="button">+ Add Deduction</button>
+      </section>
+
+      <section class="card totals-card">
+        <div class="total-line"><span>Gross / Total Remunerations</span><strong id="totalRem">0</strong></div>
+        <div class="total-line"><span>Total Deductions</span><strong id="totalDed">0</strong></div>
+        <div class="total-line net"><span>Net Income</span><strong id="netTotal">0</strong></div>
+      </section>
+
+      <section class="card">
+        <h2>🗂 Saved Payslips</h2>
+        <div class="form-group">
+          <select id="savedSelect"><option value="">— Select saved payslip —</option></select>
+        </div>
+        <div class="btn-row">
+          <button id="loadSavedBtn" class="secondary" type="button">📂 Load</button>
+          <button id="deleteSavedBtn" class="danger" type="button">🗑 Delete</button>
+          <button id="savePayslipBtn" class="secondary" type="button">💾 Save</button>
+        </div>
+      </section>
+
+      <section class="card actions-card">
+        <button id="exportWordBtn" class="primary big" type="button">⬇ Export Word (A4)</button>
+        <button id="batchExportBtn" class="primary big" type="button">⬇ Batch: All Non-Residents (1 file)</button>
+        <div class="btn-row">
+          <button id="printBtn" class="secondary" type="button">🖨 Print / PDF</button>
+          <button id="resetBtn" class="danger" type="button">♻ Reset</button>
+        </div>
+      </section>
+
+    </aside>
+
+    <!-- ============ RIGHT: LIVE PREVIEW ============ -->
+    <section class="preview-pane">
+      <div class="preview-header">📄 Live Preview — A4</div>
+      <div class="paper-wrap">
+        <div id="payslipPreview" class="paper"></div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<script type="module" src="payslip.js"></script>
+</body>
+</html>
