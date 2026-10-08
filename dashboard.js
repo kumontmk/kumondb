@@ -798,19 +798,21 @@ function buildWeeklyReport() {
     });
   });
 
-  // ---- PO section (all PO days after DT) ----
-  days.forEach(ds => {
-    const list = poDataMap[ds] || [];
-    if (!list.length) return;
-    const sorted = [...list].sort((a, b) =>
-      (wrPoTime(a, ds) || '').localeCompare(wrPoTime(b, ds) || '') ||
-      wrName(a).localeCompare(wrName(b)));
-    poBlock.push(wrDateLabel(ds, true)); // date on its OWN line, CN + EN weekday
-    sorted.forEach((st, i) => {
-      const time = wrPoTime(st, ds); // time kept when available
-      poBlock.push(`${time ? time + ' ' : ''}${i + 1}) ${st.grade || ''} ${st.nameCn || st.namePinyin || ''}(${wrSchoolCode(st.school)}) ${(st.subjects || []).map(x => WR_SUBJ_ABBR[x.name] || x.name).join(' & ')} (${wrCenterAbbr()})`);
-    });
+// ---- PO section (all PO days after DT) ----
+// NOTE: PO lines do NOT include a timeslot — times are DT-only.
+days.forEach(ds => {
+  const list = poDataMap[ds] || [];
+  if (!list.length) return;
+  // Still sort chronologically behind the scenes (fallback: name),
+  // but the time is no longer printed.
+  const sorted = [...list].sort((a, b) =>
+    (wrPoTime(a, ds) || '').localeCompare(wrPoTime(b, ds) || '') ||
+    wrName(a).localeCompare(wrName(b)));
+  poBlock.push(wrDateLabel(ds, true)); // date on its own line, CN + EN weekday
+  sorted.forEach((st, i) => {
+    poBlock.push(`${i + 1}) ${st.grade || ''} ${st.nameCn || st.namePinyin || ''}(${wrSchoolCode(st.school)}) ${(st.subjects || []).map(x => WR_SUBJ_ABBR[x.name] || x.name).join(' & ')} (${wrCenterAbbr()})`);
   });
+});
 
   // ---- Assemble: standalone headers; single blank line ONLY between DT and PO ----
   const out = [];
