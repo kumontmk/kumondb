@@ -391,66 +391,70 @@ function startCentersPage() {
 /* =========================================
    CENTERS GRID — independent loader at the bottom
 ========================================= */
-async function loadCentersGrid(user, userData, isAdmin) {
-  try {
+function loadCentersGrid(user, userData, isAdmin) {
+  return new Promise((resolve) => {
     const userPermissions = userData.permissions?.centers || {};
-    const centersSnap = await get(ref(db, 'centers'));
+    let firstLoad = true;
 
-    if (!centersSnap.exists()) {
-      centerGrid.innerHTML = `
-        <p style="text-align:center; color:#666; grid-column: 1/-1;">
-          ${escapeHtml(t('centers.noCenters'))}
-        </p>
-      `;
-      centersLoader?.classList.add('hidden');
-      return [];
-    }
+    onValue(ref(db, 'centers'), (snapshot) => {
+      const allCenters = snapshot.val() || {};
 
-    const allCenters = centersSnap.val();
-    centerGrid.innerHTML = '';
-    let hasVisibleCenters = false;
-    const accessibleCenters = [];
+      centerGrid.innerHTML = '';
+      let hasVisibleCenters = false;
+      const accessibleCenters = [];
 
-    Object.entries(allCenters).forEach(([centerId, centerData]) => {
-      const hasAccess = isAdmin || userPermissions[centerId] === true;
-      if (hasAccess) {
-        hasVisibleCenters = true;
-        accessibleCenters.push({ id: centerId, name: centerData.name || centerId });
-        const card = document.createElement('div');
-        card.className = 'center-card';
-        card.style.cursor = 'pointer';
-        card.innerHTML = `
-          <div class="card-icon">🏢</div>
-          <h3>${escapeHtml(centerData.name || centerId)}</h3>
-          <p>${escapeHtml(t('centers.cardDescription'))}</p>
+      Object.entries(allCenters).forEach(([centerId, centerData]) => {
+        // Hide disabled centers
+        if (centerData?.isDisabled === true) {
+          return;
+        }
+
+        const hasAccess = isAdmin || userPermissions[centerId] === true;
+
+        if (hasAccess) {
+          hasVisibleCenters = true;
+          accessibleCenters.push({
+            id: centerId,
+            name: centerData.name || centerId
+          });
+
+          const card = document.createElement('div');
+          card.className = 'center-card';
+          card.style.cursor = 'pointer';
+          card.innerHTML = `
+            <div class="card-icon">🏢</div>
+            <h3>${escapeHtml(centerData.name || centerId)}</h3>
+            <p>${escapeHtml(t('centers.cardDescription'))}</p>
+          `;
+
+          card.addEventListener('click', () => {
+            sessionStorage.setItem('selectedCenter', centerId);
+            sessionStorage.setItem('selectedCenterName', centerData.name || centerId);
+            window.location.href = 'dashboard.html';
+          });
+
+          centerGrid.appendChild(card);
+        }
+      });
+
+      if (!hasVisibleCenters) {
+        centerGrid.innerHTML = `
+          <div class="center-card" style="cursor: default; border-left: 4px solid #dc3545; grid-column: 1 / -1;">
+            <div class="card-icon">🚫</div>
+            <h3>${escapeHtml(t('centers.noAccessTitle'))}</h3>
+            <p>${escapeHtml(t('centers.noAccessBody'))}</p>
+          </div>
         `;
-        card.addEventListener('click', () => {
-          sessionStorage.setItem('selectedCenter', centerId);
-          sessionStorage.setItem('selectedCenterName', centerData.name || centerId);
-          window.location.href = 'dashboard.html';
-        });
-        centerGrid.appendChild(card);
+      }
+
+      centersLoader?.classList.add('hidden');
+
+      if (firstLoad) {
+        firstLoad = false;
+        resolve(accessibleCenters);
       }
     });
-
-    if (!hasVisibleCenters) {
-      centerGrid.innerHTML = `
-        <div class="center-card" style="cursor: default; border-left: 4px solid #dc3545; grid-column: 1 / -1;">
-          <div class="card-icon">🚫</div>
-          <h3>${escapeHtml(t('centers.noAccessTitle'))}</h3>
-          <p>${escapeHtml(t('centers.noAccessBody'))}</p>
-        </div>
-      `;
-    }
-
-    centersLoader?.classList.add('hidden');
-    return accessibleCenters;
-  } catch (err) {
-    console.error("Error loading centers:", err);
-    centerGrid.innerHTML = `<p style="text-align:center; color:#dc3545; grid-column: 1/-1;"> ${escapeHtml(t('centers.errorLoading'))} </p>`;
-    centersLoader?.classList.add('hidden');
-    return [];
-  }
+  });
 }
 
 /* =========================================
