@@ -1852,3 +1852,55 @@ background-color: var(--white);
   line-height: 1.2;
   margin-top: 2px;
 }
+
+/* ============================================================
+   🚫 CANCEL REQUEST TAB (append-only)
+============================================================ */
+.cx-section-title { color: var(--primary-dark); font-size: 1.05rem; margin: 0.25rem 0 0.75rem; }
+.cx-list { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1.5rem; }
+.cx-empty { background: var(--white); border: 1px dashed var(--border); border-radius: var(--radius); padding: 1.5rem; text-align: center; color: var(--text-light); }
+.cx-card { display: flex; gap: 1rem; align-items: center; justify-content: space-between; background: var(--white); border: 1px solid var(--border); border-left: 4px solid var(--primary-dark); border-radius: 10px; padding: 0.8rem 1rem; box-shadow: var(--shadow); flex-wrap: wrap; }
+.cx-card.pending { border-left-color: #b45309; background: #fffdf5; }
+.cx-card.h-approved { border-left-color: var(--success); }
+.cx-card.h-rejected { border-left-color: var(--danger); }
+.cx-card.h-withdrawn { border-left-color: #94a3b8; }
+.cx-card-main { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 0.2rem; }
+.cx-card-title { font-size: 0.95rem; }
+.cx-card-sub { font-size: 0.85rem; color: var(--text-light); }
+.cx-card-reason { font-size: 0.88rem; background: #f8fafc; border-radius: 6px; padding: 0.35rem 0.6rem; margin-top: 0.25rem; word-break: break-word; }
+.cx-card-meta { font-size: 0.78rem; color: var(--text-light); }
+.cx-card-actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.cx-chip { display: inline-block; padding: 0.25rem 0.7rem; border-radius: 999px; font-size: 0.78rem; font-weight: 700; white-space: nowrap; }
+.cx-chip.pending { background: #fef3c7; color: #92400e; }
+.cx-chip.approved { background: #d1fae5; color: #065f46; }
+.cx-chip.rejected { background: #fee2e2; color: #991b1b; }
+.cx-chip.withdrawn { background: var(--border); color: #475569; }
+.cx-chip.muted { background: #f1f5f9; color: var(--text-light); }
+.cx-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 6px; border-radius: 999px; background: #b45309; color: #fff; font-size: 0.72rem; font-weight: 800; }
+/* day picker */
+.cx-days-label { font-weight: 600; }
+.cx-days-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin: 0.5rem 0; flex-wrap: wrap; }
+.cx-selectall { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+.cx-selectall input { width: auto; margin: 0; accent-color: var(--primary-dark); }
+.cx-daycount { font-size: 0.82rem; color: var(--text-light); font-weight: 600; }
+.cx-days-list { display: flex; flex-direction: column; gap: 0.4rem; max-height: 300px; overflow-y: auto; padding-right: 4px; }
+.cx-day-row { display: flex; align-items: center; gap: 0.6rem; background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.75rem; cursor: pointer; transition: all 0.15s; flex-wrap: wrap; }
+.cx-day-row:hover { border-color: var(--primary-dark); }
+.cx-day-row:has(input:checked) { background: #fff5f5; border-color: var(--danger); }
+.cx-day-row.past { opacity: 0.55; cursor: not-allowed; background: #f1f5f9; }
+.cx-day-row.static { cursor: default; }
+.cx-day-row input { width: auto; margin: 0; accent-color: var(--danger); }
+.cx-day-date { font-weight: 600; font-size: 0.9rem; min-width: 170px; }
+.cx-day-shift { font-size: 0.8rem; color: var(--text-light); background: var(--white); border: 1px solid var(--border); border-radius: 999px; padding: 0.1rem 0.6rem; }
+.cx-day-past { font-size: 0.72rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em; }
+.cx-impact { background: #f0f8ff; border: 1px solid #b8d8ef; border-radius: var(--radius); padding: 0.75rem 1rem; font-size: 0.88rem; margin-top: 0.75rem; }
+.cx-impact:empty { display: none; }
+.cx-impact-note { color: var(--text-light); font-size: 0.8rem; }
+.cx-review-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.6rem 1rem; margin-bottom: 0.75rem; }
+.cx-review-grid label { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-light); }
+.cx-review-grid .full { grid-column: 1 / -1; }
+@media (max-width: 768px) {
+  .cx-card { flex-direction: column; align-items: stretch; }
+  .cx-card-actions { justify-content: flex-end; }
+  .cx-day-date { min-width: 0; }
+}

@@ -16,10 +16,10 @@ const FIXED_POSITION = "Teacher Assistant";   // 👈 always Teacher Assistant p
 
 // Mirrors EMPLOYER_CENTERS in employees.js (+ known contact numbers)
 const EMPLOYER_CENTERS = {
-  "Centro de Educação Kumon Champs":               { contact: "",         english: "Ave Do Conselheiro Ferreira, De Almeida No. 113B R/C, C, Edf Ho Lan Fa Un" },
+  "Centro de Educação Kumon Champs":               { contact: "28519919",         english: "Ave Do Conselheiro Ferreira, De Almeida No. 113B R/C, C, Edf Ho Lan Fa Un" },
   "Centro de Educação Kumon Taipa Pac Tat":        { contact: "28823866", english: "Rua De Viseu N˚ 120, Fast Garden, r/c, M, Taipa" },
-  "Centro de Educação Kumon Tap Siac":             { contact: "",         english: "Rua Afonso de Albuquerque, No. 22B RC-ARC Edif. Choi Lai" },
-  "Centro de Educação Kumon Taipa Mei Keng":       { contact: "",         english: "NA TAIPA, ESTRADA GOVERNADOR ALBANO DE OLIVEIRA N° 24, MEI KENG FA UN RÉ-DO-CHÃO AU" },
+  "Centro de Educação Kumon Tap Siac":             { contact: "28823866",         english: "Rua Afonso de Albuquerque, No. 22B RC-ARC Edif. Choi Lai" },
+  "Centro de Educação Kumon Taipa Mei Keng":       { contact: "28831773",         english: "NA TAIPA, ESTRADA GOVERNADOR ALBANO DE OLIVEIRA N° 24, MEI KENG FA UN RÉ-DO-CHÃO AU" },
   "Centro de Educação Long Kei":                   { contact: "",         english: "" },
   "Centro de Educação Kei Hok Fong":               { contact: "",         english: "Estrada Governador Albano de Oliveira, n.º20, Mei Keng Fa Un, r/c, AO, Taipa" },
   "Centro de Educação Oi Hok Fong 2 (EL Taipa)":   { contact: "",         english: "Avenida De Guimaraes 47, Mei Keng Fa Un, Res-Do-Chao R, Taipa, Macau" },

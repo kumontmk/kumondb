@@ -2145,4 +2145,516 @@ async function healLegacyReliefOverlaps() {
   alert(`🛠️ Done. Fixed ${fixedShifts} overlapped shift(s) across ${touchedLeaves} old leave record(s).`);
   refreshAll();
 }
+
+// ============================================================
+// 🚫 CANCEL REQUEST TAB — append-only module
+// Requests live at leaves/{id}/cancellationRequest; the leave
+// keeps status 'approved' until an admin approves the request.
+// ============================================================
+let cxCurrentLeaveId = null, cxReviewLeaveId = null;
+
+/* ---------- i18n helper with safe English fallbacks ---------- */
+function cxT(key, vars = {}, fallback = key) {
+  let v = null;
+  try { v = t(`cx_${key}`, vars); } catch (e) { /* key missing */ }
+  if (typeof v === 'string' && v && v !== `cx_${key}`) return v;
+  return String(fallback).replace(/\{\{(\w+)\}\}/g, (m, k) => (vars && vars[k] !== undefined ? vars[k] : m));
+}
+function cxCurrentUserName() {
+  if (currentUser?.empId && employees[currentUser.empId]?.englishName) return employees[currentUser.empId].englishName;
+  return currentUser?.email || 'Admin';
+}
+
+/* ---------- helpers ---------- */
+function cxGetWorkingDays(l) {
+  if (!l?.dateFrom) return [];
+  if (l.durationType === 'hours') return [l.dateFrom];
+  const skipped = new Set((l.restDaysExcluded || '').split(',').map(s => s.trim()).filter(Boolean));
+  const days = [];
+  eachDate(l.dateFrom, l.dateTo, d => { const ds = fmtISO(d); if (!skipped.has(ds)) days.push(ds); });
+  return days;
+}
+function cxReliefPlanArray(l) { return l?.reliefPlan ? (Array.isArray(l.reliefPlan) ? l.reliefPlan : Object.values(l.reliefPlan)) : []; }
+function cxReliefPlanByDate(l) {
+  const map = {};
+  cxReliefPlanArray(l).forEach(dp => {
+    if (!dp?.date) return;
+    const shifts = Array.isArray(dp.empAOrigSchedule?.shifts) ? dp.empAOrigSchedule.shifts : Object.values(dp.empAOrigSchedule?.shifts || {});
+    if (!shifts.length) return;
+    map[dp.date] = shifts.filter(s => (s.type || 'work') === 'work').map(s => `${getCenterAbbr(s._center || s.center)} ${s.start}–${s.end}`).join(', ');
+  });
+  return map;
+}
+function cxAffectedRelievers(l, dates) {
+  const set = new Set(dates); const names = new Set();
+  cxReliefPlanArray(l).forEach(dp => {
+    if (!set.has(dp?.date)) return;
+    const rels = Array.isArray(dp.relievers) ? dp.relievers : Object.values(dp.relievers || {});
+    rels.forEach(r => {
+      if (r?.relieverName) names.add(r.relieverName);
+      else if (r?.relieverId && employees[r.relieverId]?.englishName) names.add(employees[r.relieverId].englishName);
+    });
+  });
+  return [...names];
+}
+function cxLeaveHasFuture(l) { return (l.dateTo || l.dateFrom) >= todayStr(); }
+function cxScopeText(l, req) {
+  const total = cxGetWorkingDays(l).length;
+  if (req.scope === 'full' || (req.dates || []).length >= total) return cxT('fullScopeShort', {}, 'ENTIRE leave');
+  return cxT('partialScopeShort', { n: (req.dates || []).length, total }, '{{n}} of {{total}} day(s)');
+}
+
+/* ---------- rendering ---------- */
+function renderCancelTab() {
+  if (!currentUser) return;
+  const admin = currentUser.isAdmin;
+  const queueWrap = $('cxAdminQueueWrap');
+  if (admin) { queueWrap?.classList.remove('hidden'); renderCxQueue(); } else queueWrap?.classList.add('hidden');
+  const myWrap = $('cxMyLeavesWrap');
+  // 🚫 Master Admin (kumonchamps) is not an employee → no personal list
+  if (!currentUser.isMaster && currentUser.empId && employees[currentUser.empId]) { myWrap?.classList.remove('hidden'); renderCxMyLeaves(); }
+  else myWrap?.classList.add('hidden');
+  renderCxHistory(admin);
+  renderCxTabBadge();
+}
+function cxMaybeRender() {
+  if (!currentUser) return;
+  if ($('main-tab-cancelrequests')?.classList.contains('active')) renderCancelTab();
+  else renderCxTabBadge();
+}
+function renderCxTabBadge() {
+  if (!currentUser) return;
+  const btn = document.querySelector('[data-main-tab="cancelrequests"]');
+  if (!btn) return;
+  const count = Object.values(leaves).filter(l =>
+    l.status === 'approved' && l.cancellationRequest?.status === 'pending' &&
+    (currentUser.isAdmin || l.empId === currentUser.empId)
+  ).length;
+  let badge = btn.querySelector('.cx-badge');
+  if (!count) { badge?.remove(); return; }
+  if (!badge) { badge = document.createElement('span'); badge.className = 'cx-badge'; btn.appendChild(badge); }
+  badge.textContent = count;
+}
+function renderCxQueue() {
+  const el = $('cxAdminQueue'); if (!el) return;
+  const pending = Object.entries(leaves).map(([id, l]) => ({ id, ...l }))
+    .filter(l => l.status === 'approved' && l.cancellationRequest?.status === 'pending')
+    .sort((a, b) => (a.cancellationRequest.requestedAt || '').localeCompare(b.cancellationRequest.requestedAt || ''));
+  setText('cxQueueTitle', `${cxT('queueTitle', {}, '⏳ Pending cancellation requests')} (${pending.length})`);
+  if (!pending.length) { el.innerHTML = `<div class="cx-empty">${escapeHtml(cxT('noPending', {}, 'No pending cancellation requests. 🎉'))}</div>`; return; }
+  el.innerHTML = pending.map(l => {
+    const req = l.cancellationRequest; const meta = TYPE_META[l.type] || { label: l.typeLabel || l.type, cls: '' };
+    const relievers = cxAffectedRelievers(l, req.dates);
+    return `<div class="cx-card pending">
+      <div class="cx-card-main">
+        <div class="cx-card-title"><span class="type-dot lv ${meta.cls} approved"></span><strong>${escapeHtml(l.empName || '-')}</strong> · ${escapeHtml(meta.label)}</div>
+        <div class="cx-card-sub">${fmtDateWithDow(l.dateFrom)} → ${fmtDateWithDow(l.dateTo)} · ${durationText(l)}</div>
+        <div class="cx-card-sub">🚫 <strong>${escapeHtml(cxScopeText(l, req))}</strong>${req.scope !== 'full' ? ': ' + (req.dates || []).map(fmtDateShort).join(', ') : ''}</div>
+        <div class="cx-card-reason">💬 ${escapeHtml(req.reason || '')}</div>
+        <div class="cx-card-meta">${escapeHtml(cxT('requestedBy', {}, 'Requested by'))} ${escapeHtml(req.requestedByName || '-')} · ${req.requestedAt ? new Date(req.requestedAt).toLocaleString() : ''}${relievers.length ? '<br>👥 ' + escapeHtml(cxT('relieversAffected', { names: relievers.join(', ') }, 'Reliever(s) affected: {{names}}')) : ''}</div>
+      </div>
+      <div class="cx-card-actions"><button class="primary" data-cx="review" data-id="${escapeHtml(l.id)}" type="button">👁 ${escapeHtml(cxT('review', {}, 'Review'))}</button></div>
+    </div>`;
+  }).join('');
+}
+function renderCxMyLeaves() {
+  const el = $('cxMyLeaves'); if (!el) return;
+  const mine = Object.entries(leaves).map(([id, l]) => ({ id, ...l }))
+    .filter(l => l.empId === currentUser.empId && l.status === 'approved' && cxLeaveHasFuture(l))
+    .sort((a, b) => a.dateFrom.localeCompare(b.dateFrom));
+  setText('cxMyTitle', cxT('myTitle', {}, '🗓️ My approved leaves'));
+  if (!mine.length) { el.innerHTML = `<div class="cx-empty">${escapeHtml(cxT('noApproved', {}, 'No approved leaves available for cancellation.'))}</div>`; return; }
+  el.innerHTML = mine.map(l => {
+    const req = l.cancellationRequest; const meta = TYPE_META[l.type] || { label: l.typeLabel || l.type, cls: '' };
+    const pending = req?.status === 'pending';
+    const cancellable = cxGetWorkingDays(l).filter(ds => ds >= todayStr());
+    const timeNote = l.durationType === 'hours' && l.timeFrom && l.timeTo ? ` (${l.timeFrom}–${l.timeTo})` : '';
+    let action;
+    if (pending) {
+      action = `<span class="cx-chip pending">⏳ ${escapeHtml(cxT('reqPending', {}, 'Cancellation pending'))} · ${escapeHtml(cxScopeText(l, req))}</span>
+        <button class="secondary" data-cx="withdraw" data-id="${escapeHtml(l.id)}" type="button">${escapeHtml(cxT('withdraw', {}, 'Withdraw'))}</button>`;
+    } else if (!cancellable.length) {
+      action = `<span class="cx-chip muted">${escapeHtml(cxT('allPast', {}, 'All dates passed'))}</span>`;
+    } else {
+      action = `<button class="danger" data-cx="request" data-id="${escapeHtml(l.id)}" type="button">🚫 ${escapeHtml(cxT('requestBtn', {}, 'Request cancellation'))}</button>`;
+    }
+    return `<div class="cx-card">
+      <div class="cx-card-main">
+        <div class="cx-card-title"><span class="type-dot lv ${meta.cls} approved"></span><strong>${escapeHtml(meta.label)}</strong></div>
+        <div class="cx-card-sub">${fmtDateWithDow(l.dateFrom)} → ${fmtDateWithDow(l.dateTo)} · ${durationText(l)}${timeNote}${l.restDaysExcluded ? ' <small>' + escapeHtml(t('restExcluded')) + '</small>' : ''}</div>
+      </div>
+      <div class="cx-card-actions">${action}</div>
+    </div>`;
+  }).join('');
+}
+function renderCxHistory(admin) {
+  const el = $('cxHistory'), wrap = $('cxHistoryWrap'); if (!el || !wrap) return;
+  setText('cxHistoryTitle', cxT('historyTitle', {}, '🕓 Request history'));
+  const items = Object.entries(leaves).map(([id, l]) => ({ id, ...l }))
+    .filter(l => l.cancellationRequest && ['approved', 'rejected', 'withdrawn'].includes(l.cancellationRequest.status))
+    .filter(l => admin || l.empId === currentUser.empId)
+    .sort((a, b) => {
+      const ta = a.cancellationRequest.reviewedAt || a.cancellationRequest.withdrawnAt || '';
+      const tb = b.cancellationRequest.reviewedAt || b.cancellationRequest.withdrawnAt || '';
+      return tb.localeCompare(ta);
+    });
+  if (!items.length) { wrap.classList.add('hidden'); el.innerHTML = ''; return; }
+  wrap.classList.remove('hidden');
+  el.innerHTML = items.slice(0, 30).map(l => {
+    const req = l.cancellationRequest; const meta = TYPE_META[l.type] || { label: l.typeLabel || l.type, cls: '' };
+    const when = req.reviewedAt || req.withdrawnAt;
+    const chipCls = req.status;
+    const chipTxt = { approved: cxT('hApproved', {}, '✅ Cancelled'), rejected: cxT('hRejected', {}, '❌ Rejected'), withdrawn: cxT('hWithdrawn', {}, '↩️ Withdrawn') }[req.status] || req.status;
+    return `<div class="cx-card h-${req.status}">
+      <div class="cx-card-main">
+        <div class="cx-card-title"><span class="type-dot lv ${meta.cls}"></span><strong>${escapeHtml(l.empName || '-')}</strong> · ${escapeHtml(meta.label)} · ${fmtDateShort(l.dateFrom)} → ${fmtDateShort(l.dateTo)}</div>
+        <div class="cx-card-sub">🚫 ${escapeHtml(cxScopeText(l, req))} · 💬 ${escapeHtml(req.reason || '')}</div>
+        <div class="cx-card-meta">${when ? new Date(when).toLocaleString() : ''}${req.reviewNote ? ' · 📝 ' + escapeHtml(req.reviewNote) : ''}${req.reviewedByName ? ' · ' + escapeHtml(req.reviewedByName) : ''}</div>
+      </div>
+      <div class="cx-card-actions"><span class="cx-chip ${chipCls}">${escapeHtml(chipTxt)}</span></div>
+    </div>`;
+  }).join('');
+}
+
+/* ---------- request modal (employee) ---------- */
+async function openCxRequestModal(leaveId) {
+  const l = leaves[leaveId];
+  if (!l || l.status !== 'approved') return;
+  if (l.cancellationRequest?.status === 'pending') return alert(cxT('alreadyPending', {}, '⚠️ A cancellation request is already pending for this leave.'));
+  const futureDays = cxGetWorkingDays(l).filter(ds => ds >= todayStr());
+  if (!futureDays.length) return alert(cxT('allPast', {}, 'All dates passed'));
+  cxCurrentLeaveId = leaveId;
+  const meta = TYPE_META[l.type] || { label: l.typeLabel || l.type, cls: '' };
+  const timeNote = l.durationType === 'hours' && l.timeFrom && l.timeTo ? ` (${l.timeFrom}–${l.timeTo})` : '';
+  $('cxRequestSummary').innerHTML = `<span class="type-dot lv ${meta.cls} approved"></span><strong>${escapeHtml(meta.label)}</strong><br>${fmtDateWithDow(l.dateFrom)} → ${fmtDateWithDow(l.dateTo)} · ${durationText(l)}${timeNote}<br><em>${escapeHtml(l.reason || '')}</em>`;
+  $('cxReason').value = '';
+  renderCxDaysList(l);
+  openModal('cxRequestModal');
+  cxUpdateDayUI();
+}
+function renderCxDaysList(l) {
+  const wrap = $('cxDaysWrap'), list = $('cxDaysList');
+  const allDays = cxGetWorkingDays(l);
+  if (allDays.length <= 1) { wrap.classList.add('hidden'); list.innerHTML = ''; return; }
+  wrap.classList.remove('hidden');
+  const tStr = todayStr(); const plan = cxReliefPlanByDate(l);
+  list.innerHTML = allDays.map(ds => {
+    const past = ds < tStr;
+    return `<label class="cx-day-row${past ? ' past' : ''}">
+      <input type="checkbox" class="cx-day-cb" value="${ds}" ${past ? 'disabled' : ''}>
+      <span class="cx-day-date">${fmtDateWithDow(ds)}</span>
+      ${plan[ds] ? `<span class="cx-day-shift">${escapeHtml(plan[ds])}</span>` : ''}
+      ${past ? `<span class="cx-day-past">${escapeHtml(cxT('pastDay', {}, 'past'))}</span>` : ''}
+    </label>`;
+  }).join('');
+  list.querySelectorAll('.cx-day-cb').forEach(cb => cb.addEventListener('change', cxUpdateDayUI));
+}
+function cxUpdateDayUI() {
+  const l = leaves[cxCurrentLeaveId]; if (!l) return;
+  const allDays = cxGetWorkingDays(l);
+  const isSingle = allDays.length <= 1;
+  const cbs = [...document.querySelectorAll('#cxDaysList .cx-day-cb')];
+  const enabled = cbs.filter(c => !c.disabled);
+  const selected = cbs.filter(c => c.checked);
+  const selDates = isSingle ? allDays.filter(ds => ds >= todayStr()) : selected.map(c => c.value);
+  const countEl = $('cxDayCount');
+  if (countEl) countEl.textContent = isSingle ? '' : cxT('selectedCount', { n: selected.length, total: enabled.length }, '{{n}} of {{total}} selectable day(s)');
+  const sa = $('cxSelectAllDays');
+  if (sa) sa.checked = enabled.length > 0 && enabled.every(c => c.checked);
+  renderCxImpact(l, selDates);
+  const btn = $('cxSubmitRequestBtn'); if (btn) btn.disabled = !selDates.length;
+}
+function renderCxImpact(l, selDates) {
+  const box = $('cxImpact'); if (!box) return;
+  if (!l || !selDates.length) { box.innerHTML = ''; return; }
+  const total = cxGetWorkingDays(l).length;
+  const full = selDates.length === total;
+  const meta = TYPE_META[l.type] || { label: l.typeLabel || l.type };
+  let refundText;
+  if (l.type === 'unpaid') refundText = cxT('noBalanceUnpaid', {}, 'Unpaid leave — no balance will be restored.');
+  else {
+    const amt = l.durationType === 'hours'
+      ? `${l.amount} ${cxT('hrs', {}, 'hr(s)')}`
+      : `${selDates.length} ${cxT('daysUnit', {}, 'day(s)')}`;
+    refundText = cxT('willRestore', { amt, label: meta.label }, '{{amt}} of {{label}} will be restored to the balance.');
+  }
+  const relievers = cxAffectedRelievers(l, selDates);
+  box.innerHTML = `<strong>${full ? escapeHtml(cxT('fullScope', {}, 'FULL cancellation')) : escapeHtml(cxT('partialScope', {}, 'PARTIAL cancellation'))}</strong> · ${escapeHtml(refundText)}${relievers.length ? '<br>👥 ' + escapeHtml(cxT('relieversAffected', { names: relievers.join(', ') }, 'Reliever(s) affected: {{names}}')) : ''}<br><span class="cx-impact-note">${escapeHtml(cxT('impactNote', {}, 'The request will be sent to your manager for approval. Schedules and balances revert only after approval.'))}</span>`;
+}
+async function submitCxRequest() {
+  const l = leaves[cxCurrentLeaveId];
+  if (!l || l.status !== 'approved') return alert(cxT('missingRecord', {}, '❌ Missing leave record. Please close and reopen.'));
+  if (l.cancellationRequest?.status === 'pending') return alert(cxT('alreadyPending', {}, '⚠️ A cancellation request is already pending.'));
+  const reason = $('cxReason').value.trim();
+  if (!reason) return alert(cxT('reasonReq', {}, '⚠️ A reason is required to cancel a leave.'));
+  const allDays = cxGetWorkingDays(l);
+  const multi = allDays.length > 1;
+  const selDates = multi
+    ? [...document.querySelectorAll('#cxDaysList .cx-day-cb:checked')].map(c => c.value)
+    : allDays.filter(ds => ds >= todayStr());
+  if (!selDates.length) return alert(cxT('pickDay', {}, '⚠️ Please select at least one day to cancel.'));
+  const scope = selDates.length === allDays.length ? 'full' : 'partial';
+  const btn = $('cxSubmitRequestBtn'); btn.disabled = true; btn.textContent = cxT('submitting', {}, 'Submitting...');
+  try {
+    const req = {
+      status: 'pending', scope, dates: selDates.sort(), reason,
+      requestedBy: currentUser.uid, requestedByName: cxCurrentUserName(), requestedAt: new Date().toISOString()
+    };
+    await update(ref(db, `leaves/${cxCurrentLeaveId}/cancellationRequest`), req);
+    cxNotify(l, req, 'new');
+    closeModal('cxRequestModal');
+    alert(cxT('submitted', {}, '✅ Cancellation request submitted. A manager will review it.'));
+  } catch (err) { console.error(err); alert(cxT('submitFailed', { message: err.message }, '❌ Failed to submit request: {{message}}')); }
+  finally { btn.disabled = false; btn.textContent = cxT('submitBtn', {}, 'Submit request'); }
+}
+async function cxWithdraw(leaveId) {
+  const l = leaves[leaveId];
+  if (!l || l.cancellationRequest?.status !== 'pending') return;
+  if (!confirm(cxT('withdrawConfirm', {}, 'Withdraw your cancellation request?'))) return;
+  try {
+    const patch = { status: 'withdrawn', withdrawnBy: currentUser.uid, withdrawnAt: new Date().toISOString() };
+    await update(ref(db, `leaves/${leaveId}/cancellationRequest`), patch);
+    cxNotify(l, { ...l.cancellationRequest, ...patch }, 'withdrawn');
+  } catch (e) { console.error(e); alert(cxT('withdrawFailed', {}, '❌ Failed to withdraw the request.')); }
+}
+
+/* ---------- review modal (admin) ---------- */
+function openCxReviewModal(leaveId) {
+  const l = leaves[leaveId]; const req = l?.cancellationRequest;
+  if (!l || !req || req.status !== 'pending') return;
+  cxReviewLeaveId = leaveId;
+  const meta = TYPE_META[l.type] || { label: l.typeLabel || l.type };
+  const working = cxGetWorkingDays(l);
+  const plan = cxReliefPlanByDate(l);
+  const rows = (req.dates || []).map(ds => `<div class="cx-day-row static"><span class="cx-day-date">${fmtDateWithDow(ds)}</span>${plan[ds] ? `<span class="cx-day-shift">${escapeHtml(plan[ds])}</span>` : ''}</div>`).join('');
+  const refund = l.type === 'unpaid'
+    ? cxT('noBalanceUnpaid', {}, 'Unpaid leave — no balance restored.')
+    : cxT('willRestore', { amt: l.durationType === 'hours' ? `${l.amount} ${cxT('hrs', {}, 'hr(s)')}` : `${req.dates.length} ${cxT('daysUnit', {}, 'day(s)')}`, label: meta.label }, '{{amt}} of {{label}} will be restored.');
+  const relievers = cxAffectedRelievers(l, req.dates);
+  $('cxReviewBody').innerHTML = `
+    <div class="cx-review-grid">
+      <div><label>${escapeHtml(t('thEmployee'))}</label><strong>${escapeHtml(l.empName || '-')}</strong></div>
+      <div><label>${escapeHtml(t('thLeaveType'))}</label><strong>${escapeHtml(meta.label)}</strong></div>
+      <div><label>${escapeHtml(t('thFrom'))} → ${escapeHtml(t('thTo'))}</label>${fmtDateWithDow(l.dateFrom)} → ${fmtDateWithDow(l.dateTo)} · ${durationText(l)}</div>
+      <div><label>${escapeHtml(cxT('requestedBy', {}, 'Requested by'))}</label>${escapeHtml(req.requestedByName || '-')} · ${req.requestedAt ? new Date(req.requestedAt).toLocaleString() : ''}</div>
+      <div class="full"><label>${escapeHtml(t('thReason'))}</label>${escapeHtml(req.reason || '')}</div>
+    </div>
+    <div class="cx-impact"><strong>${req.scope === 'full' ? escapeHtml(cxT('fullScope', {}, 'FULL cancellation')) : escapeHtml(cxT('partialScope', {}, 'PARTIAL cancellation'))}</strong> — ${escapeHtml(cxScopeText(l, req))} (${(req.dates || []).length} of ${working.length})<br>${escapeHtml(refund)}${relievers.length ? '<br>👥 ' + escapeHtml(cxT('relieversAffected', { names: relievers.join(', ') }, 'Reliever(s) affected: {{names}}')) : ''}</div>
+    <div class="cx-days-list" style="margin-top:0.75rem;">${rows}</div>`;
+  $('cxReviewNote').value = '';
+  $('cxApproveBtn').disabled = false; $('cxRejectBtn').disabled = false;
+  $('cxApproveBtn').textContent = cxT('approveBtn', {}, '✅ Approve & cancel leave');
+  openModal('cxReviewModal');
+}
+async function cxApprove() {
+  const id = cxReviewLeaveId; const l = leaves[id]; const req = l?.cancellationRequest;
+  if (!l || !req || req.status !== 'pending') return;
+  const btn = $('cxApproveBtn'); btn.disabled = true; btn.textContent = cxT('processing', {}, 'Processing...');
+  try {
+    const working = cxGetWorkingDays(l);
+    const cancelDates = (req.dates || []).filter(ds => working.includes(ds));
+    const full = req.scope === 'full' || cancelDates.length >= working.length || !cancelDates.length;
+    if (full) await cxExecuteFullCancellation(id, l, req);
+    else await cxExecutePartialCancellation(id, l, req, cancelDates);
+    closeModal('cxReviewModal');
+    alert(cxT('cancelDone', {}, '✅ Cancellation approved — leave, schedules and balances updated.'));
+  } catch (err) { console.error(err); alert(cxT('cancelFailed', { message: err.message }, '❌ Failed to process cancellation: {{message}}')); }
+  finally { btn.disabled = false; btn.textContent = cxT('approveBtn', {}, '✅ Approve & cancel leave'); }
+}
+async function cxReject() {
+  const id = cxReviewLeaveId; const l = leaves[id]; const req = l?.cancellationRequest;
+  if (!l || !req || req.status !== 'pending') return;
+  if (!confirm(cxT('rejectConfirm', {}, 'Reject this cancellation request? The leave stays approved.'))) return;
+  const btn = $('cxRejectBtn'); btn.disabled = true;
+  try {
+    const patch = { status: 'rejected', reviewedBy: currentUser.uid, reviewedByName: cxCurrentUserName(), reviewedAt: new Date().toISOString(), reviewNote: $('cxReviewNote').value.trim() || '' };
+    await update(ref(db, `leaves/${id}/cancellationRequest`), patch);
+    cxNotify(l, { ...req, ...patch }, 'rejected');
+    closeModal('cxReviewModal');
+  } catch (e) { console.error(e); alert(cxT('rejectFailed', {}, '❌ Failed to reject the request.')); }
+  finally { btn.disabled = false; }
+}
+
+/* ---------- execution ---------- */
+function cxReviewPatch(req, extra = {}) {
+  return { ...req, status: 'approved', reviewedBy: currentUser.uid, reviewedByName: cxCurrentUserName(), reviewedAt: new Date().toISOString(), reviewNote: $('cxReviewNote')?.value.trim() || '', ...extra };
+}
+async function cxExecuteFullCancellation(id, l, req) {
+  let warn = false;
+  try { await restoreSchedulesForLeave(l); } catch (e) { console.error('Schedule restore failed:', e); warn = true; }
+  const newReq = cxReviewPatch(req);
+  leaves[id] = { ...l, status: 'cancelled' };
+  await update(ref(db, `leaves/${id}`), {
+    status: 'cancelled', cancelledBy: currentUser.uid, cancelledAt: new Date().toISOString(),
+    cancellationRequest: newReq
+  });
+  try { await recalcEntitlementUsed(l.empId); } catch (e) { console.warn('entitlement recalc failed:', e); }
+  cxNotify({ ...l, status: 'cancelled' }, newReq, 'approved');
+  if (warn) alert(cxT('restoreWarn', {}, '⚠️ Approved, but some schedule days could not be reverted. Check console.'));
+}
+async function cxExecutePartialCancellation(id, l, req, cancelDates) {
+  const cancelSet = new Set(cancelDates);
+  // 1) revert schedules for the cancelled dates only
+  await cxRestoreSchedulesForDates(l, cancelDates);
+  // 2) rebuild remaining days into contiguous segments
+  const working = cxGetWorkingDays(l);
+  const remainSet = new Set(working.filter(ds => !cancelSet.has(ds)));
+  const segments = []; let cur = null;
+  eachDate(l.dateFrom, l.dateTo, d => {
+    const ds = fmtISO(d);
+    if (cancelSet.has(ds)) { if (cur) { segments.push(cur); cur = null; } return; }
+    if (!cur) cur = { cal: [], work: [] };
+    cur.cal.push(ds); if (remainSet.has(ds)) cur.work.push(ds);
+  });
+  if (cur) segments.push(cur);
+  const nonEmpty = segments.filter(s => s.work.length);
+  if (!nonEmpty.length) return cxExecuteFullCancellation(id, l, req); // safety net
+  const planByDate = {}; cxReliefPlanArray(l).forEach(dp => { if (dp?.date) planByDate[dp.date] = dp; });
+  const mkPayload = seg => {
+    const dateFrom = seg.work[0], dateTo = seg.work[seg.work.length - 1];
+    const skipped = seg.cal.filter(ds => !remainSet.has(ds));
+    const daysPerYear = {};
+    seg.work.forEach(ds => { const y = parseInt(ds.slice(0, 4), 10); daysPerYear[y] = (daysPerYear[y] || 0) + 1; });
+    return {
+      dateFrom, dateTo, amount: seg.work.length, deductDays: seg.work.length,
+      restDaysExcluded: skipped.join(', '), daysPerYear,
+      year: parseInt(dateFrom.slice(0, 4), 10),
+      reliefPlan: seg.work.map(ds => planByDate[ds]).filter(Boolean)
+    };
+  };
+  const newReq = cxReviewPatch(req);
+  // first segment keeps the original record id
+  await update(ref(db, `leaves/${id}`), { ...mkPayload(nonEmpty[0]), cancellationRequest: newReq });
+  // extra segments become new approved records (visible in all existing tabs/exports)
+  for (let i = 1; i < nonEmpty.length; i++) {
+    const payload = {
+      empId: l.empId, empName: l.empName || '', empChinese: l.empChinese || '',
+      type: l.type, typeLabel: l.typeLabel || TYPE_META[l.type]?.label || l.type,
+      durationType: 'days', status: 'approved', reason: l.reason || '',
+      appliedBy: l.appliedBy || currentUser.uid, appliedByName: l.appliedByName || '', appliedAt: l.appliedAt || new Date().toISOString(),
+      reviewedBy: l.reviewedBy || currentUser.uid, reviewedAt: l.reviewedAt || new Date().toISOString(),
+      timeFrom: '', timeTo: '', attachment: null,
+      splitFrom: id, splitNote: 'Auto-split after partial cancellation',
+      ...mkPayload(nonEmpty[i])
+    };
+    const r = await push(ref(db, 'leaves'), payload);
+    if (r?.key) leaves[r.key] = payload; // keep local cache in sync for the recalc below
+  }
+  const snap = await get(ref(db, `leaves/${id}`)); if (snap.exists()) leaves[id] = snap.val();
+  try { await recalcEntitlementUsed(l.empId); } catch (e) { console.warn('entitlement recalc failed:', e); }
+  cxNotify(l, newReq, 'approved');
+}
+// Reverts Employee A + reliever schedules for SELECTED dates only
+// (date-filtered mirror of the existing restoreSchedulesForLeave)
+async function cxRestoreSchedulesForDates(l, dates) {
+  if (!allCenterIds.length) await loadCenterIds();
+  const dateSet = new Set(dates);
+  for (const dateStr of dates) {
+    for (const cid of allCenterIds) {
+      try {
+        const snap = await get(ref(db, `schedules/${cid}/${l.empId}/${dateStr}`)); if (!snap.exists()) continue;
+        const rec = snap.val() || {}; if (rec.status !== 'leave') continue;
+        const shiftsArr = Array.isArray(rec.shifts) ? rec.shifts : Object.values(rec.shifts || {});
+        if (shiftsArr.some(s => s.start && s.end)) await update(ref(db, `schedules/${cid}/${l.empId}/${dateStr}`), { status: 'scheduled', updatedBy: currentUser.uid, updatedAt: new Date().toISOString() });
+        else await remove(ref(db, `schedules/${cid}/${l.empId}/${dateStr}`));
+      } catch (e) { console.warn('cx restore empA failed', e); }
+    }
+  }
+  for (const dayPlan of cxReliefPlanArray(l)) {
+    if (!dateSet.has(dayPlan?.date)) continue;
+    try {
+      const relievers = dayPlan.relievers ? (Array.isArray(dayPlan.relievers) ? dayPlan.relievers : Object.values(dayPlan.relievers)) : [];
+      for (const rel of relievers) {
+        if (!rel?.relieverId || !rel?.newShift) continue;
+        const snap = await get(ref(db, `schedules/${rel.newShift.center}/${rel.relieverId}/${dayPlan.date}`));
+        const rec = snap.val();
+        if (rec?.shifts) {
+          const arr = Array.isArray(rec.shifts) ? rec.shifts : Object.values(rec.shifts);
+          const filtered = arr.filter(s => !(s.start === rel.newShift.start && s.end === rel.newShift.end && (s.center || rel.newShift.center) === rel.newShift.center));
+          await update(ref(db, `schedules/${rel.newShift.center}/${rel.relieverId}/${dayPlan.date}`), { ...rec, shifts: filtered });
+        }
+        const adjustments = Array.isArray(rel.adjustments) ? rel.adjustments : [];
+        if (!adjustments.length) continue;
+        const adjByCenter = {};
+        adjustments.forEach(a => { (adjByCenter[a.center] = adjByCenter[a.center] || []).push(a); });
+        for (const [center, list] of Object.entries(adjByCenter)) {
+          const s2 = await get(ref(db, `schedules/${center}/${rel.relieverId}/${dayPlan.date}`));
+          if (!s2.exists()) continue;
+          const r2 = s2.val() || {};
+          let arr2 = Array.isArray(r2.shifts) ? r2.shifts : Object.values(r2.shifts || {});
+          list.forEach(a => {
+            (a.after || []).forEach(p => { arr2 = arr2.filter(sh => !((sh.type || 'work') === 'work' && sh.start === p.start && sh.end === p.end)); });
+            const hasOrig = arr2.some(sh => (sh.type || 'work') === 'work' && sh.start === a.before.start && sh.end === a.before.end);
+            if (!hasOrig) arr2 = [...arr2, { ...a.before }];
+          });
+          await update(ref(db, `schedules/${center}/${rel.relieverId}/${dayPlan.date}`), { ...r2, shifts: arr2, updatedBy: currentUser.uid, updatedAt: new Date().toISOString() });
+        }
+      }
+    } catch (e) { console.warn('cx reliever restore failed:', e); }
+  }
+}
+
+/* ---------- EmailJS notifications ---------- */
+function cxNotify(leave, req, eventType) {
+  if (!EMAIL_NOTIFICATIONS_ENABLED || !emailjsConfigured()) return;
+  try {
+    const tos = new Set(getManagerEmails());
+    const empEmail = employees[leave.empId]?.email?.trim().toLowerCase();
+    if (empEmail) tos.add(empEmail);
+    const uniqueTos = [...tos]; if (!uniqueTos.length) return;
+    const subjects = {
+      new: `🚫 Cancellation REQUEST — ${leave.empName} (${leave.typeLabel || leave.type})`,
+      approved: `✅ Leave cancellation APPROVED — ${leave.empName}`,
+      rejected: `❌ Cancellation request REJECTED — ${leave.empName}`,
+      withdrawn: `↩️ Cancellation request withdrawn — ${leave.empName}`
+    };
+    const actions = {
+      new: 'Cancellation requested (PENDING)', approved: 'Cancellation APPROVED',
+      rejected: 'Cancellation request REJECTED', withdrawn: 'Cancellation request WITHDRAWN'
+    };
+    emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+      to_email: uniqueTos.join(','),
+      subject: subjects[eventType] || subjects.new,
+      action: actions[eventType] || eventType,
+      acted_by: cxCurrentUserName(),
+      employee_name: leave.empName || '-',
+      leave_type: leave.typeLabel || leave.type || '-',
+      dates: `${leave.dateFrom} → ${leave.dateTo}`,
+      duration: cxScopeText(leave, req),
+      reason: req.reason || leave.reason || '-',
+      applied_by: req.requestedByName || '-'
+    }, { publicKey: EMAILJS_PUBLIC_KEY }).catch(err => console.warn('CX notification failed:', err?.text || err));
+  } catch (err) { console.warn('CX notification failed:', err); }
+}
+
+/* ---------- wiring (runs once at module load) ---------- */
+function wireCxEvents() {
+  document.addEventListener('click', e => {
+    if (e.target.closest('[data-main-tab="cancelrequests"]')) renderCancelTab();
+  });
+  onValue(ref(db, 'leaves'), () => cxMaybeRender());
+  onValue(ref(db, 'employees'), () => cxMaybeRender());
+  $('main-tab-cancelrequests')?.addEventListener('click', e => {
+    const btn = e.target.closest('button[data-cx]'); if (!btn) return;
+    const { cx, id } = btn.dataset;
+    if (cx === 'request') openCxRequestModal(id);
+    else if (cx === 'review') openCxReviewModal(id);
+    else if (cx === 'withdraw') cxWithdraw(id);
+  });
+  $('cxSubmitRequestBtn')?.addEventListener('click', submitCxRequest);
+  $('cxCancelRequestBtn')?.addEventListener('click', () => closeModal('cxRequestModal'));
+  $('cxCloseRequestBtn')?.addEventListener('click', () => closeModal('cxRequestModal'));
+  $('cxSelectAllDays')?.addEventListener('change', e => {
+    document.querySelectorAll('#cxDaysList .cx-day-cb:not(:disabled)').forEach(cb => { cb.checked = e.target.checked; });
+    cxUpdateDayUI();
+  });
+  $('cxApproveBtn')?.addEventListener('click', cxApprove);
+  $('cxRejectBtn')?.addEventListener('click', cxReject);
+  $('cxCloseReviewBtn')?.addEventListener('click', () => closeModal('cxReviewModal'));
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeModal('cxRequestModal'); closeModal('cxReviewModal'); }
+  });
+}
+wireCxEvents();
+
 window.healLegacyReliefOverlaps = healLegacyReliefOverlaps;

@@ -33,6 +33,7 @@
             <button class="tab-btn" data-main-tab="overview" data-i18n="tabOverview">📅 Overview</button>
             <button class="tab-btn" data-main-tab="entitlements" id="tabEntitlements" data-i18n="tabEntitlements">Leave Entitlements</button>
             <button class="tab-btn" type="button" data-main-tab="weeklyreports" id="tabWeeklyReports" data-i18n="tabWeeklyReports">📋 Weekly Reports</button>
+            <button class="tab-btn" data-main-tab="cancelrequests" type="button">🚫 Cancel Request</button>
         </div>
 
         <!-- APPLICATION TAB -->
@@ -147,32 +148,47 @@
 
         <!-- ==================== 📋 WEEKLY REPORTS TAB (Master Admin only) ==================== -->
         <section id="main-tab-weeklyreports" class="tab-content">
-        <div class="wr-controls">
-            <div class="year-pager">
-            <button class="pager-btn" id="wrPrev" type="button" title="Previous week">‹</button>
-            <span id="wrWeekLabel">—</span>
-            <button class="pager-btn" id="wrNext" type="button" title="Next week">›</button>
+            <div class="wr-controls">
+                <div class="year-pager">
+                <button class="pager-btn" id="wrPrev" type="button" title="Previous week">‹</button>
+                <span id="wrWeekLabel">—</span>
+                <button class="pager-btn" id="wrNext" type="button" title="Next week">›</button>
+                </div>
+                <button class="secondary" id="wrThisWeekBtn" type="button" data-i18n="wrThisWeekBtn">This Week</button>
+                <button class="primary" id="wrCopyAll" type="button" data-i18n="wrCopyAll">📋 Copy Full Report</button>
             </div>
-            <button class="secondary" id="wrThisWeekBtn" type="button" data-i18n="wrThisWeekBtn">This Week</button>
-            <button class="primary" id="wrCopyAll" type="button" data-i18n="wrCopyAll">📋 Copy Full Report</button>
-        </div>
 
-        <div class="wr-section">
-            <div class="wr-section-head">
-            <h3 id="wrThisWeekTitle">—</h3>
-            <button class="icon-btn" id="wrCopyThis" type="button" data-i18n="wrCopy">📋 Copy</button>
+            <div class="wr-section">
+                <div class="wr-section-head">
+                <h3 id="wrThisWeekTitle">—</h3>
+                <button class="icon-btn" id="wrCopyThis" type="button" data-i18n="wrCopy">📋 Copy</button>
+                </div>
+                <div id="wrThisWeekList" class="wr-list"></div>
             </div>
-            <div id="wrThisWeekList" class="wr-list"></div>
-        </div>
 
-        <div class="wr-section">
-            <div class="wr-section-head">
-            <h3 id="wrNextWeekTitle">—</h3>
-            <button class="icon-btn" id="wrCopyNext" type="button" data-i18n="wrCopy">📋 Copy</button>
+            <div class="wr-section">
+                <div class="wr-section-head">
+                <h3 id="wrNextWeekTitle">—</h3>
+                <button class="icon-btn" id="wrCopyNext" type="button" data-i18n="wrCopy">📋 Copy</button>
+                </div>
+                <div id="wrNextWeekList" class="wr-list"></div>
             </div>
-            <div id="wrNextWeekList" class="wr-list"></div>
-        </div>
         </section>
+        <!-- 🚫 CANCEL REQUEST TAB PANEL -->
+        <div class="tab-content" id="main-tab-cancelrequests">
+        <div id="cxAdminQueueWrap" class="hidden">
+            <h3 class="cx-section-title" id="cxQueueTitle">⏳ Pending cancellation requests</h3>
+            <div id="cxAdminQueue" class="cx-list"></div>
+        </div>
+        <div id="cxMyLeavesWrap">
+            <h3 class="cx-section-title" id="cxMyTitle">🗓️ My approved leaves</h3>
+            <div id="cxMyLeaves" class="cx-list"></div>
+        </div>
+        <div id="cxHistoryWrap" class="hidden">
+            <h3 class="cx-section-title" id="cxHistoryTitle">🕓 Request history</h3>
+            <div id="cxHistory" class="cx-list"></div>
+        </div>
+        </div>
     </div>
 
     <!-- APPLY MODAL -->
@@ -306,6 +322,53 @@
         <h3 id="empScheduleModalTitle" style="margin-bottom: 1rem; color: var(--primary-dark);">Employee Schedule</h3>
         <div class="emp-schedule-cal-wrapper">
         <div id="empScheduleCalGrid" class="emp-schedule-cal-grid"></div>
+        </div>
+    </div>
+    </div>
+
+    <!-- 🚫 CANCEL REQUEST MODAL (employee) -->
+    <div class="modal hidden" id="cxRequestModal">
+    <div class="modal-content wide">
+        <button class="close-btn" id="cxCloseRequestBtn" type="button">×</button>
+        <h3 id="cxRequestTitle">Request leave cancellation</h3>
+        <div class="modal-subtitle" id="cxRequestSummary"></div>
+        <div id="cxDaysWrap" class="hidden">
+        <label class="cx-days-label" id="cxDaysLabel">Select the day(s) to cancel:</label>
+        <div class="cx-days-toolbar">
+            <label class="cx-selectall"><input type="checkbox" id="cxSelectAllDays"> <span id="cxSelectAllLabel">Select all selectable days</span></label>
+            <span class="cx-daycount" id="cxDayCount"></span>
+        </div>
+        <div class="cx-days-list" id="cxDaysList"></div>
+        </div>
+        <div class="form-grid" style="margin-top:1rem;">
+        <div class="full-width">
+            <label for="cxReason">Reason for cancellation *</label>
+            <textarea id="cxReason" rows="3" maxlength="500"></textarea>
+        </div>
+        </div>
+        <div class="cx-impact" id="cxImpact"></div>
+        <div class="modal-actions">
+        <button class="secondary" id="cxCancelRequestBtn" type="button">Cancel</button>
+        <button class="danger" id="cxSubmitRequestBtn" type="button">Submit request</button>
+        </div>
+    </div>
+    </div>
+
+    <!-- 🚫 REVIEW MODAL (admin) -->
+    <div class="modal hidden" id="cxReviewModal">
+    <div class="modal-content wide">
+        <button class="close-btn" id="cxCloseReviewBtn" type="button">×</button>
+        <h3 id="cxReviewTitle">Review cancellation request</h3>
+        <div id="cxReviewBody"></div>
+        <div class="form-grid" style="margin-top:1rem;">
+        <div class="full-width">
+            <label for="cxReviewNote">Note (optional)</label>
+            <textarea id="cxReviewNote" rows="2" maxlength="300"></textarea>
+        </div>
+        </div>
+        <div class="modal-actions">
+        <button class="danger" id="cxRejectBtn" type="button">❌ Reject</button>
+        <button class="primary" id="cxApproveBtn" type="button">✅ Approve &amp; cancel leave</button>
         </div>
     </div>
     </div>
