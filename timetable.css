@@ -78,36 +78,43 @@ header a:hover { background: rgba(255,255,255,0.35); }
 .print-btn:hover { background: #3a6f94; transform: translateY(-1px); box-shadow: 0 4px 8px rgba(70, 130, 180, 0.3); }
 
 /* ============================================
-✅ TAB NAVIGATION
+✅ TAB NAVIGATION (Pill style — matches Leave page)
 ============================================ */
 .tab-navigation {
-    display: flex;
-    gap: 0;
-    margin-bottom: 0;
-    border-bottom: 2px solid #e2e8f0;
+display: inline-flex;
+gap: 2px;
+background: #dbe4ee;
+border-radius: 999px;
+padding: 4px;
+margin-bottom: 1.5rem;
+max-width: 100%;
+overflow-x: auto;
+scrollbar-width: none;
+border-bottom: none;
 }
+.tab-navigation::-webkit-scrollbar { display: none; }
 .tab-btn {
-    padding: 0.75rem 1.5rem;
-    background: transparent;
-    border: none;
-    border-bottom: 3px solid transparent;
-    cursor: pointer;
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: var(--text-light);
-    transition: all 0.2s ease;
-    margin-bottom: -2px;
+border: none;
+background: transparent;
+padding: 0.6rem 1.2rem;
+border-radius: 999px;
+font-size: 0.9rem;
+font-weight: 600;
+color: var(--text-light);
+cursor: pointer;
+white-space: nowrap;
+transition: all 0.2s;
+margin-bottom: 0;
 }
 .tab-btn:hover {
-    color: var(--primary-dark);
-    background: rgba(135, 206, 235, 0.08);
+background: rgba(255, 255, 255, 0.6);
+color: var(--primary-dark);
 }
 .tab-btn.active {
-    color: var(--primary-dark);
-    border-bottom-color: var(--primary-dark);
-    background: rgba(135, 206, 235, 0.05);
+background: var(--white);
+color: var(--primary-dark);
+box-shadow: 0 1px 4px rgba(0,0,0,0.15);
 }
-
 /* Tab content visibility */
 .tab-content { display: none; }
 .tab-content.active { display: block; }
@@ -279,6 +286,8 @@ td.kc-cell {
     .day-view-controls .control-group { max-width: 100%; }
     
     .tab-btn { padding: 0.6rem 1rem; font-size: 0.85rem; }
+    .tab-navigation { flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+    .tab-btn { flex: 0 0 auto; min-width: max-content; }
 }
 @media (max-width: 480px) {
     :root { --side-padding: 0.75rem; }
@@ -688,4 +697,102 @@ td.kc-cell {
   background: #f0f9ff;
 }
 
+/* ============================================
+   📄 UNIFIED PRINT / EXPORT — FAB + MODAL
+============================================ */
+.timetable-controls { display: none !important; } /* replaced by floating button */
+.main-content { padding-bottom: 6rem; } /* keep last row clear of the FAB */
 
+.tt-fab {
+  position: fixed; right: 1.5rem; bottom: 1.5rem; z-index: 1500;
+  display: inline-flex; align-items: center; gap: .55rem;
+  padding: .95rem 1.5rem; border: none; border-radius: 999px;
+  background: linear-gradient(135deg, #4682B4, #2e6da4);
+  color: #fff; font-size: .95rem; font-weight: 700; cursor: pointer;
+  box-shadow: 0 10px 26px rgba(46,109,164,.45);
+  transition: transform .18s ease, box-shadow .18s ease;
+  animation: ttFabIn .35s ease;
+}
+.tt-fab:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(46,109,164,.55); }
+.tt-fab:active { transform: translateY(-1px) scale(.98); }
+.tt-fab-icon { font-size: 1.1rem; }
+@keyframes ttFabIn { from { opacity:0; transform: translateY(16px); } to { opacity:1; transform:none; } }
+
+.tt-modal { position: fixed; inset: 0; z-index: 2000; display: none; align-items: center; justify-content: center; padding: 1rem; background: rgba(15,23,42,.45); backdrop-filter: blur(3px); }
+.tt-modal.open { display: flex; }
+.tt-modal-content { position: relative; width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto; background: #fff; border-radius: 14px; padding: 1.6rem 1.7rem 1.4rem; box-shadow: 0 24px 60px rgba(0,0,0,.25); animation: ttModalIn .22s ease; }
+@keyframes ttModalIn { from { opacity:0; transform: translateY(14px) scale(.98); } to { opacity:1; transform:none; } }
+.tt-modal-content h3 { color: var(--primary-dark); margin-bottom: .15rem; font-size: 1.2rem; }
+.tt-modal-sub { color: var(--text-light); font-size: .85rem; margin-bottom: 1.1rem; }
+.tt-modal-close { position: absolute; top: .8rem; right: 1rem; font-size: 1.5rem; color: #94a3b8; cursor: pointer; line-height: 1; padding: .2rem .4rem; border-radius: 6px; }
+.tt-modal-close:hover { color: #334155; background: #f1f5f9; }
+
+.tt-section { margin-bottom: 1.1rem; }
+.tt-section-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: .5rem; }
+.tt-section-title { font-size: .72rem; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; color: var(--primary-dark); margin-bottom: .5rem; }
+.tt-section-head .tt-section-title { margin-bottom: 0; }
+.tt-mini-actions button { border: none; background: none; color: var(--primary-dark); font-size: .75rem; font-weight: 700; cursor: pointer; padding: .2rem .4rem; border-radius: 6px; }
+.tt-mini-actions button:hover { background: #eaf4fb; }
+
+.tt-output-switch { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+.tt-output-btn { padding: .8rem; border: 2px solid #e2e8f0; background: #f8fafc; border-radius: 10px; font-size: .92rem; font-weight: 600; color: var(--text-light); cursor: pointer; transition: all .15s ease; }
+.tt-output-btn:hover { border-color: var(--primary); }
+.tt-output-btn.active { border-color: var(--primary-dark); background: #eaf4fb; color: var(--primary-dark); box-shadow: 0 2px 8px rgba(70,130,180,.15); }
+
+.tt-chips { display: flex; flex-wrap: wrap; gap: .45rem; }
+.tt-chip input { position: absolute; opacity: 0; pointer-events: none; }
+.tt-chip span { display: inline-block; padding: .45rem .95rem; border-radius: 999px; border: 1.5px solid #cbd5e1; background: #fff; font-size: .85rem; font-weight: 700; color: var(--text-light); cursor: pointer; transition: all .15s ease; user-select: none; }
+.tt-chip span:hover { border-color: var(--primary); color: var(--primary-dark); }
+.tt-chip input:checked + span { background: var(--primary-dark); border-color: var(--primary-dark); color: #fff; box-shadow: 0 2px 6px rgba(70,130,180,.35); }
+.tt-hint { display: block; margin-top: .45rem; font-size: .78rem; color: #64748b; }
+
+.tt-select { width: 100%; padding: .65rem .8rem; border: 1px solid #cbd5e1; border-radius: 8px; font-size: .95rem; background: #fff; }
+.tt-select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(135,206,235,.25); }
+
+.tt-preview { background: #f1f5f9; border-radius: 8px; padding: .6rem .8rem; font-size: .85rem; color: #334155; font-weight: 600; margin-bottom: 1.1rem; }
+
+.tt-modal-actions { display: flex; gap: .7rem; }
+.tt-btn { flex: 1; padding: .8rem 1rem; border: none; border-radius: 10px; font-size: .95rem; font-weight: 700; cursor: pointer; transition: all .15s ease; }
+.tt-btn.primary { background: var(--primary-dark); color: #fff; box-shadow: 0 3px 10px rgba(70,130,180,.3); }
+.tt-btn.primary:hover { background: #3a6f94; }
+.tt-btn.primary:disabled { opacity: .6; cursor: wait; }
+.tt-btn.secondary { background: #e2e8f0; color: #334155; }
+.tt-btn.secondary:hover { background: #cbd5e1; }
+
+.tt-toast { position: fixed; right: 1.5rem; bottom: 5.8rem; z-index: 2100; background: #0f172a; color: #fff; padding: .75rem 1.1rem; border-radius: 10px; font-size: .88rem; font-weight: 600; box-shadow: 0 10px 24px rgba(0,0,0,.3); opacity: 0; transform: translateY(8px); transition: all .25s ease; pointer-events: none; }
+.tt-toast.show { opacity: 1; transform: translateY(0); }
+
+@media (max-width: 768px) {
+  .tt-fab { right: 1rem; bottom: 1rem; padding: .85rem 1.2rem; font-size: .9rem; }
+  .tt-toast { right: 1rem; bottom: 5.2rem; }
+}
+@media print { .tt-fab, .tt-modal, .tt-toast { display: none !important; } }
+
+
+/* ============================================
+   🖨️ PRINT AREA — used ONLY for custom-option prints.
+   Clones reuse the EXISTING print CSS (same table IDs/classes),
+   so the output looks exactly like the normal on-screen print.
+============================================ */
+#printArea { position: absolute; left: -10000px; top: 0; width: 1100px; background: #fff; }
+@media print {
+  body.tt-printing > *:not(#printArea) { display: none !important; }
+  #printArea { position: static; left: auto; width: auto; display: block; }
+  #printArea table + table { margin-top: 6mm; }
+}
+
+/* 📄 Custom subject/day clone extras */
+@media print {
+  #printArea tr.p-sep-row td { border-top: 2px solid #888 !important; }
+  #printArea .p-sep { border-top: 2px solid #888; }
+  #printArea .p-day-name { color: #dc3545 !important; font-weight: 700; }
+  #printArea .p-day-date { font-size: 0.8em; color: #333; }
+}
+
+@media print {
+  #printArea #weekTimetableTable .col-time,
+  #printArea #weekTimetableTable .week-time-cell {
+    width: 14mm !important;
+    min-width: 14mm !important;
+  }
+}

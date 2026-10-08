@@ -39,13 +39,6 @@
 
     <!-- Main Content -->
     <div id="mainContent" class="main-content hidden">
-        
-        <!-- Global Controls (Only Print Button now) -->
-        <div class="timetable-controls">
-            <button id="printTimetable" class="print-btn">🖨️ Print Timetable</button>
-            <button id="exportExcel" class="print-btn" style="background: #28a745; margin-left: 0.5rem;">📊 Export Excel</button>
-        </div>
-
         <!-- Tab Navigation -->
         <div class="tab-navigation">
             <button class="tab-btn active" data-tab="dayView">📅 Day View</button>
@@ -202,6 +195,58 @@
             </div>
         </div>
     </div>
+
+  <!-- 📄 Floating Print / Export button -->
+    <button id="timetableFab" class="tt-fab" title="Print or export this timetable">
+        <span class="tt-fab-icon">🖨️</span>
+        <span class="tt-fab-label">Print / Export</span>
+    </button>
+
+    <!-- 📄 Print / Export modal -->
+    <div id="timetableExportModal" class="tt-modal" aria-hidden="true">
+        <div class="tt-modal-content">
+        <span class="tt-modal-close" id="closeTimetableExportModal">&times;</span>
+        <h3>📄 Print / Export Timetable</h3>
+        <p class="tt-modal-sub" id="ttModalCenterLabel">Centre: —</p>
+
+        <div class="tt-section">
+            <div class="tt-section-title">Output</div>
+            <div class="tt-output-switch">
+            <button type="button" class="tt-output-btn active" data-output="print">🖨️ Print — A4</button>
+            <button type="button" class="tt-output-btn" data-output="excel">📊 Excel file</button>
+            </div>
+        </div>
+
+        <div class="tt-section" id="ttDaysSection">
+            <div class="tt-section-head">
+            <div class="tt-section-title">Days to include</div>
+            <div class="tt-mini-actions">
+                <button type="button" id="ttDaysAll">All</button>
+                <button type="button" id="ttDaysNone">None</button>
+            </div>
+            </div>
+            <div class="tt-chips" id="ttDayChips"></div>
+            <small class="tt-hint" id="ttDaysHint"></small>
+        </div>
+
+        <div class="tt-section hidden" id="ttSubjectSection">
+            <div class="tt-section-title">Subject</div>
+            <select id="ttSubjectFilter" class="tt-select"></select>
+            <small class="tt-hint">Pick one subject, then add more days above to fill the A4 page (e.g. Chinese Tue + Wed + Thu).</small>
+        </div>
+
+        <div class="tt-preview" id="ttPreviewText">—</div>
+
+        <div class="tt-modal-actions">
+            <button class="tt-btn secondary" id="ttCancelBtn" type="button">Cancel</button>
+            <button class="tt-btn primary" id="ttConfirmBtn" type="button">🖨️ Print Now</button>
+        </div>
+        </div>
+    </div>
+
+    <!-- Toast + print target -->
+    <div id="ttToast" class="tt-toast"></div>
+    <div id="printArea" aria-hidden="true"></div>
     <script type="module" src="timetable.js"></script>
     <script type="module" src="./activity-logger-init.js"></script>
 </body>

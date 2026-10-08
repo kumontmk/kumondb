@@ -945,6 +945,568 @@ function initializeTimetable() {
     }
 
     document.getElementById('exportExcel')?.addEventListener('click', exportToExcel);
+
+    // ============================================
+// 📄 UNIFIED PRINT / EXPORT — FAB + OPTIONS MODAL (v3)
+// Default = original print/export untouched.
+// Custom options = clone with identical markup/classes.
+// v3: Math combined (6A–E rows then F+ rows) + multi-day = ONE table.
+// ============================================
+const TT_SETTINGS_KEY = 'kumonTimetableExportV1';
+const ttFab = document.getElementById('timetableFab');
+const ttModal = document.getElementById('timetableExportModal');
+const ttClose = document.getElementById('closeTimetableExportModal');
+const ttCancel = document.getElementById('ttCancelBtn');
+const ttConfirm = document.getElementById('ttConfirmBtn');
+const ttOutputBtns = document.querySelectorAll('.tt-output-btn');
+const ttDayChipsWrap = document.getElementById('ttDayChips');
+const ttDaysSection = document.getElementById('ttDaysSection');
+const ttDaysHint = document.getElementById('ttDaysHint');
+const ttSubjectSection = document.getElementById('ttSubjectSection');
+const ttSubjectFilter = document.getElementById('ttSubjectFilter');
+const ttPreview = document.getElementById('ttPreviewText');
+const ttCenterLabel = document.getElementById('ttModalCenterLabel');
+const ttPrintArea = document.getElementById('printArea');
+let ttCurrentView = 'dayView';
+let ttOutput = 'print';
+let ttCenterName = '';
+
+const TT_DAY_SUBJECTS = [
+    { key: 'all', label: 'All subjects' },
+    { key: 'math', label: 'Math (6A–E + F+)' },
+    { key: 'english', label: 'English' },
+    { key: 'chinese', label: 'Chinese' }
+];
+const TT_CHAMP_SUBJECTS = [
+    { key: 'all', label: 'All subjects' },
+    { key: 'math6A2A', label: 'Math (6A–2A)' },
+    { key: 'mathAF', label: 'Math (A–F)' },
+    { key: 'mathGI', label: 'Math (G–I)' },
+    { key: 'mathJO', label: 'Math (J–O)' },
+    { key: 'engK', label: 'English (K0–K3)' },
+    { key: 'engP1', label: 'English (P1+)' },
+    { key: 'chinese', label: 'Chinese' }
+];
+const TT_DAY_GROUP_META = [
+    { key: 'mathLow', label: 'Math (6A–E)', cls: 'th-math' },
+    { key: 'mathHigh', label: 'Math (F+)', cls: 'th-math' },
+    { key: 'english', label: 'English', cls: 'th-english' },
+    { key: 'chinese', label: 'Chinese', cls: 'th-chinese' }
+];
+const TT_CHAMP_GROUP_META = [
+    { key: 'math6A2A', label: 'Math (6A–2A)', cls: 'th-math' },
+    { key: 'mathAF', label: 'Math (A–F)', cls: 'th-math' },
+    { key: 'mathGI', label: 'Math (G–I)', cls: 'th-math' },
+    { key: 'mathJO', label: 'Math (J–O)', cls: 'th-math' },
+    { key: 'engK', label: 'English (K0–K3)', cls: 'th-english' },
+    { key: 'engP1', label: 'English (P1+)', cls: 'th-english' },
+    { key: 'chinese', label: 'Chinese', cls: 'th-chinese' }
+];
+
+function ttEsc(v) { return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function ttGetActiveView() { return document.querySelector('.tab-btn.active')?.dataset.tab || 'dayView'; }
+function ttLoadSettings() { try { return JSON.parse(localStorage.getItem(TT_SETTINGS_KEY) || '{}'); } catch { return {}; } }
+function ttSaveSettings(s) { try { localStorage.setItem(TT_SETTINGS_KEY, JSON.stringify(s)); } catch { /* ignore */ } }
+function ttSubjectLabel(view, subjectKey) {
+    const list = view === 'champView' ? TT_CHAMP_SUBJECTS : TT_DAY_SUBJECTS;
+    return (list.find(s => s.key === subjectKey) || {}).label || 'All subjects';
+}
+
+function ttToast(msg) {
+    const t = document.getElementById('ttToast');
+    if (!t) return;
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+function ttBuildChips(container, selectedDays) {
+    container.innerHTML = '';
+    DAY_ORDER.forEach((day, i) => {
+        const label = document.createElement('label');
+        label.className = 'tt-chip';
+        const input = document.createElement('input');
+        input.type = 'checkbox'; input.value = day;
+        input.checked = selectedDays.includes(day);
+        const span = document.createElement('span'); span.textContent = DAY_ABBR[i];
+        label.append(input, span);
+        container.appendChild(label);
+    });
+}
+function ttSelectedDays(container) { return [...container.querySelectorAll('input:checked')].map(i => i.value); }
+
+function ttSetOutput(mode) {
+    ttOutput = mode;
+    ttOutputBtns.forEach(b => b.classList.toggle('active', b.dataset.output === mode));
+    ttConfirm.innerHTML = mode === 'print' ? '🖨️ Print Now' : '📊 Download Excel';
+    const s = ttLoadSettings(); s.output = mode; ttSaveSettings(s);
+}
+
+function ttUpdatePreview() {
+    const days = ttSelectedDays(ttDayChipsWrap);
+    const viewLabel = ttCurrentView === 'weekView' ? 'Whole Week View' : ttCurrentView === 'champView' ? 'Champs Format' : 'Day View';
+    const isWeek = ttCurrentView === 'weekView';
+    const subjectKey = isWeek ? 'all' : ttSubjectFilter.value;
+    const isFiltered = isWeek ? days.length !== DAY_ORDER.length : (subjectKey !== 'all' || days.length > 1);
+    const bits = [viewLabel, `${days.length} day(s)`];
+    if (!isWeek) bits.push(subjectKey === 'all' ? 'All subjects' : (ttSubjectFilter.selectedOptions[0]?.textContent || ''));
+    bits.push(isFiltered ? '• custom selection (same print format)' : '• standard layout');
+    ttPreview.textContent = bits.join(' • ');
+}
+
+async function openTimetableExportModal() {
+    ttCurrentView = ttGetActiveView();
+    const settings = ttLoadSettings();
+
+    if (!ttCenterName) {
+        try {
+            if (!cachedStudentsSnap) cachedStudentsSnap = await get(centersRef);
+            ttCenterName = cachedStudentsSnap.child(`${centerId}/name`).val() || 'Timetable';
+        } catch { ttCenterName = 'Timetable'; }
+    }
+    ttCenterLabel.textContent = `Centre: ${ttCenterName}`;
+    ttSetOutput(settings.output || 'print');
+
+    if (ttCurrentView === 'weekView') {
+        ttDaysSection.classList.remove('hidden');
+        ttSubjectSection.classList.add('hidden');
+        ttDaysHint.textContent = 'Uncheck days this centre doesn’t operate — they will be removed from the printed page.';
+        const savedWeekDays = Array.isArray(settings.weekDays) && settings.weekDays.length ? settings.weekDays : [...DAY_ORDER];
+        ttBuildChips(ttDayChipsWrap, savedWeekDays);
+    } else {
+        const isChamp = ttCurrentView === 'champView';
+        const daySelectEl = document.getElementById(isChamp ? 'champDay' : 'timetableDay');
+        const currentDay = daySelectEl?.value || 'Monday';
+        ttDaysSection.classList.remove('hidden');
+        ttDaysHint.textContent = 'Add extra days to print together on one page — e.g. Chinese Tue + Wed + Thu.';
+        const savedExtra = Array.isArray(settings.extraDays) ? settings.extraDays : [];
+        ttBuildChips(ttDayChipsWrap, [...new Set([currentDay, ...savedExtra.filter(d => d !== currentDay)])]);
+
+        ttSubjectSection.classList.remove('hidden');
+        const subjects = isChamp ? TT_CHAMP_SUBJECTS : TT_DAY_SUBJECTS;
+        ttSubjectFilter.innerHTML = subjects.map(s => `<option value="${s.key}">${s.label}</option>`).join('');
+        ttSubjectFilter.value = settings.subject || 'all';
+        // If a saved setting no longer exists (old mathLow/mathHigh), reset to all
+        if (ttSubjectFilter.value !== settings.subject) ttSubjectFilter.value = 'all';
+    }
+    ttUpdatePreview();
+    ttModal.classList.add('open');
+    ttModal.setAttribute('aria-hidden', 'false');
+}
+function closeTtModal() { ttModal.classList.remove('open'); ttModal.setAttribute('aria-hidden', 'true'); }
+
+function ttPersistLight() {
+    const s = ttLoadSettings();
+    const days = ttSelectedDays(ttDayChipsWrap);
+    if (ttCurrentView === 'weekView') s.weekDays = days; else s.extraDays = days;
+    if (ttCurrentView !== 'weekView') s.subject = ttSubjectFilter.value;
+    ttSaveSettings(s);
+}
+
+// ---------- Data builders (reuse cached snapshot; same logic as on-screen views) ----------
+function ttBuildDaySchedule(snap, day, targetDate, view) {
+    const isChamp = view === 'champView';
+    const timeSlots = getTimeSlots(day);
+    const makeEmpty = () => isChamp
+        ? { math6A2A: [], mathAF: [], mathGI: [], mathJO: [], engK: [], engP1: [], chinese: [] }
+        : { mathLow: [], mathHigh: [], english: [], chinese: [] };
+    const schedule = {};
+    timeSlots.forEach(t => schedule[t] = makeEmpty());
+    const targetISO = toISODate(targetDate);
+
+    snap.forEach(centerSnap => {
+        const centerData = centerSnap.val();
+        if (!centerData?.students) return;
+        Object.values(centerData.students).forEach(s => {
+            if (!s?.subjects) return;
+            const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
+            subjects.forEach(sub => {
+                if (!isSubjectActiveOnDate(sub, targetDate) || !sub.timeslots) return;
+                const group = getSubjectGroup(sub.name);
+                if (!group) return;
+                const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
+                tsList.forEach(ts => {
+                    if (!ts) return;
+                    if ((ts.center || centerSnap.key) !== centerId) return;
+                    const tsDay = getTsDay(ts); const time = getTsTime(ts);
+                    if (!tsDay || !time || tsDay !== day || !schedule[time]) return;
+                    const st = buildStudentObj(s, sub, tsDay, tsList, targetDate);
+                    if (!st) return;
+                    if (isChamp) {
+                        if (group === 'Math') { const b = getMathChampGroup(st.level); if (b) schedule[time][b].push(st); }
+                        else if (group === 'English') { const b = getEnglishChampGroup(s.grade); if (b) schedule[time][b].push(st); }
+                        else if (group === 'Chinese') schedule[time].chinese.push(st);
+                    } else {
+                        if (group === 'Math') { if (isMathHighLevel(st.level)) schedule[time].mathHigh.push(st); else schedule[time].mathLow.push(st); }
+                        else if (group === 'English') schedule[time].english.push(st);
+                        else if (group === 'Chinese') schedule[time].chinese.push(st);
+                    }
+                });
+            });
+        });
+    });
+
+    const ccSnap = snap.child(`${centerId}/classChanges`);
+    if (ccSnap.exists()) {
+        ccSnap.forEach(child => {
+            const cc = child.val();
+            if (!cc || cc.replacementStatus !== 'scheduled' || cc.replacementDate !== targetISO) return;
+            const time = normalizeTime(cc.replacementTime);
+            const group = getSubjectGroup(cc.subject);
+            if (!time || !group || !schedule[time]) return;
+            const st = buildClassChangeStudentObj(cc);
+            if (isChamp) {
+                if (group === 'Math') { const b = getMathChampGroup(st.level); if (b) schedule[time][b].push(st); }
+                else if (group === 'English') { const b = getEnglishChampGroup(cc.grade); if (b) schedule[time][b].push(st); }
+                else if (group === 'Chinese') schedule[time].chinese.push(st);
+            } else {
+                if (group === 'Math') { if (isMathHighLevel(st.level)) schedule[time].mathHigh.push(st); else schedule[time].mathLow.push(st); }
+                else if (group === 'English') schedule[time].english.push(st);
+                else if (group === 'Chinese') schedule[time].chinese.push(st);
+            }
+        });
+    }
+    Object.values(schedule).forEach(slot => Object.values(slot).forEach(arr => arr.sort((a, b) => String(a.grade).localeCompare(String(b.grade)))));
+    return { timeSlots, schedule };
+}
+
+function ttBuildWeekSchedule(snap) {
+    const weekDates = getWeekDates();
+    const allTimeSlots = getWeekTimeSlots();
+    const schedule = {};
+    allTimeSlots.forEach(time => { schedule[time] = {}; DAY_ORDER.forEach(d => { schedule[time][d] = []; }); });
+
+    snap.forEach(centerSnap => {
+        const centerData = centerSnap.val();
+        if (!centerData?.students) return;
+        Object.values(centerData.students).forEach(s => {
+            if (!s?.subjects) return;
+            const subjects = Array.isArray(s.subjects) ? s.subjects : Object.values(s.subjects || {});
+            subjects.forEach(sub => {
+                if (!sub.timeslots) return;
+                const tsList = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
+                tsList.forEach(ts => {
+                    if (!ts) return;
+                    if ((ts.center || centerSnap.key) !== centerId) return;
+                    const tsDay = getTsDay(ts); const time = getTsTime(ts);
+                    if (!tsDay || !time) return;
+                    const dayIdx = DAY_ORDER.indexOf(tsDay);
+                    if (dayIdx === -1 || !weekDates[dayIdx]?.fullDate) return;
+                    if (!schedule[time] || !schedule[time][tsDay]) return;
+                    if (!isSubjectActiveOnDate(sub, weekDates[dayIdx].fullDate)) return;
+                    const st = buildStudentObj(s, sub, tsDay, tsList, weekDates[dayIdx].fullDate);
+                    if (st) schedule[time][tsDay].push(st);
+                });
+            });
+        });
+    });
+
+    const ccSnap = snap.child(`${centerId}/classChanges`);
+    if (ccSnap.exists()) {
+        ccSnap.forEach(child => {
+            const cc = child.val();
+            if (!cc || cc.replacementStatus !== 'scheduled' || !cc.replacementDate) return;
+            const dayIdx = weekDates.findIndex(w => toISODate(w.fullDate) === cc.replacementDate);
+            if (dayIdx === -1) return;
+            const time = normalizeTime(cc.replacementTime);
+            const tsDay = DAY_ORDER[dayIdx];
+            if (!time || !schedule[time] || !schedule[time][tsDay]) return;
+            schedule[time][tsDay].push(buildClassChangeStudentObj(cc));
+        });
+    }
+    Object.values(schedule).forEach(ds => Object.values(ds).forEach(arr => arr.sort((a, b) => String(a.grade).localeCompare(String(b.grade)))));
+    return { weekDates, allTimeSlots, schedule };
+}
+
+// ---------- Subject student lists (Math = 6A–E rows first, then F+ rows) ----------
+function ttGetSubjectStudents(slot, subjectKey) {
+    if (!slot) return [];
+    if (subjectKey === 'math') {
+        const low = (slot.mathLow || []).map(st => ({ st }));
+        const high = (slot.mathHigh || []).map((st, i) => ({ st, sep: i === 0 && low.length > 0 }));
+        return [...low, ...high];
+    }
+    return (slot[subjectKey] || []).map(st => ({ st }));
+}
+
+// ---------- Clones: SAME markup/classes as the on-screen tables ----------
+function ttCloneRows(timeSlots, schedule, visible) {
+    let tbody = '';
+    timeSlots.forEach(time => {
+        const s = schedule[time];
+        const maxRows = Math.max(...visible.map(g => (s[g.key] || []).length));
+        const rowCount = maxRows === 0 ? 2 : maxRows;
+        const isEmpty = maxRows === 0;
+        for (let i = 0; i < rowCount; i++) {
+            let row = `<tr${isEmpty ? ' class="empty-time-row"' : ''}>`;
+            if (i === 0) row += `<td class="time-cell" rowspan="${rowCount}">${time}</td>`;
+            visible.forEach(g => {
+                const st = (s[g.key] || [])[i];
+                if (st) {
+                    const kc = st.worksheetType === 'Kumon Connect' ? ' kc-cell' : '';
+                    const cc = st.isClassChange ? ' cc-cell' : '';
+                    row += `<td class="col-grade">${ttEsc(st.grade)}</td><td class="col-name${kc}${cc}">${ttEsc(st.name)}</td><td class="col-level">${ttEsc(st.level)}</td>`;
+                } else {
+                    row += `<td class="empty-cell"></td><td class="empty-cell"></td><td class="empty-cell"></td>`;
+                }
+            });
+            row += '</tr>';
+            tbody += row;
+        }
+    });
+    return tbody;
+}
+
+// Single subject, one day: Gr/Name/Lvl rows; Math = 6A–E block then F+ block (divider row)
+function ttCloneSubjectRows(timeSlots, schedule, subjectKey) {
+    let tbody = '';
+    timeSlots.forEach(time => {
+        const list = ttGetSubjectStudents(schedule[time], subjectKey);
+        const rowCount = list.length === 0 ? 2 : list.length;
+        const isEmpty = list.length === 0;
+        for (let i = 0; i < rowCount; i++) {
+            const item = list[i];
+            const cls = [isEmpty ? 'empty-time-row' : '', item?.sep ? 'p-sep-row' : ''].filter(Boolean).join(' ');
+            let row = `<tr${cls ? ` class="${cls}"` : ''}>`;
+            if (i === 0) row += `<td class="time-cell" rowspan="${rowCount}">${time}</td>`;
+            if (item) {
+                const st = item.st;
+                const kc = st.worksheetType === 'Kumon Connect' ? ' kc-cell' : '';
+                const cc = st.isClassChange ? ' cc-cell' : '';
+                row += `<td class="col-grade">${ttEsc(st.grade)}</td><td class="col-name${kc}${cc}">${ttEsc(st.name)}</td><td class="col-level">${ttEsc(st.level)}</td>`;
+            } else {
+                row += `<td class="empty-cell"></td><td class="empty-cell"></td><td class="empty-cell"></td>`;
+            }
+            row += '</tr>';
+            tbody += row;
+        }
+    });
+    return tbody;
+}
+
+function ttCloneDayOrChampTable(snap, day, subjectKey, view) {
+    const isChamp = view === 'champView';
+    const info = getDayViewHeaderInfo(day);
+    const { timeSlots, schedule } = ttBuildDaySchedule(snap, day, info.targetDate, view);
+
+    let headerGroups, rowsHtml;
+    if (subjectKey === 'all') {
+        headerGroups = isChamp ? TT_CHAMP_GROUP_META : TT_DAY_GROUP_META;
+        rowsHtml = ttCloneRows(timeSlots, schedule, headerGroups);
+    } else if (isChamp) {
+        headerGroups = TT_CHAMP_GROUP_META.filter(g => g.key === subjectKey);
+        rowsHtml = ttCloneSubjectRows(timeSlots, schedule, subjectKey);
+    } else {
+        headerGroups = subjectKey === 'math'
+            ? [{ key: 'math', label: 'Math (6A–E + F+)', cls: 'th-math' }]
+            : TT_DAY_GROUP_META.filter(g => g.key === subjectKey);
+        rowsHtml = ttCloneSubjectRows(timeSlots, schedule, subjectKey);
+    }
+
+    const colCount = 1 + headerGroups.length * 3;
+    const thead = `
+        <tr class="day-view-header-row"><th colspan="${colCount}"><div class="day-view-date-header"><span class="header-date">${ttEsc(info.dateStr)}</span><span class="header-day">${ttEsc(info.dayStr)}</span></div></th></tr>
+        <tr><th rowspan="2" class="col-time">Time</th>${headerGroups.map(g => `<th colspan="3" class="${g.cls}">${g.label}</th>`).join('')}</tr>
+        <tr>${headerGroups.map(() => `<th class="col-grade">Gr</th><th class="col-name">Name</th><th class="col-level">Lvl</th>`).join('')}</tr>`;
+    const tableId = isChamp ? 'champTimetableTable' : 'timetableTable';
+    return `<table id="${tableId}"><thead>${thead}</thead><tbody>${rowsHtml}</tbody></table>`;
+}
+
+// 🆕 Subject + multiple days = ONE table with day columns (12/10 / 1-Monday)
+function ttCloneCombinedDaysTable(snap, opts) {
+    const isChamp = opts.view === 'champView';
+    const label = ttSubjectLabel(opts.view, opts.subjectKey);
+    const perDay = opts.days.map(day => {
+        const info = getDayViewHeaderInfo(day);
+        const { schedule } = ttBuildDaySchedule(snap, day, info.targetDate, opts.view);
+        return { day, info, schedule };
+    });
+    const allTimes = [...new Set(perDay.flatMap(d => Object.keys(d.schedule)))].sort();
+    const activeTimes = allTimes.filter(t => perDay.some(d => ttGetSubjectStudents(d.schedule[t], opts.subjectKey).length));
+
+    let rows = '';
+    activeTimes.forEach(time => {
+        let row = `<tr><td class="time-cell">${time}</td>`;
+        perDay.forEach(d => {
+            const list = ttGetSubjectStudents(d.schedule[time], opts.subjectKey);
+            const inner = list.map(({ st, sep }) => {
+                const cls = 'week-student' +
+                    (st.isClassChange ? ' cc-student' : '') +
+                    (st.worksheetType === 'Kumon Connect' ? ' kc-student' : '') +
+                    (sep ? ' p-sep' : '');
+                return `<div class="${cls}"><span class="ws-grade">${ttEsc(st.grade)}</span><span class="ws-name">${ttEsc(st.name)}</span><span class="ws-level">${ttEsc(st.level)}</span></div>`;
+            }).join('');
+            row += `<td class="week-cell">${inner}</td>`;
+        });
+        row += '</tr>';
+        rows += row;
+    });
+    if (!rows) rows = `<tr><td colspan="${perDay.length + 1}" class="week-empty-msg">No students found for the selected options.</td></tr>`;
+
+    const thead = `
+        <tr class="day-view-header-row"><th colspan="${perDay.length + 1}"><div class="day-view-date-header"><span class="header-date">${ttEsc(label)}</span><span class="header-day">${ttEsc(perDay[0].info.dateStr)} – ${ttEsc(perDay[perDay.length - 1].info.dateStr)}</span></div></th></tr>
+        <tr><th class="col-time">Time</th>${perDay.map(d => `<th class="p-day-th"><span class="p-day-date">${ttEsc(d.info.dateStr)}</span><br><span class="p-day-name">${ttEsc(d.info.dayStr)}</span></th>`).join('')}</tr>`;
+    const tableId = isChamp ? 'champTimetableTable' : 'timetableTable';
+    return `<table id="${tableId}"><thead>${thead}</thead><tbody>${rows}</tbody></table>`;
+}
+
+function ttCloneWeekTable(snap, includedDays) {
+    const { weekDates, allTimeSlots, schedule } = ttBuildWeekSchedule(snap);
+    const days = DAY_ORDER.filter(d => includedDays.includes(d));
+    const activeTimes = allTimeSlots.filter(t => days.some(d => schedule[t][d].length));
+    let thead = `<tr id="weekDateRow"><th rowspan="2" class="th-time col-time">Time</th>` +
+    days.map(d => { const i = DAY_ORDER.indexOf(d); return `<th class="${weekDates[i].isToday ? 'week-today-header' : ''}">${weekDates[i].date}</th>`; }).join('') + `</tr>
+        <tr id="weekDayRow">` + days.map(d => { const i = DAY_ORDER.indexOf(d); return `<th class="${weekDates[i].isToday ? 'week-today-header' : ''}">${DAY_ABBR[i]}</th>`; }).join('') + `</tr>`;
+    let tbody = '';
+    if (!activeTimes.length) {
+        tbody = `<tr><td colspan="${days.length + 1}" class="week-empty-msg">No students scheduled for this week.</td></tr>`;
+    } else {
+        activeTimes.forEach(time => {
+            let row = `<tr><td class="week-time-cell">${time}</td>`;
+            days.forEach(d => {
+                const i = DAY_ORDER.indexOf(d);
+                const cls = 'week-cell' + (weekDates[i].isToday ? ' week-today-col' : '');
+                const inner = schedule[time][d].map(st => {
+                    const sc = 'week-student' + (st.isClassChange ? ' cc-student' : '') + (st.worksheetType === 'Kumon Connect' ? ' kc-student' : '');
+                    return `<div class="${sc}"><span class="ws-grade">${ttEsc(st.grade)}</span><span class="ws-name">${ttEsc(st.name)}</span><span class="ws-level">${ttEsc(st.level)}</span></div>`;
+                }).join('');
+                row += `<td class="${cls}">${inner}</td>`;
+            });
+            row += '</tr>';
+            tbody += row;
+        });
+    }
+    return `<table id="weekTimetableTable"><thead>${thead}</thead><tbody>${tbody}</tbody></table>`;
+}
+
+// ---------- Custom-option outputs ----------
+function ttBuildCloneHtml(opts, snap) {
+    if (opts.view === 'weekView') return ttCloneWeekTable(snap, opts.days);
+    if (opts.subjectKey !== 'all' && opts.days.length > 1) return ttCloneCombinedDaysTable(snap, opts);
+    return opts.days.map(day => ttCloneDayOrChampTable(snap, day, opts.subjectKey, opts.view)).join('');
+}
+
+function ttRunPrint(opts, snap) {
+    ttPrintArea.innerHTML = ttBuildCloneHtml(opts, snap);
+    document.body.classList.add('tt-printing');
+    setTimeout(() => window.print(), 80);
+}
+window.addEventListener('afterprint', () => {
+    document.body.classList.remove('tt-printing');
+    ttPrintArea.innerHTML = '';
+});
+
+function ttRunExcel(opts, snap) {
+    const viewName = opts.view === 'weekView' ? 'Week_View' : opts.view === 'champView' ? 'Champ_Format' : 'Day_View';
+    const body = ttBuildCloneHtml(opts, snap);
+    const excelCSS = `<style>
+        body { font-family: 'Microsoft YaHei','PingFang SC','Segoe UI',Arial,sans-serif; }
+        table { border-collapse: collapse; border: 2px solid #333; width: 100%; font-size: 11pt; }
+        table + table { margin-top: 12px; }
+        th, td { border: 1px solid #333; padding: 3px 5px; text-align: center; vertical-align: middle; color: #000; line-height: 1.2; }
+        th { background: #eee; font-weight: 700; }
+        .th-math { background: #008B8B !important; color: #fff !important; }
+        .th-english { background: #DC143C !important; color: #fff !important; }
+        .th-chinese { background: #9ACD32 !important; color: #333 !important; }
+        .th-time { background: #555 !important; color: #fff !important; }
+        .col-time, .col-grade, .col-level { width: 1%; white-space: nowrap; }
+        .time-cell, .week-time-cell { font-weight: 600; background: #f8f9fa !important; }
+        .empty-cell { background: transparent !important; }
+        .kc-cell { background: #fff9c4 !important; }
+        .cc-cell { background: #e0f2fe !important; }
+        .empty-time-row td { height: 18pt; }
+        .day-view-header-row th { background: #fff !important; }
+        .header-date { font-size: 14pt; font-weight: 600; text-align: left; }
+        .header-day { font-size: 18pt; font-weight: 700; color: #dc3545 !important; text-align: right; }
+        .p-day-name { color: #dc3545 !important; font-weight: 700; }
+        .p-day-date { font-size: 9pt; }
+        tr.p-sep-row td { border-top: 2px solid #888 !important; }
+        .p-sep { border-top: 2px solid #888; }
+        #weekDateRow th { background: #4682B4 !important; color: #fff !important; font-size: 13pt; }
+        #weekDayRow th { background: #d0e8f5 !important; color: #333 !important; font-size: 10pt; }
+        .week-cell { text-align: left; vertical-align: top; }
+        .week-student { font-size: 9.5pt; padding: 1px 2px; border-bottom: 1px solid #eee; text-align: left; }
+        .ws-grade { font-weight: 700; color: #4682B4; }
+        .ws-level { font-weight: 600; color: #555; white-space: nowrap; }
+        .kc-student { background: #fff9c4; }
+        .cc-student { background: #e0f2fe; }
+        .week-today-col { background: rgba(135,206,235,.15); }
+        .week-today-header { background: #2e6da4 !important; color: #fff !important; }
+    </style>`;
+    const htmlTemplate = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>${viewName}</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->${excelCSS}</head><body>${body}</body></html>`;
+    const blob = new Blob([htmlTemplate], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `Kumon_Timetable_${viewName}_${dateStr}.xls`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    ttToast('✅ Excel file downloaded');
+}
+
+// ---------- Wiring ----------
+if (ttFab) {
+    ttFab.addEventListener('click', openTimetableExportModal);
+    ttOutputBtns.forEach(b => b.addEventListener('click', () => ttSetOutput(b.dataset.output)));
+    ttClose?.addEventListener('click', closeTtModal);
+    ttCancel?.addEventListener('click', closeTtModal);
+    ttModal?.addEventListener('click', e => { if (e.target === ttModal) closeTtModal(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTtModal(); });
+    document.getElementById('ttDaysAll')?.addEventListener('click', () => { ttDayChipsWrap.querySelectorAll('input').forEach(i => i.checked = true); ttPersistLight(); ttUpdatePreview(); });
+    document.getElementById('ttDaysNone')?.addEventListener('click', () => { ttDayChipsWrap.querySelectorAll('input').forEach(i => i.checked = false); ttPersistLight(); ttUpdatePreview(); });
+    ttDayChipsWrap?.addEventListener('change', () => { ttPersistLight(); ttUpdatePreview(); });
+    ttSubjectFilter?.addEventListener('change', () => { ttPersistLight(); ttUpdatePreview(); });
+
+    ttConfirm?.addEventListener('click', async () => {
+        const days = ttSelectedDays(ttDayChipsWrap);
+        if (!days.length) { alert('⚠️ Please select at least one day.'); return; }
+        ttPersistLight();
+
+        const isWeek = ttCurrentView === 'weekView';
+        const subjectKey = isWeek ? 'all' : ttSubjectFilter.value;
+        const isFiltered = isWeek ? days.length !== DAY_ORDER.length : (subjectKey !== 'all' || days.length > 1);
+        const opts = { view: ttCurrentView, days, subjectKey };
+
+        try {
+            ttConfirm.disabled = true;
+            ttConfirm.textContent = '⏳ Preparing…';
+
+            if (ttOutput === 'print') {
+                if (!isFiltered) {
+                    // ✅ 100% ORIGINAL print path — nothing changed
+                    closeTtModal();
+                    syncPrintActiveToActiveTab();
+                    window.print();
+                } else {
+                    if (!cachedStudentsSnap) cachedStudentsSnap = await get(centersRef);
+                    closeTtModal();
+                    ttRunPrint(opts, cachedStudentsSnap);
+                }
+            } else {
+                if (!isFiltered) {
+                    // ✅ 100% ORIGINAL export path — nothing changed
+                    closeTtModal();
+                    exportToExcel();
+                } else {
+                    if (!cachedStudentsSnap) cachedStudentsSnap = await get(centersRef);
+                    ttRunExcel(opts, cachedStudentsSnap);
+                    closeTtModal();
+                }
+            }
+        } catch (err) {
+            console.error('Print/Export error:', err);
+            alert('❌ Failed to prepare the timetable: ' + err.message);
+        } finally {
+            ttConfirm.disabled = false;
+            ttConfirm.innerHTML = ttOutput === 'print' ? '🖨️ Print Now' : '📊 Download Excel';
+        }
+    });
+}
+
     window.addEventListener('beforeunload', () => {
         if (timetableUnsub) timetableUnsub();
         if (weekTimetableUnsub) weekTimetableUnsub();
