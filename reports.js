@@ -328,6 +328,8 @@ function initializeReports() {
                         <th>${t('reports.thPinyin')}</th>
                         <th>${t('reports.thGrade')}</th>
                         <th>${t('reports.thSubject')}</th>
+                        <th>${t('reports.thPrevLevel')}</th>
+                        <th>${t('reports.thPrevWS')}</th>
                         <th>${t('reports.thPencilLevel')}</th>
                         <th>${t('reports.thPencilWS')}</th>
                     </tr>
@@ -436,14 +438,21 @@ function initializeReports() {
 
                 const prev = sorted.filter(p => p?.month && p.month < month).pop();
 
-                const prevLevel = prev?.currLevel || sub.startLevel || '';
-                const prevWS = prev?.currWS ?? sub.startWS ?? 0;
-
-                const currLevel = prog?.currLevel || sub.currentLevel || '';
-                const currWS = prog?.currWS ?? sub.currentWS ?? 0;
-
-                const tests = prog?.tests || (prog?.test ? [prog.test] : []);
-
+                let prevLevel, prevWS, currLevel, currWS;
+                if (isPencil) {
+                    // ✏️ Pencil now tracks monthly history like the other subjects.
+                    // pencilSkill.level/ws stays the live "current" source used by other pages.
+                    prevLevel = prev?.currLevel || '';
+                    prevWS = prev?.currWS ?? '';
+                    currLevel = prog?.currLevel || sub.pencilSkill?.level || '';
+                    currWS = prog?.currWS ?? sub.pencilSkill?.ws ?? '';
+                } else {
+                    prevLevel = prev?.currLevel || sub.startLevel || '';
+                    prevWS = prev?.currWS ?? sub.startWS ?? 0;
+                    currLevel = prog?.currLevel || sub.currentLevel || '';
+                    currWS = prog?.currWS ?? sub.currentWS ?? 0;
+                }
+                const tests = isPencil ? [] : (prog?.tests || (prog?.test ? [prog.test] : []));
                 callback({
                     studentId: id,
                     studentData: s,
@@ -671,17 +680,19 @@ function initializeReports() {
             }
             
             let rowHTML = '';
-            if (isPencil) {
-                rowHTML = `
-                    <td>${s.studentNumber || '-'}</td>
-                    <td>${s.nameCn || '-'}</td>
-                    <td>${s.namePinyin || s.nickname || '-'}</td>
-                    <td>${s.grade || '-'}</td>
-                    <td>${sub.name || '-'}</td>
-                    <td>${createInput(pencilLevel, 'pencil-level', false)}</td>
-                    <td>${createInput(pencilWS, 'pencil-ws', false, 'number')}</td>
-                `;
-            } else {
+                if (isPencil) {
+                    rowHTML = `
+                        <td>${s.studentNumber || '-'}</td>
+                        <td>${s.nameCn || '-'}</td>
+                        <td>${s.namePinyin || s.nickname || '-'}</td>
+                        <td>${s.grade || '-'}</td>
+                        <td>${sub.name || '-'}</td>
+                        <td>${createInput(prevLevel, 'pencil-prev-level', true)}</td>
+                        <td>${createInput(prevWS, 'pencil-prev-ws', true, 'number')}</td>
+                        <td>${createInput(pencilLevel, 'pencil-level')}</td>
+                        <td>${createInput(pencilWS, 'pencil-ws', false, 'number')}</td>
+                    `;
+                } else {
                 rowHTML = `
                     <td>${s.studentNumber || '-'}</td>
                     <td>${s.nameCn || '-'}</td>
@@ -804,20 +815,30 @@ function initializeReports() {
                 </div>
             `;
             let bodyHTML = '';
-            if (isPencil) {
-                bodyHTML = `
-                    <div class="report-card-body">
-                        ${createMobileField(
-                            t('reports.thPencilLevel'),
-                            createInput(pencilLevel, 'pencil-level', false)
-                        )}
-                        ${createMobileField(
-                            t('reports.thPencilWS'),
-                            createInput(pencilWS, 'pencil-ws', false, 'number')
-                        )}
-                    </div>
-                `;
-            } else {
+                if (isPencil) {
+                    bodyHTML = `
+                        <div class="report-card-body">
+                            ${createMobileField(
+                                t('reports.thPrevLevel'),
+                                createInput(prevLevel, 'pencil-prev-level', true),
+                                'readonly-field'
+                            )}
+                            ${createMobileField(
+                                t('reports.thPrevWS'),
+                                createInput(prevWS, 'pencil-prev-ws', true, 'number'),
+                                'readonly-field'
+                            )}
+                            ${createMobileField(
+                                t('reports.thPencilLevel'),
+                                createInput(pencilLevel, 'pencil-level', false)
+                            )}
+                            ${createMobileField(
+                                t('reports.thPencilWS'),
+                                createInput(pencilWS, 'pencil-ws', false, 'number')
+                            )}
+                        </div>
+                    `;
+                } else {
                 bodyHTML = `
                     <div class="report-card-body">
                         ${createMobileField(
@@ -922,20 +943,23 @@ function initializeReports() {
             group.cards.forEach(card => {
                 const tr = document.createElement('tr');
 
-                if (group.isPencil) {
-                    const pencilLevel = card.querySelector('.pencil-level')?.value || '';
-                    const pencilWS = card.querySelector('.pencil-ws')?.value || '';
-
-                    tr.innerHTML = `
-                        <td>${card.dataset.studentNumber || '-'}</td>
-                        <td>${card.dataset.nameCn || '-'}</td>
-                        <td>${card.dataset.namePinyin || '-'}</td>
-                        <td>${card.dataset.grade || '-'}</td>
-                        <td>${card.dataset.subjectLabel || 'Pencil'}</td>
-                        <td>${createPrintInput(pencilLevel, 'pencil-level')}</td>
-                        <td>${createPrintInput(pencilWS, 'pencil-ws', 'number')}</td>
-                    `;
-                } else {
+                    if (group.isPencil) {
+                        const pencilPrevLevel = card.querySelector('.pencil-prev-level')?.value || '';
+                        const pencilPrevWS = card.querySelector('.pencil-prev-ws')?.value || '';
+                        const pencilLevel = card.querySelector('.pencil-level')?.value || '';
+                        const pencilWS = card.querySelector('.pencil-ws')?.value || '';
+                        tr.innerHTML = `
+                            <td>${card.dataset.studentNumber || '-'}</td>
+                            <td>${card.dataset.nameCn || '-'}</td>
+                            <td>${card.dataset.namePinyin || '-'}</td>
+                            <td>${card.dataset.grade || '-'}</td>
+                            <td>${card.dataset.subjectLabel || 'Pencil'}</td>
+                            <td>${createPrintInput(pencilPrevLevel, 'pencil-prev-level')}</td>
+                            <td>${createPrintInput(pencilPrevWS, 'pencil-prev-ws', 'number')}</td>
+                            <td>${createPrintInput(pencilLevel, 'pencil-level')}</td>
+                            <td>${createPrintInput(pencilWS, 'pencil-ws', 'number')}</td>
+                        `;
+                    } else {
                     const prevLevel = card.querySelector('.prev-level')?.value || '';
                     const prevWS = card.querySelector('.prev-ws')?.value || '';
                     const currLevel = card.querySelector('.curr-level')?.value || '';
@@ -1121,18 +1145,25 @@ function initializeReports() {
                             batchUpdates[`${basePath}/pencilSkill`] = null;
                             delete subjectData.pencilSkill;
                         }
-                        continue; // pencil has no monthly progress entry
+                        // ✏️ Both fields cleared → don't record an empty month
+                        if (pLevel === '' && (pWS || '').trim() === '') continue;
                     }
-                    let progArr = Array.isArray(subjectData.progress) ? subjectData.progress : Object.values(subjectData.progress || {});
-                    const existing = progArr.find(p => p?.month === month);
-                    const entry = { month };
-                    if (draft.prevLevel) entry.prevLevel = draft.prevLevel;
-                    if (draft.prevWS) entry.prevWS = parseInt(draft.prevWS);
-                    if (draft.currLevel) entry.currLevel = draft.currLevel;
-                    if ((draft.currWS || '').trim() !== '') entry.currWS = parseInt(draft.currWS) || 0;
-                    // If tests were locked (not captured), preserve what's already stored
-                    entry.tests = draft.tests !== undefined ? draft.tests : (existing?.tests || []);
-                    const idx = progArr.findIndex(p => p?.month === month);
+                        let progArr = Array.isArray(subjectData.progress) ? subjectData.progress : Object.values(subjectData.progress || {});
+                        const existing = progArr.find(p => p?.month === month);
+                        const entry = { month };
+
+                        if (isPencilDraft) {
+                            if (draft.pencilLevel) entry.currLevel = draft.pencilLevel;
+                            if ((draft.pencilWS || '').trim() !== '') entry.currWS = parseInt(draft.pencilWS) || 0;
+                        } else {
+                            if (draft.prevLevel) entry.prevLevel = draft.prevLevel;
+                            if (draft.prevWS) entry.prevWS = parseInt(draft.prevWS);
+                            if (draft.currLevel) entry.currLevel = draft.currLevel;
+                            if ((draft.currWS || '').trim() !== '') entry.currWS = parseInt(draft.currWS) || 0;
+                            entry.tests = draft.tests !== undefined ? draft.tests : (existing?.tests || []);
+                        }
+
+                        const idx = progArr.findIndex(p => p?.month === month);
                     if (idx >= 0) {
                         const changed = Object.keys(entry).some(k => JSON.stringify(progArr[idx][k]) !== JSON.stringify(entry[k]));
                         if (changed) {
