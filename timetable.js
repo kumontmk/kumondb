@@ -1333,9 +1333,13 @@ function ttCloneCombinedDaysTable(snap, opts) {
             const inner = list.map(({ st, sep }) => {
                 const cls = 'week-student' +
                     (st.isClassChange ? ' cc-student' : '') +
-                    (st.worksheetType === 'Kumon Connect' ? ' kc-student' : '') +
-                    (sep ? ' p-sep' : '');
-                return `<div class="${cls}"><span class="ws-grade">${ttEsc(st.grade)}</span><span class="ws-name">${ttEsc(st.name)}</span><span class="ws-level">${ttEsc(st.level)}</span></div>`;
+                    (st.worksheetType === 'Kumon Connect' ? ' kc-student' : '');
+                const inlineStyle = st.worksheetType === 'Kumon Connect'
+                    ? ' style="background-color:#fff9c4;"'
+                    : st.isClassChange
+                        ? ' style="background-color:#e0f2fe;"'
+                        : '';
+                return `<div class="${cls}"${inlineStyle}><span class="ws-grade">${ttEsc(st.grade)}</span><span class="ws-name">${ttEsc(st.name)}</span><span class="ws-level">${ttEsc(st.level)}</span></div>`;
             }).join('');
             row += `<td class="week-cell">${inner}</td>`;
         });
@@ -1368,9 +1372,14 @@ function ttCloneWeekTable(snap, includedDays) {
                 const i = DAY_ORDER.indexOf(d);
                 const cls = 'week-cell' + (weekDates[i].isToday ? ' week-today-col' : '');
                 const inner = schedule[time][d].map(st => {
-                    const sc = 'week-student' + (st.isClassChange ? ' cc-student' : '') + (st.worksheetType === 'Kumon Connect' ? ' kc-student' : '');
-                    return `<div class="${sc}"><span class="ws-grade">${ttEsc(st.grade)}</span><span class="ws-name">${ttEsc(st.name)}</span><span class="ws-level">${ttEsc(st.level)}</span></div>`;
-                }).join('');
+                const sc = 'week-student' + (st.isClassChange ? ' cc-student' : '') + (st.worksheetType === 'Kumon Connect' ? ' kc-student' : '');
+                const inlineStyle = st.worksheetType === 'Kumon Connect'
+                    ? ' style="background-color:#fff9c4;"'
+                    : st.isClassChange
+                        ? ' style="background-color:#e0f2fe;"'
+                        : '';
+                return `<div class="${sc}"${inlineStyle}><span class="ws-grade">${ttEsc(st.grade)}</span><span class="ws-name">${ttEsc(st.name)}</span><span class="ws-level">${ttEsc(st.level)}</span></div>`;
+            }).join('');
                 row += `<td class="${cls}">${inner}</td>`;
             });
             row += '</tr>';
@@ -1397,9 +1406,66 @@ window.addEventListener('afterprint', () => {
     ttPrintArea.innerHTML = '';
 });
 
+// ---------- Excel-safe conversion (v2) ----------
+// Excel's HTML importer only reliably honours INLINE styles on real <td>/<th>.
+// Class rules (<style> block) are dropped unpredictably (e.g. .th-english, .kc-cell),
+// and <div> backgrounds are ignored completely.
+// So: (1) inline KC/CC/header/time colours onto the real cells,
+//     (2) rebuild stacked .week-student divs as nested tables with inline colours.
+function ttMakeExcelSafe(html) {
+    const wrap = document.createElement('div');
+    wrap.innerHTML = html;
+
+    const addStyle = (el, css) => {
+        const cur = el.getAttribute('style');
+        el.setAttribute('style', (cur ? cur.replace(/;?\s*$/, ';') : '') + css);
+    };
+
+    // 1) KC / CC highlight on real day/champ cells (cc applied after kc = cc wins, same as CSS)
+    wrap.querySelectorAll('td.kc-cell').forEach(td => addStyle(td, 'background-color:#fff9c4;'));
+    wrap.querySelectorAll('td.cc-cell').forEach(td => addStyle(td, 'background-color:#e0f2fe;'));
+
+    // 2) Subject header colours (Excel often drops .th-* class rules → grey headers)
+    wrap.querySelectorAll('th.th-math').forEach(th => addStyle(th, 'background-color:#008B8B;color:#fff;'));
+    wrap.querySelectorAll('th.th-english').forEach(th => addStyle(th, 'background-color:#DC143C;color:#fff;'));
+    wrap.querySelectorAll('th.th-chinese').forEach(th => addStyle(th, 'background-color:#9ACD32;color:#333;'));
+    wrap.querySelectorAll('th.th-time').forEach(th => addStyle(th, 'background-color:#555;color:#fff;'));
+
+    // 3) Time column + week header rows + today tint
+    wrap.querySelectorAll('td.time-cell, td.week-time-cell').forEach(td => addStyle(td, 'background-color:#f8f9fa;font-weight:600;'));
+    wrap.querySelectorAll('#weekDateRow th').forEach(th => addStyle(th, 'background-color:#4682B4;color:#fff;font-size:13pt;'));
+    wrap.querySelectorAll('#weekDayRow th').forEach(th => addStyle(th, 'background-color:#d0e8f5;color:#333;font-size:10pt;'));
+    wrap.querySelectorAll('th.week-today-header').forEach(th => addStyle(th, 'background-color:#2e6da4;color:#fff;'));
+    wrap.querySelectorAll('td.week-today-col').forEach(td => addStyle(td, 'background-color:#edf8fc;'));
+
+    // 4) Stacked student divs (week table + combined-days table) → nested table, inline colours
+    wrap.querySelectorAll('td.week-cell').forEach(td => {
+        const students = td.querySelectorAll('.week-student');
+        if (!students.length) return;
+        let inner = '<table style="width:100%; border-collapse:collapse; border:none; margin:0;">';
+        students.forEach(div => {
+            const grade = ttEsc(div.querySelector('.ws-grade')?.textContent.trim() || '');
+            const name  = ttEsc(div.querySelector('.ws-name')?.textContent.trim() || '');
+            const level = ttEsc(div.querySelector('.ws-level')?.textContent.trim() || '');
+            const isKC = div.classList.contains('kc-student') || div.getAttribute('data-kc') === 'true';
+            const isCC = div.classList.contains('cc-student');
+            const bgColor = isKC ? '#fff9c4' : (isCC ? '#e0f2fe' : 'transparent');
+            inner += `<tr><td style="background-color:${bgColor}; padding:2px 3px; border:none; text-align:left; vertical-align:middle; font-size:9.5pt;">` +
+                     `<b style="color:#4682B4; font-size:9pt; font-weight:700;">${grade}</b> ` +
+                     `<span style="font-size:9.5pt; font-weight:500; color:#000;">${name}</span> ` +
+                     `<b style="color:#555; font-size:9pt; font-weight:600; white-space:nowrap;">${level}</b></td></tr>`;
+        });
+        inner += '</table>';
+        td.innerHTML = inner;
+        addStyle(td, 'text-align:left;vertical-align:top;padding:2px 3px;');
+    });
+
+    return wrap.innerHTML;
+}
+
 function ttRunExcel(opts, snap) {
     const viewName = opts.view === 'weekView' ? 'Week_View' : opts.view === 'champView' ? 'Champ_Format' : 'Day_View';
-    const body = ttBuildCloneHtml(opts, snap);
+    const body = ttMakeExcelSafe(ttBuildCloneHtml(opts, snap));
     const excelCSS = `<style>
         body { font-family: 'Microsoft YaHei','PingFang SC','Segoe UI',Arial,sans-serif; }
         table { border-collapse: collapse; border: 2px solid #333; width: 100%; font-size: 11pt; }
