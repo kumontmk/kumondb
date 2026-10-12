@@ -21,7 +21,7 @@ export default {
     noChanges: "ℹ️ No changes detected.",
     saveFailed: "❌ Save failed: {{message}}",
     noDataToSave: "No data to save.",
-    confirmSave: "💾 Save changes?\n\nPartial saves are supported. Empty fields will be skipped.",
+    confirmSave: "Partial saves are supported. Empty fields will be skipped.",
     selectMonth: "📅 Please select a month.",
     noMatchingStudents: "📭 No matching active students for {{month}}",
     removeATBlock: "Remove this AT block?",
@@ -54,5 +54,9 @@ export default {
     searchPlaceholder: 'Name, pinyin or student no…',
     clearSearch: 'Clear search',
     noSearchResults: 'No students match “{query}” in {month}.',
+    removeATTitle: '🗑️ Remove AT',
+    remove: 'Remove',
+    confirmSaveTitle: 'Are you sure?',
+    save: 'Save',
   }
 };

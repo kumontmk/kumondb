@@ -329,5 +329,15 @@ export default {
     siblingAlreadyAdded: "⚠️ 此兄弟姊妹已被新增。",
     remove: "移除",
     unknown: "未知",
+    confirmDeleteTitle: '🗑️ 刪除學生',
+    confirmDelete: '您確定要刪除此學生嗎？\n\n此操作將永久刪除學生及其所有資料，無法復原。',
+    delete: '刪除',
+    transferTitle: '🔄 轉中心',
+    confirmTransfer: '轉中心',
+    discardTitle: '⚠️ 放棄更改？',
+    discard: '放棄',
+    unsavedTitle: '⚠️ 未儲存的更改',
+    leave: '離開',
+    removeSiblingTitle: '👨‍👩‍👧 移除兄弟姊妹',
   }
 };

@@ -319,5 +319,15 @@ export default {
     siblingAlreadyAdded: "⚠️ This sibling is already added.",
     remove: "Remove",
     unknown: "Unknown",
+    confirmDeleteTitle: '🗑️ Delete Student',
+    confirmDelete: 'Are you sure you want to delete this student? This action cannot be undone.',
+    delete: 'Delete',
+    transferTitle: '🔄 Transfer Student',
+    confirmTransfer: 'Transfer',
+    discardTitle: '⚠️ Discard Changes?',
+    discard: 'Discard',
+    unsavedTitle: '⚠️ Unsaved Changes',
+    leave: 'Leave',
+    removeSiblingTitle: '👨‍👩‍👧 Remove Sibling',
   }
 };

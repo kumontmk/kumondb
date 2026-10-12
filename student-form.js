@@ -57,6 +57,97 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
+// ============================================
+// 🔔 TOAST NOTIFICATION SYSTEM
+// ============================================
+let toastTimeout = null;
+
+function showToast(message, type = 'success', duration = 3000) {
+    const toast = document.getElementById('toast');
+    if (!toast) return;
+
+    if (toastTimeout) clearTimeout(toastTimeout);
+
+    toast.className = 'toast';
+    if (type) toast.classList.add(type);
+
+    toast.textContent = message;
+    toast.classList.remove('hidden');
+
+    toastTimeout = setTimeout(() => {
+        toast.classList.add('hidden');
+    }, duration);
+}
+
+// ============================================
+// 🪟 CONFIRM MODAL SYSTEM (replaces window.confirm)
+// ============================================
+function showConfirm(title, message, options = {}) {
+    return new Promise((resolve) => {
+        const overlay = document.getElementById('confirmOverlay');
+        const titleEl = document.getElementById('confirmTitle');
+        const msgEl = document.getElementById('confirmMessage');
+        const okBtn = document.getElementById('confirmOkBtn');
+        const cancelBtn = document.getElementById('confirmCancelBtn');
+
+        if (!overlay) {
+            // Fallback if modal doesn't exist
+            resolve(confirm(message));
+            return;
+        }
+
+        titleEl.textContent = title || 'Are you sure?';
+        msgEl.textContent = message || '';
+        okBtn.textContent = options.okText || 'Confirm';
+        cancelBtn.textContent = options.cancelText || 'Cancel';
+
+        // Style the OK button
+        okBtn.classList.toggle('danger', options.danger === true);
+
+        overlay.classList.remove('hidden');
+
+        function cleanup() {
+            overlay.classList.add('hidden');
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+            overlay.removeEventListener('click', onOverlayClick);
+            document.removeEventListener('keydown', onKeydown);
+        }
+
+        function onOk() {
+            cleanup();
+            resolve(true);
+        }
+
+        function onCancel() {
+            cleanup();
+            resolve(false);
+        }
+
+        function onOverlayClick(e) {
+            if (e.target === overlay) {
+                cleanup();
+                resolve(false);
+            }
+        }
+
+        function onKeydown(e) {
+            if (e.key === 'Escape') {
+                cleanup();
+                resolve(false);
+            }
+        }
+
+        okBtn.addEventListener('click', onOk);
+        cancelBtn.addEventListener('click', onCancel);
+        overlay.addEventListener('click', onOverlayClick);
+        document.addEventListener('keydown', onKeydown);
+
+        // Focus the OK button for accessibility
+        okBtn.focus();
+    });
+}
+
 function initApp() {
     const SUBJECTS = ['Math', 'Chinese (Trad)', 'Chinese (Simp)', 'English ERP', 'English EFL'];
     const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -415,8 +506,12 @@ function initApp() {
             </button>
         `;
 
-        card.querySelector('.remove-sibling-btn')?.addEventListener('click', () => {
-            const ok = confirm(tr('studentForm.removeSiblingConfirm', 'Remove this sibling link?'));
+        card.querySelector('.remove-sibling-btn')?.addEventListener('click', async () => {
+            const ok = await showConfirm(
+                tr('studentForm.removeSiblingTitle', '👨‍👩‍👧 Remove Sibling'),
+                tr('studentForm.removeSiblingConfirm', 'Remove this sibling link?'),
+                { danger: true, okText: tr('studentForm.remove', 'Remove') }
+            );
             if (!ok) return;
             delete pendingSiblingLinks[siblingId];
             renderFamilyTab();
@@ -984,7 +1079,7 @@ function initApp() {
             modal.style.display = 'flex';
             modal.style.zIndex = '10000';
         } else { 
-            alert(msg);
+            showToast(msg, 'error', 4000);
         }
     }
 
@@ -2621,15 +2716,20 @@ function renderSchedule() {
     if (isEdit && deleteBtn) {
         deleteBtn.style.display = '';
         deleteBtn.onclick = async () => {
-            if(confirm(t('studentForm.confirmDelete'))) {
+            const confirmed = await showConfirm(
+                t('studentForm.confirmDeleteTitle') || '🗑️ Delete Student',
+                t('studentForm.confirmDelete'),
+                { danger: true, okText: t('studentForm.delete') || 'Delete' }
+            );
+            if(confirmed) {
                 try {
                     showLoader();
 
                     await cleanupStudentSiblingLinks(studentId);
                     await remove(ref(db, `centers/${centerId}/students/${studentId}`));
 
-                    alert(t('studentForm.deleted'));
-                    navigateBack();
+                    showToast(t('studentForm.deleted'), 'success');
+                    setTimeout(() => navigateBack(), 1500);
 
                 } catch(err) {
                     showError(`${t('studentForm.error')}: ${err.message}`);
@@ -2667,7 +2767,12 @@ function renderSchedule() {
     document.getElementById('confirmTransferBtn')?.addEventListener('click', async () => {
         const targetId = targetCenterSelect?.value;
         if (!targetId || targetId === centerId) return showError(t('studentForm.noCenter'));
-        if (!confirm(`${t('studentForm.confirmTransferMsg')}${targetId.replace(/kumon-/g,'').replace(/-/g,' ').toUpperCase()}?`)) return;
+        const transferConfirmed = await showConfirm(
+            t('studentForm.transferTitle') || '🔄 Transfer Student',
+            `${t('studentForm.confirmTransferMsg')}${targetId.replace(/kumon-/g,'').replace(/-/g,' ').toUpperCase()}?`,
+            { okText: t('studentForm.confirmTransfer') || 'Transfer' }
+        );
+        if (!transferConfirmed) return;
         transferModal.classList.add('hidden');
         showLoader();
         try {
@@ -2680,8 +2785,8 @@ function renderSchedule() {
             await push(ref(db, `centers/${targetId}/students`), data);
             await moveStudentSiblingLinks(studentId, targetId);
             await remove(sourceRef);
-            alert(t('studentForm.transferred'));
-            navigateBack();
+            showToast(t('studentForm.transferred'), 'success');
+            setTimeout(() => navigateBack(), 1500);
         } catch(err) {
             showError(`${t('studentForm.transferFailed')}${err.message}`);
         } finally {
@@ -2913,9 +3018,8 @@ function renderSchedule() {
             await syncStudentSiblingLinks(savedStudentId);
             // 🔗 Keep family request links up-to-date automatically
             await syncFamilyPortalsSnapshot(savedStudentId, studentData);
-            alert(isEdit ? t('studentForm.updated') : t('studentForm.added'));
-
-            navigateBack();
+            showToast(isEdit ? t('studentForm.updated') : t('studentForm.added'), 'success');
+            setTimeout(() => navigateBack(), 1500);
 
         } catch (err) {
             showError(`${t('studentForm.saveError')}${err.message}`);
@@ -2924,12 +3028,24 @@ function renderSchedule() {
         }
     });
 
-    document.getElementById('cancelBtn')?.addEventListener('click', () => { if (confirm(t('studentForm.discardChanges'))) navigateBack(); });    
-    document.getElementById('backToStudents')?.addEventListener('click', (e) => {
+    document.getElementById('cancelBtn')?.addEventListener('click', async () => {
+    const confirmed = await showConfirm(
+        t('studentForm.discardTitle') || '⚠️ Discard Changes?',
+        t('studentForm.discardChanges'),
+        { danger: true, okText: t('studentForm.discard') || 'Discard' }
+    );
+        if (confirmed) navigateBack();
+    });    
+    document.getElementById('backToStudents')?.addEventListener('click', async (e) => {
         e.preventDefault();
         if (!originalFormData) { navigateBack(); return; }
         if (JSON.stringify(collectFormData()) !== JSON.stringify(originalFormData)) {
-            if (confirm(t('studentForm.unsavedChanges'))) navigateBack();
+            const confirmed = await showConfirm(
+                t('studentForm.unsavedTitle') || '⚠️ Unsaved Changes',
+                t('studentForm.unsavedChanges'),
+                { danger: true, okText: t('studentForm.leave') || 'Leave' }
+            );
+            if (confirmed) navigateBack();
         } else {
             navigateBack();
         }

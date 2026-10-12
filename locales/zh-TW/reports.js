@@ -54,5 +54,9 @@ export default {
     searchPlaceholder: '姓名、拼音或學生編號…',
     clearSearch: '清除搜尋',
     noSearchResults: '{month} 沒有符合「{query}」的學生。',
+    removeATTitle: '🗑️ 移除 AT',
+    remove: '移除',
+    confirmSaveTitle: '💾 儲存更改',
+    save: '儲存',
   }
 };

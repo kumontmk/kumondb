@@ -3,6 +3,69 @@ import { ref, get, update } from "https://www.gstatic.com/firebasejs/10.12.0/fir
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { i18nReady, t } from './reports-i18n.js';
 
+
+// ============================================
+// 🔔 TOAST NOTIFICATION SYSTEM
+// ============================================
+let toastTimeout = null;
+
+function showToast(message, type = 'success', duration = 3000) {
+    const toast = document.getElementById('toast');
+    if (!toast) return;
+    if (toastTimeout) clearTimeout(toastTimeout);
+    toast.className = 'toast';
+    if (type) toast.classList.add(type);
+    toast.textContent = message;
+    toast.classList.remove('hidden');
+    toastTimeout = setTimeout(() => {
+        toast.classList.add('hidden');
+    }, duration);
+}
+
+// ============================================
+// 🪟 CONFIRM MODAL SYSTEM (replaces window.confirm)
+// ============================================
+function showConfirm(title, message, options = {}) {
+    return new Promise((resolve) => {
+        const overlay = document.getElementById('confirmOverlay');
+        const titleEl = document.getElementById('confirmTitle');
+        const msgEl = document.getElementById('confirmMessage');
+        const okBtn = document.getElementById('confirmOkBtn');
+        const cancelBtn = document.getElementById('confirmCancelBtn');
+
+        if (!overlay) {
+            resolve(confirm(message));
+            return;
+        }
+
+        titleEl.textContent = title || 'Are you sure?';
+        msgEl.textContent = message || '';
+        okBtn.textContent = options.okText || 'Confirm';
+        cancelBtn.textContent = options.cancelText || 'Cancel';
+        okBtn.classList.toggle('danger', options.danger === true);
+        overlay.classList.remove('hidden');
+
+        function cleanup() {
+            overlay.classList.add('hidden');
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+            overlay.removeEventListener('click', onOverlayClick);
+            document.removeEventListener('keydown', onKeydown);
+        }
+
+        function onOk() { cleanup(); resolve(true); }
+        function onCancel() { cleanup(); resolve(false); }
+        function onOverlayClick(e) { if (e.target === overlay) { cleanup(); resolve(false); } }
+        function onKeydown(e) { if (e.key === 'Escape') { cleanup(); resolve(false); } }
+
+        okBtn.addEventListener('click', onOk);
+        cancelBtn.addEventListener('click', onCancel);
+        overlay.addEventListener('click', onOverlayClick);
+        document.addEventListener('keydown', onKeydown);
+        okBtn.focus();
+    });
+}
+
 await i18nReady.catch(() => {});
 
 const REQUIRED_PERMISSION = 'monthlyReports';
@@ -299,7 +362,7 @@ function initializeReports() {
             isDataLoaded = true;
         } catch (err) {
             console.error('❌ Load failed:', err);
-            alert(t('reports.loadFailed'));
+            showToast(t('reports.loadFailed'), 'error', 4000);
         }
         hideLoader();
     }
@@ -501,11 +564,18 @@ function initializeReports() {
             toggleTests();
         });
 
-        container.addEventListener('click', (e) => {
+        container.addEventListener('click', async (e) => {
             if (e.target.classList.contains('remove-at-btn')) {
-                if (container.children.length > 1 || confirm(t('reports.removeATBlock'))) {
-                    e.target.closest('.at-block').remove();
-                }
+                if (container.children.length > 1) {
+    e.target.closest('.at-block').remove();
+    } else {
+        const confirmed = await showConfirm(
+            t('reports.removeATTitle') || '🗑️ Remove AT',
+            t('reports.removeATBlock'),
+            { danger: true, okText: t('reports.remove') || 'Remove' }
+        );
+        if (confirmed) e.target.closest('.at-block').remove();
+    }
             }
         });
 
@@ -1092,8 +1162,16 @@ function initializeReports() {
                 })
             );
             
-            if (pending.length === 0) return alert(t('reports.noDataToSave'));
-            if (!confirm(t('reports.confirmSave'))) return;
+            if (pending.length === 0) {
+                showToast(t('reports.noDataToSave'), 'warning');
+                return;
+            }
+            const saveConfirmed = await showConfirm(
+                t('reports.confirmSaveTitle') || '💾 Save Changes',
+                t('reports.confirmSave'),
+                { okText: t('reports.save') || 'Save' }
+            );
+            if (!saveConfirmed) return;
             
             showLoader();
             saveBtn.disabled = true;
@@ -1179,7 +1257,7 @@ function initializeReports() {
                 console.log('🧾 REPORT SAVE batchUpdates:', JSON.parse(JSON.stringify(batchUpdates)));
                 if (Object.keys(batchUpdates).length > 0) {
                     await update(ref(db), batchUpdates);
-                    alert(t('reports.savedSuccess'));
+                    showToast(t('reports.savedSuccess'), 'success');
                     
                     // 🔥 Clear dirty state only for the records that were actually saved
                     pending.forEach(({ studentId, subjectName }) => {
@@ -1205,7 +1283,7 @@ function initializeReports() {
                     cacheStudents(cachedStudents);
                     setTimeout(buildReport, 300);
                 } else {
-                    alert(t('reports.noChanges'));
+                    showToast(t('reports.noChanges'), 'warning');
                     
                     // 🔥 If nothing actually changed in DB, still clear the dirty flags
                     pending.forEach(({ studentId, subjectName }) => {
@@ -1219,7 +1297,7 @@ function initializeReports() {
                 }
             } catch (err) {
                 console.error('Save error:', err);
-                alert(t('reports.saveFailed', { message: err.message }));
+                showToast(t('reports.saveFailed', { message: err.message }), 'error', 4000);
             } finally {
                 hideLoader();
                 saveBtn.disabled = false;
