@@ -149,6 +149,33 @@ function loadImg(src) {
   });
 }
 
+// ✅ Word-wrap for canvas (fillText never wraps on its own).
+function wrapText(ctx, text, maxWidth) {
+  const raw = String(text ?? '').trim();
+  if (!raw) return ['—'];
+  const isCJK = (ch) => /[\u2E80-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF\u3000-\u303F]/.test(ch);
+  const tokens = [];
+  raw.split(/\s+/).forEach((word) => {
+    if (ctx.measureText(word).width <= maxWidth) { tokens.push(word); return; }
+    let cur = '';                                    // break over-long words per char
+    for (const ch of word) {
+      if (cur && ctx.measureText(cur + ch).width > maxWidth) { tokens.push(cur); cur = ch; }
+      else cur += ch;
+    }
+    if (cur) tokens.push(cur);
+  });
+  const lines = [];
+  let line = '';
+  tokens.forEach((tok) => {
+    const sep = line && (isCJK(line[line.length - 1]) || isCJK(tok[0])) ? '' : ' ';
+    const test = line ? line + sep + tok : tok;
+    if (line && ctx.measureText(test).width > maxWidth) { lines.push(line); line = tok; }
+    else line = test;
+  });
+  if (line) lines.push(line);
+  return lines.length ? lines : ['—'];
+}
+
 function rr(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -1151,7 +1178,16 @@ async function downloadCardAsPng(fam) {
     const headerH = 104, divH = 6, footerH = 58;
     const studentH = (m) => 74 + ((m.awards || []).length ? 30 : 0);
     const studentsH = 22 + fam.members.reduce((s, m) => s + studentH(m) + 12, 0);
-    const detH = 132;
+    const lineH = 20;                                    // height per wrapped line
+    const mctx = document.createElement('canvas').getContext('2d');
+    mctx.font = `700 15px ${CARD_FONT}`;                 // must match the paint font
+    const colW  = (W - 2 * pad) / 2 - 24;                // usable width of a half column
+    const fullW = W - 2 * pad - 32;                      // usable width full row
+    const dateLines  = wrapText(mctx, eventSettings.eventDate ? new Date(eventSettings.eventDate).toLocaleDateString('en-GB') : '—', colW);
+    const timeLines  = wrapText(mctx, familyTimeText(fam), colW);
+    const venueLines = wrapText(mctx, eventSettings.venue || '—', fullW);
+    const row1H = Math.max(dateLines.length, timeLines.length) * lineH;
+    const detH  = 112 + row1H + (venueLines.length - 1) * lineH;  // box grows with wraps
     const iw = W - 2 * pad - 2 * secPad;
     const bcItems = bcImgs.map(img => {
       const bw = Math.min(img.naturalWidth, iw - 32); // ✅ Prevent stretching beyond natural width
@@ -1178,8 +1214,14 @@ async function downloadCardAsPng(fam) {
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, headerH);
     ctx.fillStyle = '#fff'; ctx.font = `40px ${CARD_FONT}`;
     ctx.fillText('🏅', pad, 68);
-    ctx.font = `800 24px ${CARD_FONT}`;
-    ctx.fillText(eventDisplayName().toUpperCase(), pad + 64, 50);
+    const title = eventDisplayName().toUpperCase();
+    const titleMax = W - pad - (pad + 64);
+    let titleSize = 24;
+    ctx.font = `800 ${titleSize}px ${CARD_FONT}`;
+    while (ctx.measureText(title).width > titleMax && titleSize > 12) {
+      titleSize--; ctx.font = `800 ${titleSize}px ${CARD_FONT}`;
+    }
+    ctx.fillText(title, pad + 64, 50);
     ctx.font = `500 12px ${CARD_FONT}`;
     ctx.fillText('Advanced Student Honour Roll 進階學生榮譽榜', pad + 64, 74);
     y += headerH;
@@ -1216,19 +1258,20 @@ async function downloadCardAsPng(fam) {
     });
     y += 4;
 
-    // details box
+    // details box (wrapped text)
     ctx.fillStyle = '#f1f5f9'; rr(ctx, pad, y, W - 2 * pad, detH, 10); ctx.fill();
     const c1 = pad + 16, c2 = pad + (W - 2 * pad) / 2 + 8;
     ctx.font = `600 10px ${CARD_FONT}`; ctx.fillStyle = '#666';
     ctx.fillText('📅 DATE 日期', c1, y + 26);
     ctx.fillText('🕐 TIME 時間', c2, y + 26);
     ctx.font = `700 15px ${CARD_FONT}`; ctx.fillStyle = '#4682B4';
-    ctx.fillText(eventSettings.eventDate ? new Date(eventSettings.eventDate).toLocaleDateString('en-GB') : '—', c1, y + 50);
-    ctx.fillText(familyTimeText(fam), c2, y + 50);
+    dateLines.forEach((ln, i) => ctx.fillText(ln, c1, y + 50 + i * lineH));
+    timeLines.forEach((ln, i) => ctx.fillText(ln, c2, y + 50 + i * lineH));
+    const venueLabelY = y + 50 + row1H + 16;
     ctx.font = `600 10px ${CARD_FONT}`; ctx.fillStyle = '#666';
-    ctx.fillText('📍 VENUE 地點', c1, y + 86);
+    ctx.fillText('📍 VENUE 地點', c1, venueLabelY);
     ctx.font = `700 15px ${CARD_FONT}`; ctx.fillStyle = '#4682B4';
-    ctx.fillText(eventSettings.venue || '—', c1, y + 110);
+    venueLines.forEach((ln, i) => ctx.fillText(ln, c1, venueLabelY + 24 + i * lineH));
     y += detH + 16;
 
     // barcode section
