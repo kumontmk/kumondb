@@ -90,7 +90,7 @@ All sizes scale from:
 
   /* Wide, soft, transparent scrim for the left/lower content block */
   background: radial-gradient(
-    ellipse 65% 75% at 10% 78%,
+    ellipse 65% 75% at 6% 78%,
     rgba(2, 6, 23, .45),
     rgba(2, 6, 23, 0) 70%
   );

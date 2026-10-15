@@ -61,12 +61,18 @@
             </div>
             <div id="balanceStrip" class="balance-strip hidden"></div>
 
-            <div class="status-pills">
-                <button class="pill active" data-status="all"><span data-i18n="all">All</span> <span class="pill-count" id="countAll">0</span></button>
-                <button class="pill pill-pending" data-status="pending"><span data-i18n="statusPending">Pending</span> <span class="pill-count" id="countPending">0</span></button>
-                <button class="pill pill-approved" data-status="approved"><span data-i18n="statusApproved">Approved</span> <span class="pill-count" id="countApproved">0</span></button>
-                <button class="pill pill-rejected" data-status="rejected"><span data-i18n="statusRejected">Rejected</span> <span class="pill-count" id="countRejected">0</span></button>
-                <button class="pill pill-cancelled" data-status="cancelled"><span data-i18n="statusCancelled">Cancelled</span> <span class="pill-count" id="countCancelled">0</span></button>
+            <div class="status-pills-wrapper" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin: 0.75rem 0 1rem;">
+                <div class="status-pills" style="margin: 0;">
+                    <button class="pill pill-pending active" data-status="pending"><span data-i18n="statusPending">Pending</span> <span class="pill-count" id="countPending">0</span></button>
+                    <button class="pill pill-approved" data-status="approved"><span data-i18n="statusApproved">Approved</span> <span class="pill-count" id="countApproved">0</span></button>
+                    <button class="pill pill-rejected" data-status="rejected"><span data-i18n="statusRejected">Rejected</span> <span class="pill-count" id="countRejected">0</span></button>
+                    <button class="pill pill-cancelled" data-status="cancelled"><span data-i18n="statusCancelled">Cancelled</span> <span class="pill-count" id="countCancelled">0</span></button>
+                    <button class="pill" data-status="all"><span data-i18n="all">All</span> <span class="pill-count" id="countAll">0</span></button>
+                </div>
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer; white-space: nowrap; color: var(--text-light); font-weight: 600;">
+                    <input type="checkbox" id="hidePastYearsToggle">
+                    <span>Hide past years</span>
+                </label>
             </div>
 
             <div class="table-wrapper">

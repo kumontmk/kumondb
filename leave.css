@@ -1904,3 +1904,43 @@ background-color: var(--white);
   .cx-card-actions { justify-content: flex-end; }
   .cx-day-date { min-width: 0; }
 }
+
+/* 🆕 Year Group Header */
+#leaveTable tr.year-group-header td {
+    background: var(--primary-dark);
+    color: var(--white);
+    font-weight: 700;
+    font-size: 0.95rem;
+    padding: 0.6rem 0.75rem;
+    position: sticky;
+    top: 46px; /* Sits right below the main thead */
+    z-index: 1;
+    text-align: left;
+    letter-spacing: 0.02em;
+}
+
+@media (max-width: 768px) {
+    #leaveTable tr.year-group-header {
+        display: block;
+        background: var(--primary-dark);
+        color: white;
+        border-radius: 8px 8px 0 0;
+        margin-top: 1rem;
+        margin-bottom: 0;
+        padding: 0.5rem 0.9rem;
+        border: none;
+        box-shadow: none;
+    }
+    #leaveTable tr.year-group-header td {
+        display: block;
+        position: static;
+        padding: 0;
+        border: none;
+        background: transparent;
+        color: white;
+        text-align: left;
+    }
+    #leaveTable tr.year-group-header td::before {
+        content: none; /* Hides the mobile data-label prefix */
+    }
+}

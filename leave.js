@@ -63,7 +63,7 @@ const LV_OVERLAY = {
 };
 
 let employees = {}, leaves = {}, currentUser = null;
-let statusFilter = 'all', monthFilter = 'all';
+let statusFilter = 'pending', monthFilter = 'all';
 let currentYear = new Date().getFullYear();
 let entYear = new Date().getFullYear();
 let pickerYear = currentYear;
@@ -701,43 +701,94 @@ function monthRangeForFilter() {
   return { start: `${currentYear}-${pad(m)}-01`, end: `${currentYear}-${pad(m)}-${pad(lastDay)}` };
 }
 function getFilteredLeaves() {
-  let list = scopedLeaves().filter(l => String(l.year || (l.dateFrom || '').slice(0, 4)) === String(currentYear));
-  const range = monthRangeForFilter(); if (range) list = list.filter(l => l.dateFrom <= range.end && l.dateTo >= range.start);
-  const empF = $('empFilter')?.value; if (currentUser.isAdmin && empF && empF !== 'all') list = list.filter(l => l.empId === empF);
-  const q = $('searchLeave')?.value.trim().toLowerCase();
-  if (q) list = list.filter(l => (l.reason || '').toLowerCase().includes(q) || (l.typeLabel || '').toLowerCase().includes(q) || (l.empName || '').toLowerCase().includes(q));
-  list.sort((a, b) => (b.appliedAt || '').localeCompare(a.appliedAt || ''));
-  return list;
+let list = scopedLeaves();
+
+// 🆕 Hide past years toggle logic
+if ($('hidePastYearsToggle')?.checked) {
+    const thisYear = new Date().getFullYear();
+    list = list.filter(l => {
+        const y = parseInt(String(l.year || (l.dateFrom || '').slice(0, 4)), 10);
+        return y >= thisYear;
+    });
+}
+
+// 🆕 Only filter by year/month if a specific month is selected
+if (monthFilter !== 'all') {
+    list = list.filter(l => String(l.year || (l.dateFrom || '').slice(0, 4)) === String(currentYear));
+    const range = monthRangeForFilter(); 
+    if (range) list = list.filter(l => l.dateFrom <= range.end && l.dateTo >= range.start);
+}
+
+const empF = $('empFilter')?.value; 
+if (currentUser.isAdmin && empF && empF !== 'all') list = list.filter(l => l.empId === empF);
+
+const q = $('searchLeave')?.value.trim().toLowerCase();
+if (q) list = list.filter(l => (l.reason || '').toLowerCase().includes(q) || (l.typeLabel || '').toLowerCase().includes(q) || (l.empName || '').toLowerCase().includes(q));
+
+list.sort((a, b) => (b.appliedAt || '').localeCompare(a.appliedAt || ''));
+return list;
 }
 function updatePillCounts() {
-  const base = getFilteredLeaves(); const count = s => base.filter(l => l.status === s).length;
-  setText('countAll', base.length); setText('countPending', count('pending')); setText('countApproved', count('approved')); setText('countRejected', count('rejected')); setText('countCancelled', count('cancelled'));
+let base = scopedLeaves();
+// 🆕 Respect the Hide past years toggle for global counts
+if ($('hidePastYearsToggle')?.checked) {
+    const thisYear = new Date().getFullYear();
+    base = base.filter(l => {
+        const y = parseInt(String(l.year || (l.dateFrom || '').slice(0, 4)), 10);
+        return y >= thisYear;
+    });
+}
+const count = s => base.filter(l => l.status === s).length;
+setText('countAll', base.length); setText('countPending', count('pending')); setText('countApproved', count('approved')); setText('countRejected', count('rejected')); setText('countCancelled', count('cancelled'));
 }
 function durationText(l) { return l.durationType === 'hours' ? `${l.amount} ${t('hrUnit')}` : `${l.amount} ${t('dayUnit')}`; }
 function renderLeaveTable() {
-  updatePillCounts(); const table = $('leaveTable'); if (!table) return;
-  let list = getFilteredLeaves(); if (statusFilter !== 'all') list = list.filter(l => l.status === statusFilter);
-  const admin = currentUser.isAdmin; const cols = admin ? 9 : 8;
-  const thead = `<thead><tr>${admin ? `<th>${escapeHtml(t('thEmployee'))}</th>` : ''}<th>${escapeHtml(t('thLeaveType'))}</th><th>${escapeHtml(t('thDuration'))}</th><th>${escapeHtml(t('thFrom'))}</th><th>${escapeHtml(t('thTo'))}</th><th>${escapeHtml(t('thReason'))}</th><th>📎</th><th>${escapeHtml(t('thStatus'))}</th><th>${escapeHtml(t('thActions'))}</th></tr></thead>`;
-  if (list.length === 0) { table.innerHTML = thead + `<tbody><tr><td colspan="${cols}" class="empty-state">${escapeHtml(t('noLeaveRecords', { year: currentYear }))}</td></tr></tbody>`; return; }
-  const rows = list.map(l => {
-    const meta = TYPE_META[l.type] || { label: l.typeLabel || l.type, cls: '' };
-    const fromCell = l.durationType === 'hours'
-  ? `${fmtDateWithDow(l.dateFrom)}${l.timeFrom ? ' · ' + l.timeFrom : ''}`
-  : fmtDateWithDow(l.dateFrom);
-    const toCell = l.durationType === 'hours'
-    ? `${fmtDateWithDow(l.dateTo)}${l.timeTo ? ' · ' + l.timeTo : ''}`
-    : fmtDateWithDow(l.dateTo);
-    let actions = '';
-    if (admin && l.status === 'pending') actions += `<button class="primary" data-action="approve" data-id="${escapeHtml(l.id)}" type="button">✅</button><button class="danger" data-action="reject" data-id="${escapeHtml(l.id)}" type="button">❌</button>`;
-    const canCancel = (l.status === 'pending' && (admin || l.empId === currentUser.empId)) || (l.status === 'approved' && admin);
-    if (canCancel) actions += `<button class="secondary" data-action="cancel" data-id="${escapeHtml(l.id)}" type="button">🚫</button>`;
-    if (!actions) actions = `<span style="color:#cbd5e1;">—</span>`;
-    const canDelAtt = l.attachment && (admin || (l.empId === currentUser.empId && l.status === 'pending'));
-    const safeId = escapeHtml(l.id);
-    return `<tr> ${admin ? `<td data-label="${escapeHtml(t('thEmployee'))}">${escapeHtml(l.empName || '-')}${l.empChinese ? `<small>(${escapeHtml(l.empChinese)})</small>` : ''}</td>` : ''} <td data-label="${escapeHtml(t('thLeaveType'))}"><span class="type-dot lv ${meta.cls} approved"></span>${escapeHtml(meta.label)}</td> <td data-label="${escapeHtml(t('thDuration'))}">${durationText(l)}${l.restDaysExcluded ? ` <small style="color:#94a3b8;">${escapeHtml(t('restExcluded'))}</small>` : ''}</td> <td data-label="${escapeHtml(t('thFrom'))}">${fromCell}</td><td data-label="${escapeHtml(t('thTo'))}">${toCell}</td> <td data-label="${escapeHtml(t('thReason'))}" class="reason-cell" title="${escapeHtml(l.reason)}">${escapeHtml(l.reason)}</td> <td data-label="File">${l.attachment ? `<button class="icon-btn" data-action="view-att" data-id="${safeId}" type="button">📎</button>` : '-'}${canDelAtt ? `<button class="icon-btn danger-ico" data-action="del-att" data-id="${safeId}" type="button">🗑</button>` : ''}</td> <td data-label="${escapeHtml(t('thStatus'))}"><span class="status-badge ${l.status}">${escapeHtml(statusLabel(l.status))}</span></td> <td data-label="${escapeHtml(t('thActions'))}"><div class="leave-table-actions">${actions}</div></td> </tr>`;
-  }).join('');
-  table.innerHTML = thead + `<tbody>${rows}</tbody>`;
+updatePillCounts(); 
+const table = $('leaveTable'); if (!table) return;
+let list = getFilteredLeaves(); 
+if (statusFilter !== 'all') list = list.filter(l => l.status === statusFilter);
+
+const admin = currentUser.isAdmin; 
+const cols = admin ? 9 : 8;
+const thead = `<thead><tr>${admin ? `<th>${escapeHtml(t('thEmployee'))}</th>` : ''}<th>${escapeHtml(t('thLeaveType'))}</th><th>${escapeHtml(t('thDuration'))}</th><th>${escapeHtml(t('thFrom'))}</th><th>${escapeHtml(t('thTo'))}</th><th>${escapeHtml(t('thReason'))}</th><th>📎</th><th>${escapeHtml(t('thStatus'))}</th><th>${escapeHtml(t('thActions'))}</th></tr></thead>`;
+
+if (list.length === 0) { 
+    table.innerHTML = thead + `<tbody><tr><td colspan="${cols}" class="empty-state">${escapeHtml(t('noLeaveRecords', { year: monthFilter !== 'all' ? currentYear : 'selected filters' }))}</td></tr></tbody>`; 
+    return; 
+}
+
+// 🆕 Group by Year
+const groups = new Map();
+list.forEach(l => {
+    const y = String(l.year || (l.dateFrom || '').slice(0, 4));
+    if (!groups.has(y)) groups.set(y, []);
+    groups.get(y).push(l);
+});
+const sortedYears = [...groups.keys()].sort((a, b) => a.localeCompare(b));
+
+let rows = '';
+sortedYears.forEach(year => {
+    rows += `<tr class="year-group-header"><td colspan="${cols}">📆 ${year} (${groups.get(year).length})</td></tr>`;
+    groups.get(year).forEach(l => {
+        const meta = TYPE_META[l.type] || { label: l.typeLabel || l.type, cls: '' };
+        const fromCell = l.durationType === 'hours'
+        ? `${fmtDateWithDow(l.dateFrom)}${l.timeFrom ? ' · ' + l.timeFrom : ''}`
+        : fmtDateWithDow(l.dateFrom);
+        const toCell = l.durationType === 'hours'
+        ? `${fmtDateWithDow(l.dateTo)}${l.timeTo ? ' · ' + l.timeTo : ''}`
+        : fmtDateWithDow(l.dateTo);
+        let actions = '';
+        if (admin && l.status === 'pending') actions += `<button class="primary" data-action="approve" data-id="${escapeHtml(l.id)}" type="button">✅</button><button class="danger" data-action="reject" data-id="${escapeHtml(l.id)}" type="button">❌</button>`;
+        const canCancel = (l.status === 'pending' && (admin || l.empId === currentUser.empId)) || (l.status === 'approved' && admin);
+        if (canCancel) actions += `<button class="secondary" data-action="cancel" data-id="${escapeHtml(l.id)}" type="button">🚫</button>`;
+        if (!actions) actions = `<span style="color:#cbd5e1;">—</span>`;
+        const canDelAtt = l.attachment && (admin || (l.empId === currentUser.empId && l.status === 'pending'));
+        const safeId = escapeHtml(l.id);
+        rows += `<tr> ${admin ? `<td data-label="${escapeHtml(t('thEmployee'))}">${escapeHtml(l.empName || '-')}${l.empChinese ? `<small>(${escapeHtml(l.empChinese)})</small>` : ''}</td>` : ''} <td data-label="${escapeHtml(t('thLeaveType'))}"><span class="type-dot lv ${meta.cls} approved"></span>${escapeHtml(meta.label)}</td> <td data-label="${escapeHtml(t('thDuration'))}">${durationText(l)}${l.restDaysExcluded ? ` <small style="color:#94a3b8;">${escapeHtml(t('restExcluded'))}</small>` : ''}</td> <td data-label="${escapeHtml(t('thFrom'))}">${fromCell}</td><td data-label="${escapeHtml(t('thTo'))}">${toCell}</td> <td data-label="${escapeHtml(t('thReason'))}" class="reason-cell" title="${escapeHtml(l.reason)}">${escapeHtml(l.reason)}</td> <td data-label="File">${l.attachment ? `<button class="icon-btn" data-action="view-att" data-id="${safeId}" type="button">📎</button>` : '-'}${canDelAtt ? `<button class="icon-btn danger-ico" data-action="del-att" data-id="${safeId}" type="button">🗑</button>` : ''}</td> <td data-label="${escapeHtml(t('thStatus'))}"><span class="status-badge ${l.status}">${escapeHtml(statusLabel(l.status))}</span></td> <td data-label="${escapeHtml(t('thActions'))}"><div class="leave-table-actions">${actions}</div></td> </tr>`;
+    });
+});
+
+table.innerHTML = thead + `<tbody>${rows}</tbody>`;
 }
 
 // ============ APPROVE MODAL & RELIEF ============
@@ -2020,6 +2071,8 @@ function wireEvents() {
   $('closeEditEntModal')?.addEventListener('click', () => closeModal('editEntitlementModal'));
   $('cancelEditEntBtn')?.addEventListener('click', () => closeModal('editEntitlementModal'));
 
+  $('hidePastYearsToggle')?.addEventListener('change', renderLeaveTable);
+
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
       closeModal('applyModal');
@@ -2651,6 +2704,7 @@ function wireCxEvents() {
   $('cxApproveBtn')?.addEventListener('click', cxApprove);
   $('cxRejectBtn')?.addEventListener('click', cxReject);
   $('cxCloseReviewBtn')?.addEventListener('click', () => closeModal('cxReviewModal'));
+  
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { closeModal('cxRequestModal'); closeModal('cxReviewModal'); }
   });
