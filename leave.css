@@ -1944,3 +1944,78 @@ background-color: var(--white);
         content: none; /* Hides the mobile data-label prefix */
     }
 }
+
+/* ============================================================
+🎁 EXTRA LEAVE CREDITS (append-only)
+============================================================ */
+:root {
+    --c-extra: #10b981;
+    --c-extra-faint: #d1fae5;
+    --c-extra-ink: #065f46;
+}
+.lv-extra { --lv: var(--c-extra); --lv-faint: var(--c-extra-faint); --lv-ink: var(--c-extra-ink); }
+.type-dot.lv-extra, .chip.lv-extra { background: var(--c-extra); }
+.lv-extra.pending {
+    background-image: repeating-linear-gradient(45deg, rgba(16, 185, 129, 0.55) 0 3px, transparent 3px 8px);
+}
+.balance-card.bc-extra { border-left-color: var(--c-extra); }
+
+/* Entitlements table — new Extra Credit column (green) + shifted Unpaid column.
+   These rules come later in the file, so they safely override the old Unpaid selectors. */
+#entitlementsTable thead tr:first-child th:nth-child(5),
+#entitlementsTable thead tr:nth-child(2) th:nth-child(n+10):nth-child(-n+12) {
+    background-color: var(--c-extra);
+    color: var(--white);
+}
+#entitlementsTable tbody td:nth-child(n+11):nth-child(-n+13) {
+    background-color: var(--c-extra-faint);
+    color: var(--c-extra-ink);
+}
+#entitlementsTable thead tr:first-child th:nth-child(6) {
+    background-color: var(--c-unpaid);
+    color: var(--white);
+}
+#entitlementsTable tbody td:nth-child(14) {
+    background-color: var(--c-unpaid-faint);
+    color: var(--c-unpaid-ink);
+}
+
+/* Expiry warning badge in the Entitlements tab */
+.xc-warn { display: inline-block; margin-left: 0.3rem; cursor: help; font-size: 0.9rem; }
+
+/* Credit manager modal */
+#extraCreditModal .modal-content.wide { max-width: 760px; width: 95%; }
+.xc-summary { display: flex; gap: 1rem; flex-wrap: wrap; background: #f0f8ff; border: 1px solid #b8d8ef; border-radius: var(--radius); padding: 0.9rem 1rem; margin: 0.75rem 0 1rem; }
+.xc-summary .xc-stat { flex: 1; min-width: 90px; text-align: center; }
+.xc-summary label { display: block; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-light); }
+.xc-summary span { font-size: 1.2rem; font-weight: 800; }
+.xc-summary .xc-bal { color: var(--success); }
+.xc-section-title { color: var(--primary-dark); font-size: 0.95rem; margin: 0.9rem 0 0.5rem; }
+.xc-history { display: flex; flex-direction: column; gap: 0.5rem; max-height: 300px; overflow-y: auto; padding-right: 4px; }
+.xc-empty { border: 1px dashed var(--border); border-radius: var(--radius); padding: 1.25rem; text-align: center; color: var(--text-light); }
+.xc-item { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; background: var(--white); border: 1px solid var(--border); border-left: 4px solid var(--c-extra); border-radius: 8px; padding: 0.6rem 0.8rem; }
+.xc-item.expired { border-left-color: #94a3b8; }
+.xc-item.revoked { border-left-color: var(--danger); }
+.xc-item-main { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.9rem; }
+.xc-item-main small { color: var(--text-light); }
+.xc-chip { padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; white-space: nowrap; }
+.xc-chip.active { background: #d1fae5; color: #065f46; }
+.xc-chip.soon { background: #fef3c7; color: #92400e; }
+.xc-chip.expired { background: var(--border); color: #475569; }
+.xc-chip.revoked { background: #fee2e2; color: #991b1b; }
+.xc-grant { border-top: 1px dashed var(--border); margin-top: 1rem; padding-top: 0.25rem; }
+.xc-amount-row { display: flex; gap: 0.5rem; }
+.xc-amount-row input { flex: 1; }
+.xc-amount-row select { width: 110px; flex: 0 0 auto; }
+#xcExpiryDate { margin-top: 0.5rem; }
+@media (max-width: 768px) {
+    .xc-amount-row { flex-direction: column; }
+    .xc-amount-row select { width: 100%; }
+}
+
+/* 🎁 Fix: row 2 now holds only the 12 Ent/Used/Bal sub-headers (Employee/Unpaid/Actions
+   span both rows), so don't sticky-pin row 2's first cell to the left edge. */
+#entitlementsTable thead tr:nth-child(2) th:first-child {
+    left: auto;
+    z-index: 9;
+}
