@@ -1295,3 +1295,5 @@ nav {
     box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
   }
 }
+
+body:not(.is-manager-or-admin) .manager-only { display: none !important; }
