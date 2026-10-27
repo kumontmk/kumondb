@@ -1350,17 +1350,15 @@ ${url}`;
 function inviteMessageEn(name, url) {
   return `Dear Parents,
 
-Will [${name}] be attending the Kumon ${currentEventId} Program Completers and Advanced Student Honour Roll (ASHR) Awards Ceremony?
+Will ${name} be attending the Kumon ${currentEventId} Program Completers and Advanced Student Honour Roll (ASHR) Awards Ceremony?
 
 This special event is dedicated to recognizing your child's outstanding efforts and academic achievements, as well as acknowledging their top-tier performance in the program. It is a wonderful opportunity for us to gather, witness, and celebrate this proud milestone together.
 
-If you plan to attend, we kindly request that you complete the attendance reply form by Monday, November 30.
-Thank you very much for your continuous support! Once again, our sincere congratulations to your child on achieving such an outstanding accomplishment!
+If you plan to attend, we kindly request that you complete the attendance reply form by Monday, November 30 so that we can coordinate the seating and awards accordingly.
 
-If you will be attending, please log in here to fill out the form. Thank you!
+👉🏻 ${url}
 
-👉🏻 Parents, please complete the attendance registration via the link below before November 30, 2026, so that we can coordinate the seating and awards accordingly:
-${url}`;
+Thank you very much for your continuous support! Once again, our sincere congratulations to your child on achieving such an outstanding accomplishment!`;
 }
 
 // Center → Excel tab abbreviation (mirrors TAB_TO_CENTER used by the import)
