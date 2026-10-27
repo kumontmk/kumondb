@@ -30,6 +30,10 @@ export default {
     ashrDesc: "Advanced Student Honour Roll ceremony management",
     ashrPres: "ASHR Stage Presenter",
     ashrPresDesc: "Stage presenter for ASHR ceremonies",
+    payslipGenerator: "Pay Slip Generator",
+    payslipGeneratorDesc: "Generate & export A4 payslips (Word) for non-resident workers",
+    eventSchedule: "Event Schedule",
+    eventScheduleDesc: "Visual drag & drop event schedule with timeline bars"
   },
   bulletin: {
     title: "📢 Bulletin Board",

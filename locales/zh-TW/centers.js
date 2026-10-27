@@ -30,6 +30,10 @@ export default {
     ashrDesc: "公文式超學年優秀生頒獎典禮管理",
     ashrPres: "ASHR 舞台主持人",
     ashrPresDesc: "舞台主持人，負責 ASHR 典禮的主持工作",
+    payslipGenerator: "薪資單產生器",
+    payslipGeneratorDesc: "為非居民員工產生並匯出 A4 薪資單 (Word)",
+    eventSchedule: "活動時間表",
+    eventScheduleDesc: "可視化拖放活動時間表，帶有時間軸條"
   },
   bulletin: {
     title: "📢 佈告欄",
