@@ -66,7 +66,7 @@ export default {
     noLink: 'No Link',
     disabled: 'Disabled',
     genAll: '✨ Generate All Missing Links',
-    printAll: '🖨️ Print All Cards',
+    exportMsg: '📤 Export Messages (Excel)',
     card: '📇 Card',
     gen: '✨ Generate',
     regen: '♻️ Regen',

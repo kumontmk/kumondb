@@ -66,7 +66,7 @@ export default {
     noLink: '無連結',
     disabled: '已停用',
     genAll: '✨ 產生所有缺少的連結',
-    printAll: '🖨️ 列印所有卡片',
+    exportMsg: '📤 Export Messages (Excel)',
     card: '📇 卡片',
     gen: '✨ 產生',
     regen: '♻️ 重新產生',

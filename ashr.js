@@ -938,7 +938,7 @@ function setupLinks() {
   $('linkSearch').addEventListener('input', renderLinks);
   $('linkFilter').addEventListener('change', renderLinks);
   $('generateAllLinksBtn').addEventListener('click', generateAllMissingLinks);
-  $('printAllCardsBtn').addEventListener('click', printAllCards);
+  $('exportMessagesBtn').addEventListener('click', exportInvitationMessages);
   $('closeLinkCard').addEventListener('click', () => $('linkCardModal').classList.add('hidden'));
 }
 
@@ -1327,130 +1327,118 @@ async function downloadCardAsPng(fam) {
   }
 }
 
-// ✅ Batch print: one bilingual card per page, image-based barcodes/QR
-async function printAllCards() {
-  const familyGroups = buildAshrFamilies();
-  const withLink = familyGroups.filter(fam => Object.values(portalsCache).some(p => p.familyKey === fam.key));
-  if (!withLink.length) return showToast('No families with links yet', 'error');
-  if (!confirm(`Open ${withLink.length} invitation card(s) in a print window?`)) return;
+// ============================================
+// 📤 EXPORT INVITATION MESSAGES → Excel
+//    One tab per center: C / MK / PT / TS
+//    Columns: Name | Message (Chinese) | Message (English)
+// ============================================
+function inviteMessageCn(name, url) {
+  return `家長您好,
 
-  const printWin = window.open('', '_blank');
-  if (!printWin) return showToast('Pop-up blocked — allow pop-ups and try again', 'error');
+請問${name}是否會出席「公文式${currentEventId}年度最終教材完成者及超越學年頒獎典禮」？
+此特別活動旨在表彰您的孩子展現出的卓越努力與學業成就，並肯定其在課程中名列前茅的優異表現。這是一個難得的機會，讓我們共同見證並慶祝孩子這項值得驕傲的里程碑。
 
-  const cardsHtml = (await Promise.all(withLink.map(async (fam) => {
-    const entry = Object.entries(portalsCache).find(([_, p]) => p.familyKey === fam.key);
-    if (!entry) return '';
-    const [token] = entry;
-    const url = `${location.origin}${location.pathname.replace(/[^/]*$/, '')}ashr-invite.html?e=${encodeURIComponent(currentEventId)}&t=${encodeURIComponent(token)}`;
+如您計劃出席，懇請30/11(一)之前填妥出席回覆表。
+非常感謝各位家長一直以來的支持！再次誠摯祝賀您的孩子取得如此出色的成就！
 
-    const studentsHtml = fam.members.map(m => {
-      const awardsHtml = (m.awards || []).map(a =>
-        `<span class="award-badge award-${(a.tier || 'bronze').toLowerCase()}">${medalFor(a.tier)} ${escapeHtml(a.subject)} ${'★'.repeat(a.stars || 0)}</span>`
-      ).join('');
-      return `<div class="inv-student">
-        <div class="inv-student-name">${escapeHtml(m.nameCn || m.nameEn || '')}</div>
-        <div class="inv-student-center">${escapeHtml(m.centerName || '')} · #${escapeHtml(m.studentNumber || '')}</div>
-        <div class="inv-student-awards">${awardsHtml}</div>
-      </div>`;
-    }).join('');
+如要出席, 請登入此填表, 謝謝 !
 
-    const barcodesHtml = fam.members.map(m => {
-      const value = m.barcodeValue || `ASHR${currentEventId}_${m.honoreeKey}`;
-      const dataUrl = barcodeDataUrl(shortScanCode(value)); // ✅ Short code
-      return `<div class="inv-barcode-item">
-        ${dataUrl ? `<img class="inv-barcode-img" src="${dataUrl}" style="image-rendering: pixelated; width: auto; max-width: 100%; height: auto;">` : `<div class="inv-barcode-fallback">${escapeHtml(value)}</div>`}
-        <div class="inv-barcode-student">${escapeHtml(m.nameCn || m.nameEn || '')}</div>
-      </div>`;
-    }).join('');
-
-    const qrUrl = await qrDataUrl(url, 240);
-
-    return `
-      <div class="card-wrapper">
-        <div class="invitation-card">
-          <div class="inv-header">
-            <div class="inv-logo">🏅</div>
-            <div class="inv-title-block">
-              <div class="inv-event-name">${escapeHtml(eventDisplayName())}</div>
-              <div class="inv-subtitle"><span class="en">Advanced Student Honour Roll</span> <span class="zh">進階學生榮譽榜</span></div>
-            </div>
-          </div>
-          <div class="inv-divider"></div>
-          <div class="inv-body">
-            <div class="inv-label">Honoured Student(s) <span class="zh">獲獎學生</span></div>
-            ${studentsHtml}
-            <div class="inv-details-grid">
-              <div><div class="inv-detail-label">📅 Date <span class="zh">日期</span></div><div class="inv-detail-value">${eventSettings.eventDate ? new Date(eventSettings.eventDate).toLocaleDateString('en-GB') : '—'}</div></div>
-              <div><div class="inv-detail-label">🕐 Time <span class="zh">時間</span></div><div class="inv-detail-value">${escapeHtml(familyTimeText(fam))}</div></div>
-              <div style="grid-column:1/-1;"><div class="inv-detail-label">📍 Venue <span class="zh">地點</span></div><div class="inv-detail-value">${escapeHtml(eventSettings.venue || '—')}</div></div>
-            </div>
-            <div class="inv-barcode-section">
-              <div class="inv-label">Check-in Barcode(s) <span class="zh">報到條碼</span></div>
-              ${barcodesHtml}
-            </div>
-            ${qrUrl ? `<div class="inv-qr-section">
-              <div class="inv-label">RSVP / Details <span class="zh">回覆與詳情</span></div>
-              <div class="inv-qr"><img class="inv-qr-img" src="${qrUrl}"></div>
-              <div class="inv-qr-hint">Scan to confirm attendance <span class="zh">掃描以確認出席</span></div>
-            </div>` : ''}
-          </div>
-          <div class="inv-footer">
-            <div class="inv-footer-text">Please present this card at check-in<span class="zh">請於報到時出示此卡</span></div>
-            <div class="inv-footer-code">FAM-${token.slice(0, 6).toUpperCase()}</div>
-          </div>
-        </div>
-      </div>`;
-  }))).join('<div class="page-break"></div>');
-
-  printWin.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escapeHtml(eventDisplayName())} Cards</title>
-    <style>
-      body { font-family:'Segoe UI','PingFang TC','Microsoft JhengHei',sans-serif; padding:24px; display:flex; flex-direction:column; gap:32px; align-items:center; background:#fff; }
-      .no-print { padding:10px 24px; font-size:16px; cursor:pointer; border:none; border-radius:8px; background:#4682B4; color:#fff; font-weight:600; }
-      .page-break { page-break-after: always; }
-      .card-wrapper { width:500px; }
-      .invitation-card { background:#fff; border:2px solid #4682B4; border-radius:16px; overflow:hidden; }
-      .inv-header { background:#4682B4; color:#fff; padding:1.25rem 1.5rem; display:flex; align-items:center; gap:1rem; }
-      .inv-logo { font-size:2.5rem; }
-      .inv-title-block { flex:1; }
-      .inv-event-name { font-size:1.4rem; font-weight:800; text-transform:uppercase; }
-      .inv-subtitle { font-size:0.85rem; opacity:0.95; }
-      .inv-divider { height:4px; background:#FFD700; }
-      .inv-body { padding:1.5rem; }
-      .inv-label { font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; color:#4682B4; margin-bottom:0.5rem; }
-      .inv-label .zh { letter-spacing:0.5px; text-transform:none; }
-      .inv-student { background:#f8fafc; border-left:4px solid #FFD700; padding:0.6rem 0.9rem; border-radius:6px; margin-bottom:0.5rem; }
-      .inv-student-name { font-weight:700; font-size:1.05rem; }
-      .inv-student-center { font-size:0.8rem; color:#666; }
-      .inv-student-awards { margin-top:0.35rem; }
-      .inv-details-grid { display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; background:#f1f5f9; padding:0.9rem; border-radius:10px; margin:1.25rem 0; }
-      .inv-detail-label { font-size:0.7rem; color:#666; text-transform:uppercase; }
-      .inv-detail-label .zh { text-transform:none; }
-      .inv-detail-value { font-weight:700; color:#4682B4; font-size:0.95rem; }
-      .inv-barcode-section { border:1.5px dashed #cbd5e1; border-radius:10px; padding:1rem; margin-bottom:1rem; }
-      .inv-barcode-item { text-align:center; padding:0.5rem; background:#fafafa; border-radius:6px; margin-bottom:0.5rem; }
-      .inv-barcode-img { max-width:100%; height:auto; display:block; margin:0 auto; }
-      .inv-barcode-fallback { font-family:'Courier New',monospace; font-size:0.8rem; }
-      .inv-barcode-student { font-size:0.78rem; font-weight:600; margin-top:0.3rem; }
-      .inv-qr-section { text-align:center; padding:0.75rem; background:#f8fafc; border-radius:10px; }
-      .inv-qr { display:inline-block; padding:0.5rem; background:#fff; border-radius:8px; margin-top:0.4rem; }
-      .inv-qr-img { width:120px; height:120px; display:block; margin:0 auto; }
-      .inv-qr-hint { font-size:0.72rem; color:#666; font-style:italic; margin-top:0.4rem; }
-      .inv-qr-hint .zh { font-style:normal; }
-      .inv-footer { background:#4682B4; color:#fff; padding:0.75rem 1.5rem; display:flex; justify-content:space-between; align-items:center; font-size:0.78rem; gap:1rem; }
-      .inv-footer-text .zh { display:block; font-size:0.72rem; opacity:0.9; }
-      .inv-footer-code { font-family:'Courier New',monospace; font-weight:700; }
-      .award-badge { display:inline-block; padding:0.15rem 0.5rem; border-radius:999px; font-size:0.75rem; font-weight:700; margin:0.1rem; }
-      .award-gold { background:#fef3c7; color:#92400e; border:1px solid #fde047; }
-      .award-silver { background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; }
-      .award-bronze { background:#ffedd5; color:#c2410c; border:1px solid #fdba74; }
-      @media print { .no-print { display:none !important; } .card-wrapper { page-break-after: always; } body { padding:0; } }
-    </style>
-    </head><body>
-    <button class="no-print" onclick="window.print()">🖨️ Print All Cards</button>
-    ${cardsHtml}
-    </body></html>`);
-  printWin.document.close();
+👉🏻請家長於2026年11月30日之前，通過以下鏈接填妥出席登記，以便我們統籌安排座位及獎品：
+${url}`;
 }
+
+function inviteMessageEn(name, url) {
+  return `Dear Parents,
+
+Will [${name}] be attending the Kumon ${currentEventId} Program Completers and Advanced Student Honour Roll (ASHR) Awards Ceremony?
+
+This special event is dedicated to recognizing your child's outstanding efforts and academic achievements, as well as acknowledging their top-tier performance in the program. It is a wonderful opportunity for us to gather, witness, and celebrate this proud milestone together.
+
+If you plan to attend, we kindly request that you complete the attendance reply form by Monday, November 30.
+Thank you very much for your continuous support! Once again, our sincere congratulations to your child on achieving such an outstanding accomplishment!
+
+If you will be attending, please log in here to fill out the form. Thank you!
+
+👉🏻 Parents, please complete the attendance registration via the link below before November 30, 2026, so that we can coordinate the seating and awards accordingly:
+${url}`;
+}
+
+// Center → Excel tab abbreviation (mirrors TAB_TO_CENTER used by the import)
+function centerExcelTab(centerId, centerName) {
+  const hay = `${centerId || ''} ${centerName || ''}`.toLowerCase();
+  if (hay.includes('champs')) return 'C';
+  if (hay.includes('mei keng') || hay.includes('meikeng')) return 'MK';
+  if (hay.includes('pac tat') || hay.includes('paktat')) return 'PT';
+  if (hay.includes('tap siac') || hay.includes('tapsiac')) return 'TS';
+  return String(centerName || centerId || 'Other')
+    .replace(/[\[\]:*?/\\]/g, ' ').trim().slice(0, 31) || 'Other';
+}
+
+function exportInvitationMessages() {
+  if (typeof XLSX === 'undefined') {
+    return showToast(`${t('toast.err', 'Error')}: SheetJS (XLSX) not loaded`, 'error');
+  }
+
+  const familyGroups = buildAshrFamilies();
+
+  // 1) One row per honoree whose family has an ACTIVE invitation link
+  const rows = [];
+  familyGroups.forEach(fam => {
+    const entry = Object.entries(portalsCache).find(
+      ([_, p]) => p.familyKey === fam.key && p.active !== false
+    );
+    if (!entry) return;
+    const url = `${location.origin}${location.pathname.replace(/[^/]*$/, '')}ashr-invite.html?e=${encodeURIComponent(currentEventId)}&t=${encodeURIComponent(entry[0])}`;
+    fam.members.forEach(m => rows.push({ ...m, inviteUrl: url }));
+  });
+
+  if (!rows.length) {
+    return showToast('No students with active invitation links yet — generate links first', 'error');
+  }
+
+  // 2) Group rows by center tab
+  const tabMap = {};
+  rows.forEach(r => {
+    const tab = centerExcelTab(r.centerId, r.centerName);
+    (tabMap[tab] = tabMap[tab] || []).push(r);
+  });
+
+  const preferred = ['C', 'MK', 'PT', 'TS'];
+  const tabNames = [
+    ...preferred.filter(x => tabMap[x]),
+    ...Object.keys(tabMap).filter(x => !preferred.includes(x)).sort()
+  ];
+
+  // 3) Build the workbook — one sheet per center
+  const wb = XLSX.utils.book_new();
+  tabNames.forEach(tab => {
+    const students = tabMap[tab].sort((a, b) => {
+      const na = String(a.nameCn || a.nameEn || '');
+      const nb = String(b.nameCn || b.nameEn || '');
+      return na.localeCompare(nb) ||
+        String(a.studentNumber || '').localeCompare(String(b.studentNumber || ''));
+    });
+
+    const sheetRows = students.map(s => {
+      const cnName = s.nameCn || s.nameEn || '';
+      const enName = s.nameEn || s.nameCn || '';
+      return {
+        'Name': [s.nameCn, s.nameEn].filter(Boolean).join(' ') || '—',
+        'Message (Chinese)': inviteMessageCn(cnName, s.inviteUrl),
+        'Message (English)': inviteMessageEn(enName, s.inviteUrl)
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(sheetRows);
+    ws['!cols'] = [{ wch: 26 }, { wch: 80 }, { wch: 80 }];
+    XLSX.utils.book_append_sheet(wb, ws, tab);
+  });
+
+  XLSX.writeFile(wb, `ASHR_Invitation_Messages_${currentEventId}.xlsx`);
+  showToast(`✅ Exported ${rows.length} message(s) — tabs: ${tabNames.join(', ')}`, 'success');
+}
+
+
 
 // ============================================
 // RSVPS & REPORTS
