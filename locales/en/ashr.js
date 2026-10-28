@@ -110,7 +110,7 @@ export default {
     timeslot: 'Timeslot', students: 'Students', capacity: 'Capacity',
     guests: 'Guests', totalPeople: 'Total People', total: 'Total People',
     submitted: 'Submitted', sheet: 'Sheet', sid: 'Student ID',
-    nameEn: 'Name (EN)', nameCn: 'Name (CN)', subject: 'Subject', stars: 'Stars', slot: 'Timeslot'
+    nameEn: 'Name (EN)', nameCn: 'Name (CN)', subject: 'Subject', stars: 'Stars', slot: 'Timeslot', reason: 'Decline Reason'
   },
   um: {
     title: '✏️ Resolve Unmatched Record',
@@ -177,6 +177,10 @@ export default {
     reasonDisabled: 'This invitation link has been disabled.',
     reasonNoMembers: 'No honorees found for this invitation.',
     downloadPng: '🖼️ Download PNG',
-    copyLink: '📋 Copy Invite Link'
+    copyLink: '📋 Copy Invite Link',
+    reasonTitle: '💬 May we ask why? (optional)',
+    reasonHint: 'Sharing a reason is completely optional — it just helps your center plan future events.',
+    reasonPh: 'e.g. family trip, schedule conflict...',
+    reasonWord: 'Reason',
   }
 };

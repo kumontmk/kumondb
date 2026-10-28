@@ -110,7 +110,7 @@ export default {
     timeslot: '時段', students: '學生', capacity: '容量',
     guests: '賓客', totalPeople: '總人數', total: '總人數',
     submitted: '提交時間', sheet: '分頁', sid: '學號',
-    nameEn: '英文名', nameCn: '中文名', subject: '科目', stars: '星數', slot: '時段'
+    nameEn: '英文名', nameCn: '中文名', subject: '科目', stars: '星數', slot: '時段', reason: '缺席原因'
   },
   um: {
     title: '✏️ 處理未匹配記錄',
@@ -177,6 +177,10 @@ export default {
     reasonDisabled: '此連結已被中心停用。',
     reasonNoMembers: '此連結沒有獲獎學生。',
     downloadPng: '🖼️ 下載 PNG',
-    copyLink: '📋 複製邀請連結'
+    copyLink: '📋 複製邀請連結',
+    reasonTitle: '💬 方便告知原因嗎？（選填）',
+    reasonHint: '是否填寫原因完全自由，這能幫助中心安排未來的活動。',
+    reasonPh: '例如：家庭旅行、時間衝突…',
+    reasonWord: '原因',
   }
 };

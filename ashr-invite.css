@@ -88,3 +88,32 @@ body {
 .invite-toast.error { background: var(--red); }
 
 @media (max-width: 480px) { .guest-grid { grid-template-columns: 1fr 1fr; } }
+
+/* ============================================
+   💬 DECLINE REASON (optional)
+   ============================================ */
+#reasonCard .reason-hint {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: -0.35rem 0 0.6rem;
+}
+#reasonCard textarea,
+textarea#declineReason {
+  display: block;
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  padding: 0.6rem 0.75rem;
+  border: 1.5px solid #dbeafe;
+  border-radius: 10px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+textarea#declineReason:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(70, 130, 180, 0.15);
+}

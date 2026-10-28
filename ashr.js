@@ -1335,30 +1335,39 @@ async function downloadCardAsPng(fam) {
 function inviteMessageCn(name, url) {
   return `家長您好,
 
-請問${name}是否會出席「公文式${currentEventId}年度最終教材完成者及超越學年頒獎典禮」？
-此特別活動旨在表彰您的孩子展現出的卓越努力與學業成就，並肯定其在課程中名列前茅的優異表現。這是一個難得的機會，讓我們共同見證並慶祝孩子這項值得驕傲的里程碑。
+恭喜🎉 ${name} 同學於${currentEventId}年8月的進度達到超越學年的水平並獲得獎項，請問 ${name} 能否出席出席頒獎典禮呢？
 
-如您計劃出席，懇請30/11(一)之前填妥出席回覆表。
-非常感謝各位家長一直以來的支持！再次誠摯祝賀您的孩子取得如此出色的成就！
+* 誠邀家長預留時間陪同子女出席，共同見證這項值得驕傲的學習里程碑。
+📌 頒獎典禮詳情
+* 活動名稱：公文式${currentEventId}年度最終教材完成者及超越學年頒獎典禮
+* 日期：12月12日（星期六）下午
+* 場次（共三場）：
+	1. 14:00–15:00
+	2. 16:00–17:00
+	3. 17:30–18:30 
+* 請於${currentEventId}年11月21日或之前，透過以下連結填妥出席登記及選擇出席場次，以便統籌座位及獎項安排：
+${url}
 
-如要出席, 請登入此填表, 謝謝 !
-
-👉🏻請家長於2026年11月30日之前，通過以下鏈接填妥出席登記，以便我們統籌安排座位及獎品：
-${url}`;
+如有任何疑問，歡迎回覆查詢。衷心感謝各位家長一直以來的支持，並再次誠摯祝賀同學取得出色的成就！`;
 }
 
 function inviteMessageEn(name, url) {
-  return `Dear Parents,
+  return `Dear Parent,
+Congratulations! 🎉 As of August ${currentEventId}, ${name} has progressed beyond their school grade level and earned an award. Will ${name} be able to attend the awards ceremony?
+We cordially invite you to set aside time to accompany your child and witness this proud learning milestone together.
 
-Will ${name} be attending the Kumon ${currentEventId} Program Completers and Advanced Student Honour Roll (ASHR) Awards Ceremony?
+📌 Awards Ceremony Details
+Event Name: Kumon ${currentEventId} Program Completers and Advanced Student Awards Ceremony
+Date: Saturday, December 12 (Afternoon)
+Sessions (Three available):
+14:00–15:00
+16:00–17:00
+17:30–18:30
 
-This special event is dedicated to recognizing your child's outstanding efforts and academic achievements, as well as acknowledging their top-tier performance in the program. It is a wonderful opportunity for us to gather, witness, and celebrate this proud milestone together.
+Please complete the attendance registration and select your preferred session via the link below on or before November 21, ${currentEventId}, to help us coordinate seating and awards:
+${url}
 
-If you plan to attend, we kindly request that you complete the attendance reply form by Monday, November 30 so that we can coordinate the seating and awards accordingly.
-
-👉🏻 ${url}
-
-Thank you very much for your continuous support! Once again, our sincere congratulations to your child on achieving such an outstanding accomplishment!`;
+If you have any questions, please feel free to reply. Thank you for your continued support, and congratulations once again to your child on their outstanding achievement!`;
 }
 
 // Center → Excel tab abbreviation (mirrors TAB_TO_CENTER used by the import)
@@ -1517,13 +1526,11 @@ function renderRSVPs() {
     }
     const statusClass = status === 'attending' ? 'st-attending' : status === 'declined' ? 'st-declined' : 'st-pending';
     const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${escapeHtml(memberNames)}</td>
-      <td>${memberIds.length}</td>
-      <td><span class="status-badge ${statusClass}">${t('st.' + status, status)}</span></td>
-      <td>${escapeHtml(slotDisplay)}</td>
-      <td>${countGuests(rsvp.guests)}</td>
-      <td>${rsvp.submittedAt ? new Date(rsvp.submittedAt).toLocaleDateString() : '—'}</td>`;
+      tr.innerHTML = `<td>${escapeHtml(memberNames)}</td> 
+      <td>${memberIds.length}</td> <td><span class="status-badge ${statusClass}">${t('st.' + status, status)}</span></td> 
+      <td>${rsvp.status === 'declined' && rsvp.reason ? escapeHtml(rsvp.reason) : '—'}</td> <td>${escapeHtml(slotDisplay)}</td> 
+      <td>${countGuests(rsvp.guests)}</td> <td>${rsvp.submittedAt ? new Date(rsvp.submittedAt).toLocaleDateString() : 
+        '—'}</td>`;
     tbody.appendChild(tr);
   });
 }
@@ -1559,7 +1566,8 @@ function exportRSVPs() {
         'Student': h.nameCn || h.nameEn, 'Pinyin': h.nameEn || '', 'Center': h.centerName || '',
         'Awards': (h.awards || []).map(a => `${a.subject} ${a.stars}★`).join('; '),
         'RSVP Status': rsvp.status || 'pending', 'Guests': countGuests(rsvp.guests),
-        'Submitted': rsvp.submittedAt || ''
+        'Submitted': rsvp.submittedAt || '',
+        'Decline Reason': rsvp.status === 'declined' ? (rsvp.reason || '') : '',
       });
     });
   });

@@ -36,6 +36,12 @@ let selectedSlots = {};
 let isEditing = false;
 let deadlinePassed = false;
 
+// ✅ Helper to safely display free-text reason
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 // 2️⃣ WAIT FOR TRANSLATIONS, THEN BOOT
 await i18nReady.catch(() => {});
 init();
@@ -44,10 +50,10 @@ init();
 async function init() {
   applyI18n();
   $('langToggle').textContent = getLang() === 'en' ? '中文' : 'EN';
-    $('langToggle').addEventListener('click', () => {
+  $('langToggle').addEventListener('click', () => {
     setLang(getLang() === 'en' ? 'zh-TW' : 'en');
     location.reload(); // cleanest: core re-boots in the new language
-    });
+  });
   $('retryBtn').addEventListener('click', () => location.reload());
 
   if (!eventId || !token) return showInvalid('Missing ?e= or ?t= parameter in URL.');
@@ -105,6 +111,11 @@ async function init() {
 }
 
 function wireEvents() {
+  // 💬 Translated placeholder for reason
+  if ($('declineReason')) {
+    $('declineReason').placeholder = t('inv.reasonPh', 'e.g. family trip, schedule conflict...');
+  }
+
   $('btnAttending').addEventListener('click', () => selectStatus('attending'));
   $('btnDeclined').addEventListener('click', () => selectStatus('declined'));
   $('submitRsvpBtn').addEventListener('click', submitRSVP);
@@ -168,7 +179,7 @@ function renderAwards() {
   $('studentAwardsList').innerHTML = memberHonorees.map(h => {
     const awards = (h.awards || []).map(a => {
       // 🥇 Only Gold awards carry a medal
-    const medal = a.tier === 'Gold' ? '🥇 ' : a.tier === 'Silver' ? '🥈 ' : a.tier === 'Bronze' ? '🥉 ' : '';
+      const medal = a.tier === 'Gold' ? '🥇 ' : a.tier === 'Silver' ? '🥈 ' : a.tier === 'Bronze' ? '🥉 ' : '';
       return `<span class="award-tier tier-${(a.tier || 'bronze').toLowerCase()}">${medal}${a.subject} ${'★'.repeat(a.stars || 0)}</span>`;
     }).join(' ');
     return `
@@ -197,6 +208,7 @@ function selectStatus(status) {
   const attending = status === 'attending';
   $('timeslotCard').classList.toggle('hidden', !attending);
   $('guestCard').classList.toggle('hidden', !attending);
+  $('reasonCard').classList.toggle('hidden', attending);   // 💬 Show reason card only for declined
   $('submitCard').classList.remove('hidden');
   if (attending) renderTimeslots();
 }
@@ -273,6 +285,11 @@ async function submitRSVP() {
   const memberKeys = portal.members || [];
   const rsvp = { status: selectedStatus, submittedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
 
+  // 💬 Capture optional reason if declined
+  if (selectedStatus === 'declined') {
+    rsvp.reason = $('declineReason').value.trim(); // may be '' — it's optional
+  }
+
   if (selectedStatus === 'attending') {
     const counts = computeSlotCountsExclude(familyId);
     if (slotMode === 'same') {
@@ -331,6 +348,12 @@ function renderConfirmation() {
   const rsvp = familyData?.rsvp;
   if (!rsvp) return;
   let details = `<p><strong>${t('inv.statusWord', 'Status')}:</strong> ${rsvp.status === 'attending' ? '✅ ' + t('st.attending', 'Attending') : '❌ ' + t('st.declined', 'Declined')}</p>`;
+  
+  // 💬 Display reason if declined and provided
+  if (rsvp.status === 'declined' && rsvp.reason) {
+    details += `<p><strong>${t('inv.reasonWord', 'Reason')}:</strong> ${escapeHtml(rsvp.reason)}</p>`;
+  }
+
   if (rsvp.status === 'attending') {
     if (rsvp.sameTimeslot && rsvp.sharedSlotId) {
       const slot = timeslots[rsvp.sharedSlotId];
@@ -362,6 +385,7 @@ function startEditing() {
   $('rsvpCard').classList.remove('hidden');
   $('btnAttending').classList.toggle('selected', rsvp.status === 'attending');
   $('btnDeclined').classList.toggle('selected', rsvp.status === 'declined');
+  
   if (rsvp.status === 'attending') {
     $('timeslotCard').classList.remove('hidden');
     $('guestCard').classList.remove('hidden');
@@ -380,6 +404,11 @@ function startEditing() {
     }
     renderTimeslots();
   } else {
+    // 💬 Restore reason if editing a declined RSVP
+    if ($('declineReason')) {
+      $('declineReason').value = rsvp.reason || '';
+    }
+    $('reasonCard').classList.remove('hidden'); // Ensure it's visible
     $('submitCard').classList.remove('hidden');
   }
 }

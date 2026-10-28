@@ -63,6 +63,13 @@
       </div>
     </div>
 
+    <!-- 💬 Optional decline reason (shown only when "can't attend" is selected) -->
+    <div class="invite-card hidden" id="reasonCard">
+      <h2 data-i18n="inv.reasonTitle">💬 May we ask why? (optional)</h2>
+      <p class="reason-hint" data-i18n="inv.reasonHint">Sharing a reason is completely optional — it just helps your center plan future events.</p>
+      <textarea id="declineReason" rows="3" maxlength="500" placeholder="e.g. family trip, schedule conflict..."></textarea>
+    </div>
+
     <div class="invite-card hidden" id="timeslotCard">
       <h2 data-i18n="inv.slotTitle">🕐 Choose Timeslot</h2>
       <div class="slot-mode-toggle">
