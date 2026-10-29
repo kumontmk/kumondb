@@ -173,7 +173,7 @@ export default {
     date: '📅 日期：', venue: '📍 場地：', deadline: '⏰ 回覆期限：',
     full: '已滿',
     statusWord: '狀態', timeslotsWord: '時段', guestsWord: '賓客', submittedWord: '提交時間',
-    congratsText: '恭喜 {{names}}！您的努力與堅持，讓您榮獲進階學生榮譽榜的殊榮。',
+    congratsText: '恭喜 {{names}} 同學！您的努力與堅持，讓你獲得本年度超越學年獎項。',
     reasonDisabled: '此連結已被中心停用。',
     reasonNoMembers: '此連結沒有獲獎學生。',
     downloadPng: '🖼️ 下載 PNG',

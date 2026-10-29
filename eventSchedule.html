@@ -4,88 +4,109 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Event Timetable - Kumon DB</title>
-<link rel="stylesheet" href="./eventSchedule.css">
+<link rel="stylesheet" href="eventSchedule.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
 
 <header>
-  <a href="centers.html" id="backToCenters">← Centers</a>
+  <nav>
+    <a href="centers.html" id="backToCenters">← Centers</a>
+    <span class="user-chip" id="userEmail"></span>
+  </nav>
   <h1>📊 Event Timetable</h1>
 </header>
 
-<div id="accessDenied" class="access-denied hidden">
+<!-- 🔐 ACCESS DENIED -->
+<div class="access-denied hidden" id="accessDenied">
   <div class="access-denied-content">
     <h2>🔐 Access Restricted</h2>
     <p>This page is only accessible to Managers and Master Admins.</p>
-    <a href="centers.html">← Back to Centers</a>
+    <p style="margin-top:1rem"><a href="centers.html" style="color:var(--primary-dark);font-weight:700">← Back to Centers</a></p>
   </div>
 </div>
 
-<div id="mainContent" class="hidden">
+<main id="mainContent" class="hidden">
 
+  <!-- 🖨 print-only title block -->
+  <div class="print-head" id="printHead"></div>
+
+  <!-- TOOLBAR -->
   <div class="toolbar">
     <div class="tb-group grow">
       <select id="eventSelect"></select>
-      <button id="newEventBtn" class="primary">➕ New</button>
-      <button id="editEventBtn" class="ghost">✏️</button>
+    </div>
+    <div class="tb-group">
+      <button class="primary" id="newEventBtn">➕ New</button>
+      <button class="ghost" id="editEventBtn" title="Edit event">✏️</button>
     </div>
     <div class="tb-group">
       <span class="mini-lbl">Zoom</span>
       <div class="seg" id="zoomSeg">
-        <button data-zoom="90">S</button><button data-zoom="140">M</button>
-        <button data-zoom="200">L</button><button data-zoom="260">XL</button>
-        <button data-zoom="fit">⤢</button>
+        <button data-zoom="90"  title="Small (90 px/h)">S</button>
+        <button data-zoom="140" title="Medium (140 px/h)">M</button>
+        <button data-zoom="200" title="Large (200 px/h)">L</button>
+        <button data-zoom="260" title="Extra large (260 px/h)">XL</button>
+        <button data-zoom="340" title="XXL (340 px/h) — wider bars + 3-line titles">XXL</button>
+        <button data-zoom="440" title="3XL (440 px/h) — widest bars + 3-line titles">3XL</button>
+        <button data-zoom="fit" title="Fit to screen">⤢</button>
       </div>
     </div>
     <div class="tb-group">
       <span class="mini-lbl">Snap</span>
       <select id="snapSelect" class="narrow">
-        <option value="5">5m</option><option value="10">10m</option>
-        <option value="15">15m</option><option value="30">30m</option>
+        <option value="5">5m</option>
+        <option value="10">10m</option>
+        <option value="15">15m</option>
+        <option value="30">30m</option>
       </select>
     </div>
     <label class="chk"><input type="checkbox" id="hideEmptyChk"> Hide idle staff</label>
     <div class="tb-group grow">
-      <input type="search" id="searchInput" placeholder="🔍 Search staff or task…">
+      <input type="search" id="searchInput" placeholder="🔍 Search staff or task...">
     </div>
     <div class="tb-group">
-      <button id="addStaffBtn" class="primary">👥 Add Staff</button>
-      <button id="managePtBtn" class="ghost">🧩 PTs</button>
-      <button id="boothBtn" class="ghost">🏪 Booths</button>
-    </div>
-    <div class="tb-group">
+      <button class="primary" id="addStaffBtn">👥 Add Staff</button>
+      <button class="ghost" id="managePtBtn">🧩 PTs</button>
+      <button class="ghost" id="boothBtn">🏪 Booths</button>
+      <button class="ghost" id="nowBtn" title="Scroll to current time">🎯 Now</button>
       <div class="export-menu-wrap">
-        <button id="exportMenuBtn" class="primary">⬇ Export</button>
-        <div id="exportMenu" class="export-menu hidden">
+        <button class="primary" id="exportMenuBtn">⬇ Export</button>
+        <div class="export-menu hidden" id="exportMenu">
           <button id="exportExcelOpt">📊 Excel (.xlsx)</button>
           <button id="exportImageOpt">🖼️ Image (.png)</button>
+          <button id="exportTextOpt">📄 Staff brief (.txt)</button>
+          <button id="exportCopyOpt">📋 Copy brief to clipboard</button>
         </div>
       </div>
-      <button id="printBtn" class="ghost">🖨</button>
+      <button class="ghost" id="printBtn" title="Print">🖨</button>
     </div>
   </div>
 
+  <!-- STATS / LEGEND DROPDOWN / BOOTH BAR / HINT -->
   <div class="stats-row" id="statChips"></div>
   <div class="legend-bar" id="legendBar"></div>
   <div class="booth-bar hidden" id="boothBar"></div>
-  <div class="hint-bar">💡 Drag bars to move · drag edges to resize · click a bar to edit · click empty row space to add a task · double-click staff cell to edit shift</div>
+  <div class="hint-bar">💡 Drag bars to move · drag edges to resize · click a bar to edit · click empty row space to add a task · double-click staff cell to edit shift · click ⚠️ chip to spotlight conflicts</div>
 
+  <!-- EMPTY STATE -->
+  <div class="empty-state hidden" id="emptyState">
+    <h3>No event selected</h3>
+    <p>Create an event to start building the timetable.</p>
+    <button class="primary" id="emptyNewBtn">➕ Create event</button>
+  </div>
+
+  <!-- GANTT -->
   <div class="gantt-scroll hidden" id="ganttScroll">
     <div class="gantt" id="gantt"></div>
   </div>
+</main>
 
-  <div class="empty-state" id="emptyState">
-    <h3>No event selected</h3>
-    <p>Create an event to start building the timetable.</p>
-  </div>
-</div>
-
-<!-- EVENT MODAL -->
-<div id="eventModal" class="modal hidden">
+<!-- ============ EVENT MODAL ============ -->
+<div class="modal hidden" id="eventModal">
   <div class="modal-content">
-    <button class="close-btn" data-close="eventModal">×</button>
+    <span class="close-btn" data-close="eventModal">×</span>
     <h3 id="eventModalTitle">New Event</h3>
     <div class="form-grid">
       <div class="fg full"><label>Event Name *</label><input id="evName"></div>
@@ -95,27 +116,29 @@
       <div class="fg"><label>Window End (blank = auto)</label><input type="time" id="evEnd"></div>
     </div>
     <div class="modal-actions">
-      <button id="deleteEventBtn" class="danger">🗑 Delete</button>
-      <button id="dupEventBtn" class="ghost">⧉ Duplicate</button>
+      <button class="danger hidden" id="deleteEventBtn">🗑 Delete</button>
+      <button class="ghost hidden" id="dupEventBtn">⧉ Duplicate</button>
       <span class="spacer"></span>
-      <button class="secondary" data-close="eventModal">Cancel</button>
-      <button id="saveEventBtn" class="primary">💾 Save</button>
+      <button class="ghost" data-close="eventModal">Cancel</button>
+      <button class="primary" id="saveEventBtn">💾 Save</button>
     </div>
   </div>
 </div>
 
-<!-- STAFF MODAL -->
-<div id="staffModal" class="modal hidden">
+<!-- ============ STAFF MODAL ============ -->
+<div class="modal hidden" id="staffModal">
   <div class="modal-content">
-    <button class="close-btn" data-close="staffModal">×</button>
+    <span class="close-btn" data-close="staffModal">×</span>
     <h3 id="staffModalTitle">Add Staff</h3>
     <div class="tabs" id="staffTabs">
       <button class="tab-btn active" data-stab="emp">🏢 Full-time</button>
       <button class="tab-btn" data-stab="pt">🧩 Part-timers</button>
     </div>
-    <input type="search" id="empSearch" placeholder="🔍 Filter employees…" style="margin-bottom:.6rem;width:100%">
     <div class="edit-info hidden" id="staffEditInfo"></div>
-    <div class="stab active" id="tabEmp"><div class="pick-list" id="empList"></div></div>
+    <input type="search" id="empSearch" placeholder="🔍 Search employees..." style="margin-bottom:.5rem">
+    <div class="stab active" id="tabEmp">
+      <div class="pick-list" id="empList"></div>
+    </div>
     <div class="stab" id="tabPt">
       <div class="pick-list" id="ptList"></div>
       <div class="new-pt-box">
@@ -130,87 +153,88 @@
     <div class="form-grid">
       <div class="fg"><label>Shift From</label><input type="time" id="sfShiftStart"></div>
       <div class="fg"><label>Shift To</label><input type="time" id="sfShiftEnd"></div>
-      <div class="fg full"><button id="windowChipBtn" class="chip-btn">↔ Use event window</button></div>
+      <div class="fg full"><button class="chip-btn" id="windowChipBtn" type="button">↔ Use event window</button></div>
       <div class="fg full"><label>Notes</label><textarea id="sfNotes" rows="2"></textarea></div>
     </div>
     <div class="modal-actions">
-      <button id="removeStaffBtn" class="danger hidden">🗑 Remove</button>
+      <button class="danger hidden" id="removeStaffBtn">🗑 Remove</button>
       <span class="spacer"></span>
-      <button class="secondary" data-close="staffModal">Cancel</button>
-      <button id="saveStaffBtn" class="primary">💾 Save</button>
+      <button class="ghost" data-close="staffModal">Cancel</button>
+      <button class="primary" id="saveStaffBtn">💾 Save</button>
     </div>
   </div>
 </div>
 
-<!-- TASK MODAL -->
-<div id="taskModal" class="modal hidden">
+<!-- ============ TASK MODAL ============ -->
+<div class="modal hidden" id="taskModal">
   <div class="modal-content">
-    <button class="close-btn" data-close="taskModal">×</button>
+    <span class="close-btn" data-close="taskModal">×</span>
     <h3 id="taskModalTitle">Task</h3>
+    <datalist id="titlesList"></datalist>
     <div class="form-grid">
       <div class="fg full"><label>Staff *</label><select id="taskStaff"></select></div>
-      <div class="fg full"><label>Task *</label><input id="taskTitle" list="titlesList" placeholder="e.g. ASHR Orientation"><datalist id="titlesList"></datalist></div>
+      <div class="fg full"><label>Task *</label><input id="taskTitle" list="titlesList"></div>
       <div class="fg"><label>Start *</label><input type="time" id="taskStart"></div>
       <div class="fg"><label>End *</label><input type="time" id="taskEnd"></div>
       <div class="fg full">
         <label>Booth</label>
         <div class="booth-pick-row">
           <select id="taskBooth"></select>
-          <button id="boothQuickToggle" class="ghost" type="button" title="Add a new booth">＋</button>
+          <button class="chip-btn" id="boothQuickToggle" type="button">＋ Add</button>
         </div>
         <div id="boothQuickAdd" class="hidden">
           <input id="boothQuickName" placeholder="New booth name">
-          <button id="boothQuickSave" class="primary" type="button">Add</button>
+          <button class="primary" id="boothQuickSave" type="button">Save</button>
         </div>
       </div>
       <div class="fg full">
         <label class="lead-toggle" id="leadToggleBox">
           <input type="checkbox" id="taskLead">
           <span class="lead-star">★</span>
-          <span><b>LEAD</b> — person in charge of this task</span>
+          <span>LEAD — person in charge of this task
+            <span class="field-hint">Tip: typing "Lead:" at the start of the task name auto-marks it as lead.</span>
+          </span>
         </label>
-        <span class="field-hint">Tip: typing "Lead:" at the start of the task name auto-marks it as lead.</span>
       </div>
       <div class="fg full"><label>Color</label><div class="swatches" id="colorSwatches"></div></div>
       <div class="fg full"><label>Notes</label><textarea id="taskNotes" rows="2"></textarea></div>
     </div>
     <div class="modal-actions">
-      <button id="deleteTaskBtn" class="danger hidden">🗑 Delete</button>
+      <button class="danger hidden" id="deleteTaskBtn">🗑 Delete</button>
       <span class="spacer"></span>
-      <button class="secondary" data-close="taskModal">Cancel</button>
-      <button id="saveTaskBtn" class="primary">💾 Save</button>
+      <button class="ghost" data-close="taskModal">Cancel</button>
+      <button class="primary" id="saveTaskBtn">💾 Save</button>
     </div>
   </div>
 </div>
 
-<!-- PART-TIMER POOL MODAL -->
-<div id="ptModal" class="modal hidden">
+<!-- ============ PART-TIMER POOL MODAL ============ -->
+<div class="modal hidden" id="ptModal">
   <div class="modal-content">
-    <button class="close-btn" data-close="ptModal">×</button>
+    <span class="close-btn" data-close="ptModal">×</span>
     <h3>🧩 Part-timers Pool</h3>
     <p class="muted">Reusable across all events. Removing one here does not delete already-scheduled copies.</p>
     <div class="pick-list" id="ptListBody"></div>
-    <div class="modal-actions"><span class="spacer"></span><button class="secondary" data-close="ptModal">Close</button></div>
+    <div class="modal-actions"><span class="spacer"></span><button class="ghost" data-close="ptModal">Close</button></div>
   </div>
 </div>
 
-<!-- BOOTHS MODAL -->
-<div id="boothModal" class="modal hidden">
+<!-- ============ BOOTH MODAL ============ -->
+<div class="modal hidden" id="boothModal">
   <div class="modal-content">
-    <button class="close-btn" data-close="boothModal">×</button>
+    <span class="close-btn" data-close="boothModal">×</span>
     <h3>🏪 Booths</h3>
     <p class="muted">Booths for the current event. Assign them to tasks from the Task modal.</p>
     <div class="booth-add-row">
-      <input id="boothNewName" placeholder="New booth name (e.g. Booth 1 / Math Games)">
-      <button id="boothAddBtn" class="primary">➕ Add</button>
+      <input id="boothNewName" placeholder="Booth name">
+      <button class="primary" id="boothAddBtn">➕ Add</button>
     </div>
     <div class="pick-list" id="boothListBody"></div>
-    <div class="modal-actions"><span class="spacer"></span><button class="secondary" data-close="boothModal">Close</button></div>
+    <div class="modal-actions"><span class="spacer"></span><button class="ghost" data-close="boothModal">Close</button></div>
   </div>
 </div>
 
 <div id="toasts"></div>
-
-<script type="module" src="./eventSchedule.js"></script>
+<script type="module" src="eventSchedule.js"></script>
 </body>
 </html>

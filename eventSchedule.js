@@ -1,4 +1,5 @@
-// eventSchedule.js v5.1 — Gantt timetable + BOOTH assignments (booth shown on bars only, no emoji on data)
+// eventSchedule.js v5.3 — legend dropdown + staff-brief text export + UX polish
+// (keeps v5.2 extended zoom XXL/3XL; ALL existing IDs & behaviors unchanged)
 import { db } from './auth.js';
 import { ref, get, set, push, update, remove, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -6,8 +7,13 @@ import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/
 const AUTHORIZED_EMAIL = "kumonchamps@gmail.com";
 const auth = getAuth();
 const $ = (id) => document.getElementById(id);
+
 const PALETTE = ['#4682B4','#e07a5f','#3d8b63','#9b5de5','#f4a261','#e63946','#2a9d8f','#6d6875','#d81159','#0096c7','#80b918','#b5838d'];
-const ZOOM_STEPS = [90, 140, 200, 260];
+const ZOOM_STEPS = [90, 140, 200, 260, 340, 440];   // S  M  L  XL  XXL  3XL
+const LANE_H = 48;        // normal lane height (px)
+const LANE_H_XXL = 64;    // taller lanes at XXL/3XL so 3-line titles fit
+const XXL_AT = 340;       // px/hour from which lanes grow + titles get 3 lines
+const ZOOM_MAX = 440;     // hard clamp for "fit"
 const LEAD_RE = /^lead\s*[:：]\s*/i;   // "Lead: X" / "lead：X" auto-detect
 
 const state = {
@@ -16,9 +22,11 @@ const state = {
   pxPerHour: (() => { const v = Number(localStorage.getItem('ev_pxh')); return (v && v !== 90) ? v : 0; })(),
   snap: Number(localStorage.getItem('ev_snap') || 15),
   search: '', hideEmpty: false, highlight: null, boothHighlight: null,
+  focusConflicts: false,                 // ★ click ⚠️ chip => spotlight conflicts only
+  legendOpen: false, legendQuery: '', legendGroups: [],   // ★ legend dropdown state
   metrics: null, editingStaffId: null, editingTaskId: null, staffTab: 'emp', taskColor: ''
 };
-let drag = null, suppressClick = false, employeesLoaded = false;
+let drag = null, suppressClick = false, employeesLoaded = false, legendClickHandled = false;
 
 /* ============ HELPERS ============ */
 const t2m = (t) => { if (!t) return null; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
@@ -33,13 +41,13 @@ function getEmpPositions(emp) {
   if (emp.position) return [emp.position];
   return [];
 }
-// ★ LEAD: explicit flag OR "Lead:" prefix in the title
+// ★ LEAD: explicit flag OR "Lead: " prefix in the title
 function leadInfo(t) {
   const raw = String(t?.title || '');
   const hasPrefix = LEAD_RE.test(raw);
   return { lead: t?.lead === true || hasPrefix, title: (hasPrefix ? raw.replace(LEAD_RE, '').trim() : raw) || raw };
 }
-const shortCenter = (n) => String(n || '').replace(/Centro de Educa[cç][ãa]o\s*/i, '').replace(/\s+/g, ' ').trim();
+const shortCenter = (n) => String(n || '').replace(/Centro de Educa[cç][ãa]o\s+/i, '').replace(/\s+/g, ' ').trim();
 function centerLabelForEmp(e) {
   const cn = e?.contract?.employerName;
   if (cn) return shortCenter(cn);
@@ -109,15 +117,18 @@ function initApp() {
   onValue(ref(db, 'eventPartTimers'), (snap) => { state.partTimers = snap.val() || {}; });
   get(ref(db, 'centers')).then(s => { state.centersCache = s.val() || {}; populateCenterSelect(); }).catch(() => {});
 
-  $('eventSelect')?.addEventListener('change', e => { state.currentEventId = e.target.value || null; state.boothHighlight = null; renderAll(); });
+  $('eventSelect')?.addEventListener('change', e => { state.currentEventId = e.target.value || null; state.boothHighlight = null; state.highlight = null; renderAll(); });
   $('newEventBtn')?.addEventListener('click', () => openEventModal(null));
+  $('emptyNewBtn')?.addEventListener('click', () => openEventModal(null));
   $('editEventBtn')?.addEventListener('click', () => state.currentEventId && openEventModal(state.currentEventId));
   $('saveEventBtn')?.addEventListener('click', saveEvent);
   $('deleteEventBtn')?.addEventListener('click', deleteEvent);
   $('dupEventBtn')?.addEventListener('click', duplicateEvent);
+
   $('zoomSeg')?.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.zoom === 'fit') fitZoom(); else { state.pxPerHour = Number(b.dataset.zoom); localStorage.setItem('ev_pxh', state.pxPerHour); }
+    if (b.dataset.zoom === 'fit') fitZoom();
+    else { state.pxPerHour = Number(b.dataset.zoom); localStorage.setItem('ev_pxh', state.pxPerHour); }
     $('zoomSeg').querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
     renderGantt();
   });
@@ -127,6 +138,7 @@ function initApp() {
   $('hideEmptyChk')?.addEventListener('change', e => { state.hideEmpty = e.target.checked; renderGantt(); });
   $('addStaffBtn')?.addEventListener('click', () => openStaffModal(null));
   $('managePtBtn')?.addEventListener('click', openPtModal);
+
   /* ★ Booths */
   $('boothBtn')?.addEventListener('click', openBoothModal);
   $('boothAddBtn')?.addEventListener('click', () => { addBooth($('boothNewName').value); $('boothNewName').value = ''; });
@@ -136,6 +148,57 @@ function initApp() {
     if (!box.classList.contains('hidden')) $('boothQuickName').focus();
   });
   $('boothQuickSave')?.addEventListener('click', quickAddBoothFromTask);
+
+  /* ★ NEW: jump to current time (or middle of event if not today) */
+  $('nowBtn')?.addEventListener('click', () => {
+    const sc = $('ganttScroll'); if (!sc || !state.metrics) return;
+    const { win, pxm } = state.metrics;
+    const ev = currentEvent();
+    const today = new Date().toISOString().split('T')[0];
+    let m;
+    if (ev?.date === today) { const n = new Date(); m = n.getHours() * 60 + n.getMinutes(); }
+    else m = (win.start + win.end) / 2;
+    sc.scrollTo({ left: Math.max(0, (m - win.start) * pxm - sc.clientWidth / 2), behavior: 'smooth' });
+  });
+
+  /* ★ NEW: conflict spotlight via the ⚠️ stat chip */
+  $('statChips')?.addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-act="focus-conflicts"]'); if (!chip) return;
+    state.focusConflicts = !state.focusConflicts;
+    renderStats(); renderGantt();
+  });
+
+  /* ★ NEW: legend dropdown (open / pick / clear / filter) — delegated, survives re-renders */
+  $('legendBar')?.addEventListener('click', (e) => {
+    legendClickHandled = true;   // ★ click started inside the dropdown → the outside-closer must ignore this same click
+    if (e.target.closest('#legendBtn')) {
+      state.legendOpen = !state.legendOpen;
+      renderLegend();
+      if (state.legendOpen) $('legendSearch')?.focus();
+      return;
+    }
+    const row = e.target.closest('.dd-row');
+    if (row) {
+      const k = row.dataset.group;
+      state.highlight = state.highlight === k ? null : k;
+      renderLegend(); renderGantt();
+      return;
+    }
+    if (e.target.closest('#legendClear')) { state.highlight = null; renderLegend(); renderGantt(); }
+  });
+  $('legendBar')?.addEventListener('input', (e) => {
+    if (e.target.id === 'legendSearch') {
+      state.legendQuery = e.target.value;
+      const list = $('legendList'); if (list) list.innerHTML = legendRows();
+    }
+  });
+  document.addEventListener('click', (e) => {
+    if (legendClickHandled) { legendClickHandled = false; return; }   // ★ same click that just opened/used the panel
+    if (state.legendOpen && !e.target.closest('#legendBar')) { state.legendOpen = false; renderLegend(); }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && state.legendOpen) { state.legendOpen = false; renderLegend(); }
+  });
 
   $('exportMenuBtn') && setupExportMenu();
   $('printBtn')?.addEventListener('click', () => window.print());
@@ -210,7 +273,16 @@ function populateCenterSelect() {
   if (!sel) return;
   sel.innerHTML = '<option value="">—</option>' + Object.entries(state.centersCache).map(([id, c]) => `<option value="${id}">${esc(c.name || id)}</option>`).join('');
 }
-function renderAll() { renderStats(); renderLegend(); renderBoothBar(); renderGantt(); }
+function renderAll() { renderPrintHead(); renderStats(); renderLegend(); renderBoothBar(); renderGantt(); }
+
+/* ★ print-only title block */
+function renderPrintHead() {
+  const el = $('printHead'); if (!el) return;
+  const ev = currentEvent();
+  if (!ev) { el.innerHTML = ''; return; }
+  const cn = ev.centerId ? shortCenter(state.centersCache[ev.centerId]?.name || '') : '';
+  el.innerHTML = `<h2>📊 ${esc(ev.name || 'Event Timetable')}</h2><div class="ph-sub">${esc(ev.date || '')}${cn ? ' · ' + esc(cn) : ''} · Staff ${staffOf(ev).length} · Tasks ${tasksOf(ev).length}</div>`;
+}
 
 function filteredStaff(ev) {
   const tasks = tasksOf(ev);
@@ -233,20 +305,40 @@ function renderStats() {
     if (!tasks.some(t => t.startMin < b + 30 && t.endMin > b)) gaps++;
   const nBooths = boothsOf(ev).length;
   const nBoothTasks = tasks.filter(t => t.boothId).length;
-  box.innerHTML = `<span class="stat-chip">👥 ${staff.length} staff (${pts} PT)</span> <span class="stat-chip">🧩 ${tasks.length} tasks</span> <span class="stat-chip ${conflicts ? 'bad' : 'good'}">⚠️ ${conflicts / 2 | 0} conflict${conflicts ? 's' : ''}</span> <span class="stat-chip ${gaps ? 'warn' : 'good'}">🕳 ${gaps / 2 | 0} gap slot(s)</span>${nBooths ? ` <span class="stat-chip">🏪 ${nBooths} booth${nBooths === 1 ? '' : 's'} · ${nBoothTasks} tagged</span>` : ''} <span class="stat-chip">📅 ${esc(ev.date || 'no date')}</span>`;
+  const confPairs = conflicts / 2 | 0;
+  box.innerHTML = `<span class="stat-chip">👥 ${staff.length} staff (${pts} PT)</span> <span class="stat-chip">🧩 ${tasks.length} tasks</span> <span class="stat-chip ${conflicts ? 'bad' : 'good'} ${state.focusConflicts ? 'active' : ''}" data-act="focus-conflicts" title="${confPairs ? 'Click to spotlight only conflicting tasks' : 'No conflicts'}" ${confPairs ? '' : 'style="cursor:default"'}>⚠️ ${confPairs} conflict${confPairs === 1 ? '' : 's'}</span> <span class="stat-chip ${gaps ? 'warn' : 'good'}">🕳 ${gaps / 2 | 0} gap slot(s)</span>${nBooths ? ` <span class="stat-chip">🏪 ${nBooths} booth${nBooths === 1 ? '' : 's'} · ${nBoothTasks} tagged</span>` : ''} <span class="stat-chip">📅 ${esc(ev.date || 'no date')}</span>`;
+}
+
+/* ★ LEGEND = compact dropdown (was a crammed chip wall). Same spotlight behavior. */
+function legendRows() {
+  const q = norm(state.legendQuery || '');
+  const rows = (state.legendGroups || []).filter(([k]) => !q || k.includes(q));
+  if (!rows.length) return '<div class="dd-empty">No matching tasks</div>';
+  return rows.map(([k, n]) =>
+    `<button type="button" class="dd-row ${state.highlight === k ? 'active' : ''}" data-group="${esc(k)}" title="Spotlight: ${esc(k)}">` +
+    `<span class="legend-dot" style="background:${groupColor(k)}"></span>` +
+    `<span class="dd-name">${esc(k)}</span><b class="dd-count">${n}</b>` +
+    `${state.highlight === k ? '<span class="dd-check">✓</span>' : ''}</button>`).join('');
 }
 function renderLegend() {
-  const ev = currentEvent(); const box = $('legendBar'); if (!ev || !box) { if (box) box.innerHTML = ''; return; }
+  const ev = currentEvent(); const box = $('legendBar'); if (!box) return;
   const groups = {};
   tasksOf(ev).forEach(t => { const k = norm(leadInfo(t).title) || '(untitled)'; groups[k] = (groups[k] || 0) + 1; });
-  box.innerHTML = Object.entries(groups).sort((a, b) => b[1] - a[1]).map(([k, n]) =>
-    `<span class="legend-item ${state.highlight === k ? 'active' : ''}" data-group="${esc(k)}"><span class="legend-dot" style="background:${groupColor(k)}"></span>${esc(k)} <b>(${n})</b></span>`).join('');
-  box.onclick = (e) => {
-    const item = e.target.closest('.legend-item'); if (!item) return;
-    state.highlight = state.highlight === item.dataset.group ? null : item.dataset.group;
-    renderLegend(); renderGantt();
-  };
+  state.legendGroups = Object.entries(groups).sort((a, b) => b[1] - a[1]);
+  if (!ev || !state.legendGroups.length) { box.innerHTML = ''; return; }
+  const active = state.highlight;
+  box.innerHTML =
+    `<div class="dd">` +
+    `<button type="button" class="dd-btn ${active ? 'active' : ''}" id="legendBtn" title="Task groups — click to spotlight">` +
+    `🏷 <span class="dd-label">${active ? esc(active) + ' · spotlight on' : `Tasks · ${state.legendGroups.length} group${state.legendGroups.length === 1 ? '' : 's'}`}</span>` +
+    `<span class="dd-caret">▾</span></button>` +
+    `<div class="dd-panel ${state.legendOpen ? '' : 'hidden'}" id="legendPanel">` +
+    `<input type="search" id="legendSearch" placeholder="🔍 Filter task names..." value="${esc(state.legendQuery || '')}">` +
+    `<div class="dd-list" id="legendList">${legendRows()}</div>` +
+    `<div class="dd-foot"><button type="button" class="ghost" id="legendClear">✖ Clear spotlight</button><span class="dd-hint">Click a task to spotlight its bars</span></div>` +
+    `</div></div>`;
 }
+
 /* ★ BOOTH BAR — at-a-glance booth → staff overview; click to spotlight */
 function renderBoothBar() {
   const ev = currentEvent(); const box = $('boothBar'); if (!box) return;
@@ -257,7 +349,7 @@ function renderBoothBar() {
   box.innerHTML = booths.map(b => {
     const mine = tasks.filter(t => t.boothId === b.id);
     const names = [...new Set(mine.map(t => staffName(ev, t.staffId)))];
-    const who = names.slice(0, 3).join(', ') + (names.length > 3 ? ` +${names.length - 3}` : '');
+    const who = names.slice(0, 3).join(', ') + (names.length > 3 ? `+${names.length - 3}` : '');
     return `<span class="booth-item ${state.boothHighlight === b.id ? 'active' : ''}" data-booth="${b.id}" title="${esc(b.name)}${names.length ? ' · ' + esc(names.join(', ')) : ' · unassigned'}"><span class="booth-dot" style="background:${groupColor(b.name)}"></span>🏪 ${esc(b.name)} <b>(${mine.length})</b>${who ? ` <span class="booth-who">— ${esc(who)}</span>` : ''}</span>`;
   }).join('') + `<button class="chip-btn" id="boothBarAdd" type="button">＋ booth</button>`;
   box.onclick = (e) => {
@@ -273,8 +365,13 @@ function renderGantt() {
   const pxm = state.pxPerHour / 60;
   const totalW = Math.ceil((win.end - win.start) * pxm);
   state.metrics = { win, pxm, totalW };
+  /* ★ v5.2: taller lanes at XXL/3XL so 3-line titles fit inside bars */
+  const laneH = state.pxPerHour >= XXL_AT ? LANE_H_XXL : LANE_H;
+  g.classList.toggle('z-xxl', state.pxPerHour >= XXL_AT);
+
   const staff = filteredStaff(ev);
   const allTasks = tasksOf(ev);
+
   let ticks = '';
   for (let m = win.start; m < win.end; m += 60) ticks += `<div class="tick" style="left:${(m - win.start) * pxm}px">${m2t(m)}</div>`;
   let cov = '';
@@ -283,15 +380,18 @@ function renderGantt() {
     cov += `<div class="cov cov${Math.min(3, n)}" style="flex:1" title="${m2t(b)}–${m2t(b + 30)} · ${n} task(s)"></div>`;
   }
   const nowX = nowLineX(win, pxm);
+
   let rows = '';
   staff.forEach(st => {
     const mine = allTasks.filter(t => t.staffId === st.id);
     const { lanes, conflicts } = assignLanes(mine);
-    const rowH = lanes * 48 + 10;
+    const rowH = lanes * laneH + 10;
     const ss = t2m(st.shiftStart), se = t2m(st.shiftEnd);
     const band = (ss != null && se != null && se > ss)
       ? `<div class="shift-band" style="left:${(ss - win.start) * pxm}px;width:${(se - ss) * pxm}px"></div>` : '';
     const leads = mine.filter(t => leadInfo(t).lead).length;
+    /* ★ NEW: workload at a glance (task count + booked hours) */
+    const loadH = Math.round(mine.reduce((a, t) => a + (t.endMin - t.startMin), 0) / 6) / 10;
     const bars = mine.map(t => {
       const li = leadInfo(t);
       const bn = boothName(ev, t.boothId);
@@ -300,15 +400,17 @@ function renderGantt() {
       const color = groupColor(li.title, t.color);
       const dimG = state.highlight && state.highlight !== norm(li.title);
       const dimB = state.boothHighlight && t.boothId !== state.boothHighlight;
-      const dim = (dimG || dimB) ? ' dim' : '';
+      const dimC = state.focusConflicts && !conflicts.has(t.id);   // ★ conflict spotlight
+      const dim = (dimG || dimB || dimC) ? ' dim' : '';
       const outside = (ss != null && (t.startMin < ss || t.endMin > se)) ? ' outside' : '';
       const conf = conflicts.has(t.id) ? ' conflict' : '';
       /* ★ booth shown ONLY here on the bar: plain name pill, no emoji */
-      return `<div class="task-bar${li.lead ? ' lead' : ''}${width < 70 ? ' xs' : ''}${dim}${outside}${conf}" data-task="${t.id}" data-staff="${st.id}" style="left:${left}px;width:${width}px;top:${4 + t._lane * 48}px;background:${color}" title="${li.lead ? '★ LEAD: ' : ''}${esc(li.title)}${bn ? ` · Booth: ${esc(bn)}` : ''} · ${t.start}–${t.end}${t.notes ? '\n' + esc(t.notes) : ''}"><i class="hdl l"></i><span class="tb-title">${li.lead ? '★ ' : ''}${esc(li.title)}</span><span class="tb-meta"><span class="tb-time">${t.start}–${t.end}</span>${bn ? `<span class="tb-booth" title="Booth: ${esc(bn)}">${esc(bn)}</span>` : ''}</span><i class="hdl r"></i></div>`;
+      return `<div class="task-bar${li.lead ? ' lead' : ''}${width < 70 ? ' xs' : ''}${dim}${outside}${conf}" data-task="${t.id}" data-staff="${st.id}" style="left:${left}px;width:${width}px;top:${4 + t._lane * laneH}px;background:${color}" title="${li.lead ? '★ LEAD: ' : ''}${esc(li.title)}${bn ? ` · Booth: ${esc(bn)}` : ''} · ${t.start}–${t.end}${t.notes ? '\n' + esc(t.notes) : ''}"><i class="hdl l"></i><span class="tb-title">${li.lead ? '★ ' : ''}${esc(li.title)}</span><span class="tb-meta"><span class="tb-time">${t.start}–${t.end}</span>${bn ? `<span class="tb-booth" title="Booth: ${esc(bn)}">${esc(bn)}</span>` : ''}</span><i class="hdl r"></i></div>`;
     }).join('');
-    /* ★ staff meta = shift only (no booths) */
-    rows += `<div class="g-row" style="direction:ltr;grid-template-columns:var(--staff-w) 1fr"><div class="g-staff" style="grid-column:1" data-act="edit-staff" data-staff="${st.id}" title="Click to edit shift / notes"><div class="g-staff-name">${esc(st.name)} <span class="badge ${st.type === 'parttimer' ? 'pt' : 'emp'}">${st.type === 'parttimer' ? 'PT' : 'EMP'}</span>${leads ? ` <span class="badge leadcount">★${leads}</span>` : ''}</div><div class="g-staff-meta">${ss != null ? `${st.shiftStart}–${st.shiftEnd}` : ''}</div></div><div class="g-lanes" data-staff="${st.id}" style="grid-column:2;width:${totalW}px;height:${rowH}px;--hourpx:${state.pxPerHour}px">${band}${bars}</div></div>`;
+    /* ★ staff meta = shift + workload */
+    rows += `<div class="g-row" style="direction:ltr;grid-template-columns:var(--staff-w) 1fr"><div class="g-staff" style="grid-column:1" data-act="edit-staff" data-staff="${st.id}" title="Click to edit shift / notes"><div class="g-staff-name">${esc(st.name)} <span class="badge ${st.type === 'parttimer' ? 'pt' : 'emp'}">${st.type === 'parttimer' ? 'PT' : 'EMP'}</span>${leads ? ` <span class="badge leadcount">★${leads}</span>` : ''}</div><div class="g-staff-meta">${ss != null ? `${st.shiftStart}–${st.shiftEnd}` : ''}${mine.length ? ` · ${mine.length} task${mine.length === 1 ? '' : 's'} · ${loadH}h` : ' · idle'}</div></div><div class="g-lanes" data-staff="${st.id}" style="grid-column:2;width:${totalW}px;height:${rowH}px;--hourpx:${state.pxPerHour}px;--lane-h:${laneH}px">${band}${bars}</div></div>`;
   });
+
   g.innerHTML = `<div class="g-head" style="direction:ltr;grid-template-columns:var(--staff-w) 1fr"><div class="g-corner" style="grid-column:1">👥 Staff (${staff.length})</div><div class="g-head-times" style="grid-column:2;width:${totalW}px">${ticks}<div class="cov-strip">${cov}</div>${nowX != null ? `<div class="now-line" style="left:${nowX}px"></div>` : ''}</div></div><div class="g-body">${rows || `<div style="padding:2rem;color:#64748b">No staff yet — click "👥 Add Staff".</div>`}</div>`;
   renderNowLine();
 }
@@ -329,7 +431,7 @@ function fitZoom() {
   if (!state.metrics) return;
   const avail = $('ganttScroll').clientWidth - 240;
   const hours = (state.metrics.win.end - state.metrics.win.start) / 60;
-  state.pxPerHour = Math.max(40, Math.min(300, Math.floor(avail / hours)));
+  state.pxPerHour = Math.max(40, Math.min(ZOOM_MAX, Math.floor(avail / hours)));
   localStorage.setItem('ev_pxh', state.pxPerHour);
   syncZoomSeg();
 }
@@ -342,7 +444,7 @@ function readableFitZoom() {
   const w = ev ? getWindow(ev) : { start: 540, end: 1080 };
   const hours = Math.max(1, (w.end - w.start) / 60);
   const avail = Math.max(320, ($('ganttScroll')?.clientWidth || 800) - 240);
-  const target = Math.max(140, Math.min(260, avail / hours));
+  const target = Math.max(140, Math.min(ZOOM_MAX, avail / hours));
   state.pxPerHour = [...ZOOM_STEPS].reverse().find(s => s <= target) || 140;
   localStorage.setItem('ev_pxh', state.pxPerHour);
   syncZoomSeg();
@@ -654,6 +756,54 @@ function openPtModal() {
   openModal('ptModal');
 }
 
+/* ============ ★ STAFF BRIEF (plain text) ============
+   Format:
+   Marie (11:15 - 19:00)
+   - 11:25 to 12:15 - ASHR Orientation (Lead)
+   (booth-tagged tasks append "[Booth name]" — remove `${booth?...}` if unwanted) */
+function staffBriefText() {
+  const ev = currentEvent(); if (!ev) return '';
+  const staff = staffOf(ev).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  const blocks = staff.map(s => {
+    const mine = tasksOf(ev).filter(t => t.staffId === s.id).sort((a, b) => a.startMin - b.startMin);
+    const shift = s.shiftStart ? ` (${s.shiftStart} - ${s.shiftEnd})` : '';
+    const lines = mine.map(t => {
+      const li = leadInfo(t);
+      const booth = boothName(ev, t.boothId);
+      return `- ${t.start} to ${t.end} - ${li.title}${li.lead ? ' (Lead)' : ''}${booth ? ` [${booth}]` : ''}`;
+    });
+    return `${s.name}${shift}\n${lines.length ? lines.join('\n') : '- (no tasks)'}`;
+  });
+  const head = `${ev.name || 'Event'}${ev.date ? ' · ' + ev.date : ''}\n${'='.repeat(40)}\n\n`;
+  return head + blocks.join('\n\n') + '\n';
+}
+function exportText() {
+  const ev = currentEvent(); if (!ev) return toast('⚠️ No event selected', 'warn');
+  const blob = new Blob([staffBriefText()], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `Staff_Brief_${(ev.name || 'event').replace(/\s+/g, '_')}_${ev.date || ''}.txt`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('📄 Staff brief exported');
+}
+function copyTextFallback(txt) {
+  const ta = document.createElement('textarea');
+  ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); toast('📋 Copied to clipboard'); }
+  catch { toast('❌ Copy failed in this browser', 'err'); }
+  ta.remove();
+}
+async function copyBrief() {
+  const ev = currentEvent(); if (!ev) return toast('⚠️ No event selected', 'warn');
+  const txt = staffBriefText();
+  if (navigator.clipboard?.writeText) {
+    try { await navigator.clipboard.writeText(txt); toast('📋 Copied to clipboard'); return; } catch {}
+  }
+  copyTextFallback(txt);
+}
+
 /* ============ EXCEL EXPORT (with booths) ============ */
 function exportExcel() {
   if (typeof XLSX === 'undefined') return toast('❌ Excel library not loaded', 'err');
@@ -716,6 +866,8 @@ function setupExportMenu() {
   document.addEventListener('click', (e) => { if (!menu.contains(e.target)) menu.classList.add('hidden'); });
   document.getElementById('exportExcelOpt')?.addEventListener('click', () => { menu.classList.add('hidden'); exportExcel(); });
   document.getElementById('exportImageOpt')?.addEventListener('click', () => { menu.classList.add('hidden'); exportTableAsPNG(); });
+  document.getElementById('exportTextOpt')?.addEventListener('click', () => { menu.classList.add('hidden'); exportText(); });
+  document.getElementById('exportCopyOpt')?.addEventListener('click', () => { menu.classList.add('hidden'); copyBrief(); });
 }
 /* Pretty date for the banner: "Fri, 23 Oct 2026" (falls back to raw string) */
 function fmtExportDate(d) {
