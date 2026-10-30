@@ -96,6 +96,29 @@
       <div id="importSummary" class="hidden" style="margin-top:1rem;"></div>
     </div>
 
+    <!-- 🎓 COMPLETERS IMPORT -->
+    <div class="card">
+      <h3 data-i18n="hon.completersTitle">🎓 Import Completers Excel</h3>
+      <p class="hint" data-i18n="hon.completersHint">
+        Imports Math / Chinese / ERP / EFL completers. Rows are matched by Center + Student ID and merged into the same honoree record.
+        Unmatched rows are stored for manual resolution.
+      </p>
+
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;">
+        <button id="importCompletersBtn" class="primary" data-i18n="hon.chooseCompleters">📂 Choose Completers Excel File</button>
+        <input type="file" id="completersFileInput" accept=".xlsx,.xls,.csv" class="hidden">
+        <button id="clearCompletersBtn" class="danger" data-i18n="hon.clearCompleters">🧹 Clear Completers</button>
+        <button id="exportCompletersBtn" class="secondary" data-i18n="hon.exportCompleters">📤 Export Completers (Excel)</button>
+      </div>
+
+      <div id="completersImportProgress" class="hidden" style="margin-top:1rem;">
+        <div class="progress-bar"><div id="completersImportProgressFill" class="progress-fill"></div></div>
+        <p id="completersImportStatusText" class="hint"></p>
+      </div>
+
+      <div id="completersImportSummary" class="hidden" style="margin-top:1rem;"></div>
+    </div>
+
     <div class="card">
       <div class="card-head">
         <h3 data-i18n="hon.unmatchedTitle">Unmatched Records</h3>
@@ -132,6 +155,12 @@
         <input type="text" id="honoreeSearch" placeholder="Filter by name or ID...">
         <select id="honoreeCenterFilter">
           <option value="" data-i18n="hon.allCenters">All Centers</option>
+        </select>
+        <select id="honoreeTypeFilter">
+          <option value="all" data-i18n="hon.typeAll">All Types</option>
+          <option value="award" data-i18n="hon.typeAward">ASHR Award</option>
+          <option value="completer" data-i18n="hon.typeCompleter">Completer</option>
+          <option value="both" data-i18n="hon.typeBoth">Both</option>
         </select>
       </div>
       <div class="table-wrap">
@@ -358,7 +387,7 @@
         <div id="umSelectedInfo" class="hidden" style="margin-top:0.5rem;font-size:0.9rem;color:var(--green);"></div>
       </div>
       <div class="field" style="grid-column:1/-1;">
-        <label data-i18n="um.awardsLabel">Awards (subject & medals)</label>
+        <label id="umAwardsLabel" data-i18n="um.awardsLabel">Awards (subject & medals)</label>
         <div id="umAwardsList"></div>
         <button class="btn-small secondary" id="umAddAwardBtn" style="margin-top:0.5rem;" data-i18n="hon.addAward">+ Add Award</button>
       </div>

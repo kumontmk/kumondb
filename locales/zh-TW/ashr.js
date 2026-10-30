@@ -55,7 +55,21 @@ export default {
     updated: '已更新！',
     searchPh: '以姓名或學號搜尋學生...',
     filterPh: '以姓名或學號篩選...',
-    studentBarcode: '學生條碼'
+    studentBarcode: '學生條碼',
+    completersTitle: '🎓 匯入完成者 Excel',
+    completersHint: '匯入 Math / Chinese / ERP / EFL 完成者。資料行將依中心 + 學號匹配，並合併至同一獲獎學生記錄。未匹配的資料行將保留以供手動處理。',
+    chooseCompleters: '📂 選擇完成者 Excel 檔案',
+    completersImportDone: '完成者匯入完成',
+    noCompleters: '沒有完成者記錄',
+    completersCleared: '完成者已清除',
+    clearCompleters: '🧹 清除完成者',
+    exportCompleters: '📤 匯出完成者',
+    typeAll: '所有類型',
+    typeAward: 'ASHR 獎項',
+    typeCompleter: '完成者',
+    typeBoth: '兩者',
+    completerWord: '完成者'
+    
   },
   links: {
     title: '家庭邀請連結',
@@ -110,7 +124,10 @@ export default {
     timeslot: '時段', students: '學生', capacity: '容量',
     guests: '賓客', totalPeople: '總人數', total: '總人數',
     submitted: '提交時間', sheet: '分頁', sid: '學號',
-    nameEn: '英文名', nameCn: '中文名', subject: '科目', stars: '星數', slot: '時段', reason: '缺席原因'
+    nameEn: '英文名', nameCn: '中文名', subject: '科目', stars: '星數', slot: '時段', reason: '缺席原因',
+    source: '來源',
+    ref: '參考',
+    detail: '詳細資訊'
   },
   um: {
     title: '✏️ 處理未匹配記錄',
@@ -126,11 +143,19 @@ export default {
     saved: '✅ 已加入獲獎學生！',
     removed: '記錄已移除',
     deleteConfirm: '移除此未匹配記錄？',
-    clearConfirm: '清除所有未匹配記錄？'
+    clearConfirm: '清除所有未匹配記錄？',
+    row: '列',
+    completed: '已完成',
+    testDate: '測驗日期',
+    completerDetailsLabel: '完成者詳細資訊',
+    completerHint: '從資料庫中選擇匹配的學生以保存此完成者記錄。',
+    saveCompleter: '💾 儲存為完成者',
+    completerSaved: '✅ 已儲存為完成者!'
   },
   imp: {
     added: '新增', updated: '更新', skipLow: '跳過（EFL <3★）',
-    skipSubject: '跳過（科目）', unmatched: '未匹配', removed: '移除（無金獎）'
+    skipSubject: '跳過（科目）', unmatched: '未匹配', removed: '移除（無金獎）',   newHonorees: '新增獲獎學生'
+
   },
   toast: {
     settings: '設定已儲存！', err: '錯誤',
@@ -146,7 +171,10 @@ export default {
     chooseSlot: '請選擇時段',
     eachSlot: '請為每位學生選擇時段',
     slotFullNow: '已滿，請選擇其他時段。',
-    rsvpOk: '回覆提交成功！'
+    rsvpOk: '回覆提交成功！',
+    noCompleters: '沒有完成者記錄',
+    completersImportDone: '完成者匯入完成',
+    completersCleared: '完成者記錄已清除'
   },
   common: { save: '💾 儲存', cancel: '取消', delete: '🗑', edit: '✏️ 編輯', copied: '已複製！' },
   inv: {

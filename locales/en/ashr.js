@@ -55,7 +55,17 @@ export default {
     updated: 'Updated!',
     searchPh: 'Search student by name or ID...',
     filterPh: 'Filter by name or ID...',
-    studentBarcode: 'Student Barcode'
+    studentBarcode: 'Student Barcode',
+    completersTitle: '🎓 Import Completers Excel',
+    completersHint: 'Imports Math / Chinese / ERP / EFL completers. Rows are matched by Center + Student ID and merged into the same honoree record. Unmatched rows are stored for manual resolution.',
+    chooseCompleters: '📂 Choose Completers Excel File',
+    clearCompleters: '🧹 Clear Completers',
+    exportCompleters: '📤 Export Completers (Excel)',
+    typeAll: 'All Types',
+    typeAward: 'ASHR Award',
+    typeCompleter: 'Completer',
+    typeBoth: 'Both',
+    completerWord: 'Completer'
   },
   links: {
     title: 'Family Invitation Links',
@@ -110,7 +120,9 @@ export default {
     timeslot: 'Timeslot', students: 'Students', capacity: 'Capacity',
     guests: 'Guests', totalPeople: 'Total People', total: 'Total People',
     submitted: 'Submitted', sheet: 'Sheet', sid: 'Student ID',
-    nameEn: 'Name (EN)', nameCn: 'Name (CN)', subject: 'Subject', stars: 'Stars', slot: 'Timeslot', reason: 'Decline Reason'
+    nameEn: 'Name (EN)', nameCn: 'Name (CN)', subject: 'Subject', stars: 'Stars', slot: 'Timeslot', reason: 'Decline Reason',  source: 'Source',
+    ref: 'Ref',
+    detail: 'Detail'
   },
   um: {
     title: '✏️ Resolve Unmatched Record',
@@ -126,11 +138,18 @@ export default {
     saved: '✅ Added to honorees!',
     removed: 'Record removed',
     deleteConfirm: 'Remove this unmatched record?',
-    clearConfirm: 'Clear all unmatched records?'
+    clearConfirm: 'Clear all unmatched records?',
+    row: 'Row',
+    completed: 'Completed',
+    testDate: 'Test Date',
+    completerDetailsLabel: 'Completer details',
+    completerHint: 'Select the matching student from the database to save this completer record.',
+    saveCompleter: '💾 Save as Completer',
+    completerSaved: '✅ Saved as completer!'
   },
   imp: {
     added: 'Added', updated: 'Updated', skipLow: 'Skipped (EFL <3★)',
-    skipSubject: 'Skipped (subject)', unmatched: 'Unmatched', removed: 'Removed (no Gold)'
+    skipSubject: 'Skipped (subject)', unmatched: 'Unmatched', removed: 'Removed (no Gold)', newHonorees: 'New Honorees'
   },
   toast: {
     settings: 'Settings saved!', err: 'Error',
@@ -146,7 +165,9 @@ export default {
     chooseSlot: 'Please select a timeslot',
     eachSlot: 'Please select a timeslot for each student',
     slotFullNow: 'is now full. Please choose another.',
-    rsvpOk: 'RSVP submitted successfully!'
+    rsvpOk: 'RSVP submitted successfully!',   noCompleters: 'No completer records',
+    completersImportDone: 'Completers import complete',
+    completersCleared: 'Completers cleared'
   },
   common: { save: '💾 Save', cancel: 'Cancel', delete: '🗑', edit: '✏️ Edit', copied: 'Copied!' },
   inv: {

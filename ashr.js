@@ -25,6 +25,7 @@ let selectedManualStudent = null;
 let editingHonoreeKey = null;
 let unmatchedEditKey = null;
 let umSelectedStudent = null;
+let unmatchedEditIsCompleter = false;
 let unsubscribers = [];
 let html5QrCode = null;
 let cameraActive = false;
@@ -43,6 +44,7 @@ function medalFor(tier) { return tier === 'Gold' ? '🥇' : tier === 'Silver' ? 
 // false = every imported honoree (Bronze/Silver/Gold) gets an invitation.
 const INVITE_REQUIRES_GOLD = false;
 function isInvitable(h) {
+  if ((h.completions || []).length > 0) return true;
   if (!INVITE_REQUIRES_GOLD) return true;
   return (h.awards || []).some(a => (a.stars || 0) >= 3);
 }
@@ -240,20 +242,35 @@ async function loadAllCenters() {
     const snap = await get(ref(db, 'centers'));
     allCentersData = {};
     allStudentsFlat = [];
+
     if (snap.exists()) {
       snap.forEach(c => {
         const v = c.val() || {};
-        allCentersData[c.key] = {
-          name: v.name || c.key,
+        const centerId = c.key;
+
+        allCentersData[centerId] = {
+          ...v,
+          key: centerId,
+          name: v.name || centerId,
+          nameCn: v.nameCn || v.chineseName || v.centerNameCn || '',
+          centerCode: String(v.centerCode || v.code || v.externalId || v.exId || v.centreId || '').trim(),
           students: v.students || {},
           studentSiblingLinks: v.studentSiblingLinks || {}
         };
+
         Object.entries(v.students || {}).forEach(([sid, s]) => {
-          allStudentsFlat.push({ id: sid, centerId: c.key, centerName: v.name || c.key, ...s });
+          allStudentsFlat.push({
+            id: sid,
+            centerId,
+            centerName: allCentersData[centerId].name,
+            ...s
+          });
         });
       });
     }
-  } catch (err) { console.error('Failed to load centers:', err); }
+  } catch (err) {
+    console.error('Failed to load centers:', err);
+  }
 }
 
 async function loadEventList() {
@@ -456,6 +473,14 @@ const TAB_TO_CENTER = { champs: 'champs', mk: 'mei keng', ts: 'tap siac', pt: 'p
 function setupHonorees() {
   $('importExcelBtn').addEventListener('click', () => $('excelFileInput').click());
   $('excelFileInput').addEventListener('change', handleExcelImport);
+
+  // 🎓 Completers
+  $('importCompletersBtn')?.addEventListener('click', () => $('completersFileInput').click());
+  $('completersFileInput')?.addEventListener('change', handleCompletersExcelImport);
+  $('clearCompletersBtn')?.addEventListener('click', clearCompleters);
+  $('exportCompletersBtn')?.addEventListener('click', exportCompleters);
+  $('honoreeTypeFilter')?.addEventListener('change', renderHonorees);
+
   $('clearUnmatchedBtn').addEventListener('click', clearUnmatched);
   $('deleteAllHonoreesBtn').addEventListener('click', deleteAllHonorees);
   $('manualSearchInput').addEventListener('input', handleManualSearch);
@@ -472,9 +497,11 @@ function setupHonorees() {
   $('umSearch').addEventListener('focus', umRunSearch);
   $('umAddAwardBtn').addEventListener('click', () => $('umAwardsList').appendChild(awardEditRow('Math', 3, '')));
   $('umSaveBtn').addEventListener('click', umSave);
+
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.um-search-wrap')) $('umDropdown').classList.add('hidden');
   });
+
   populateCenterFilter();
 }
 
@@ -595,43 +622,395 @@ async function handleExcelImport(e) {
   e.target.value = '';
 }
 
+async function handleCompletersExcelImport(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  const progress = $('completersImportProgress');
+  const summary = $('completersImportSummary');
+
+  progress?.classList.remove('hidden');
+  summary?.classList.add('hidden');
+
+  try {
+    const data = await file.arrayBuffer();
+    const wb = XLSX.read(data, { type: 'array', cellDates: true });
+
+    let added = 0;
+    let updated = 0;
+    let newHonorees = 0;
+    let skippedSubject = 0;
+    let unmatched = 0;
+
+    const work = JSON.parse(JSON.stringify(honorees || {}));
+    const touched = new Set();
+    const unmatchedUpdates = {};
+    const now = new Date().toISOString();
+
+    const totalSheets = wb.SheetNames.length;
+    let sheetIdx = 0;
+
+    for (const sheetName of wb.SheetNames) {
+      sheetIdx++;
+
+      const statusEl = $('completersImportStatusText');
+      const fillEl = $('completersImportProgressFill');
+
+      if (statusEl) statusEl.textContent = `Processing sheet: ${sheetName} (${sheetIdx}/${totalSheets})`;
+      if (fillEl) fillEl.style.width = `${(sheetIdx / totalSheets) * 100}%`;
+
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' });
+
+      for (let rIdx = 0; rIdx < rows.length; rIdx++) {
+        const row = rows[rIdx];
+
+        const rowNo = String(pickRowValue(row, '#', 'No', 'Row') || (rIdx + 2)).trim();
+        const nameEn = String(pickRowValue(row, 'English Name', 'EnglishName', 'Student Name (Alphabet)', 'Student Name（Alphabet）') || '').trim();
+        const nameCn = String(pickRowValue(row, 'Chinese Name', 'ChineseName', 'Student Name') || '').trim();
+        const studentIdExcel = String(pickRowValue(row, 'Student ID', 'StudentID', 'Student Number') || '').trim();
+        const subjectOriginal = String(pickRowValue(row, 'Subject') || '').trim();
+
+        if (!studentIdExcel || !subjectOriginal) continue;
+
+        const rule = subjectRule(subjectOriginal);
+        if (!rule) {
+          skippedSubject++;
+          continue;
+        }
+
+        const canon = rule.canon;
+
+        const dateOfCompletion = parseExcelDate(pickRowValue(row, 'Date of Completion', 'DateOfCompletion', 'Completion Date'));
+        const completerTestDate = parseExcelDate(pickRowValue(row, 'Completer Test Date', 'CompleterTestDate', 'Test Date'));
+
+        const centreIdExcel = String(pickRowValue(row, 'CentreID', 'CenterID', 'Centre ID', 'Center ID') || '').trim();
+        const centreNameExcel = String(pickRowValue(row, 'Centre', 'Center', 'Centre Name', 'Center Name') || '').trim();
+        const chineseCentreNameExcel = String(pickRowValue(row, 'Chinese Center Name', 'ChineseCentreName', 'Chinese Center') || '').trim();
+
+        const centerId = resolveCompleterCenterId({
+          centreIdExcel,
+          centreNameExcel,
+          chineseCentreNameExcel
+        });
+
+        const student = centerId
+          ? allStudentsFlat.find(s =>
+              s.centerId === centerId &&
+              (
+                String(s.studentNumber || '').trim() === studentIdExcel ||
+                String(s.id || '').trim() === studentIdExcel
+              )
+            )
+          : null;
+
+        const unmatchedKey = safeKey('completer', studentIdExcel, canon);
+
+        if (!student) {
+          unmatched++;
+
+          unmatchedUpdates[`ashrEvents/${currentEventId}/unmatched/${unmatchedKey}`] = {
+            sourceType: 'completer',
+            rowNumber: rowNo,
+            sheetName,
+            studentId: studentIdExcel,
+            nameEn,
+            nameCn,
+            subjectOriginal,
+            subjectCanon: canon,
+            dateOfCompletion,
+            completerTestDate,
+            centreIdExcel,
+            centreNameExcel,
+            chineseCentreNameExcel,
+            centerGuess: centerId || null,
+            createdAt: now
+          };
+
+          continue;
+        }
+
+        // If this row previously failed and now succeeds, remove the old unmatched entry.
+        if (unmatchedDb[unmatchedKey]) {
+          unmatchedUpdates[`ashrEvents/${currentEventId}/unmatched/${unmatchedKey}`] = null;
+        }
+
+        const key = `${centerId}_${student.studentNumber || student.id}`;
+        touched.add(key);
+
+        let h = work[key];
+
+        if (!h) {
+          h = {
+            studentId: student.id,
+            centerId,
+            centerName: allCentersData[centerId]?.name || centreNameExcel,
+            nameCn: student.nameCn || nameCn,
+            nameEn: student.namePinyin || nameEn,
+            studentNumber: student.studentNumber || studentIdExcel,
+            barcodeValue: `ASHR${currentEventId}_${key}`,
+            awards: [],
+            completions: [],
+            createdAt: now
+          };
+
+          work[key] = h;
+          newHonorees++;
+        }
+
+        h.completions = h.completions || [];
+
+        const completion = {
+          subject: canon,
+          subjectCanon: canon,
+          subjectOriginal,
+          dateOfCompletion,
+          completerTestDate,
+          centreIdExcel,
+          centreNameExcel,
+          chineseCentreNameExcel,
+          sourceRow: rowNo,
+          importedAt: now
+        };
+
+        const existingCompletion = h.completions.find(c =>
+          (c.subjectCanon || c.subject) === canon
+        );
+
+        if (existingCompletion) {
+          Object.assign(existingCompletion, completion);
+          updated++;
+        } else {
+          h.completions.push(completion);
+          added++;
+        }
+
+        // Backfill names if missing
+        if (!h.nameCn && nameCn) h.nameCn = nameCn;
+        if (!h.nameEn && nameEn) h.nameEn = nameEn;
+
+        h.updatedAt = now;
+      }
+    }
+
+    const updates = {};
+
+    touched.forEach(k => {
+      updates[`ashrEvents/${currentEventId}/honorees/${k}`] = work[k];
+    });
+
+    Object.assign(updates, unmatchedUpdates);
+
+    if (Object.keys(updates).length) {
+      await update(ref(db), updates);
+    }
+
+    progress?.classList.add('hidden');
+
+    if (summary) {
+      summary.classList.remove('hidden');
+      summary.innerHTML = `
+        <div class="stat-grid">
+          <div class="stat-card">
+            <div class="stat-value">${added}</div>
+            <div class="stat-label">${t('imp.added', 'Added')}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${updated}</div>
+            <div class="stat-label">${t('imp.updated', 'Updated')}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${newHonorees}</div>
+            <div class="stat-label">${t('imp.newHonorees', 'New Honorees')}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${skippedSubject}</div>
+            <div class="stat-label">${t('imp.skipSubject', 'Skipped (subject)')}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${unmatched}</div>
+            <div class="stat-label">${t('imp.unmatched', 'Unmatched')}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    showToast(`${t('toast.completersImportDone', 'Completers import complete')}: +${added}, ↻${updated}`, 'success');
+  } catch (err) {
+    console.error('Completers import error:', err);
+    showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error');
+    $('completersImportProgress')?.classList.add('hidden');
+  }
+
+  e.target.value = '';
+}
+
+async function clearCompleters() {
+  const honoreeEntries = Object.entries(honorees || {}).filter(([_, h]) => (h.completions || []).length > 0);
+  const unmatchedEntries = Object.entries(unmatchedDb || {}).filter(([_, r]) => r.sourceType === 'completer');
+
+  const total = honoreeEntries.length + unmatchedEntries.length;
+  if (!total) return showToast(t('toast.noCompleters', 'No completer records'), 'error');
+
+  if (!confirm(
+    `Clear ${honoreeEntries.length} completer honoree record(s) and ${unmatchedEntries.length} unmatched completer row(s)?\n\n` +
+    `Honorees with ASHR awards will remain; completer-only honorees will be removed.`
+  )) return;
+
+  const updates = {};
+
+  honoreeEntries.forEach(([key, h]) => {
+    if ((h.awards || []).length > 0) {
+      updates[`ashrEvents/${currentEventId}/honorees/${key}/completions`] = null;
+    } else {
+      updates[`ashrEvents/${currentEventId}/honorees/${key}`] = null;
+    }
+  });
+
+  unmatchedEntries.forEach(([key]) => {
+    updates[`ashrEvents/${currentEventId}/unmatched/${key}`] = null;
+  });
+
+  try {
+    await update(ref(db), updates);
+    showToast(t('toast.completersCleared', 'Completers cleared'), 'success');
+  } catch (err) {
+    showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error');
+  }
+}
+
+function exportCompleters() {
+  const rows = [];
+
+  Object.values(honorees || {}).forEach(h => {
+    (h.completions || []).forEach(c => {
+      rows.push({
+        'English Name': h.nameEn || '',
+        'Chinese Name': h.nameCn || '',
+        'Student ID': h.studentNumber || '',
+        'Subject': c.subjectOriginal || c.subject || c.subjectCanon || '',
+        'Date of Completion': c.dateOfCompletion || '',
+        'CentreID': c.centreIdExcel || '',
+        'Centre': c.centreNameExcel || h.centerName || '',
+        'Chinese Center Name': c.chineseCentreNameExcel || '',
+        'Completer Test Date': c.completerTestDate || ''
+      });
+    });
+  });
+
+  if (!rows.length) {
+    return showToast(t('toast.noCompleters', 'No completer records'), 'error');
+  }
+
+  rows.sort((a, b) =>
+    String(a['Centre'] || '').localeCompare(String(b['Centre'] || '')) ||
+    String(a['Chinese Name'] || a['English Name'] || '').localeCompare(
+      String(b['Chinese Name'] || b['English Name'] || '')
+    )
+  );
+
+  downloadExcel(rows, `ASHR_Completers_${currentEventId}.xls`);
+  showToast(t('toast.exportOk', 'Exported!'), 'success');
+}
+
 function renderUnmatched() {
   const list = $('unmatchedList');
   const rows = Object.entries(unmatchedDb || {});
-  if (!rows.length) { list.innerHTML = '<p class="hint">—</p>'; return; }
-  rows.sort((a, b) =>
-    String(a[1].sheetName || '').localeCompare(String(b[1].sheetName || '')) ||
-    String(a[1].studentNumber || '').localeCompare(String(b[1].studentNumber || ''))
-  );
-  list.innerHTML = `<div class="table-wrap"><table class="data-table">
-    <thead><tr>
-      <th>${t('th.sheet', 'Sheet')}</th><th>${t('th.sid', 'Student ID')}</th>
-      <th>${t('th.nameEn', 'Name (EN)')}</th><th>${t('th.nameCn', 'Name (CN)')}</th>
-      <th>${t('th.subject', 'Subject')}</th><th>${t('th.stars', 'Stars')}</th>
-      <th>${t('th.actions', 'Actions')}</th>
-    </tr></thead>
-    <tbody>${rows.map(([key, r]) => `<tr>
-      <td>${escapeHtml(r.sheetName || '')}</td>
-      <td>${escapeHtml(r.studentNumber || '')}</td>
-      <td>${escapeHtml(r.nameAlphabet || '')}</td>
-      <td>${escapeHtml(r.nameCn || '')}</td>
-      <td>${escapeHtml(r.subject || '')}</td>
-      <td>${escapeHtml(r.stars || '')}</td>
-      <td><div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
-        <button class="btn-small primary" data-um-edit="${escapeHtml(key)}">${t('um.edit', '✏️ Edit')}</button>
-        <button class="btn-small danger" data-um-del="${escapeHtml(key)}">${t('common.delete', '🗑')}</button>
-      </div></td>
-    </tr>`).join('')}</tbody></table></div>`;
+
+  if (!rows.length) {
+    list.innerHTML = '<p class="hint">—</p>';
+    return;
+  }
+
+  rows.sort((a, b) => {
+    const sa = a[1].sourceType === 'completer' ? 1 : 0;
+    const sb = b[1].sourceType === 'completer' ? 1 : 0;
+    if (sa !== sb) return sa - sb;
+
+    return String(a[1].sheetName || a[1].centreNameExcel || '').localeCompare(String(b[1].sheetName || b[1].centreNameExcel || '')) ||
+           String(a[1].studentNumber || a[1].studentId || '').localeCompare(String(b[1].studentNumber || b[1].studentId || ''));
+  });
+
+  list.innerHTML = `
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>${t('th.source', 'Source')}</th>
+            <th>${t('th.ref', 'Ref')}</th>
+            <th>${t('th.sid', 'Student ID')}</th>
+            <th>${t('th.nameEn', 'Name (EN)')}</th>
+            <th>${t('th.nameCn', 'Name (CN)')}</th>
+            <th>${t('th.subject', 'Subject')}</th>
+            <th>${t('th.detail', 'Detail')}</th>
+            <th>${t('th.actions', 'Actions')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(([key, r]) => {
+            const isComp = r.sourceType === 'completer';
+            const source = isComp
+              ? `🎓 ${escapeHtml(t('hon.typeCompleter', 'Completer'))}`
+              : `🏅 ${escapeHtml(t('hon.typeAward', 'ASHR Award'))}`;
+
+            const refText = isComp
+              ? `${escapeHtml(t('um.row', 'Row'))} ${escapeHtml(r.rowNumber || '')}`
+              : escapeHtml(r.sheetName || '');
+
+            const studentId = escapeHtml(r.studentId || r.studentNumber || '');
+            const nameEn = escapeHtml(r.nameEn || r.nameAlphabet || '');
+            const nameCn = escapeHtml(r.nameCn || '');
+            const subject = escapeHtml(r.subjectOriginal || r.subject || '');
+
+            const centerDisplay =
+              r.centreNameExcel ||
+              allCentersData[r.centerGuess]?.name ||
+              r.centerGuess ||
+              '—';
+
+            const detail = isComp
+              ? `
+                  ${escapeHtml(t('um.completed', 'Completed'))}: ${escapeHtml(r.dateOfCompletion || '—')}<br>
+                  ${escapeHtml(t('um.testDate', 'Test Date'))}: ${escapeHtml(r.completerTestDate || '—')}<br>
+                  ${escapeHtml(t('th.center', 'Center'))}: ${escapeHtml(centerDisplay)}
+                `
+              : escapeHtml(r.stars || '');
+
+            return `
+              <tr>
+                <td>${source}</td>
+                <td>${refText}</td>
+                <td>${studentId}</td>
+                <td>${nameEn}</td>
+                <td>${nameCn}</td>
+                <td>${subject}</td>
+                <td>${detail}</td>
+                <td>
+                  <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
+                    <button class="btn-small primary" data-um-edit="${escapeHtml(key)}">${t('um.edit', '✏️ Edit')}</button>
+                    <button class="btn-small danger" data-um-del="${escapeHtml(key)}">${t('common.delete', '🗑')}</button>
+                  </div>
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
   list.querySelectorAll('[data-um-edit]').forEach(btn => {
     btn.addEventListener('click', () => openUnmatchedEdit(btn.dataset.umEdit));
   });
+
   list.querySelectorAll('[data-um-del]').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!confirm(t('um.deleteConfirm', 'Remove this unmatched record?'))) return;
       try {
         await remove(ref(db, `ashrEvents/${currentEventId}/unmatched/${btn.dataset.umDel}`));
         showToast(t('um.removed', 'Record removed'), 'success');
-      } catch (err) { showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error'); }
+      } catch (err) {
+        showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error');
+      }
     });
   });
 }
@@ -729,35 +1108,83 @@ async function handleManualAdd() {
 function renderHonorees() {
   const search = ($('honoreeSearch').value || '').toLowerCase();
   const centerFilter = $('honoreeCenterFilter').value;
+  const typeFilter = $('honoreeTypeFilter')?.value || 'all';
   const tbody = $('honoreeTableBody');
+
   tbody.innerHTML = '';
+
   const entries = Object.entries(honorees).filter(([key, h]) => {
     if (centerFilter && h.centerId !== centerFilter) return false;
+
+    const type = getHonoreeType(h);
+    if (typeFilter !== 'all' && type !== typeFilter) return false;
+
     if (search) {
-      const hay = [h.nameCn, h.nameEn, h.studentNumber].filter(Boolean).join(' ').toLowerCase();
+      const compSubjects = (h.completions || [])
+        .map(c => `${c.subject || c.subjectCanon || ''} ${c.subjectOriginal || ''}`)
+        .join(' ');
+
+      const hay = [h.nameCn, h.nameEn, h.studentNumber, compSubjects]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
       if (!hay.includes(search)) return false;
     }
+
     return true;
   });
+
   $('honoreeCount').textContent = entries.length;
+
   entries.forEach(([key, h]) => {
+    const type = getHonoreeType(h);
+
+    const typeLabel =
+      type === 'both'
+        ? t('hon.typeBoth', 'Both')
+        : type === 'completer'
+          ? t('hon.typeCompleter', 'Completer')
+          : t('hon.typeAward', 'ASHR Award');
+
+    const typeClass =
+      type === 'both'
+        ? 'tb-both'
+        : type === 'completer'
+          ? 'tb-completer'
+          : 'tb-award';
+
     const awardsHtml = (h.awards || []).map(a =>
       `<span class="award-badge award-${(a.tier || 'bronze').toLowerCase()}">${medalFor(a.tier)} ${escapeHtml(a.subject)} ${'★'.repeat(a.stars || 0)}</span>`
     ).join('');
+
+    const completionsHtml = (h.completions || []).map(c =>
+      `<span class="award-badge award-completer">🎓 ${escapeHtml(c.subject || c.subjectCanon || '')} ${escapeHtml(t('hon.completerWord', 'Completer'))}</span>`
+    ).join('');
+
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td><strong>${escapeHtml(h.nameCn || h.nameEn || '')}</strong><br><small>${escapeHtml(h.nameEn || '')}</small></td>
+      <td>
+        <strong>${escapeHtml(h.nameCn || h.nameEn || '')}</strong><br>
+        <small>${escapeHtml(h.nameEn || '')}</small><br>
+        <span class="type-badge ${typeClass}">${escapeHtml(typeLabel)}</span>
+      </td>
       <td>${escapeHtml(h.centerName || '')}</td>
-      <td>${awardsHtml}</td>
-      <td><div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
-        <button class="btn-small primary" data-edit-honoree="${escapeHtml(key)}">${t('hon.edit', '✏️ Edit')}</button>
-        <button class="btn-small danger" data-del-honoree="${escapeHtml(key)}">${t('common.delete', '🗑')}</button>
-      </div></td>`;
+      <td>${awardsHtml}${completionsHtml}</td>
+      <td>
+        <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
+          <button class="btn-small primary" data-edit-honoree="${escapeHtml(key)}">${t('hon.edit', '✏️ Edit')}</button>
+          <button class="btn-small danger" data-del-honoree="${escapeHtml(key)}">${t('common.delete', '🗑')}</button>
+        </div>
+      </td>
+    `;
     tbody.appendChild(tr);
   });
+
   tbody.querySelectorAll('[data-edit-honoree]').forEach(btn => {
     btn.addEventListener('click', () => openEditHonoree(btn.dataset.editHonoree));
   });
+
   tbody.querySelectorAll('[data-del-honoree]').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (confirm('Remove this honoree?')) {
@@ -836,17 +1263,54 @@ function populateUmCenters(selectedId) {
 function openUnmatchedEdit(key) {
   const r = unmatchedDb[key];
   if (!r) return;
+
   unmatchedEditKey = key;
+  unmatchedEditIsCompleter = r.sourceType === 'completer';
+
   umSelectedStudent = null;
   $('umSelectedInfo').classList.add('hidden');
   $('umSearch').value = '';
   $('umDropdown').classList.add('hidden');
+
   populateUmCenters(r.centerGuess || Object.keys(allCentersData)[0] || '');
+
   const list = $('umAwardsList');
+  const label = $('umAwardsLabel');
+  const addBtn = $('umAddAwardBtn');
+  const saveBtn = $('umSaveBtn');
+
   list.innerHTML = '';
-  const rule = subjectRule(r.subject);
-  const starCount = Math.min(5, Math.max(1, (String(r.stars || '').match(/\*/g) || []).length || 3));
-  list.appendChild(awardEditRow(rule ? rule.canon : 'Math', starCount, r.reportingMonth || ''));
+
+  if (unmatchedEditIsCompleter) {
+    if (label) label.textContent = t('um.completerDetailsLabel', 'Completer details');
+    if (addBtn) addBtn.classList.add('hidden');
+    if (saveBtn) saveBtn.textContent = t('um.saveCompleter', '💾 Save as Completer');
+
+    const centerDisplay =
+      r.centreNameExcel ||
+      allCentersData[r.centerGuess]?.name ||
+      r.centerGuess ||
+      '—';
+
+    list.innerHTML = `
+      <div class="completer-info">
+        <p><strong>${escapeHtml(r.nameCn || r.nameEn || '')}</strong> · #${escapeHtml(r.studentId || '')}</p>
+        <p>🎓 ${escapeHtml(r.subjectOriginal || r.subjectCanon || '')} ${escapeHtml(t('hon.typeCompleter', 'Completer'))}</p>
+        <p>${escapeHtml(t('um.completed', 'Completed'))}: ${escapeHtml(r.dateOfCompletion || '—')} · ${escapeHtml(t('um.testDate', 'Test Date'))}: ${escapeHtml(r.completerTestDate || '—')}</p>
+        <p>${escapeHtml(t('th.center', 'Center'))}: ${escapeHtml(centerDisplay)}</p>
+        <p class="hint">${escapeHtml(t('um.completerHint', 'Select the matching student from the database to save this completer record.'))}</p>
+      </div>
+    `;
+  } else {
+    if (label) label.textContent = t('um.awardsLabel', 'Awards (subject & medals)');
+    if (addBtn) addBtn.classList.remove('hidden');
+    if (saveBtn) saveBtn.textContent = t('um.save', '💾 Save as Honoree');
+
+    const rule = subjectRule(r.subject);
+    const starCount = Math.min(5, Math.max(1, (String(r.stars || '').match(/★/g) || []).length || 3));
+    list.appendChild(awardEditRow(rule ? rule.canon : 'Math', starCount, r.reportingMonth || ''));
+  }
+
   $('unmatchedEditModal').classList.remove('hidden');
   setTimeout(() => $('umSearch').focus(), 100);
 }
@@ -888,29 +1352,119 @@ function umSelectStudent(s) {
 
 async function umSave() {
   if (!umSelectedStudent) return showToast(t('um.selectStudent', '⚠️ Please select a student from the database search.'), 'error');
+
+  const r = unmatchedDb[unmatchedEditKey];
+  if (!r) return;
+
+  // ============================================
+  // 🎓 COMPLETER BRANCH
+  // ============================================
+  if (unmatchedEditIsCompleter) {
+    const s = umSelectedStudent;
+    const centerId = $('umCenter').value || s.centerId;
+    const key = `${centerId}_${s.studentNumber || s.id}`;
+
+    const rule = subjectRule(r.subjectOriginal || r.subject);
+    const canon = rule?.canon || r.subjectCanon || 'Math';
+    const now = new Date().toISOString();
+
+    const completion = {
+      subject: canon,
+      subjectCanon: canon,
+      subjectOriginal: r.subjectOriginal || r.subject || canon,
+      dateOfCompletion: r.dateOfCompletion || '',
+      completerTestDate: r.completerTestDate || '',
+      centreIdExcel: r.centreIdExcel || '',
+      centreNameExcel: r.centreNameExcel || '',
+      chineseCentreNameExcel: r.chineseCentreNameExcel || '',
+      sourceRow: r.rowNumber || '',
+      importedAt: now,
+      resolvedManually: true
+    };
+
+    try {
+      const existing = honorees[key];
+
+      if (existing) {
+        const completions = [...(existing.completions || [])];
+        const ex = completions.find(c => (c.subjectCanon || c.subject) === canon);
+
+        if (ex) Object.assign(ex, completion);
+        else completions.push(completion);
+
+        await update(ref(db, `ashrEvents/${currentEventId}/honorees/${key}`), {
+          completions,
+          centerId,
+          centerName: allCentersData[centerId]?.name || existing.centerName || '',
+          updatedAt: now
+        });
+      } else {
+        await set(ref(db, `ashrEvents/${currentEventId}/honorees/${key}`), {
+          studentId: s.id,
+          centerId,
+          centerName: allCentersData[centerId]?.name || '',
+          nameCn: s.nameCn || r.nameCn || '',
+          nameEn: s.namePinyin || r.nameEn || '',
+          studentNumber: s.studentNumber || r.studentId || '',
+          barcodeValue: `ASHR${currentEventId}_${key}`,
+          awards: [],
+          completions: [completion],
+          createdAt: now
+        });
+      }
+
+      await remove(ref(db, `ashrEvents/${currentEventId}/unmatched/${unmatchedEditKey}`));
+      $('unmatchedEditModal').classList.add('hidden');
+      showToast(t('um.completerSaved', '✅ Saved as completer!'), 'success');
+    } catch (err) {
+      showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error');
+    }
+
+    return;
+  }
+
+  // ============================================
+  // 🏅 ASHR AWARD BRANCH
+  // ============================================
   const rows = [...$('umAwardsList').querySelectorAll('.award-edit-row')];
   const awards = [];
+
   for (const row of rows) {
     const subject = row.querySelector('.ae-subject').value;
     const stars = parseInt(row.querySelector('.ae-stars').value, 10);
     if (subject === 'EFL' && stars < 3) return showToast(t('hon.eflMin', 'EFL requires 3★ or more'), 'error');
+
     const rm = row.dataset.rm || '';
     const dup = awards.find(a => a.subject === subject && (a.reportingMonth || '') === rm);
-    if (dup) { dup.stars = Math.max(dup.stars, stars); dup.tier = tierFor(dup.stars); }
-    else awards.push({ subject, stars, tier: tierFor(stars), reportingMonth: rm });
+    if (dup) {
+      dup.stars = Math.max(dup.stars, stars);
+      dup.tier = tierFor(dup.stars);
+    } else {
+      awards.push({ subject, stars, tier: tierFor(stars), reportingMonth: rm });
+    }
   }
+
   if (!awards.length) return showToast(t('hon.needAward', 'Add at least one award'), 'error');
+
   const s = umSelectedStudent;
   const centerId = $('umCenter').value || s.centerId;
   const key = `${centerId}_${s.studentNumber || s.id}`;
+
   try {
     const existing = honorees[key];
+
     if (existing) {
       const merged = [...(existing.awards || [])];
       awards.forEach(a => {
         const ex = merged.find(m => m.subject === a.subject && (m.reportingMonth || '') === (a.reportingMonth || ''));
-        if (ex) { ex.stars = a.stars; ex.tier = a.tier; } else merged.push(a);
+        if (ex) {
+          ex.stars = a.stars;
+          ex.tier = a.tier;
+        } else {
+          merged.push(a);
+        }
       });
+
       await update(ref(db, `ashrEvents/${currentEventId}/honorees/${key}`), {
         awards: merged,
         centerId,
@@ -918,17 +1472,24 @@ async function umSave() {
       });
     } else {
       await set(ref(db, `ashrEvents/${currentEventId}/honorees/${key}`), {
-        studentId: s.id, centerId, centerName: allCentersData[centerId]?.name || '',
-        nameCn: s.nameCn || '', nameEn: s.namePinyin || '', studentNumber: s.studentNumber || '',
+        studentId: s.id,
+        centerId,
+        centerName: allCentersData[centerId]?.name || '',
+        nameCn: s.nameCn || '',
+        nameEn: s.namePinyin || '',
+        studentNumber: s.studentNumber || '',
         barcodeValue: `ASHR${currentEventId}_${key}`,
         awards,
         createdAt: new Date().toISOString()
       });
     }
+
     await remove(ref(db, `ashrEvents/${currentEventId}/unmatched/${unmatchedEditKey}`));
     $('unmatchedEditModal').classList.add('hidden');
     showToast(t('um.saved', '✅ Added to honorees!'), 'success');
-  } catch (err) { showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error'); }
+  } catch (err) {
+    showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error');
+  }
 }
 
 // ============================================
@@ -1033,6 +1594,167 @@ function renderLinks() {
   });
 }
 
+
+function pickRowValue(row, ...keys) {
+  const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff#]+/g, '');
+  const map = {};
+  Object.keys(row || {}).forEach(k => {
+    map[norm(k)] = row[k];
+  });
+
+  for (const k of keys) {
+    const v = map[norm(k)];
+    if (v !== undefined && v !== null && String(v).trim() !== '') return v;
+  }
+
+  return '';
+}
+
+function normalizeCenterText(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/kumon|公文式|education\s*cent(?:re|er)|教育中心|中心|centre|center|[\s\-_./()]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function scoreCenterTerms(text, terms) {
+  if (!text) return 0;
+  let score = 0;
+  for (const term of terms) {
+    const nt = normalizeCenterText(term);
+    if (nt && text.includes(nt)) score += nt.length + 1;
+  }
+  return score;
+}
+
+const COMPLETER_CENTER_ALIASES = [
+  {
+    id: 'champs',
+    terms: ['champs', '卓思'],
+    abbrev: ['champs']
+  },
+  {
+    id: 'mei keng',
+    terms: ['mei keng', 'meikeng', '美景', 'taipa mei keng', '氹仔美景'],
+    abbrev: ['mk', 'mei-keng', 'meikeng']
+  },
+  {
+    id: 'tap siac',
+    terms: ['tap siac', 'tapsiac', '塔石'],
+    abbrev: ['ts', 'tap-siac', 'tapsiac']
+  },
+  {
+    id: 'pac tat',
+    terms: ['pac tat', 'paktat', '北立', 'taipa pac tat', '氹仔北立'],
+    abbrev: ['pt', 'pac-tat', 'paktat']
+  }
+];
+
+function resolveCompleterCenterId({ centreIdExcel, centreNameExcel, chineseCentreNameExcel }) {
+  const code = String(centreIdExcel || '').trim().toUpperCase();
+
+  // 1) Exact center key match
+  if (code && allCentersData[code]) return code;
+
+  // 2) Exact centerCode / externalId match
+  if (code) {
+    const byCode = Object.entries(allCentersData).find(([cid, c]) =>
+      String(c.centerCode || '').trim().toUpperCase() === code ||
+      String(cid).trim().toUpperCase() === code
+    );
+    if (byCode) return byCode[0];
+  }
+
+  const hay = normalizeCenterText(`${centreNameExcel || ''} ${chineseCentreNameExcel || ''}`);
+
+  let bestId = null;
+  let bestScore = 0;
+
+  for (const [cid, c] of Object.entries(allCentersData)) {
+    const target = normalizeCenterText(`${cid} ${c.name || ''} ${c.nameCn || ''} ${c.centerCode || ''}`);
+    let score = 0;
+
+    for (const alias of COMPLETER_CENTER_ALIASES) {
+      const excelScore =
+        scoreCenterTerms(hay, alias.terms) +
+        scoreCenterTerms(hay, alias.abbrev);
+
+      const centerScore =
+        scoreCenterTerms(target, alias.terms) +
+        scoreCenterTerms(target, alias.abbrev);
+
+      if (excelScore > 0 && centerScore > 0) {
+        score += excelScore + centerScore;
+      }
+    }
+
+    if (hay && target) {
+      if (hay === target) score += 100;
+      else if (hay.includes(target) || target.includes(hay)) {
+        score += Math.min(hay.length, target.length);
+      }
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestId = cid;
+    }
+  }
+
+  return bestScore >= 5 ? bestId : null;
+}
+
+function parseExcelDate(value) {
+  if (value === undefined || value === null || value === '') return '';
+
+  if (value instanceof Date) {
+    return isNaN(value.valueOf()) ? '' : value.toISOString().slice(0, 10);
+  }
+
+  if (typeof value === 'number') {
+    const ms = Math.round((value - 25569) * 86400000);
+    const d = new Date(ms);
+    return isNaN(d.valueOf()) ? '' : d.toISOString().slice(0, 10);
+  }
+
+  const s = String(value).trim();
+
+  // Examples: 8-Oct-25, 22-July-2026, 25-August-2026
+  const m = s.match(/^(\d{1,2})[-\s/.]([A-Za-z]{3,})[-\s/.](\d{2}|\d{4})$/);
+  if (m) {
+    const day = Number(m[1]);
+    const monthKey = m[2].slice(0, 3).toLowerCase();
+    const yearRaw = m[3];
+
+    const months = {
+      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+    };
+
+    const month = months[monthKey];
+    if (month !== undefined) {
+      let year = Number(yearRaw);
+      if (yearRaw.length === 2) year = year < 50 ? 2000 + year : 1900 + year;
+
+      const d = new Date(Date.UTC(year, month, day));
+      return isNaN(d.valueOf()) ? s : d.toISOString().slice(0, 10);
+    }
+  }
+
+  const d = new Date(s);
+  return isNaN(d.valueOf()) ? s : d.toISOString().slice(0, 10);
+}
+
+function getHonoreeType(h) {
+  const hasAward = (h.awards || []).length > 0;
+  const hasComp = (h.completions || []).length > 0;
+
+  if (hasAward && hasComp) return 'both';
+  if (hasComp) return 'completer';
+  return 'award';
+}
+
 function randomToken(len = 24) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
   const a = new Uint8Array(len);
@@ -1101,18 +1823,26 @@ async function openLinkCard(fam) {
   // Students + awards
   const studentsDiv = $('icStudents');
   studentsDiv.innerHTML = '';
-  fam.members.forEach(m => {
-    const div = document.createElement('div');
-    div.className = 'inv-student';
-    const awardsHtml = (m.awards || []).map(a =>
-      `<span class="award-badge award-${(a.tier || 'bronze').toLowerCase()}">${medalFor(a.tier)} ${escapeHtml(a.subject)} ${'★'.repeat(a.stars || 0)}</span>`
-    ).join('');
-    div.innerHTML = `
-      <div class="inv-student-name">${escapeHtml(m.nameCn || m.nameEn || '')}</div>
-      <div class="inv-student-center">${escapeHtml(m.centerName || '')} · #${escapeHtml(m.studentNumber || '')}</div>
-      <div class="inv-student-awards">${awardsHtml}</div>`;
-    studentsDiv.appendChild(div);
-  });
+fam.members.forEach(m => {
+  const div = document.createElement('div');
+  div.className = 'inv-student';
+
+  const awardsHtml = (m.awards || []).map(a =>
+    `<span class="award-badge award-${(a.tier || 'bronze').toLowerCase()}">${medalFor(a.tier)} ${escapeHtml(a.subject)} ${'★'.repeat(a.stars || 0)}</span>`
+  ).join('');
+
+  const completionsHtml = (m.completions || []).map(c =>
+    `<span class="award-badge award-completer">🎓 ${escapeHtml(c.subject || c.subjectCanon || '')} ${escapeHtml(t('hon.completerWord', 'Completer'))}</span>`
+  ).join('');
+
+  div.innerHTML = `
+    <div class="inv-student-name">${escapeHtml(m.nameCn || m.nameEn || '')}</div>
+    <div class="inv-student-center">${escapeHtml(m.centerName || '')} · #${escapeHtml(m.studentNumber || '')}</div>
+    <div class="inv-student-awards">${awardsHtml}${completionsHtml}</div>
+  `;
+
+  studentsDiv.appendChild(div);
+});
 
   // ✅ Barcodes as PNG <img> (survives export & printing)
   const barcodesDiv = $('icBarcodes');
@@ -1176,7 +1906,8 @@ async function downloadCardAsPng(fam) {
     // 2) layout metrics
     const W = 500, pad = 24, secPad = 16;
     const headerH = 104, divH = 6, footerH = 58;
-    const studentH = (m) => 74 + ((m.awards || []).length ? 30 : 0);
+    const badgeCount = (m) => (m.awards || []).length + (m.completions || []).length;
+    const studentH = (m) => 74 + (badgeCount(m) ? 30 : 0);
     const studentsH = 22 + fam.members.reduce((s, m) => s + studentH(m) + 12, 0);
     const lineH = 20;                                    // height per wrapped line
     const mctx = document.createElement('canvas').getContext('2d');
@@ -1238,19 +1969,54 @@ async function downloadCardAsPng(fam) {
       ctx.fillText(m.nameCn || m.nameEn || '', pad + 14, y + 27);
       ctx.fillStyle = '#666'; ctx.font = `12px ${CARD_FONT}`;
       ctx.fillText(`${m.centerName || ''} · #${m.studentNumber || ''}`, pad + 14, y + 47);
-      if ((m.awards || []).length) {
+      const badges = [
+        ...(m.awards || []).map(a => ({
+          label: `${medalFor(a.tier)} ${a.subject} ${'★'.repeat(a.stars || 0)}`,
+          kind: (a.tier || 'bronze').toLowerCase()
+        })),
+        ...(m.completions || []).map(c => ({
+          label: `🎓 ${c.subject || c.subjectCanon || ''} Completer`,
+          kind: 'completer'
+        }))
+      ];
+
+      if (badges.length) {
         let x = pad + 14;
         ctx.font = `700 11px ${CARD_FONT}`;
-        (m.awards || []).forEach(a => {
-          const label = `${medalFor(a.tier)} ${a.subject} ${'★'.repeat(a.stars || 0)}`;
-          const w = ctx.measureText(label).width + 18;
-          const tier = (a.tier || 'bronze').toLowerCase();
-          ctx.fillStyle = tier === 'gold' ? '#fef3c7' : tier === 'silver' ? '#f1f5f9' : '#ffedd5';
-          rr(ctx, x, y + 56, w, 22, 11); ctx.fill();
-          ctx.strokeStyle = tier === 'gold' ? '#fde047' : tier === 'silver' ? '#cbd5e1' : '#fdba74';
-          ctx.lineWidth = 1; rr(ctx, x, y + 56, w, 22, 11); ctx.stroke();
-          ctx.fillStyle = tier === 'gold' ? '#92400e' : tier === 'silver' ? '#475569' : '#c2410c';
-          ctx.fillText(label, x + 9, y + 71);
+
+        badges.forEach(b => {
+          const w = ctx.measureText(b.label).width + 18;
+
+          let bg = '#ffedd5';
+          let border = '#fdba74';
+          let text = '#c2410c';
+
+          if (b.kind === 'gold') {
+            bg = '#fef3c7';
+            border = '#fde047';
+            text = '#92400e';
+          } else if (b.kind === 'silver') {
+            bg = '#f1f5f9';
+            border = '#cbd5e1';
+            text = '#475569';
+          } else if (b.kind === 'completer') {
+            bg = '#ecfdf5';
+            border = '#34d399';
+            text = '#065f46';
+          }
+
+          ctx.fillStyle = bg;
+          rr(ctx, x, y + 56, w, 22, 11);
+          ctx.fill();
+
+          ctx.strokeStyle = border;
+          ctx.lineWidth = 1;
+          rr(ctx, x, y + 56, w, 22, 11);
+          ctx.stroke();
+
+          ctx.fillStyle = text;
+          ctx.fillText(b.label, x + 9, y + 71);
+
           x += w + 6;
         });
       }
@@ -1557,21 +2323,30 @@ function renderSlotCapacity() {
 
 function exportRSVPs() {
   const rows = [];
+
   Object.values(families).forEach(fam => {
     const rsvp = fam.rsvp || {};
+
     (fam.memberHonoreeIds || []).forEach(mid => {
       const h = honorees[mid];
       if (!h) return;
+
       rows.push({
-        'Student': h.nameCn || h.nameEn, 'Pinyin': h.nameEn || '', 'Center': h.centerName || '',
+        'Student': h.nameCn || h.nameEn,
+        'Pinyin': h.nameEn || '',
+        'Center': h.centerName || '',
         'Awards': (h.awards || []).map(a => `${a.subject} ${a.stars}★`).join('; '),
-        'RSVP Status': rsvp.status || 'pending', 'Guests': countGuests(rsvp.guests),
+        'Completions': (h.completions || []).map(c => `${c.subject || c.subjectCanon} Completer`).join('; '),
+        'RSVP Status': rsvp.status || 'pending',
+        'Guests': countGuests(rsvp.guests),
         'Submitted': rsvp.submittedAt || '',
-        'Decline Reason': rsvp.status === 'declined' ? (rsvp.reason || '') : '',
+        'Decline Reason': rsvp.status === 'declined' ? (rsvp.reason || '') : ''
       });
     });
   });
+
   if (!rows.length) return showToast(t('toast.noExport', 'No data to export'), 'error');
+
   downloadExcel(rows, `ASHR_RSVP_${currentEventId}.xls`);
   showToast(t('toast.exportOk', 'Exported!'), 'success');
 }
