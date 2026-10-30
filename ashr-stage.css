@@ -335,3 +335,20 @@ All sizes scale from:
     transition: none !important;
   }
 }
+
+/* ============================================
+   🎓 COMPLETER STAGE PILL
+============================================ */
+.tier-completer {
+  background: linear-gradient(135deg, #6ee7b7, #10b981);
+  color: #064e3b;
+  border-color: rgba(16, 185, 129, 0.65);
+}
+
+.stage.anim-in .tier-completer {
+  animation: stPop 0.6s cubic-bezier(.34, 1.56, .64, 1) both;
+}
+
+.st-award.tier-completer .st-subj {
+  letter-spacing: .02em;
+}

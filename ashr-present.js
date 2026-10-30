@@ -148,16 +148,28 @@ function presRef() {
 
 async function showStudent(key) {
   const h = honorees[key];
-
   if (!h) {
     feedback(`❌ ${t('pres.gone', 'Student no longer in honoree list')}`, 'error');
     return;
   }
 
   const awards = h.awards || [];
+  const completions = h.completions || [];
 
-  const tier = awards.some(a => a.tier === 'Gold') ? 'Gold'
-    : awards.some(a => a.tier === 'Silver') ? 'Silver' : 'Bronze';
+  const hasAward = awards.length > 0;
+  const hasComp = completions.length > 0;
+
+  const presentationType =
+    hasAward && hasComp ? 'both'
+    : hasComp ? 'completer'
+    : 'award';
+
+  const tier =
+    awards.some(a => a.tier === 'Gold') ? 'Gold'
+    : awards.some(a => a.tier === 'Silver') ? 'Silver'
+    : hasAward ? 'Bronze'
+    : hasComp ? 'Completer'
+    : 'Bronze';
 
   try {
     await set(presRef(), {
@@ -171,11 +183,18 @@ async function showStudent(key) {
         nameEn: h.nameEn || '',
         centerName: h.centerName || '',
         studentNumber: h.studentNumber || '',
+        presentationType,
         tier,
         awards: awards.map(a => ({
           subject: a.subject,
           stars: a.stars,
           tier: a.tier
+        })),
+        completions: completions.map(c => ({
+          subject: c.subject || c.subjectCanon || '',
+          subjectOriginal: c.subjectOriginal || '',
+          dateOfCompletion: c.dateOfCompletion || '',
+          completerTestDate: c.completerTestDate || ''
         }))
       },
       effects: effectsOn,
@@ -185,7 +204,6 @@ async function showStudent(key) {
     });
 
     pushRecent(key);
-
     feedback(`✅ ${t('pres.showing', 'Now showing')}: ${h.nameCn || h.nameEn}`, 'success');
   } catch (err) {
     feedback(`${t('toast.err', 'Error')}: ${err.message}`, 'error');
@@ -265,7 +283,6 @@ function processInput(raw) {
 function renderSearchDrop(q) {
   const drop = $('searchDrop');
   const results = searchHonorees(honorees, q, 10);
-
   drop.innerHTML = '';
 
   if (!results.length) {
@@ -277,9 +294,16 @@ function renderSearchDrop(q) {
     const div = document.createElement('div');
     div.className = 'result-item pres-result';
 
-    const medals = (r.awards || []).map(a =>
+    const awardBadges = (r.awards || []).map(a =>
       `<span class="mini-award tier-${String(a.tier || 'bronze').toLowerCase()}">${medalFor(a.tier)} ${esc(a.subject)} ${'★'.repeat(a.stars || 0)}</span>`
     ).join('');
+
+    const completerBadges = (r.completions || []).map(c => {
+      const subject = c.subject || c.subjectCanon || c.subjectOriginal || '';
+      return `<span class="mini-award tier-completer">🎓 ${esc(subject)} Completer</span>`;
+    }).join('');
+
+    const medals = awardBadges + completerBadges;
 
     const arrived = checkins[r.key]
       ? `<span class="arrived">✓ ${t('pres.here', 'checked in')}</span>`
@@ -381,11 +405,23 @@ function renderQueue() {
       (i < queueIndex ? ' q-done' : '') +
       (i === queueIndex ? ' q-next' : '');
 
+    let detailText = '';
+    if (h) {
+      const parts = [];
+      const awardCount = (h.awards || []).length;
+      const compCount = (h.completions || []).length;
+
+      if (awardCount) parts.push(`${awardCount} award(s)`);
+      if (compCount) parts.push(`${compCount} completion(s)`);
+
+      detailText = `${h.centerName || ''}${parts.length ? ' · ' + parts.join(' · ') : ''}`;
+    }
+
     li.innerHTML = `
       <span class="q-num">${i + 1}</span>
       <div class="q-info">
         <strong>${esc(h ? (h.nameCn || h.nameEn) : key)}</strong>
-        <small>${esc(h ? `${h.centerName || ''} · ${(h.awards || []).length} award(s)` : t('pres.removed', 'no longer in honorees'))}</small>
+        <small>${esc(h ? detailText : t('pres.removed', 'no longer in honorees'))}</small>
       </div>
       <button class="btn-small primary q-show" title="Show now">▶</button>
       <button class="btn-small secondary q-up" title="Move up">↑</button>

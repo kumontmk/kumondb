@@ -350,3 +350,12 @@ kbd {
     flex: 1 1 100%;
   }
 }
+
+/* ============================================
+   🎓 COMPLETER MINI BADGE IN PRESENTER SEARCH
+============================================ */
+.mini-award.tier-completer {
+  background: #ecfdf5;
+  color: #065f46;
+  border-color: #34d399;
+}

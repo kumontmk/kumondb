@@ -55,22 +55,43 @@ export function matchScan(honorees, value, eventId) {
 // ✅ Fuzzy name/center search for typed input
 export function searchHonorees(honorees, q, limit = 10) {
   const s = String(q || '').trim().toLowerCase();
-
   if (!s) return [];
 
-  const score = h =>
-    [(h.nameCn || '').toLowerCase(), (h.nameEn || '').toLowerCase()]
-      .some(n => n.startsWith(s)) ? 0 : 1;
+  const score = h => {
+    const names = [
+      (h.nameCn || '').toLowerCase(),
+      (h.nameEn || '').toLowerCase()
+    ];
+
+    return names.some(n => n.startsWith(s)) ? 0 : 1;
+  };
 
   return Object.entries(honorees || {})
     .map(([key, h]) => ({ key, ...h }))
-    .filter(h =>
-      [h.nameCn, h.nameEn, h.studentNumber, h.centerName]
+    .filter(h => {
+      const parts = [
+        h.nameCn,
+        h.nameEn,
+        h.studentNumber,
+        h.centerName
+      ];
+
+      (h.awards || []).forEach(a => {
+        parts.push(a.subject);
+      });
+
+      (h.completions || []).forEach(c => {
+        parts.push(c.subject);
+        parts.push(c.subjectCanon);
+        parts.push(c.subjectOriginal);
+      });
+
+      return parts
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
-        .includes(s)
-    )
+        .includes(s);
+    })
     .sort((a, b) =>
       score(a) - score(b) ||
       String(a.nameCn || a.nameEn).localeCompare(String(b.nameCn || b.nameEn))
@@ -201,9 +222,11 @@ export function playFanfare(tier) {
   const base = [523.25, 659.25, 783.99];
 
   const notes =
-    tier === 'Gold' ? [...base, 1046.5, 1318.51]
-    : tier === 'Silver' ? [...base, 1046.5]
-    : base;
+    tier === 'Gold' || tier === 'Completer'
+      ? [...base, 1046.5, 1318.51]
+      : tier === 'Silver'
+        ? [...base, 1046.5]
+        : base;
 
   const t0 = audioCtx.currentTime + 0.03;
 
@@ -215,13 +238,11 @@ export function playFanfare(tier) {
     o.frequency.value = f;
 
     const st = t0 + i * 0.1;
-
     g.gain.setValueAtTime(0.0001, st);
     g.gain.exponentialRampToValueAtTime(0.13, st + 0.02);
     g.gain.exponentialRampToValueAtTime(0.0001, st + 0.55);
 
     o.connect(g).connect(audioCtx.destination);
-
     o.start(st);
     o.stop(st + 0.6);
   });
@@ -300,50 +321,65 @@ class StageController {
   }
 
   apply(state = {}) {
-    this._applyAspect(state.aspect);
+  this._applyAspect(state.aspect);
 
-    const mode =
-      (state.mode === 'student' && state.student) ? 'student'
-      : state.mode === 'blank' ? 'blank'
-      : 'backdrop';
+  const mode =
+    (state.mode === 'student' && state.student) ? 'student'
+    : state.mode === 'blank' ? 'blank'
+    : 'backdrop';
 
-    this.root.classList.toggle('is-blank', mode === 'blank');
-    this.root.classList.toggle('has-student', mode === 'student');
+  this.root.classList.toggle('is-blank', mode === 'blank');
+  this.root.classList.toggle('has-student', mode === 'student');
 
-    const content = this.root.querySelector('.stage-content');
+  const content = this.root.querySelector('.stage-content');
 
-    if (mode !== 'student') {
-      content.classList.add('is-hidden');
-      this.seq = null;
-      return;
+  if (mode !== 'student') {
+    content.classList.add('is-hidden');
+    this.seq = null;
+    return;
+  }
+
+  const isNew = state.seq !== this.seq;
+  this._fill(state);
+  content.classList.remove('is-hidden');
+
+  if (isNew) {
+    this.seq = state.seq;
+
+    this.root.classList.remove('anim-in');
+    void this.root.offsetWidth; // restart CSS animations
+    this.root.classList.add('anim-in');
+
+    const student = state.student || {};
+    const awards = student.awards || [];
+    const completions = student.completions || [];
+
+    if (state.effects !== false) {
+      const gold = awards.some(a => a.tier === 'Gold');
+      const completer = completions.length > 0;
+
+      burstConfetti(
+        this.root.querySelector('.stage-confetti'),
+        {
+          count: this.opts.mini
+            ? 40
+            : gold
+              ? 170
+              : completer
+                ? 140
+                : 110
+        }
+      );
     }
 
-    const isNew = state.seq !== this.seq;
-
-    this._fill(state);
-    content.classList.remove('is-hidden');
-
-    if (isNew) {
-      this.seq = state.seq;
-
-      this.root.classList.remove('anim-in');
-      void this.root.offsetWidth; // restart CSS animations
-      this.root.classList.add('anim-in');
-
-      if (state.effects !== false) {
-        const gold = (state.student.awards || []).some(a => a.tier === 'Gold');
-
-        burstConfetti(
-          this.root.querySelector('.stage-confetti'),
-          { count: this.opts.mini ? 40 : (gold ? 170 : 110) }
-        );
-      }
-
-      if (state.sound && !this.opts.silent) {
-        playFanfare(state.student.tier || 'Bronze');
-      }
+    if (state.sound && !this.opts.silent) {
+      playFanfare(
+        student.tier ||
+        (completions.length ? 'Completer' : 'Bronze')
+      );
     }
   }
+}
 
   _fill(state) {
     const s = state.student || {};
@@ -353,19 +389,38 @@ class StageController {
     q('.st-name-en').textContent = (s.nameCn && s.nameEn) ? s.nameEn : '';
 
     const awards = s.awards || [];
+    const completions = s.completions || [];
 
-    // Compact modes so award stacks fit different aspect ratios better
-    this.root.classList.toggle('awards-many', awards.length >= 4);
-    this.root.classList.toggle('awards-max', awards.length >= 7);
-
-    q('.st-awards').innerHTML = awards.map((a, i) =>
-      `
-        <div class="st-award tier-${String(a.tier || 'bronze').toLowerCase()}" style="animation-delay:${(0.3 + i * 0.16).toFixed(2)}s">
+    // 🎓 Completers render FIRST, then ASHR awards
+    const badges = [
+      ...completions.map(c => {
+        const subject = c.subject || c.subjectCanon || c.subjectOriginal || '';
+        return {
+          kind: 'completer',
+          html: `
+            <span class="st-medal">🎓</span>
+            <span class="st-subj">${escapeHtml(subject)} Completer</span>
+          `
+        };
+      }),
+      ...awards.map(a => ({
+        kind: String(a.tier || 'bronze').toLowerCase(),
+        html: `
           <span class="st-medal">${medalFor(a.tier)}</span>
           <span class="st-subj">${escapeHtml(a.subject || '')}</span>
           <span class="st-stars">${starsFor(a.stars)}</span>
-        </div>
-      `
-    ).join('');
+        `
+      }))
+    ];
+
+    // Compact modes so the stack fits different aspect ratios
+    this.root.classList.toggle('awards-many', badges.length >= 4);
+    this.root.classList.toggle('awards-max', badges.length >= 7);
+
+    q('.st-awards').innerHTML = badges.map((b, i) => `
+      <div class="st-award tier-${b.kind}" style="animation-delay:${(0.3 + i * 0.16).toFixed(2)}s">
+        ${b.html}
+      </div>
+    `).join('');
   }
 }
