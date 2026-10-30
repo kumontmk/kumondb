@@ -1474,8 +1474,7 @@ function renderTable(filter = '') {
     }
 
     const currentUserEmail = auth.currentUser?.email?.toLowerCase();
-     let isAdmin = currentUserEmail === 'kumonchamps@gmail.com';
-      modalIsAdmin = isAdmin;
+    let isAdmin = currentUserEmail === 'kumonchamps@gmail.com';
     if (!isAdmin && auth.currentUser) {
       try {
         const userSnap = await get(ref(db, `users/${auth.currentUser.uid}`));
@@ -1497,7 +1496,7 @@ function renderTable(filter = '') {
         }
       } catch (err) { console.error('Error checking admin status:', err); }
     }
-
+    modalIsAdmin = isAdmin;                        // ✅ now reflects the FINAL value
     const permInputs = document.querySelectorAll('#tab-permissions input');
     const permMsg = document.getElementById('permissionsLockedMsg');
     if (!isAdmin) {
