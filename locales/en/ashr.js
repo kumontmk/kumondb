@@ -203,5 +203,17 @@ export default {
     reasonHint: 'Sharing a reason is completely optional — it just helps your center plan future events.',
     reasonPh: 'e.g. family trip, schedule conflict...',
     reasonWord: 'Reason',
-  }
+
+    completer: 'Completer',
+    honoured: 'Honoured Student',
+
+    completerCongratsText:
+      'Congratulations to {{names}}! Your hard work and dedication have earned you recognition as a Final Material Completer.',
+
+    mixedCongratsText:
+      'Congratulations to {{names}}! Your hard work and dedication have earned you recognition as a Final Material Completer and a place on the Advanced Student Honour Roll.',
+
+    title: 'Kumon Completers & Advanced Student Honour Roll',
+    subtitle: 'Final Material Completers and Advanced Student Honour Roll'
+    }
 };

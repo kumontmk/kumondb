@@ -210,5 +210,16 @@ export default {
     reasonHint: '是否填寫原因完全自由，這能幫助中心安排未來的活動。',
     reasonPh: '例如：家庭旅行、時間衝突…',
     reasonWord: '原因',
+    completer: '完成者',
+    honoured: '獲獎學生',
+
+    completerCongratsText:
+      '恭喜 {{names}}！你的努力與堅持令你達到了最終教材完成者的成就。',
+
+    mixedCongratsText:
+      '恭喜 {{names}}！你的努力與堅持令你達到了最終教材完成者及超越學年榮譽榜的成就。',
+
+    title: '公文式最終教材完成者及超越學年榮譽榜',
+    subtitle: '最終教材完成者及超越學年頒獎典禮'
   }
 };
