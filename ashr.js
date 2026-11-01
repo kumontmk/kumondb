@@ -316,11 +316,11 @@ function subscribeToEvent(eventId) {
   const subs = [
     { path: `${base}/settings`, handler: (snap) => { eventSettings = snap.val() || {}; renderControlPanel(); updateEventStatus(); } },
     { path: `${base}/timeslots`, handler: (snap) => { timeslots = snap.val() || {}; renderTimeslots(); renderSlotCapacity(); renderCheckinSlots(); } },
-    { path: `${base}/honorees`, handler: (snap) => { honorees = snap.val() || {}; renderHonorees(); renderLinks(); renderCheckinSlots(); } },
+    { path: `${base}/honorees`, handler: (snap) => { honorees = snap.val() || {}; renderHonorees(); renderLinks(); renderRSVPs(); renderCheckinSlots(); } },
     { path: `${base}/families`, handler: (snap) => { families = snap.val() || {}; renderLinks(); renderRSVPs(); renderSlotCapacity(); renderCheckinSlots(); } },
     { path: `${base}/checkins`, handler: (snap) => { checkins = snap.val() || {}; renderCheckinSlots(); } },
     { path: `${base}/unmatched`, handler: (snap) => { unmatchedDb = snap.val() || {}; renderUnmatched(); } },
-    { path: `publicAshrLinks/${currentEventId}`, handler: (snap) => { portalsCache = {}; if (snap.exists()) snap.forEach(c => { portalsCache[c.key] = c.val(); }); renderLinks(); } },
+    { path: `publicAshrLinks/${currentEventId}`, handler: (snap) => { portalsCache = {}; if (snap.exists()) snap.forEach(c => { portalsCache[c.key] = c.val(); }); renderLinks(); renderRSVPs(); } },
   ];
   subs.forEach(({ path, handler }) => {
     const unsub = onValue(ref(db, path), handler, (err) => console.error(`Listener error on ${path}:`, err));
@@ -2259,28 +2259,65 @@ function computeSlotCounts() {
   return counts;
 }
 
+// ============================================
+// 📊 RSVP REPORT SOURCE
+//   The `families` node only exists AFTER a family replies.
+//   To show "No Response" we left-join:
+//   family groups → invite link (publicAshrLinks) → RSVP record (families).
+//   A family appears as pending as soon as its link is generated.
+// ============================================
+function buildRsvpRows() {
+  const rows = [];
+  const matchedFamIds = new Set();
+
+  buildAshrFamilies().forEach(fam => {
+    const portalEntry = Object.entries(portalsCache).find(([_, p]) => p.familyKey === fam.key);
+    const portal = portalEntry ? portalEntry[1] : null;
+    const famId = portal ? portal.familyId : null;
+    const famRec = famId ? families[famId] : null;
+    if (famId) matchedFamIds.add(famId);
+    if (!portal && !famRec) return;   // not invited yet → not "No Response"
+    rows.push({
+      famId: famId || fam.key,
+      members: fam.members,
+      rsvp: famRec?.rsvp || null,
+      hasLink: !!portal,
+      linkDisabled: portal?.active === false
+    });
+  });
+
+  // Orphan RSVP records (honoree deleted / link regenerated under a new familyKey)
+  Object.entries(families).forEach(([famId, famRec]) => {
+    if (matchedFamIds.has(famId)) return;
+    const members = (famRec.memberHonoreeIds || []).map(mid => honorees[mid]).filter(Boolean);
+    if (!members.length && !famRec.rsvp) return;
+    rows.push({ famId, members, rsvp: famRec.rsvp || null, hasLink: false, linkDisabled: false });
+  });
+
+  return rows;
+}
+
 function renderRSVPs() {
   const filter = $('rsvpFilter').value;
   const tbody = $('rsvpTableBody');
   tbody.innerHTML = '';
   let attending = 0, declined = 0, pending = 0, totalGuests = 0;
-  Object.values(families).forEach(fam => {
-    const status = fam.rsvp?.status || 'pending';
-    if (status === 'attending') { attending++; totalGuests += countGuests(fam.rsvp.guests); }
+  const rows = buildRsvpRows();
+
+  rows.forEach(row => {
+    const status = row.rsvp?.status || 'pending';
+    if (status === 'attending') { attending++; totalGuests += countGuests(row.rsvp.guests); }
     else if (status === 'declined') declined++;
     else pending++;
   });
-  $('rsvpStats').innerHTML = `
-    <div class="stat-card"><div class="stat-value">${attending}</div><div class="stat-label">${t('stat.attending', 'Attending')}</div></div>
-    <div class="stat-card"><div class="stat-value">${declined}</div><div class="stat-label">${t('stat.declined', 'Declined')}</div></div>
-    <div class="stat-card"><div class="stat-value">${pending}</div><div class="stat-label">${t('stat.pending', 'No Response')}</div></div>
-    <div class="stat-card"><div class="stat-value">${totalGuests}</div><div class="stat-label">${t('stat.guests', 'Total Guests')}</div></div>`;
-  Object.entries(families).forEach(([famId, fam]) => {
-    const rsvp = fam.rsvp || {};
+
+  $('rsvpStats').innerHTML = `<div class="stat-card"><div class="stat-value">${attending}</div><div class="stat-label">${t('stat.attending', 'Attending')}</div></div> <div class="stat-card"><div class="stat-value">${declined}</div><div class="stat-label">${t('stat.declined', 'Declined')}</div></div> <div class="stat-card"><div class="stat-value">${pending}</div><div class="stat-label">${t('stat.pending', 'No Response')}</div></div> <div class="stat-card"><div class="stat-value">${totalGuests}</div><div class="stat-label">${t('stat.guests', 'Total Guests')}</div></div>`;
+
+  rows.forEach(row => {
+    const rsvp = row.rsvp || {};
     const status = rsvp.status || 'pending';
     if (filter !== 'all' && status !== filter) return;
-    const memberIds = fam.memberHonoreeIds || [];
-    const memberNames = memberIds.map(mid => honorees[mid] ? (honorees[mid].nameCn || honorees[mid].nameEn) : mid).join(', ');
+    const memberNames = row.members.map(m => m.nameCn || m.nameEn).join(', ') || row.famId;
     let slotDisplay = '—';
     if (status === 'attending') {
       if (rsvp.sameTimeslot && rsvp.sharedSlotId) {
@@ -2292,11 +2329,7 @@ function renderRSVPs() {
     }
     const statusClass = status === 'attending' ? 'st-attending' : status === 'declined' ? 'st-declined' : 'st-pending';
     const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${escapeHtml(memberNames)}</td> 
-      <td>${memberIds.length}</td> <td><span class="status-badge ${statusClass}">${t('st.' + status, status)}</span></td> 
-      <td>${rsvp.status === 'declined' && rsvp.reason ? escapeHtml(rsvp.reason) : '—'}</td> <td>${escapeHtml(slotDisplay)}</td> 
-      <td>${countGuests(rsvp.guests)}</td> <td>${rsvp.submittedAt ? new Date(rsvp.submittedAt).toLocaleDateString() : 
-        '—'}</td>`;
+    tr.innerHTML = `<td>${escapeHtml(memberNames)}</td> <td>${row.members.length}</td> <td><span class="status-badge ${statusClass}">${t('st.' + status, status)}</span></td> <td>${rsvp.status === 'declined' && rsvp.reason ? escapeHtml(rsvp.reason) : '—'}</td> <td>${escapeHtml(slotDisplay)}</td> <td>${countGuests(rsvp.guests)}</td> <td>${rsvp.submittedAt ? new Date(rsvp.submittedAt).toLocaleDateString() : '—'}</td>`;
     tbody.appendChild(tr);
   });
 }
@@ -2323,20 +2356,15 @@ function renderSlotCapacity() {
 
 function exportRSVPs() {
   const rows = [];
-
-  Object.values(families).forEach(fam => {
-    const rsvp = fam.rsvp || {};
-
-    (fam.memberHonoreeIds || []).forEach(mid => {
-      const h = honorees[mid];
-      if (!h) return;
-
+  buildRsvpRows().forEach(row => {
+    const rsvp = row.rsvp || {};
+    row.members.forEach(m => {
       rows.push({
-        'Student': h.nameCn || h.nameEn,
-        'Pinyin': h.nameEn || '',
-        'Center': h.centerName || '',
-        'Awards': (h.awards || []).map(a => `${a.subject} ${a.stars}★`).join('; '),
-        'Completions': (h.completions || []).map(c => `${c.subject || c.subjectCanon} Completer`).join('; '),
+        'Student': m.nameCn || m.nameEn,
+        'Pinyin': m.nameEn || '',
+        'Center': m.centerName || '',
+        'Awards': (m.awards || []).map(a => `${a.subject} ${a.stars}★`).join('; '),
+        'Completions': (m.completions || []).map(c => `${c.subject || c.subjectCanon} Completer`).join('; '),
         'RSVP Status': rsvp.status || 'pending',
         'Guests': countGuests(rsvp.guests),
         'Submitted': rsvp.submittedAt || '',
@@ -2344,9 +2372,7 @@ function exportRSVPs() {
       });
     });
   });
-
   if (!rows.length) return showToast(t('toast.noExport', 'No data to export'), 'error');
-
   downloadExcel(rows, `ASHR_RSVP_${currentEventId}.xls`);
   showToast(t('toast.exportOk', 'Exported!'), 'success');
 }

@@ -305,10 +305,26 @@ function computeSlotCountsExclude(excludeFamId) {
   return counts;
 }
 
+// 👤 Single-student invitations don't need a mode toggle
+function isSingleStudent() {
+  return ((portal && portal.members) || []).length <= 1;
+}
+function syncSlotModeToggle() {
+  const toggleEl = document.querySelector('.slot-mode-toggle');
+  if (!toggleEl) return;
+  toggleEl.classList.toggle('hidden', isSingleStudent());
+  if (isSingleStudent() && slotMode !== 'same') {
+    slotMode = 'same';
+    const radio = document.querySelector('input[name="slotMode"][value="same"]');
+    if (radio) radio.checked = true;
+  }
+}
+
 function renderTimeslots() {
   const container = $('timeslotList');
   if (!container) return;
   container.innerHTML = '';
+  syncSlotModeToggle(); // ✅ NEW: hide toggle + force 'same' when only 1 student
   const memberKeys = (portal && portal.members) || [];
   const slotCounts = computeSlotCountsExclude(familyId);
   const sorted = Object.entries(timeslots)
@@ -363,6 +379,8 @@ async function submitRSVP() {
   }
 
   if (selectedStatus === 'attending') {
+    if (isSingleStudent()) slotMode = 'same';   // ✅ never submit "separate" for 1 student
+    
     const counts = computeSlotCountsExclude(familyId);
     if (slotMode === 'same') {
       if (!selectedSlots.shared) return showToast(t('toast.chooseSlot', 'Please select a timeslot'), 'error');
@@ -463,10 +481,22 @@ function startEditing() {
     $('timeslotCard').classList.remove('hidden');
     $('guestCard').classList.remove('hidden');
     $('submitCard').classList.remove('hidden');
-    slotMode = rsvp.sameTimeslot ? 'same' : 'separate';
+    
+    if (isSingleStudent()) {
+      // ✅ Only one student: always use the simple shared-slot flow,
+      // even if the old RSVP was saved in per-student format
+      slotMode = 'same';
+      selectedSlots = rsvp.sameTimeslot
+        ? { shared: rsvp.sharedSlotId }
+        : { shared: Object.values(rsvp.perStudentSlots || {})[0] || null };
+    } else {
+      slotMode = rsvp.sameTimeslot ? 'same' : 'separate';
+      selectedSlots = rsvp.sameTimeslot ? { shared: rsvp.sharedSlotId } : { ...(rsvp.perStudentSlots || {}) };
+    }
+    
     const radio = document.querySelector(`input[name="slotMode"][value="${slotMode}"]`);
     if (radio) radio.checked = true;
-    selectedSlots = rsvp.sameTimeslot ? { shared: rsvp.sharedSlotId } : { ...(rsvp.perStudentSlots || {}) };
+    
     if (rsvp.guests) {
       $('guestMom').checked = !!rsvp.guests.mom;
       $('guestDad').checked = !!rsvp.guests.dad;
