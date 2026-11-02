@@ -8,6 +8,8 @@ import { applyI18n, t, i18nReady } from './change-classes-i18n.js';
 // ============================================
 const centerId = sessionStorage.getItem('selectedCenter');
 let classChangesCache = [];
+let incomingChangesCache = [];   // records from OTHER centers being made up HERE
+let incomingUnsubs = [];
 let allStudents = [];
 let allStudentsMap = new Map();
 let ccUnsub = null;
@@ -22,7 +24,8 @@ let currentFilter = {
   dateFrom: '',
   dateTo: '',
   month: currentYearMonth(),   // 'YYYY-MM', or '' = all months
-  monthField: 'absence'        // 'absence' | 'replacement' — which date the month filter uses
+  monthField: 'absence',       // 'absence' | 'replacement' — which date the month filter uses
+  scope: 'all'                 // 'all' | 'home' | 'incoming'
 };
 
 let selectedIds = new Set();
@@ -181,10 +184,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadAllCentersData();
     buildFamilies();
     startRealtimeSync();
+    startIncomingSync();
     startPortalsSync();
     wirePageTabs();
     wireFilters();
-    wireMonthFilter();      // 🆕
+    wireMonthFilter();
     wireAddEditModal();
     wireDetailModal();
     wireConfirmModal();
@@ -362,6 +366,7 @@ function startPortalsSync() {
 window.addEventListener('beforeunload', () => {
   if (ccUnsub) off(ref(db, `centers/${centerId}/classChanges`));
   if (portalsUnsub) off(ref(db, `publicFamilyLinks/${centerId}`));
+  incomingUnsubs.forEach(u => u());
 });
 
 // ============================================
@@ -403,13 +408,60 @@ function startRealtimeSync() {
   }, (err) => console.error('Realtime sync error:', err));
 }
 
+function startIncomingSync() {
+  incomingUnsubs.forEach(u => u());
+  incomingUnsubs = [];
+  Object.keys(allCentersData).forEach(cid => {
+    if (cid === centerId) return;
+    const r = ref(db, `centers/${cid}/classChanges`);
+    const unsub = onValue(r, (snap) => {
+      const list = [];
+      if (snap.exists()) {
+        snap.forEach(child => {
+          const rec = child.val() || {};
+          if (rec.replacementCenterId === centerId) {
+            list.push({ ...rec, id: child.key, _incoming: true,
+              _originCenterId: cid, _originCenterName: allCentersData[cid]?.name || cid });
+          }
+        });
+      }
+      incomingChangesCache = incomingChangesCache
+        .filter(x => x._originCenterId !== cid).concat(list);
+      renderAll();
+    }, (err) => console.error('Incoming sync error:', err));
+    incomingUnsubs.push(unsub);
+  });
+}
+
+function getAllRecords() {
+  const home = classChangesCache.map(r => ({ ...r,
+    _originCenterId: centerId, _originCenterName: allCentersData[centerId]?.name || centerId }));
+  return home.concat(incomingChangesCache);
+}
+
+function matchesScope(r) {
+  if (currentFilter.scope === 'home') return !r._incoming;
+  if (currentFilter.scope === 'incoming') return !!r._incoming;
+  return true;
+}
+
+function formatCenterRoute(r) {
+  const from = r._originCenterName || '?';
+  const isCC = String(r.type || '').startsWith('CC');
+  if (isCC && r.replacementCenterId && r.replacementCenterId !== r._originCenterId) {
+    const to = r.replacementCenterName || '?';
+    return `<span class="center-route center-cross" title="${escapeHtml(from)} → ${escapeHtml(to)}">${escapeHtml(getCenterAbbr(from))} → ${escapeHtml(getCenterAbbr(to))}</span>`;
+  }
+  return `<span class="center-route" title="${escapeHtml(from)}">${escapeHtml(getCenterAbbr(from))}</span>`;
+}
+
 function renderAll() {
   const records = getFilteredRecords();
   renderTable(records);
   renderCards(records);
   updateBulkBar();
-  updateSegmentCounts();     // 🆕
-  updateResultsCount(records); // 🆕
+  updateSegmentCounts();
+  updateResultsCount(records);
 }
 
 // Everything EXCEPT the status filter (used for the tab counters)
@@ -443,8 +495,8 @@ function matchesStatusFilter(r) {
 }
 
 function getFilteredRecords() {
-  return classChangesCache
-    .filter(r => matchesBaseFilters(r) && matchesStatusFilter(r))
+  return getAllRecords()
+    .filter(r => matchesScope(r) && matchesBaseFilters(r) && matchesStatusFilter(r))
     .sort((a, b) => {
       const order = { scheduled: 0, missed: 1, completed: 2, cancelled: 3 };
       const sa = order[a.replacementStatus] ?? 4, sb = order[b.replacementStatus] ?? 4;
@@ -455,7 +507,7 @@ function getFilteredRecords() {
 
 // 🆕 Live counters on each status tab
 function updateSegmentCounts() {
-  const base = classChangesCache.filter(matchesBaseFilters);
+  const base = getAllRecords().filter(r => matchesBaseFilters(r) && matchesScope(r));
   const counts = { active: 0, all: base.length, scheduled: 0, completed: 0, missed: 0, cancelled: 0 };
   base.forEach(r => {
     const s = r.replacementStatus;
@@ -473,7 +525,8 @@ function updateResultsCount(records) {
   const el = document.getElementById('resultsCount');
   if (!el) return;
   const scope = currentFilter.month ? monthLabel(currentFilter.month) : tt('cc.allMonths', 'All months');
-  const msg = tt('cc.showingRecords', 'Showing {{shown}} of {{total}} records', { shown: records.length, total: classChangesCache.length });
+  const total = getAllRecords().length;
+  const msg = tt('cc.showingRecords', 'Showing {{shown}} of {{total}} records', { shown: records.length, total: total });
   el.textContent = `${scope} · ${msg}`;
 }
 
@@ -482,25 +535,25 @@ function updateResultsCount(records) {
 // ============================================
 function wireMonthFilter() {
   const picker = document.getElementById('monthPicker');
-  picker.value = currentFilter.month || '';
+  if (picker) picker.value = currentFilter.month || '';
 
-  picker.addEventListener('change', (e) => { currentFilter.month = e.target.value; renderAll(); });
-  document.getElementById('monthPrev').addEventListener('click', () => shiftMonth(-1));
-  document.getElementById('monthNext').addEventListener('click', () => shiftMonth(1));
+  picker?.addEventListener('change', (e) => { currentFilter.month = e.target.value; renderAll(); });
+  document.getElementById('monthPrev')?.addEventListener('click', () => shiftMonth(-1));
+  document.getElementById('monthNext')?.addEventListener('click', () => shiftMonth(1));
 
-  document.getElementById('monthTodayBtn').addEventListener('click', () => {
+  document.getElementById('monthTodayBtn')?.addEventListener('click', () => {
     currentFilter.month = currentYearMonth();
-    picker.value = currentFilter.month;
+    if (picker) picker.value = currentFilter.month;
     renderAll();
   });
 
-  document.getElementById('monthClearBtn').addEventListener('click', () => {
+  document.getElementById('monthClearBtn')?.addEventListener('click', () => {
     currentFilter.month = '';
-    picker.value = '';
+    if (picker) picker.value = '';
     renderAll();
   });
 
-  document.getElementById('monthField').addEventListener('change', (e) => {
+  document.getElementById('monthField')?.addEventListener('change', (e) => {
     currentFilter.monthField = e.target.value;
     renderAll();
   });
@@ -511,7 +564,8 @@ function shiftMonth(delta) {
   const [y, m] = base.split('-').map(Number);
   const d = new Date(y, (m - 1) + delta, 1);
   currentFilter.month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  document.getElementById('monthPicker').value = currentFilter.month;
+  const picker = document.getElementById('monthPicker');
+  if (picker) picker.value = currentFilter.month;
   renderAll();
 }
 
@@ -521,15 +575,17 @@ function shiftMonth(delta) {
 function renderTable(records) {
   const tbody = document.getElementById('ccTableBody');
   const empty = document.getElementById('emptyState');
+  if (!tbody) return;
   tbody.innerHTML = '';
-  if (!records.length) { empty.classList.remove('hidden'); return; }
-  empty.classList.add('hidden');
+  if (!records.length) { empty?.classList.remove('hidden'); return; }
+  empty?.classList.add('hidden');
 
   records.forEach(r => {
     const tr = document.createElement('tr');
     tr.dataset.id = r.id;
     if (selectedIds.has(r.id)) tr.classList.add('selected');
     tr.classList.add(`row-${r.replacementStatus || 'none'}`);
+    if (r._incoming) tr.classList.add('row-incoming');
 
     const overdue = isOverdue(r);
     if (overdue) tr.classList.add('row-overdue');
@@ -537,9 +593,11 @@ function renderTable(records) {
     const student = allStudentsMap.get(r.studentId);
     const isVisiting = student && student.homeCenterId && student.homeCenterId !== centerId;
     const parentBadge = r.source === 'parent' ? `<span class="parent-src" title="${t('cc.parentBadgeTitle')}">📲</span>` : '';
+    const countBadge = (parseInt(r.classCount,10)||1) > 1 ? ` <span class="count-badge">×${r.classCount}</span>` : '';
 
     tr.innerHTML = `
-      <td><input type="checkbox" class="row-check" data-id="${r.id}" ${selectedIds.has(r.id) ? 'checked' : ''}></td>
+      <td>${r._incoming ? `<span class="incoming-badge" title="Incoming from ${escapeHtml(r._originCenterName)}">📥</span>` :
+        `<input type="checkbox" class="row-check" data-id="${r.id}" ${selectedIds.has(r.id) ? 'checked' : ''}>`}</td>
       <td>
         <div class="student-cell">
           <span class="student-name">
@@ -554,13 +612,14 @@ function renderTable(records) {
       <td>${escapeHtml(r.subject || '-')} ${r.subjectLevel ? `(${escapeHtml(r.subjectLevel)})` : ''}</td>
       <td><span class="type-badge ${getTypeClass(r.type)}">${escapeHtml(formatType(r.type))}</span></td>
       <td>${formatDate(r.absenceDate)} ${r.originalTime ? `<br><small style="color:var(--text-light);">${escapeHtml(r.originalTime)}</small>` : ''}</td>
-      <td class="${overdue ? 'overdue-cell' : ''}">${formatReplacementCell(r)}${overdue ? ` <span class="overdue-flag" title="${tt('cc.overdueTip', 'Overdue — replacement date has passed')}">⚠️</span>` : ''}</td>
+      <td class="${overdue ? 'overdue-cell' : ''}">${formatReplacementCell(r)}${countBadge}${overdue ? ` <span class="overdue-flag" title="${tt('cc.overdueTip', 'Overdue — replacement date has passed')}">⚠️</span>` : ''}</td>
+      <td>${formatCenterRoute(r)}</td>
       <td><span class="status-badge status-${r.replacementStatus || 'none'}">${formatStatus(r.replacementStatus)}</span></td>
       <td><span class="pu-badge ${r.homeworkPickedUp ? 'pu-yes' : 'pu-no'}">${r.homeworkPickedUp ? '✓' : '—'}</span></td>
       <td>
         <div class="action-btn-group">
           <button class="action-btn action-view" data-action="view" data-id="${r.id}">👁</button>
-          <button class="action-btn action-edit" data-action="edit" data-id="${r.id}">✏️</button>
+          ${!r._incoming ? `<button class="action-btn action-edit" data-action="edit" data-id="${r.id}">✏️</button>` : ''}
           ${r.replacementStatus === 'scheduled' ? `<button class="action-btn action-complete" data-action="complete" data-id="${r.id}">✅</button>` : ''}
           ${r.replacementStatus !== 'cancelled' ? `<button class="action-btn action-cancel" data-action="cancel" data-id="${r.id}">🚫</button>` : ''}
         </div>
@@ -589,6 +648,7 @@ function renderTable(records) {
 // ============================================
 function renderCards(records) {
   const container = document.getElementById('cardsContainer');
+  if (!container) return;
   container.innerHTML = '';
   if (!records.length) {
     container.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>${t('cc.emptyState')}</p></div>`;
@@ -601,6 +661,7 @@ function renderCards(records) {
     const overdue = isOverdue(r);
     const typeClass = r.type && r.type.startsWith('CC') ? 'cc-type-cc' : 'cc-type-mc';
     const parentBadge = r.source === 'parent' ? `<span class="parent-src" title="${t('cc.parentBadgeTitle')}">📲</span>` : '';
+    const countBadge = (parseInt(r.classCount,10)||1) > 1 ? ` <span class="count-badge">×${r.classCount}</span>` : '';
 
     const card = document.createElement('div');
     card.className = `cc-card ${typeClass} cc-${r.replacementStatus || 'none'}${overdue ? ' cc-overdue' : ''}`;
@@ -624,12 +685,13 @@ function renderCards(records) {
       </div>
       <div class="cc-card-dates">
         <div class="cc-card-date-item"><strong>${t('cc.absenceDate')}</strong><span>${formatDate(r.absenceDate)} ${r.originalTime || ''}</span></div>
-        <div class="cc-card-date-item"><strong>${t('cc.replacementDate')}</strong><span>${r.replacementDate ? formatDate(r.replacementDate) + ' ' + (r.replacementTime || '') : '—'}</span></div>
+        <div class="cc-card-date-item"><strong>${t('cc.replacementDate')}</strong><span>${r.replacementDate ? formatDate(r.replacementDate) + ' ' + (r.replacementTime || '') : '—'}${countBadge}</span></div>
+        <div class="cc-card-date-item"><strong>Center</strong><span>${formatCenterRoute(r)}</span></div>
       </div>
       ${r.note ? `<div style="font-size:0.82rem;color:var(--text-light);background:#f8fafc;padding:0.5rem;border-radius:6px;margin-top:0.3rem;">📝 ${escapeHtml(r.note)}</div>` : ''}
       <div class="cc-card-actions">
         <button class="action-btn action-view" data-action="view" data-id="${r.id}">👁 ${t('cc.view')}</button>
-        <button class="action-btn action-edit" data-action="edit" data-id="${r.id}">✏️ ${t('cc.edit')}</button>
+        ${!r._incoming ? `<button class="action-btn action-edit" data-action="edit" data-id="${r.id}">✏️ ${t('cc.edit')}</button>` : ''}
         ${r.replacementStatus === 'scheduled' ? `<button class="action-btn action-complete" data-action="complete" data-id="${r.id}">✅ ${t('cc.markComplete')}</button>` : ''}
         ${r.replacementStatus !== 'cancelled' ? `<button class="action-btn action-cancel" data-action="cancel" data-id="${r.id}">🚫 ${t('cc.cancel')}</button>` : ''}
       </div>`;
@@ -691,6 +753,14 @@ function parentPageUrl(token) {
   return `${location.origin}${dir}parent-request.html?c=${encodeURIComponent(centerId)}&t=${encodeURIComponent(token)}`;
 }
 
+function getCenterAbbr(name) {
+  if (!name) return '?';
+  const lower = name.toLowerCase();
+  const rules = [['pac tat', 'PT'], ['mei keng', 'MK'], ['tap siac', 'TS'], ['champs', 'C']];
+  for (const [m, a] of rules) if (lower.includes(m)) return a;
+  return (name.replace(/^kumon[\s.-]*/i, '').trim() || name).substring(0, 2).toUpperCase();
+}
+
 // ============================================
 // FILTERS / BULK / ROW ACTIONS
 // ============================================
@@ -703,28 +773,38 @@ function wireFilters() {
       renderAll();
     });
   });
-  document.getElementById('searchInput').addEventListener('input', (e) => { currentFilter.search = e.target.value.trim(); renderAll(); });
-  document.getElementById('dateFrom').addEventListener('change', (e) => { currentFilter.dateFrom = e.target.value; renderAll(); });
-  document.getElementById('dateTo').addEventListener('change', (e) => { currentFilter.dateTo = e.target.value; renderAll(); });
-  document.getElementById('clearDatesBtn').addEventListener('click', () => {
-    document.getElementById('dateFrom').value = ''; document.getElementById('dateTo').value = '';
+  document.getElementById('searchInput')?.addEventListener('input', (e) => { currentFilter.search = e.target.value.trim(); renderAll(); });
+  document.getElementById('dateFrom')?.addEventListener('change', (e) => { currentFilter.dateFrom = e.target.value; renderAll(); });
+  document.getElementById('dateTo')?.addEventListener('change', (e) => { currentFilter.dateTo = e.target.value; renderAll(); });
+  document.getElementById('clearDatesBtn')?.addEventListener('click', () => {
+    const df = document.getElementById('dateFrom');
+    const dt = document.getElementById('dateTo');
+    if (df) df.value = ''; 
+    if (dt) dt.value = '';
     currentFilter.dateFrom = ''; currentFilter.dateTo = ''; renderAll();
   });
-  document.getElementById('typeFilter').addEventListener('change', (e) => { currentFilter.type = e.target.value; renderAll(); });
-  document.getElementById('subjectFilter').addEventListener('change', (e) => { currentFilter.subject = e.target.value; renderAll(); });
+  document.getElementById('typeFilter')?.addEventListener('change', (e) => { currentFilter.type = e.target.value; renderAll(); });
+  document.getElementById('subjectFilter')?.addEventListener('change', (e) => { currentFilter.subject = e.target.value; renderAll(); });
+  
+  document.getElementById('centerScopeFilter')?.addEventListener('change', (e) => {
+    currentFilter.scope = e.target.value; renderAll();
+  });
 }
 
 function wireSelectAll() {
-  document.getElementById('selectAllCheck').addEventListener('change', (e) => {
-    const records = getFilteredRecords();
+  const selAll = document.getElementById('selectAllCheck');
+  if (!selAll) return;
+  selAll.addEventListener('change', (e) => {
+    const records = getFilteredRecords().filter(r => !r._incoming);
     if (e.target.checked) records.forEach(r => selectedIds.add(r.id)); else selectedIds.clear();
     renderAll();
   });
 }
 
 function updateSelectAllCheck() {
-  const records = getFilteredRecords();
+  const records = getFilteredRecords().filter(r => !r._incoming);
   const allCheck = document.getElementById('selectAllCheck');
+  if (!allCheck) return;
   if (records.length === 0) { allCheck.checked = false; allCheck.indeterminate = false; return; }
   const cnt = records.filter(r => selectedIds.has(r.id)).length;
   allCheck.checked = cnt === records.length;
@@ -732,49 +812,59 @@ function updateSelectAllCheck() {
 }
 
 function wireBulkActions() {
-  document.getElementById('bulkCompleteBtn').addEventListener('click', async () => {
+  document.getElementById('bulkCompleteBtn')?.addEventListener('click', async () => {
     if (!selectedIds.size) return;
     if (!await showConfirm(t('cc.bulkCompleteTitle'), t('cc.bulkCompleteMsg', { count: selectedIds.size }))) return;
     await bulkUpdateStatus('completed');
   });
-  document.getElementById('bulkCancelBtn').addEventListener('click', async () => {
+  document.getElementById('bulkCancelBtn')?.addEventListener('click', async () => {
     if (!selectedIds.size) return;
     if (!await showConfirm(t('cc.bulkCancelTitle'), t('cc.bulkCancelMsg', { count: selectedIds.size }))) return;
     await bulkUpdateStatus('cancelled');
   });
-  document.getElementById('bulkClearBtn').addEventListener('click', () => {
+  document.getElementById('bulkClearBtn')?.addEventListener('click', () => {
     selectedIds.clear(); renderAll();
   });
 }
 
 function updateBulkBar() {
   const bar = document.getElementById('bulkActions');
+  if (!bar) return;
   if (selectedIds.size > 0) {
     bar.classList.remove('hidden');
-    document.getElementById('bulkCount').textContent = t('cc.selectedCount', { count: selectedIds.size });
+    const bc = document.getElementById('bulkCount');
+    if (bc) bc.textContent = t('cc.selectedCount', { count: selectedIds.size });
   } else bar.classList.add('hidden');
 }
 
 async function bulkUpdateStatus(status) {
-  const updates = {}; const now = new Date().toISOString();
+  const updatesByCenter = {}; 
+  const now = new Date().toISOString();
   selectedIds.forEach(id => {
-    updates[`${id}/replacementStatus`] = status;
-    updates[`${id}/updatedAt`] = now;
-    if (status === 'completed') updates[`${id}/completedAt`] = now;
+    const rec = getAllRecords().find(r => r.id === id);
+    const origin = rec?._originCenterId || centerId;
+    if (!updatesByCenter[origin]) updatesByCenter[origin] = {};
+    updatesByCenter[origin][`${id}/replacementStatus`] = status;
+    updatesByCenter[origin][`${id}/updatedAt`] = now;
+    if (status === 'completed') updatesByCenter[origin][`${id}/completedAt`] = now;
   });
   try {
-    await update(ref(db, `centers/${centerId}/classChanges`), updates);
+    for (const [origin, upd] of Object.entries(updatesByCenter)) {
+      await update(ref(db, `centers/${origin}/classChanges`), upd);
+    }
     showToast(t('cc.bulkSuccess', { count: selectedIds.size }), 'success');
     selectedIds.clear(); updateBulkBar(); updateSelectAllCheck();
   } catch (err) { console.error('Bulk update failed:', err); showToast(t('cc.bulkFailed'), 'error'); }
 }
 
 async function handleRowAction(action, id) {
-  const record = classChangesCache.find(r => r.id === id);
+  const record = getAllRecords().find(r => r.id === id);
   if (!record) return;
   switch (action) {
     case 'view': openDetail(id); break;
-    case 'edit': openAddEditModal(id); break;
+    case 'edit':
+      if (record._incoming) return showToast('📥 Incoming records can only be edited at their home center', 'error');
+      openAddEditModal(id); break;
     case 'complete': {
       if (!await showConfirm(t('cc.completeTitle'), t('cc.completeMsg', { name: record.nameCn || record.nameEn }))) return;
       await updateRecord(id, { replacementStatus: 'completed', completedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
@@ -791,25 +881,40 @@ async function handleRowAction(action, id) {
 }
 
 async function updateRecord(id, updates) {
-  try { await update(ref(db, `centers/${centerId}/classChanges/${id}`), updates); }
+  const rec = getAllRecords().find(r => r.id === id);
+  const origin = rec?._originCenterId || centerId;
+  try { await update(ref(db, `centers/${origin}/classChanges/${id}`), updates); }
   catch (err) { console.error('Update failed:', err); showToast(t('cc.updateFailed'), 'error'); }
 }
 
 // ============================================
 // ADD / EDIT MODAL
 // ============================================
+function populateReplacementCenters(selectedId) {
+  const sel = document.getElementById('replacementCenterSelect');
+  if (!sel) return;
+  sel.innerHTML = '';
+  Object.entries(allCentersData).forEach(([cid, c]) => {
+    const opt = document.createElement('option');
+    opt.value = cid;
+    opt.textContent = c.name + (cid === centerId ? ' (this center)' : '');
+    sel.appendChild(opt);
+  });
+  sel.value = selectedId || centerId;
+}
+
 function wireAddEditModal() {
-  document.getElementById('addRequestBtn').addEventListener('click', () => openAddEditModal(null));
-  document.getElementById('closeCcModal').addEventListener('click', closeAddEditModal);
-  document.getElementById('cancelCcBtn').addEventListener('click', closeAddEditModal);
-  document.getElementById('ccModal').addEventListener('click', (e) => { if (e.target.id === 'ccModal') closeAddEditModal(); });
+  document.getElementById('addRequestBtn')?.addEventListener('click', () => openAddEditModal(null));
+  document.getElementById('closeCcModal')?.addEventListener('click', closeAddEditModal);
+  document.getElementById('cancelCcBtn')?.addEventListener('click', closeAddEditModal);
+  document.getElementById('ccModal')?.addEventListener('click', (e) => { if (e.target.id === 'ccModal') closeAddEditModal(); });
 
   const searchInput = document.getElementById('studentSearch');
   const resultsDiv = document.getElementById('studentResults');
 
-  searchInput.addEventListener('input', (e) => {
+  searchInput?.addEventListener('input', (e) => {
     const q = e.target.value.trim().toLowerCase();
-    if (!q) { resultsDiv.classList.add('hidden'); return; }
+    if (!q) { resultsDiv?.classList.add('hidden'); return; }
     const matches = allStudents.filter(s => {
       if (!hasCurrentSubjects(s)) return false;
       const hay = [s.nameCn, s.namePinyin, s.nickname, s.studentNumber, s.grade, s.school].filter(Boolean).join(' ').toLowerCase();
@@ -817,30 +922,38 @@ function wireAddEditModal() {
     }).slice(0, 15);
     renderStudentResults(matches);
   });
-  searchInput.addEventListener('focus', () => { if (searchInput.value.trim()) searchInput.dispatchEvent(new Event('input')); });
-  document.addEventListener('click', (e) => { if (!e.target.closest('.search-wrapper')) resultsDiv.classList.add('hidden'); });
+  searchInput?.addEventListener('focus', () => { if (searchInput.value.trim()) searchInput.dispatchEvent(new Event('input')); });
+  document.addEventListener('click', (e) => { if (!e.target.closest('.search-wrapper')) resultsDiv?.classList.add('hidden'); });
 
-  document.getElementById('changeStudentBtn').addEventListener('click', () => {
+  document.getElementById('changeStudentBtn')?.addEventListener('click', () => {
     selectedStudent = null;
-    document.getElementById('selectedStudentId').value = '';
-    document.getElementById('selectedStudentInfo').classList.add('hidden');
-    searchInput.value = ''; searchInput.focus();
+    const sid = document.getElementById('selectedStudentId');
+    if (sid) sid.value = '';
+    document.getElementById('selectedStudentInfo')?.classList.add('hidden');
+    if (searchInput) searchInput.value = ''; 
+    searchInput?.focus();
     populateSubjects(null);
   });
 
-  document.getElementById('typeSelect').addEventListener('change', (e) => {
+  document.getElementById('typeSelect')?.addEventListener('change', (e) => {
     const isCC = e.target.value.startsWith('CC');
-    document.getElementById('ccForm').classList.toggle('hide-replacement', !isCC);
-    document.getElementById('replacementDate').required = isCC;
-    document.getElementById('replacementTime').required = isCC;
-    if (e.target.value === 'CC_PU' || e.target.value === 'MC_PU') document.getElementById('homeworkPU').checked = true;
+    document.getElementById('ccForm')?.classList.toggle('hide-replacement', !isCC);
+    const rd = document.getElementById('replacementDate');
+    const rt = document.getElementById('replacementTime');
+    if (rd) rd.required = isCC;
+    if (rt) rt.required = isCC;
+    if (e.target.value === 'CC_PU' || e.target.value === 'MC_PU') {
+      const pu = document.getElementById('homeworkPU');
+      if (pu) pu.checked = true;
+    }
   });
 
-  document.getElementById('ccForm').addEventListener('submit', handleFormSubmit);
+  document.getElementById('ccForm')?.addEventListener('submit', handleFormSubmit);
 }
 
 function renderStudentResults(matches) {
   const div = document.getElementById('studentResults');
+  if (!div) return;
   div.innerHTML = '';
   if (matches.length === 0) {
     div.innerHTML = `<div class="search-result-item" style="color:#94a3b8;cursor:default;">${t('cc.noStudentsFound')}</div>`;
@@ -861,17 +974,22 @@ function renderStudentResults(matches) {
 
 function selectStudentForForm(s) {
   selectedStudent = s;
-  document.getElementById('selectedStudentId').value = s.id;
-  document.getElementById('studentSearch').value = '';
-  document.getElementById('studentResults').classList.add('hidden');
-  document.getElementById('selectedStudentName').textContent = `${s.nameCn || 'Unknown'} ${s.nickname ? `(${s.nickname})` : ''}`;
-  document.getElementById('selectedStudentMeta').textContent = [s.namePinyin, s.grade ? `Grade ${s.grade}` : '', s.studentNumber ? `#${s.studentNumber}` : '', s.school].filter(Boolean).join(' • ');
-  document.getElementById('selectedStudentInfo').classList.remove('hidden');
+  const sid = document.getElementById('selectedStudentId');
+  if (sid) sid.value = s.id;
+  const si = document.getElementById('studentSearch');
+  if (si) si.value = '';
+  document.getElementById('studentResults')?.classList.add('hidden');
+  const sn = document.getElementById('selectedStudentName');
+  if (sn) sn.textContent = `${s.nameCn || 'Unknown'} ${s.nickname ? `(${s.nickname})` : ''}`;
+  const sm = document.getElementById('selectedStudentMeta');
+  if (sm) sm.textContent = [s.namePinyin, s.grade ? `Grade ${s.grade}` : '', s.studentNumber ? `#${s.studentNumber}` : '', s.school].filter(Boolean).join(' • ');
+  document.getElementById('selectedStudentInfo')?.classList.remove('hidden');
   populateSubjects(s);
 }
 
 function populateSubjects(student) {
   const select = document.getElementById('subjectSelect');
+  if (!select) return;
   select.innerHTML = `<option value="">${t('cc.selectSubject')}</option>`;
   if (!student) return;
   getCurrentSubjects(student).forEach(s => {
@@ -886,26 +1004,42 @@ function populateSubjects(student) {
 function openAddEditModal(id) {
   editingId = id;
   const form = document.getElementById('ccForm');
-  form.reset();
-  form.classList.remove('hide-replacement');
-  document.getElementById('studentResults').classList.add('hidden');
+  if (form) {
+    form.reset();
+    form.classList.remove('hide-replacement');
+  }
+  document.getElementById('studentResults')?.classList.add('hidden');
   selectedStudent = null;
-  document.getElementById('selectedStudentInfo').classList.add('hidden');
-  document.getElementById('selectedStudentId').value = '';
-  document.getElementById('subjectSelect').innerHTML = `<option value="">${t('cc.selectSubject')}</option>`;
+  document.getElementById('selectedStudentInfo')?.classList.add('hidden');
+  const sid = document.getElementById('selectedStudentId');
+  if (sid) sid.value = '';
+  const ss = document.getElementById('subjectSelect');
+  if (ss) ss.innerHTML = `<option value="">${t('cc.selectSubject')}</option>`;
+
+  const currentCenterDisplay = document.getElementById('currentCenterDisplay');
+  if (currentCenterDisplay) currentCenterDisplay.value = allCentersData[centerId]?.name || centerId;
+  populateReplacementCenters(centerId);
+  const classCountInput = document.getElementById('classCountInput');
+  if (classCountInput) classCountInput.value = 1;
 
   if (id) {
-    const r = classChangesCache.find(x => x.id === id);
+    const r = getAllRecords().find(x => x.id === id);
     if (!r) return;
-    document.getElementById('ccModalTitle').textContent = t('cc.editTitle');
-    document.getElementById('absenceDate').value = r.absenceDate || '';
-    document.getElementById('originalTime').value = r.originalTime || '';
-    document.getElementById('replacementDate').value = r.replacementDate || '';
-    document.getElementById('replacementTime').value = r.replacementTime || '';
-    document.getElementById('typeSelect').value = r.type || 'CC_NO_PU';
-    document.getElementById('statusSelect').value = r.replacementStatus || 'scheduled';
-    document.getElementById('homeworkPU').checked = !!r.homeworkPickedUp;
-    document.getElementById('noteInput').value = r.note || '';
+    const title = document.getElementById('ccModalTitle');
+    if (title) title.textContent = t('cc.editTitle');
+    
+    const ad = document.getElementById('absenceDate'); if (ad) ad.value = r.absenceDate || '';
+    const ot = document.getElementById('originalTime'); if (ot) ot.value = r.originalTime || '';
+    const rd = document.getElementById('replacementDate'); if (rd) rd.value = r.replacementDate || '';
+    const rt = document.getElementById('replacementTime'); if (rt) rt.value = r.replacementTime || '';
+    const ts = document.getElementById('typeSelect'); if (ts) ts.value = r.type || 'CC_NO_PU';
+    const sts = document.getElementById('statusSelect'); if (sts) sts.value = r.replacementStatus || 'scheduled';
+    const pu = document.getElementById('homeworkPU'); if (pu) pu.checked = !!r.homeworkPickedUp;
+    const ni = document.getElementById('noteInput'); if (ni) ni.value = r.note || '';
+    
+    populateReplacementCenters(r.replacementCenterId || centerId);
+    if (classCountInput) classCountInput.value = r.classCount || 1;
+
     const s = allStudentsMap.get(r.studentId);
     if (s) selectStudentForForm(s);
     setTimeout(() => {
@@ -915,46 +1049,63 @@ function openAddEditModal(id) {
         opt.value = r.subject; opt.textContent = `${r.subject} (${r.subjectLevel || '-'})`; opt.dataset.level = r.subjectLevel || '';
         select.appendChild(opt);
       }
-      select.value = r.subject || '';
+      if (select) select.value = r.subject || '';
     }, 50);
-    form.classList.toggle('hide-replacement', !(r.type || '').startsWith('CC'));
+    if (form) form.classList.toggle('hide-replacement', !(r.type || '').startsWith('CC'));
   } else {
-    document.getElementById('ccModalTitle').textContent = t('cc.addTitle');
-    document.getElementById('statusSelect').value = 'scheduled';
-    document.getElementById('absenceDate').value = localISODate(); // 🆕 sensible default
+    const title = document.getElementById('ccModalTitle');
+    if (title) title.textContent = t('cc.addTitle');
+    const sts = document.getElementById('statusSelect'); if (sts) sts.value = 'scheduled';
+    const ad = document.getElementById('absenceDate'); if (ad) ad.value = localISODate();
   }
-  document.getElementById('ccModal').classList.remove('hidden');
+  document.getElementById('ccModal')?.classList.remove('hidden');
 }
 
 function closeAddEditModal() {
-  document.getElementById('ccModal').classList.add('hidden');
+  document.getElementById('ccModal')?.classList.add('hidden');
   editingId = null; selectedStudent = null;
 }
 
 async function handleFormSubmit(e) {
   e.preventDefault();
-  const studentId = document.getElementById('selectedStudentId').value;
+  const studentIdEl = document.getElementById('selectedStudentId');
+  const studentId = studentIdEl ? studentIdEl.value : '';
   if (!studentId) return showToast(t('cc.selectStudentFirst'), 'error');
   const student = allStudentsMap.get(studentId);
   if (!student) return;
 
   const subjectSelect = document.getElementById('subjectSelect');
-  const subject = subjectSelect.value;
-  const subjectLevel = subjectSelect.selectedOptions[0]?.dataset?.level || '';
+  const subject = subjectSelect ? subjectSelect.value : '';
+  const subjectLevel = subjectSelect?.selectedOptions[0]?.dataset?.level || '';
   if (!subject) return showToast(t('cc.selectSubjectFirst'), 'error');
 
-  const type = document.getElementById('typeSelect').value;
+  const typeEl = document.getElementById('typeSelect');
+  const type = typeEl ? typeEl.value : '';
   const isCC = type.startsWith('CC');
-  const absenceDate = document.getElementById('absenceDate').value;
-  const originalTime = document.getElementById('originalTime').value;
-  const replacementDate = isCC ? document.getElementById('replacementDate').value : '';
-  const replacementTime = isCC ? document.getElementById('replacementTime').value : '';
+  
+  const absenceDateEl = document.getElementById('absenceDate');
+  const originalTimeEl = document.getElementById('originalTime');
+  const replacementDateEl = document.getElementById('replacementDate');
+  const replacementTimeEl = document.getElementById('replacementTime');
+  const statusSelectEl = document.getElementById('statusSelect');
+  const homeworkPUEl = document.getElementById('homeworkPU');
+  const noteInputEl = document.getElementById('noteInput');
+
+  const absenceDate = absenceDateEl ? absenceDateEl.value : '';
+  const originalTime = originalTimeEl ? originalTimeEl.value : '';
+  const replacementDate = isCC && replacementDateEl ? replacementDateEl.value : '';
+  const replacementTime = isCC && replacementTimeEl ? replacementTimeEl.value : '';
+
+  const replacementCenterId = isCC ? (document.getElementById('replacementCenterSelect')?.value || centerId) : centerId;
+  const replacementCenterName = isCC ? (allCentersData[replacementCenterId]?.name || '') : (allCentersData[centerId]?.name || '');
+  const classCountEl = document.getElementById('classCountInput');
+  const classCount = Math.max(1, parseInt(classCountEl?.value, 10) || 1);
 
   if (!absenceDate) return showToast(t('cc.selectAbsenceDate'), 'error');
   if (isCC && (!replacementDate || !replacementTime)) return showToast(t('cc.selectReplacement'), 'error');
 
   const saveBtn = document.getElementById('saveCcBtn');
-  saveBtn.disabled = true; saveBtn.textContent = t('common.saving');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = t('common.saving'); }
 
   try {
     const now = new Date().toISOString();
@@ -969,9 +1120,10 @@ async function handleFormSubmit(e) {
       pinyin: student.namePinyin || '',
       subject, subjectLevel, type, absenceDate, originalTime,
       replacementDate, replacementTime,
-      replacementStatus: document.getElementById('statusSelect').value,
-      homeworkPickedUp: document.getElementById('homeworkPU').checked,
-      note: document.getElementById('noteInput').value.trim(),
+      replacementCenterId, replacementCenterName, classCount,
+      replacementStatus: statusSelectEl ? statusSelectEl.value : 'scheduled',
+      homeworkPickedUp: homeworkPUEl ? homeworkPUEl.checked : false,
+      note: noteInputEl ? noteInputEl.value.trim() : '',
       homeCenterId: student.homeCenterId || centerId,
       homeCenterName: student.homeCenterName || '',
       isVisiting: !!(student.homeCenterId && student.homeCenterId !== centerId),
@@ -979,13 +1131,14 @@ async function handleFormSubmit(e) {
     };
 
     if (editingId) {
-      const existing = classChangesCache.find(r => r.id === editingId);
+      const existing = getAllRecords().find(r => r.id === editingId);
+      const origin = existing?._originCenterId || centerId;
       const history = Array.isArray(existing?.history) ? [...existing.history] : [];
       history.push({ at: now, by: auth.currentUser?.email || '', action: 'edited' });
       payload.history = history;
       payload.createdAt = existing?.createdAt || now;
       payload.createdBy = existing?.createdBy || auth.currentUser?.uid;
-      await update(ref(db, `centers/${centerId}/classChanges/${editingId}`), payload);
+      await update(ref(db, `centers/${origin}/classChanges/${editingId}`), payload);
       showToast(t('cc.editSuccess'), 'success');
     } else {
       payload.createdAt = now;
@@ -999,7 +1152,7 @@ async function handleFormSubmit(e) {
     console.error('Save failed:', err);
     showToast(t('cc.saveFailed'), 'error');
   } finally {
-    saveBtn.disabled = false; saveBtn.textContent = t('cc.save');
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = t('cc.save'); }
   }
 }
 
@@ -1007,19 +1160,22 @@ async function handleFormSubmit(e) {
 // DETAIL MODAL
 // ============================================
 function wireDetailModal() {
-  document.getElementById('closeDetailModal').addEventListener('click', closeDetailModal);
-  document.getElementById('closeDetailBtn').addEventListener('click', closeDetailModal);
-  document.getElementById('detailModal').addEventListener('click', (e) => { if (e.target.id === 'detailModal') closeDetailModal(); });
-  document.getElementById('editDetailBtn').addEventListener('click', () => {
+  document.getElementById('closeDetailModal')?.addEventListener('click', closeDetailModal);
+  document.getElementById('closeDetailBtn')?.addEventListener('click', closeDetailModal);
+  document.getElementById('detailModal')?.addEventListener('click', (e) => { if (e.target.id === 'detailModal') closeDetailModal(); });
+  document.getElementById('editDetailBtn')?.addEventListener('click', () => {
     if (!currentDetailId) return;
     closeDetailModal();
     setTimeout(() => openAddEditModal(currentDetailId), 150);
   });
-  document.getElementById('deleteDetailBtn').addEventListener('click', async () => {
+  document.getElementById('deleteDetailBtn')?.addEventListener('click', async () => {
     if (!currentDetailId) return;
+    const rec = getAllRecords().find(r => r.id === currentDetailId);
+    if (rec?._incoming) return showToast('📥 Incoming records can only be deleted at their home center', 'error');
     if (!await showConfirm(t('cc.deleteTitle'), t('cc.deleteMsg'))) return;
     try {
-      await remove(ref(db, `centers/${centerId}/classChanges/${currentDetailId}`));
+      const origin = rec?._originCenterId || centerId;
+      await remove(ref(db, `centers/${origin}/classChanges/${currentDetailId}`));
       showToast(t('cc.deleteSuccess'), 'success');
       closeDetailModal();
     } catch (err) { console.error('Delete failed:', err); showToast(t('cc.deleteFailed'), 'error'); }
@@ -1027,7 +1183,7 @@ function wireDetailModal() {
 }
 
 function openDetail(id) {
-  const r = classChangesCache.find(x => x.id === id);
+  const r = getAllRecords().find(x => x.id === id);
   if (!r) return;
   currentDetailId = id;
 
@@ -1042,7 +1198,10 @@ function openDetail(id) {
 
   const parentLine = r.source === 'parent' ? `<div class="detail-item full-width"><strong>${t('cc.parentBadgeTitle')}</strong><span>📲 ${escapeHtml(r.parentRequestId || '')}</span></div>` : '';
 
-  document.getElementById('detailContent').innerHTML = `
+  const detailContent = document.getElementById('detailContent');
+  if (!detailContent) return;
+
+  detailContent.innerHTML = `
     <div class="detail-section"><h4>👤 ${t('cc.detailStudent')}</h4>
       <div class="detail-grid">
         <div class="detail-item"><strong>${t('cc.name')}</strong><span>${escapeHtml(r.nameCn || r.nameEn || 'Unknown')} ${r.nickname ? `(${escapeHtml(r.nickname)})` : ''}</span></div>
@@ -1061,16 +1220,22 @@ function openDetail(id) {
         <div class="detail-item"><strong>${t('cc.homeworkPU')}</strong><span>${r.homeworkPickedUp ? '✓' : '—'}</span></div>
         <div class="detail-item"><strong>${t('cc.absenceDate')}</strong><span>${formatDate(r.absenceDate)} ${r.originalTime || ''}</span></div>
         <div class="detail-item"><strong>${t('cc.replacementDate')}</strong><span>${r.replacementDate ? formatDate(r.replacementDate) + ' ' + (r.replacementTime || '') : '—'}</span></div>
+        <div class="detail-item"><strong>Current Center</strong><span>${escapeHtml(r._originCenterName || '-')}</span></div>
+        <div class="detail-item"><strong>Replacement Center</strong><span>${escapeHtml(r.replacementCenterName || r._originCenterName || '-')}</span></div>
+        <div class="detail-item"><strong>Classes</strong><span>${(parseInt(r.classCount,10)||1) > 1 ? '×' + r.classCount : '1'}</span></div>
         ${r.note ? `<div class="detail-item full-width"><strong>${t('cc.note')}</strong><span>${escapeHtml(r.note)}</span></div>` : ''}
         ${parentLine}
       </div>
     </div>
     <div class="detail-section"><h4>📜 ${t('cc.historyTimeline')}</h4>${historyHtml}</div>`;
-  document.getElementById('detailModal').classList.remove('hidden');
+    
+  document.getElementById('detailModal')?.classList.remove('hidden');
+  const deleteBtn = document.getElementById('deleteDetailBtn');
+  if (deleteBtn) deleteBtn.style.display = r._incoming ? 'none' : '';
 }
 
 function closeDetailModal() {
-  document.getElementById('detailModal').classList.add('hidden');
+  document.getElementById('detailModal')?.classList.add('hidden');
   currentDetailId = null;
 }
 
@@ -1078,13 +1243,16 @@ function closeDetailModal() {
 // EXPORT (CC)
 // ============================================
 function wireExport() {
-  document.getElementById('exportBtn').addEventListener('click', exportToExcel);
+  document.getElementById('exportBtn')?.addEventListener('click', exportToExcel);
 }
 
 function exportToExcel() {
-  const records = getFilteredRecords(); // 🆕 respects month/status filters
+  const records = getFilteredRecords();
   if (records.length === 0) return showToast(t('cc.nothingToExport'), 'error');
   const rows = records.map(r => ({
+    'Home Center': r._originCenterName || '',
+    'Replacement Center': r.replacementCenterName || r._originCenterName || '',
+    'Classes': r.classCount || 1,
     'Student': r.nameCn || r.nameEn || '', 'Nickname': r.nickname || '', 'Pinyin': r.pinyin || '',
     'Grade': r.grade || '', 'Student #': r.studentNumber || '', 'Subject': r.subject || '',
     'Level': r.subjectLevel || '', 'Type': formatType(r.type), 'Absence Date': r.absenceDate || '',
@@ -1131,10 +1299,10 @@ function wireLinks() {
       renderLinks();
     });
   });
-  document.getElementById('linksSearch').addEventListener('input', (e) => { linksFilter.search = e.target.value.trim(); renderLinks(); });
-  document.getElementById('closeLinkCard').addEventListener('click', () => document.getElementById('linkCardModal').classList.add('hidden'));
-  document.getElementById('linkCardModal').addEventListener('click', (e) => { if (e.target.id === 'linkCardModal') e.target.classList.add('hidden'); });
-  document.getElementById('closePhoneModal').addEventListener('click', () => document.getElementById('phoneModal').classList.add('hidden'));
+  document.getElementById('linksSearch')?.addEventListener('input', (e) => { linksFilter.search = e.target.value.trim(); renderLinks(); });
+  document.getElementById('closeLinkCard')?.addEventListener('click', () => document.getElementById('linkCardModal')?.classList.add('hidden'));
+  document.getElementById('linkCardModal')?.addEventListener('click', (e) => { if (e.target.id === 'linkCardModal') e.target.classList.add('hidden'); });
+  document.getElementById('closePhoneModal')?.addEventListener('click', () => document.getElementById('phoneModal')?.classList.add('hidden'));
 }
 
 function getVisibleFamilies() {
@@ -1157,49 +1325,54 @@ function renderLinks() {
   const cards = document.getElementById('linksCards');
   const empty = document.getElementById('linksEmpty');
   const fams = getVisibleFamilies();
-  tbody.innerHTML = ''; cards.innerHTML = '';
-  if (fams.length === 0) { empty.classList.remove('hidden'); return; }
-  empty.classList.add('hidden');
+  if (tbody) tbody.innerHTML = ''; 
+  if (cards) cards.innerHTML = '';
+  if (fams.length === 0) { empty?.classList.remove('hidden'); return; }
+  empty?.classList.add('hidden');
 
   fams.forEach(fam => {
     const portal = portalForFamily(fam);
-    const tr = document.createElement('tr');
-    if (!portal) tr.classList.add('no-link');
-    tr.innerHTML = `
-      <td><div class="family-cell">
-        <span class="family-name">${escapeHtml(familyDisplayName(fam))}</span>
-        <span class="family-sub">${fam.members.map(m => escapeHtml(m.data.namePinyin || '')).filter(Boolean).join(', ')}</span>
-      </div></td>
-      <td>${fam.members.length}</td>
-      <td>${portal ? (portal.meta.active === false ? `<span class="link-status-badge ls-disabled">${t('links.statusDisabled')}</span>` : `<span class="link-status-badge ls-active">${t('links.statusActive')}</span>`) : `<span class="link-status-badge ls-none">${t('links.statusNoLink')}</span>`}</td>
-      <td>${portal ? `<span class="code-chip">${escapeHtml(portal.meta.code || '')}</span>` : '—'}</td>
-      <td>${portal?.meta.createdAt ? new Date(portal.meta.createdAt).toLocaleDateString() : '—'}</td>
-      <td><div class="link-actions">
-        ${portal ? `<button class="lc-btn" data-la="card" data-fam="${fam.key}">📇 ${t('links.openCard')}</button>` : ''}
-        <button class="lc-btn ${portal ? 'warn' : 'gen'}" data-la="gen" data-fam="${fam.key}">${portal ? `♻️ ${t('links.regenerate')}` : `✨ ${t('links.generate')}`}</button>
-        ${portal ? `<button class="lc-btn warn" data-la="toggle" data-fam="${fam.key}">${portal.meta.active === false ? `▶️ ${t('links.enable')}` : `⏸ ${t('links.disable')}`}</button>` : ''}
-      </div></td>`;
-    tbody.appendChild(tr);
+    if (tbody) {
+      const tr = document.createElement('tr');
+      if (!portal) tr.classList.add('no-link');
+      tr.innerHTML = `
+        <td><div class="family-cell">
+          <span class="family-name">${escapeHtml(familyDisplayName(fam))}</span>
+          <span class="family-sub">${fam.members.map(m => escapeHtml(m.data.namePinyin || '')).filter(Boolean).join(', ')}</span>
+        </div></td>
+        <td>${fam.members.length}</td>
+        <td>${portal ? (portal.meta.active === false ? `<span class="link-status-badge ls-disabled">${t('links.statusDisabled')}</span>` : `<span class="link-status-badge ls-active">${t('links.statusActive')}</span>`) : `<span class="link-status-badge ls-none">${t('links.statusNoLink')}</span>`}</td>
+        <td>${portal ? `<span class="code-chip">${escapeHtml(portal.meta.code || '')}</span>` : '—'}</td>
+        <td>${portal?.meta.createdAt ? new Date(portal.meta.createdAt).toLocaleDateString() : '—'}</td>
+        <td><div class="link-actions">
+          ${portal ? `<button class="lc-btn" data-la="card" data-fam="${fam.key}">📇 ${t('links.openCard')}</button>` : ''}
+          <button class="lc-btn ${portal ? 'warn' : 'gen'}" data-la="gen" data-fam="${fam.key}">${portal ? `♻️ ${t('links.regenerate')}` : `✨ ${t('links.generate')}`}</button>
+          ${portal ? `<button class="lc-btn warn" data-la="toggle" data-fam="${fam.key}">${portal.meta.active === false ? `▶️ ${t('links.enable')}` : `⏸ ${t('links.disable')}`}</button>` : ''}
+        </div></td>`;
+      tbody.appendChild(tr);
+    }
 
-    const card = document.createElement('div');
-    card.className = `link-card ${portal ? '' : 'no-link'}`;
-    card.innerHTML = `
-      <div style="display:flex;justify-content:space-between;gap:0.5rem;align-items:flex-start;">
-        <div>
-          <div class="cc-card-name">${escapeHtml(familyDisplayName(fam))}</div>
-          <div class="family-sub">${fam.members.map(m => `${escapeHtml(m.data.namePinyin || m.data.nameCn || '')}${m.centerId !== centerId ? ' 🏫' : ''}`).join(' • ')}</div>
+    if (cards) {
+      const card = document.createElement('div');
+      card.className = `link-card ${portal ? '' : 'no-link'}`;
+      card.innerHTML = `
+        <div style="display:flex;justify-content:space-between;gap:0.5rem;align-items:flex-start;">
+          <div>
+            <div class="cc-card-name">${escapeHtml(familyDisplayName(fam))}</div>
+            <div class="family-sub">${fam.members.map(m => `${escapeHtml(m.data.namePinyin || m.data.nameCn || '')}${m.centerId !== centerId ? ' 🏫' : ''}`).join(' • ')}</div>
+          </div>
+          ${portal
+            ? (portal.meta.active === false ? `<span class="link-status-badge ls-disabled">${t('links.statusDisabled')}</span>` : `<span class="link-status-badge ls-active">${t('links.statusActive')}</span>`)
+            : `<span class="link-status-badge ls-none">${t('links.statusNoLink')}</span>`}
         </div>
-        ${portal
-          ? (portal.meta.active === false ? `<span class="link-status-badge ls-disabled">${t('links.statusDisabled')}</span>` : `<span class="link-status-badge ls-active">${t('links.statusActive')}</span>`)
-          : `<span class="link-status-badge ls-none">${t('links.statusNoLink')}</span>`}
-      </div>
-      ${portal ? `<div style="margin:0.4rem 0;"><span class="code-chip">${escapeHtml(portal.meta.code || '')}</span></div>` : ''}
-      <div class="link-actions" style="margin-top:0.5rem;">
-        ${portal ? `<button class="lc-btn" data-la="card" data-fam="${fam.key}">📇 ${t('links.openCard')}</button>` : ''}
-        <button class="lc-btn ${portal ? 'warn' : 'gen'}" data-la="gen" data-fam="${fam.key}">${portal ? `♻️ ${t('links.regenerate')}` : `✨ ${t('links.generate')}`}</button>
-        ${portal ? `<button class="lc-btn warn" data-la="toggle" data-fam="${fam.key}">${portal.meta.active === false ? `▶️ ${t('links.enable')}` : `⏸ ${t('links.disable')}`}</button>` : ''}
-      </div>`;
-    cards.appendChild(card);
+        ${portal ? `<div style="margin:0.4rem 0;"><span class="code-chip">${escapeHtml(portal.meta.code || '')}</span></div>` : ''}
+        <div class="link-actions" style="margin-top:0.5rem;">
+          ${portal ? `<button class="lc-btn" data-la="card" data-fam="${fam.key}">📇 ${t('links.openCard')}</button>` : ''}
+          <button class="lc-btn ${portal ? 'warn' : 'gen'}" data-la="gen" data-fam="${fam.key}">${portal ? `♻️ ${t('links.regenerate')}` : `✨ ${t('links.generate')}`}</button>
+          ${portal ? `<button class="lc-btn warn" data-la="toggle" data-fam="${fam.key}">${portal.meta.active === false ? `▶️ ${t('links.enable')}` : `⏸ ${t('links.disable')}`}</button>` : ''}
+        </div>`;
+      cards.appendChild(card);
+    }
   });
 
   document.querySelectorAll('[data-la]').forEach(btn => {
@@ -1317,38 +1490,46 @@ function openLinkCardModal(fam) {
   if (!portal) return;
   currentCardFamilyKey = fam.key;
   const modal = document.getElementById('linkCardModal');
+  if (!modal) return;
 
-  document.getElementById('lcFamilyName').textContent = familyDisplayName(fam);
-  document.getElementById('lcStatusRow').innerHTML = portal.meta.active === false
+  const fn = document.getElementById('lcFamilyName');
+  if (fn) fn.textContent = familyDisplayName(fam);
+  const sr = document.getElementById('lcStatusRow');
+  if (sr) sr.innerHTML = portal.meta.active === false
     ? `<span class="link-status-badge ls-disabled">${t('links.statusDisabled')}</span>`
     : `<span class="link-status-badge ls-active">${t('links.statusActive')}</span>`;
 
   const url = parentPageUrl(portal.token);
-  document.getElementById('lcLink').value = url;
-  document.getElementById('lcCode').value = portal.meta.code || '';
+  const ll = document.getElementById('lcLink'); if (ll) ll.value = url;
+  const lc = document.getElementById('lcCode'); if (lc) lc.value = portal.meta.code || '';
 
   const qrDiv = document.getElementById('lcQr');
-  qrDiv.innerHTML = '';
-  if (typeof QRCode !== 'undefined') {
-    new QRCode(qrDiv, { text: url, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
+  if (qrDiv) {
+    qrDiv.innerHTML = '';
+    if (typeof QRCode !== 'undefined') {
+      new QRCode(qrDiv, { text: url, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
+    }
   }
 
-  document.getElementById('lcToggleActive').innerHTML = portal.meta.active === false
+  const ta = document.getElementById('lcToggleActive');
+  if (ta) ta.innerHTML = portal.meta.active === false
     ? `▶️ ${t('links.enable')}` : `⏸ ${t('links.disable')}`;
 
-  document.getElementById('lcCopyLink').onclick = () => copyText(url, t('links.copied'));
-  document.getElementById('lcCopyCode').onclick = () => copyText(portal.meta.code, t('links.copied'));
-  document.getElementById('lcWhatsapp').onclick = () => sendViaPhone(fam, 'wa');
-  document.getElementById('lcSms').onclick = () => sendViaPhone(fam, 'sms');
-  document.getElementById('lcEmail').onclick = () => sendViaEmail(fam);
-  document.getElementById('lcShare').onclick = async () => {
+  const cl = document.getElementById('lcCopyLink'); if (cl) cl.onclick = () => copyText(url, t('links.copied'));
+  const cc = document.getElementById('lcCopyCode'); if (cc) cc.onclick = () => copyText(portal.meta.code, t('links.copied'));
+  const cw = document.getElementById('lcWhatsapp'); if (cw) cw.onclick = () => sendViaPhone(fam, 'wa');
+  const cs = document.getElementById('lcSms'); if (cs) cs.onclick = () => sendViaPhone(fam, 'sms');
+  const ce = document.getElementById('lcEmail'); if (ce) ce.onclick = () => sendViaEmail(fam);
+  const csh = document.getElementById('lcShare'); 
+  if (csh) csh.onclick = async () => {
     const msg = buildShareMessage(fam, portal);
     if (navigator.share) {
       try { await navigator.share({ title: t('links.shareMsgTitle'), text: msg, url }); } catch {}
     } else copyText(msg, t('links.copied'));
   };
-  document.getElementById('lcPrint').onclick = () => printLinkCard(fam, portal);
-  document.getElementById('lcSync').onclick = async () => {
+  const cp = document.getElementById('lcPrint'); if (cp) cp.onclick = () => printLinkCard(fam, portal);
+  const csy = document.getElementById('lcSync');
+  if (csy) csy.onclick = async () => {
     await loadAllCentersData(); buildFamilies();
     const fam2 = familiesCache.find(f => f.key === fam.key) || fam;
     const p2 = portalForFamily(fam2);
@@ -1360,12 +1541,13 @@ function openLinkCardModal(fam) {
       } catch (err) { console.error(err); showToast(t('cc.saveFailed'), 'error'); }
     }
   };
-  document.getElementById('lcToggleActive').onclick = async () => {
+  if (ta) ta.onclick = async () => {
     await togglePortal(fam);
     const f2 = familiesCache.find(f => f.key === fam.key);
     if (f2) openLinkCardModal(f2);
   };
-  document.getElementById('lcRegenerate').onclick = async () => {
+  const cr = document.getElementById('lcRegenerate');
+  if (cr) cr.onclick = async () => {
     await generateOrRegenerate(fam);
     modal.classList.add('hidden');
   };
@@ -1407,15 +1589,16 @@ function sendViaPhone(fam, mode) {
   };
   if (phones.length === 1) return open(phones[0].num);
   const list = document.getElementById('phoneList');
+  if (!list) return;
   list.innerHTML = '';
   phones.forEach(p => {
     const btn = document.createElement('div');
     btn.className = 'phone-option';
     btn.innerHTML = `<span>${escapeHtml(p.num)}</span><small>${escapeHtml(p.label)}</small>`;
-    btn.addEventListener('click', () => { document.getElementById('phoneModal').classList.add('hidden'); open(p.num); });
+    btn.addEventListener('click', () => { document.getElementById('phoneModal')?.classList.add('hidden'); open(p.num); });
     list.appendChild(btn);
   });
-  document.getElementById('phoneModal').classList.remove('hidden');
+  document.getElementById('phoneModal')?.classList.remove('hidden');
 }
 
 function sendViaEmail(fam) {
@@ -1430,6 +1613,7 @@ function sendViaEmail(fam) {
 function printLinkCard(fam, portal) {
   const url = parentPageUrl(portal.token);
   const area = document.getElementById('printArea');
+  if (!area) return;
   area.innerHTML = `
     <div class="print-card">
       <h2>Kumon</h2>
@@ -1468,14 +1652,14 @@ function wirePending() {
       renderPending();
     });
   });
-  document.getElementById('pendingExportBtn').addEventListener('click', exportPending);
+  document.getElementById('pendingExportBtn')?.addEventListener('click', exportPending);
 
   const notifyBtn = document.getElementById('notifyBtn');
-  if (localStorage.getItem('cc_notify') === 'on' && 'Notification' in window && Notification.permission === 'granted') {
+  if (notifyBtn && localStorage.getItem('cc_notify') === 'on' && 'Notification' in window && Notification.permission === 'granted') {
     notifyBtn.classList.add('on');
     notifyBtn.innerHTML = `🔔 <span>${t('pending.notifyOn')}</span>`;
   }
-  notifyBtn.addEventListener('click', async () => {
+  notifyBtn?.addEventListener('click', async () => {
     if (!('Notification' in window)) return;
     const perm = await Notification.requestPermission();
     if (perm === 'granted') {
@@ -1485,11 +1669,11 @@ function wirePending() {
     }
   });
 
-  document.getElementById('closeRejectModal').addEventListener('click', () => document.getElementById('rejectModal').classList.add('hidden'));
-  document.getElementById('cancelRejectBtn').addEventListener('click', () => document.getElementById('rejectModal').classList.add('hidden'));
-  document.getElementById('confirmRejectBtn').addEventListener('click', confirmReject);
-  document.getElementById('closeReqDetail').addEventListener('click', () => document.getElementById('reqDetailModal').classList.add('hidden'));
-  document.getElementById('closeReqDetailBtn').addEventListener('click', () => document.getElementById('reqDetailModal').classList.add('hidden'));
+  document.getElementById('closeRejectModal')?.addEventListener('click', () => document.getElementById('rejectModal')?.classList.add('hidden'));
+  document.getElementById('cancelRejectBtn')?.addEventListener('click', () => document.getElementById('rejectModal')?.classList.add('hidden'));
+  document.getElementById('confirmRejectBtn')?.addEventListener('click', confirmReject);
+  document.getElementById('closeReqDetail')?.addEventListener('click', () => document.getElementById('reqDetailModal')?.classList.add('hidden'));
+  document.getElementById('closeReqDetailBtn')?.addEventListener('click', () => document.getElementById('reqDetailModal')?.classList.add('hidden'));
 }
 
 function allRequests() {
@@ -1508,9 +1692,10 @@ function renderPending() {
   const empty = document.getElementById('pendingEmpty');
   let reqs = allRequests();
   if (pendingFilter.seg !== 'all') reqs = reqs.filter(r => r.status === pendingFilter.seg);
-  tbody.innerHTML = ''; cards.innerHTML = '';
-  if (reqs.length === 0) { empty.classList.remove('hidden'); return; }
-  empty.classList.add('hidden');
+  if (tbody) tbody.innerHTML = ''; 
+  if (cards) cards.innerHTML = '';
+  if (reqs.length === 0) { empty?.classList.remove('hidden'); return; }
+  empty?.classList.add('hidden');
 
   reqs.forEach(r => {
     const otherCenter = r.studentCenterId && r.studentCenterId !== centerId;
@@ -1520,37 +1705,41 @@ function renderPending() {
       ? `<button class="action-btn action-complete" data-pa="approve" data-rid="${r.id}">✅ ${t('pending.approve')}</button> <button class="action-btn action-cancel" data-pa="reject" data-rid="${r.id}">🚫 ${t('pending.reject')}</button>`
       : `<button class="action-btn action-view" data-pa="view" data-rid="${r.id}">👁 ${t('pending.view')}</button>`;
 
-    const tr = document.createElement('tr');
-    tr.className = `pr-${r.status || 'pending'}`;
-    tr.innerHTML = `
-      <td>${new Date(r.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}${r.parentEditedAt ? `<span title="${escapeHtml(t('pending.editedByParent'))}"> ✏️</span>` : ''}</td>
-      <td><strong>${escapeHtml(cleanName(r.studentName) || cleanName(r.studentNameEn) || 'Unknown')}</strong>${cBadge}<br><small style="color:var(--text-light);">${escapeHtml(r.studentNameEn || '')}</small></td>
-      <td>${escapeHtml(r.subject || '')} ${r.subjectLevel ? `(${escapeHtml(r.subjectLevel)})` : ''}</td>
-      <td>${formatDate(r.absenceDate)}<br><small style="color:var(--text-light);">${escapeHtml(r.originalTime || '')}</small></td>
-      <td>${formatDate(r.preferredDate)}<br><small style="color:var(--text-light);">${escapeHtml(r.preferredTime || '')}${r.preferredCenterName ? ` @ ${escapeHtml(r.preferredCenterName)}` : ''}</small></td>
-      <td class="reason-cell">${escapeHtml(r.reason || '—')}</td>
-      <td>${statusPill}</td>
-      <td><div class="action-btn-group">${actions}</div></td>`;
-    tbody.appendChild(tr);
+    if (tbody) {
+      const tr = document.createElement('tr');
+      tr.className = `pr-${r.status || 'pending'}`;
+      tr.innerHTML = `
+        <td>${new Date(r.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}${r.parentEditedAt ? `<span title="${escapeHtml(t('pending.editedByParent'))}"> ✏️</span>` : ''}</td>
+        <td><strong>${escapeHtml(cleanName(r.studentName) || cleanName(r.studentNameEn) || 'Unknown')}</strong>${cBadge}<br><small style="color:var(--text-light);">${escapeHtml(r.studentNameEn || '')}</small></td>
+        <td>${escapeHtml(r.subject || '')} ${r.subjectLevel ? `(${escapeHtml(r.subjectLevel)})` : ''}</td>
+        <td>${formatDate(r.absenceDate)}<br><small style="color:var(--text-light);">${escapeHtml(r.originalTime || '')}</small></td>
+        <td>${formatDate(r.preferredDate)}<br><small style="color:var(--text-light);">${escapeHtml(r.preferredTime || '')}${r.preferredCenterName ? ` @ ${escapeHtml(r.preferredCenterName)}` : ''}</small></td>
+        <td class="reason-cell">${escapeHtml(r.reason || '—')}</td>
+        <td>${statusPill}</td>
+        <td><div class="action-btn-group">${actions}</div></td>`;
+      tbody.appendChild(tr);
+    }
 
-    const card = document.createElement('div');
-    card.className = `pending-card pc-${r.status || 'pending'}`;
-    card.innerHTML = `
-      <div style="display:flex;justify-content:space-between;gap:0.5rem;">
-        <div>
-          <div class="cc-card-name">${escapeHtml(cleanName(r.studentName) || cleanName(r.studentNameEn) || 'Unknown')} ${cBadge}</div>
-          <div class="cc-card-subject">${escapeHtml(r.subject || '')} ${r.subjectLevel ? `(${escapeHtml(r.subjectLevel)})` : ''}</div>
+    if (cards) {
+      const card = document.createElement('div');
+      card.className = `pending-card pc-${r.status || 'pending'}`;
+      card.innerHTML = `
+        <div style="display:flex;justify-content:space-between;gap:0.5rem;">
+          <div>
+            <div class="cc-card-name">${escapeHtml(cleanName(r.studentName) || cleanName(r.studentNameEn) || 'Unknown')} ${cBadge}</div>
+            <div class="cc-card-subject">${escapeHtml(r.subject || '')} ${r.subjectLevel ? `(${escapeHtml(r.subjectLevel)})` : ''}</div>
+          </div>
+          ${statusPill}
         </div>
-        ${statusPill}
-      </div>
-      <div class="cc-card-dates">
-        <div class="cc-card-date-item"><strong>${t('pending.colAbsence')}</strong><span>${formatDate(r.absenceDate)} ${r.originalTime || ''}</span></div>
-        <div class="cc-card-date-item"><strong>${t('pending.colPreferred')}</strong><span>${formatDate(r.preferredDate)} ${r.preferredTime || ''}</span></div>
-      </div>
-      ${r.reason ? `<div class="reason-cell" style="background:#f8fafc;padding:0.4rem;border-radius:6px;">💬 ${escapeHtml(r.reason)}</div>` : ''}
-      ${r.status === 'rejected' && rejectReasonText(r) ? `<div class="reason-cell" style="color:#b91c1c;">↩️ ${escapeHtml(rejectReasonText(r))}</div>` : ''}
-      <div class="cc-card-actions">${actions}</div>`;
-    cards.appendChild(card);
+        <div class="cc-card-dates">
+          <div class="cc-card-date-item"><strong>${t('pending.colAbsence')}</strong><span>${formatDate(r.absenceDate)} ${r.originalTime || ''}</span></div>
+          <div class="cc-card-date-item"><strong>${t('pending.colPreferred')}</strong><span>${formatDate(r.preferredDate)} ${r.preferredTime || ''}</span></div>
+        </div>
+        ${r.reason ? `<div class="reason-cell" style="background:#f8fafc;padding:0.4rem;border-radius:6px;">💬 ${escapeHtml(r.reason)}</div>` : ''}
+        ${r.status === 'rejected' && rejectReasonText(r) ? `<div class="reason-cell" style="color:#b91c1c;">↩️ ${escapeHtml(rejectReasonText(r))}</div>` : ''}
+        <div class="cc-card-actions">${actions}</div>`;
+      cards.appendChild(card);
+    }
   });
 
   document.querySelectorAll('[data-pa]').forEach(btn => {
@@ -1564,7 +1753,7 @@ function renderPending() {
     });
   });
 
-  tbody.querySelectorAll('tr').forEach(tr => {
+  tbody?.querySelectorAll('tr').forEach(tr => {
     tr.addEventListener('click', (e) => {
       if (e.target.tagName === 'BUTTON') return;
       const btn = tr.querySelector('[data-pa]');
@@ -1581,14 +1770,6 @@ function reqStatusLabel(s) {
 function rejectReasonText(r) {
   if (r.rejectReasonKey && r.rejectReasonKey !== 'other') return t(`pending.tpl${r.rejectReasonKey.charAt(0).toUpperCase()}${r.rejectReasonKey.slice(1)}`);
   return r.rejectReason || '';
-}
-
-function getCenterAbbr(name) {
-  if (!name) return '?';
-  const lower = name.toLowerCase();
-  const rules = [['pac tat', 'PT'], ['mei keng', 'MK'], ['tap siac', 'TS'], ['champs', 'C']];
-  for (const [m, a] of rules) if (lower.includes(m)) return a;
-  return (name.replace(/^kumon[\s.-]*/i, '').trim() || name).substring(0, 2).toUpperCase();
 }
 
 function cleanName(n) { return (n && n !== '-') ? n : ''; }
@@ -1648,15 +1829,19 @@ async function approveRequest(r) {
 
 function openRejectModal(r) {
   currentRejectReq = r;
-  document.getElementById('rejectTemplateSel').value = 'slotFull';
-  document.getElementById('rejectCustom').value = '';
-  document.getElementById('rejectModal').classList.remove('hidden');
+  const sel = document.getElementById('rejectTemplateSel');
+  if (sel) sel.value = 'slotFull';
+  const cust = document.getElementById('rejectCustom');
+  if (cust) cust.value = '';
+  document.getElementById('rejectModal')?.classList.remove('hidden');
 }
 
 async function confirmReject() {
   if (!currentRejectReq) return;
-  const key = document.getElementById('rejectTemplateSel').value;
-  const custom = document.getElementById('rejectCustom').value.trim();
+  const sel = document.getElementById('rejectTemplateSel');
+  const cust = document.getElementById('rejectCustom');
+  const key = sel ? sel.value : '';
+  const custom = cust ? cust.value.trim() : '';
   if (key === 'other' && !custom) return showToast(t('pending.rejectReasonPh'), 'error');
   try {
     await update(ref(db, `publicFamilyLinks/${centerId}/${currentRejectReq.token}/requests/${currentRejectReq.id}`), {
@@ -1666,7 +1851,7 @@ async function confirmReject() {
       reviewedAt: new Date().toISOString(),
       reviewedBy: auth.currentUser?.email || ''
     });
-    document.getElementById('rejectModal').classList.add('hidden');
+    document.getElementById('rejectModal')?.classList.add('hidden');
     showToast(t('pending.rejectedMsg'), 'success');
   } catch (err) { console.error(err); showToast(t('cc.saveFailed'), 'error'); }
 }
@@ -1681,7 +1866,10 @@ function openReqDetail(r) {
   if (r.parentEditedAt) timeline.push({ at: r.parentEditedAt, label: `✏️ ${t('pending.timelineEdited')}`, by: '' });
   timeline.sort((a, b) => String(a.at || '').localeCompare(String(b.at || '')));
 
-  document.getElementById('reqDetailContent').innerHTML = `
+  const reqDetailContent = document.getElementById('reqDetailContent');
+  if (!reqDetailContent) return;
+
+  reqDetailContent.innerHTML = `
     <div class="detail-section"><h4>📋 ${t('pending.detailTitle')}</h4>
       <div class="detail-grid">
         <div class="detail-item"><strong>${t('pending.colStudent')}</strong><span>${escapeHtml(r.studentName || '')} ${escapeHtml(r.studentNameEn || '')}</span></div>
@@ -1702,7 +1890,7 @@ function openReqDetail(r) {
           </div>`).join('')}
       </div>
     </div>`;
-  document.getElementById('reqDetailModal').classList.remove('hidden');
+  document.getElementById('reqDetailModal')?.classList.remove('hidden');
 }
 
 function exportPending() {
@@ -1740,8 +1928,8 @@ async function sweepExpiredRequests() {
 function updatePendingNotifications() {
   const pendings = allRequests().filter(r => r.status === 'pending');
   const badge = document.getElementById('pendingBadge');
-  if (pendings.length > 0) { badge.textContent = pendings.length; badge.classList.remove('hidden'); }
-  else badge.classList.add('hidden');
+  if (pendings.length > 0) { if (badge) { badge.textContent = pendings.length; badge.classList.remove('hidden'); } }
+  else badge?.classList.add('hidden');
 
   document.title = pendings.length > 0 ? `(${pendings.length}) ${BASE_TITLE}` : BASE_TITLE;
 
@@ -1763,21 +1951,23 @@ function updatePendingNotifications() {
 let confirmResolver = null;
 
 function wireConfirmModal() {
-  document.getElementById('confirmCancelBtn').addEventListener('click', () => {
-    document.getElementById('confirmModal').classList.add('hidden');
+  document.getElementById('confirmCancelBtn')?.addEventListener('click', () => {
+    document.getElementById('confirmModal')?.classList.add('hidden');
     if (confirmResolver) confirmResolver(false);
   });
-  document.getElementById('confirmOkBtn').addEventListener('click', () => {
-    document.getElementById('confirmModal').classList.add('hidden');
+  document.getElementById('confirmOkBtn')?.addEventListener('click', () => {
+    document.getElementById('confirmModal')?.classList.add('hidden');
     if (confirmResolver) confirmResolver(true);
   });
 }
 
 function showConfirm(title, message) {
   return new Promise(resolve => {
-    document.getElementById('confirmTitle').textContent = title;
-    document.getElementById('confirmMessage').textContent = message;
-    document.getElementById('confirmModal').classList.remove('hidden');
+    const ct = document.getElementById('confirmTitle');
+    if (ct) ct.textContent = title;
+    const cm = document.getElementById('confirmMessage');
+    if (cm) cm.textContent = message;
+    document.getElementById('confirmModal')?.classList.remove('hidden');
     confirmResolver = resolve;
   });
 }
@@ -1785,6 +1975,7 @@ function showConfirm(title, message) {
 let toastTimer = null;
 function showToast(message, type = 'success') {
   const toast = document.getElementById('toast');
+  if (!toast) return;
   toast.textContent = message;
   toast.className = `toast ${type}`;
   clearTimeout(toastTimer);

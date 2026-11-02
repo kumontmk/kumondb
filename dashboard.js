@@ -3830,60 +3830,46 @@ function renderDashboardAbsencePane() {
 function renderAbsenceSubjectRows() {
   const container = document.getElementById('dashAbsenceSubjectRows');
   const dateInput = document.getElementById('dashAbsenceDateInput');
-
   if (!container || !dateInput) return;
-
   const student = attendanceSelectedStudent;
   const dateStr = dateInput.value || dashAttendanceTodayISO();
-
   container.innerHTML = '';
-
   if (!student) return;
-
   const subjects = getDashAttendanceCurrentSubjects(student);
-
   if (!subjects.length) {
-    container.innerHTML = `
-      <div style="padding:0.8rem; border:1px solid #fecaca; background:#fee2e2; color:#b91c1c; border-radius:10px;">
-        ${dashAttendanceEscapeHtml(t('dashboard.attendance.noActiveSubjects'))}
-      </div>
-    `;
+    container.innerHTML = `<div style="padding:0.8rem; border:1px solid #fecaca; background:#fee2e2; color:#b91c1c; border-radius:10px;"> ${dashAttendanceEscapeHtml(t('dashboard.attendance.noActiveSubjects'))} </div>`;
     return;
+  }
+
+  // 🆕 Build center options from global cache
+  let centerOptionsHtml = '';
+  centerNamesCache.forEach((name, id) => {
+    const selected = id === centerId ? 'selected' : '';
+    const label = id === centerId ? `${dashAttendanceEscapeHtml(name)} (this center)` : dashAttendanceEscapeHtml(name);
+    centerOptionsHtml += `<option value="${dashAttendanceEscapeHtml(id)}" ${selected}>${label}</option>`;
+  });
+  if (!centerOptionsHtml) {
+    centerOptionsHtml = `<option value="${dashAttendanceEscapeHtml(centerId)}" selected>Current Center</option>`;
   }
 
   subjects.forEach((subject) => {
     const slot = getAbsenceSlotForDate(student, subject, dateStr);
-
     const row = document.createElement('div');
     row.className = 'dash-absence-subject-row';
-
     row.innerHTML = `
       <div class="dash-absence-subject-top">
-        <input
-          type="checkbox"
-          class="absence-subject-check"
-          value="${dashAttendanceEscapeHtml(subject.name)}"
-          data-level="${dashAttendanceEscapeHtml(subject.currentLevel || subject.startLevel || '')}"
-          data-day="${dashAttendanceEscapeHtml(slot.day)}"
-          data-time="${dashAttendanceEscapeHtml(slot.time)}"
-          checked
-        >
-
+        <input type="checkbox" class="absence-subject-check" value="${dashAttendanceEscapeHtml(subject.name)}" data-level="${dashAttendanceEscapeHtml(subject.currentLevel || subject.startLevel || '')}" data-day="${dashAttendanceEscapeHtml(slot.day)}" data-time="${dashAttendanceEscapeHtml(slot.time)}" checked>
         <div class="dash-absence-subject-body">
           <div class="dash-absence-subject-name">
             ${dashAttendanceEscapeHtml(subject.name)}
-            <span style="color:#64748b; font-weight:600;">
-              (${dashAttendanceEscapeHtml(subject.currentLevel || subject.startLevel || '?')})
-            </span>
+            <span style="color:#64748b; font-weight:600;">(${dashAttendanceEscapeHtml(subject.currentLevel || subject.startLevel || '?')})</span>
           </div>
-
           <div class="dash-absence-subject-meta">
             🕒 ${dashAttendanceEscapeHtml(slot.fullSchedule)}<br>
             ${dashAttendanceEscapeHtml(dateStr)}: ${dashAttendanceEscapeHtml(slot.day || 'No day')} ${dashAttendanceEscapeHtml(slot.time || '--:--')}
           </div>
         </div>
       </div>
-
       <div class="dash-absence-controls">
         <select class="absence-type-select">
           <option value="CC_PU" selected>${dashAttendanceEscapeHtml(t('dashboard.attendance.typeCCPU'))}</option>
@@ -3891,27 +3877,26 @@ function renderAbsenceSubjectRows() {
           <option value="MC">${dashAttendanceEscapeHtml(t('dashboard.attendance.typeMC'))}</option>
           <option value="MC_PU">${dashAttendanceEscapeHtml(t('dashboard.attendance.typeMCPU'))}</option>
         </select>
-
         <div class="dash-absence-replacement">
           <input type="date" class="absence-replacement-date">
           <input type="time" class="absence-replacement-time" step="900">
+          <select class="absence-replacement-center">
+            ${centerOptionsHtml}
+          </select>
+          <div class="absence-class-count-wrapper">
+            <label class="absence-class-count-label">Classes:</label>
+            <input type="number" class="absence-class-count" min="1" max="9" step="1" value="1">
+          </div>
         </div>
       </div>
     `;
-
     const typeSelect = row.querySelector('.absence-type-select');
     const replacementDiv = row.querySelector('.dash-absence-replacement');
-
     const toggleReplacement = () => {
-      replacementDiv.classList.toggle(
-        'hidden',
-        !dashAttendanceTypeIsCC(typeSelect.value)
-      );
+      replacementDiv.classList.toggle('hidden', !dashAttendanceTypeIsCC(typeSelect.value));
     };
-
     typeSelect.addEventListener('change', toggleReplacement);
     toggleReplacement();
-
     container.appendChild(row);
   });
 }
@@ -3959,10 +3944,22 @@ function renderAbsenceExistingRecords() {
   records.forEach((record) => {
     const row = document.createElement('div');
     row.className = 'dash-absence-existing-row';
-
     const replacementText = record.replacementDate
       ? `${t('dashboard.attendance.replacementLabel')}: ${record.replacementDate} ${record.replacementTime || ''}`
       : t('dashboard.attendance.absentLabel');
+      
+    // 🆕 Badges for Cross-Center and Class Count
+    let extraBadges = '';
+    if (record.replacementDate) {
+        const recCenterId = record.replacementCenterId || centerId;
+        const recCenterName = record.replacementCenterName || centerNamesCache.get(recCenterId) || '';
+        if (recCenterId !== centerId && recCenterName) {
+            extraBadges += ` <span style="background:#ffedd5;color:#c2410c;padding:0.1rem 0.4rem;border-radius:999px;font-size:0.75rem;font-weight:700;">🏫 ${dashAttendanceEscapeHtml(recCenterName)}</span>`;
+        }
+        if (record.classCount > 1) {
+            extraBadges += ` <span style="background:#e0f2fe;color:#0369a1;padding:0.1rem 0.4rem;border-radius:999px;font-size:0.75rem;font-weight:700;">×${record.classCount}</span>`;
+        }
+    }
 
     row.innerHTML = `
       <div class="dash-absence-existing-info">
@@ -3970,18 +3967,15 @@ function renderAbsenceExistingRecords() {
           ${dashAttendanceEscapeHtml(record.subject || '-')} • ${dashAttendanceEscapeHtml(getClassChangeTypeLabel(record.type))}
         </div>
         <div class="dash-absence-existing-sub">
-          ${dashAttendanceEscapeHtml(replacementText)}
+          ${dashAttendanceEscapeHtml(replacementText)} ${extraBadges}
           ${record.homeworkPickedUp ? ' • PU' : ''}
         </div>
       </div>
-
       <button type="button" class="dash-absence-delete-btn">🗑</button>
     `;
-
     row.querySelector('.dash-absence-delete-btn').addEventListener('click', async () => {
       await deleteClassChangeRecord(record.id);
     });
-
     box.appendChild(row);
   });
 
@@ -4025,36 +4019,40 @@ async function saveDashboardAbsence() {
     return;
   }
 
-  const rows = Array.from(document.querySelectorAll('#dashAbsenceSubjectRows .dash-absence-subject-row'));
-  const selected = [];
+    const rows = Array.from(document.querySelectorAll('#dashAbsenceSubjectRows .dash-absence-subject-row'));
+    const selected = [];
+    for (const row of rows) {
+      const checkbox = row.querySelector('.absence-subject-check');
+      if (!checkbox || !checkbox.checked) continue;
+      const type = row.querySelector('.absence-type-select')?.value || '';
+      const isCC = dashAttendanceTypeIsCC(type);
+      const replacementDate = row.querySelector('.absence-replacement-date')?.value || '';
+      const replacementTime = row.querySelector('.absence-replacement-time')?.value || '';
+      
+      // 🆕 Read Center and Class Count
+      const repCenterId = row.querySelector('.absence-replacement-center')?.value || centerId;
+      const repCenterName = centerNamesCache.get(repCenterId) || '';
+      const classCount = Math.max(1, parseInt(row.querySelector('.absence-class-count')?.value, 10) || 1);
 
-  for (const row of rows) {
-    const checkbox = row.querySelector('.absence-subject-check');
-    if (!checkbox || !checkbox.checked) continue;
-
-    const type = row.querySelector('.absence-type-select')?.value || '';
-    const isCC = dashAttendanceTypeIsCC(type);
-
-    const replacementDate = row.querySelector('.absence-replacement-date')?.value || '';
-    const replacementTime = row.querySelector('.absence-replacement-time')?.value || '';
-
-    if (isCC && (!replacementDate || !replacementTime)) {
-      showDashboardToast(t('dashboard.attendance.absenceReplacementMissing'), true);
-      return;
+      if (isCC && (!replacementDate || !replacementTime)) {
+        showDashboardToast(t('dashboard.attendance.absenceReplacementMissing'), true);
+        return;
+      }
+      selected.push({
+        subject: checkbox.value,
+        level: checkbox.dataset.level || '',
+        originalDay: checkbox.dataset.day || '',
+        originalTime: checkbox.dataset.time || '',
+        type,
+        isCC,
+        replacementDate,
+        replacementTime,
+        homeworkPickedUp: type === 'CC_PU' || type === 'MC_PU',
+        replacementCenterId: isCC ? repCenterId : centerId,
+        replacementCenterName: isCC ? repCenterName : (centerNamesCache.get(centerId) || ''),
+        classCount: isCC ? classCount : 1
+      });
     }
-
-    selected.push({
-      subject: checkbox.value,
-      level: checkbox.dataset.level || '',
-      originalDay: checkbox.dataset.day || '',
-      originalTime: checkbox.dataset.time || '',
-      type,
-      isCC,
-      replacementDate,
-      replacementTime,
-      homeworkPickedUp: type === 'CC_PU' || type === 'MC_PU'
-    });
-  }
 
   if (!selected.length) {
     showDashboardToast(t('dashboard.attendance.absenceSelectSubject'), true);
@@ -4134,6 +4132,9 @@ async function saveDashboardAbsence() {
           updates[`${existingDue.id}/type`] = item.type;
           updates[`${existingDue.id}/replacementDate`] = item.replacementDate;
           updates[`${existingDue.id}/replacementTime`] = item.replacementTime;
+          updates[`${existingDue.id}/replacementCenterId`] = item.replacementCenterId; // 🆕
+          updates[`${existingDue.id}/replacementCenterName`] = item.replacementCenterName; // 🆕
+          updates[`${existingDue.id}/classCount`] = item.classCount; // 🆕
           updates[`${existingDue.id}/replacementStatus`] = 'scheduled';
           updates[`${existingDue.id}/homeworkPickedUp`] = item.homeworkPickedUp;
           updates[`${existingDue.id}/note`] = note || existingDue.note || '';
@@ -4167,6 +4168,9 @@ const payload = {
   originalTime: item.originalTime || '',
   replacementDate: item.isCC ? item.replacementDate : '',
   replacementTime: item.isCC ? item.replacementTime : '',
+  replacementCenterId: item.replacementCenterId, // 🆕
+  replacementCenterName: item.replacementCenterName, // 🆕
+  classCount: item.classCount, // 🆕
 
   // ✅ FIX:
   // CC = scheduled replacement class

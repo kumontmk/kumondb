@@ -51,7 +51,22 @@ export default {
     monthByReplacement: "按補堂日期",
     overdue: "已過期",
     overdueTip: "已過期——補堂日期已過",
-    showingRecords: "顯示 {{shown}}／共 {{total}} 筆記錄"
+    showingRecords: "顯示 {{shown}}／共 {{total}} 筆記錄",
+    showingAllRecords: "顯示全部 {{total}} 筆記錄",
+    noRecordsFound: "沒有符合篩選條件的記錄。",
+    noRecordsInMonth: "在 {{month}} 沒有記錄。",
+    noRecordsInMonthByAbsence: "在 {{month}}（按缺席日期）沒有記錄。",
+    noRecordsInMonthByReplacement: "在 {{month}}（按補堂日期）沒有記錄。",
+    colCenter: "中心", filterHome: "所屬中心", filterIncoming: "只顯示轉入",
+    centerScopeFilterTitle: "中心範圍篩選",
+    centerScopeFilterAll: "🏠📥 全部記錄",
+    centerScopeFilterHome: "🏠 我的中心",
+    centerScopeFilterIncoming: "📥 轉入記錄",
+    currentCenter: "目前中心", incomingCenter: "轉入中心",
+    classCount: "堂數", totalCount: "總數",
+    replacementCenter: "補堂中心", replacementCenterTip: "補堂將在該中心進行。",
+    incomingBadge: "轉入", incomingBadgeTip: "該學生從其他中心轉入。",
+    centerRoute: "中心路線", centerRouteTip: "學生所屬中心的路線。"
   },
   links: {
     tabTitle: "連結",

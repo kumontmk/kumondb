@@ -92,6 +92,12 @@
             <option value="Chinese">Chinese</option>
           </select>
 
+          <select id="centerScopeFilter" title="Center scope">
+            <option value="all" data-i18n="cc.centerScopeFilterAll">🏠📥 All records</option>
+            <option value="home" data-i18n="cc.centerScopeFilterHome">🏠 My center only</option>
+            <option value="incoming" data-i18n="cc.centerScopeFilterIncoming">📥 Incoming only</option>
+          </select>
+
           <button id="exportBtn" class="export-btn">📊 <span data-i18n="cc.export">Export</span></button>
           <button id="addRequestBtn" class="add-request-btn">
             <span class="fab-text" data-i18n="cc.addNew">+ Add Change Class</span><span class="fab-icon">＋</span>
@@ -117,6 +123,7 @@
                 <th data-i18n="cc.colType">Type</th>
                 <th data-i18n="cc.colAbsence">Absence Date</th>
                 <th data-i18n="cc.colReplacement">Replacement</th>
+                <th data-i18n="cc.colCenter">Center</th>
                 <th data-i18n="cc.colStatus">Status</th>
                 <th data-i18n="cc.colPU">PU</th>
                 <th data-i18n="cc.colActions">Actions</th>
@@ -267,6 +274,21 @@
           <div class="info-group replacement-field">
             <label for="replacementTime" data-i18n="cc.replacementTime">Replacement Time *</label>
             <input type="time" id="replacementTime">
+          </div>
+
+          <div class="info-group">
+            <label data-i18n="cc.currentCenter">Current Center</label>
+            <input type="text" id="currentCenterDisplay" disabled>
+          </div>
+
+          <div class="info-group replacement-field">
+            <label data-i18n="cc.replacementCenter">Change Class Center *</label>
+            <select id="replacementCenterSelect"></select>
+          </div>
+
+          <div class="info-group replacement-field">
+            <label data-i18n="cc.classCount">Number of Classes</label>
+            <input type="number" id="classCountInput" min="1" max="9" step="1" value="1">
           </div>
 
           <div class="info-group">

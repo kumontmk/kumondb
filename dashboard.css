@@ -2717,6 +2717,61 @@ header button:hover {
 }
 
 /* =========================================
+🔄 ABSENCE PANE: CROSS-CENTER & MULTI-CLASS
+========================================= */
+.dash-absence-replacement {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.dash-absence-replacement.hidden {
+  display: none;
+}
+/* Make the center select span full width */
+.dash-absence-replacement select.absence-replacement-center {
+  grid-column: 1 / -1;
+  width: 100%;
+  padding: 0.6rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  background: #fff;
+}
+/* Class count wrapper styling */
+.absence-class-count-wrapper {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: #f8fafc;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+.absence-class-count-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #475569;
+  white-space: nowrap;
+}
+.absence-class-count-wrapper input.absence-class-count {
+  width: 70px;
+  padding: 0.4rem;
+  text-align: center;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 700;
+  background: #fff;
+}
+.absence-class-count-wrapper input.absence-class-count:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(135, 206, 235, 0.25);
+}
+
+/* =========================================
 🌐 TRADITIONAL CHINESE FONT SUPPORT
 ========================================= */
 :lang(zh-TW) body,

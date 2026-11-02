@@ -51,7 +51,20 @@ export default {
     monthByReplacement: "By replacement date",
     overdue: "Overdue",
     overdueTip: "Overdue — replacement date has passed",
-    showingRecords: "Showing {{shown}} of {{total}} records"
+    showingRecords: "Showing {{shown}} of {{total}} records",
+    showingAllRecords: "Showing all {{total}} records",
+    noRecordsFound: "No records found for the selected filters.",
+    noRecordsInMonth: "No records found for {{month}}.",
+    noRecordsInMonthByAbsence: "No records found for {{month}} (by absence date).",
+    noRecordsInMonthByReplacement: "No records found for {{month}} (by replacement date).",
+    colCenter: "Center", filterHome: "Home Center", filterIncoming: "Incoming Only",
+    centerScopeFilterTitle: "Center scope filter",
+    centerScopeFilterAll: "🏠📥 All records", centerScopeFilterHome: "🏠 My center only", centerScopeFilterIncoming: "📥 Incoming only",
+    currentCenter: "Current center", incomingCenter: "Incoming center",
+    classCount: "Class count", totalCount: "Total count",
+    replacementCenter: "Replacement center", replacementCenterTip: "The center where the replacement class will be held.",
+    incomingBadge: "Incoming", incomingBadgeTip: "This student is incoming from another center.",
+    centerRoute: "Center route", centerRouteTip: "The route of the student's home center."
   },
   links: {
     tabTitle: "Links",
