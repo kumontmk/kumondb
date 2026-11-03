@@ -123,6 +123,8 @@ export default {
       labelEditorDesc: "產生並列印學生標籤（A4、24 格）",
       changeClasses: "調整班級",
       changeClassesDesc: "管理 CC/MC 請求、替代與報告",
+      followUpReports: "跟進報告",
+      followUpReportsDesc: "追蹤家長訊息與電話 — 看看誰已經跟進了，誰還沒有"
     },
 
     links: {

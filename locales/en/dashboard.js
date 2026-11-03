@@ -125,6 +125,8 @@ export default {
       labelEditorDesc: "Generate & print student labels (A4, 24-up)",
       changeClasses: "Change Classes",
       changeClassesDesc: "Manage CC/MC requests, replacements & reports",
+      followUpReports: "Follow-Up Reports",
+      followUpReportsDesc: "Track parent messages & calls — see who has and hasn't been followed up",
     },
 
     links: {
