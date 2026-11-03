@@ -207,7 +207,7 @@ export default {
     downloadPng: '🖼️ 下載 PNG',
     copyLink: '📋 複製邀請連結',
     reasonTitle: '💬 方便告知原因嗎？（選填）',
-    reasonHint: '是否填寫原因完全自由，這能幫助中心安排未來的活動。',
+    reasonHint: '未能出席的同學，請填寫原因（我們希望了解原因以便日後安排活動），謝謝。',
     reasonPh: '例如：家庭旅行、時間衝突…',
     reasonWord: '原因',
     completer: '完成者',
