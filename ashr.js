@@ -2111,7 +2111,7 @@ function inviteMessageCn(name, url) {
 	1. 14:00–15:00
 	2. 16:00–17:00
 	3. 17:30–18:30 
-* 請於${currentEventId}年11月21日或之前，透過以下連結填妥出席登記及選擇出席場次，以便統籌座位及獎項安排：
+* 請於${currentEventId}年11月15日或之前，透過以下連結填妥出席登記及選擇出席場次，以便統籌座位及獎項安排：
 ${url}
 
 如有任何疑問，歡迎回覆查詢。衷心感謝各位家長一直以來的支持，並再次誠摯祝賀同學取得出色的成就！`;
@@ -2130,7 +2130,7 @@ Sessions (Three available):
 16:00–17:00
 17:30–18:30
 
-Please complete the attendance registration and select your preferred session via the link below on or before November 21, ${currentEventId}, to help us coordinate seating and awards:
+Please complete the attendance registration and select your preferred session via the link below on or before November 15, ${currentEventId}, to help us coordinate seating and awards:
 ${url}
 
 If you have any questions, please feel free to reply. Thank you for your continued support, and congratulations once again to your child on their outstanding achievement!`;
