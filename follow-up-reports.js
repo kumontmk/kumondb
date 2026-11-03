@@ -4,9 +4,17 @@
 window.__fuBooted = true;
 console.info('%c📣 follow-up-reports.js VERSION J loaded', 'color:#065f46;font-weight:700');
 
-import { auth, db, syncPendingRequests } from './auth.js';
-import { ref, get, push, update, remove, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { auth, db, logout } from './auth.js';
+import { ref, get, update, remove, push, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+// 🌐 1. IMPORT I18N LAYER
+import { i18nReady, t, applyI18n, currentLanguage } from './follow-up-reports-i18n.js';
+
+// 🌐 2. WAIT FOR TRANSLATIONS TO LOAD
+await i18nReady.catch(() => {});
+document.documentElement.lang = currentLanguage;
+applyI18n();
 
 const SUBJECTS = ['Math', 'English ERP', 'English EFL', 'Chinese (Trad)', 'Chinese (Simp)'];
 const GRADE_ORDER = ['K0','K1','K2','K3','1','2','3','4','5','6','7','8','9','10','11','12','13'];
@@ -56,7 +64,8 @@ const state = {
   dataLoaded: false, loadError: '',
   viewYear: new Date().getFullYear(), viewMonth: new Date().getMonth() + 1,
   currentPage: 1, filteredRoster: [], selectedIds: new Set(),
-  logStudents: [], rosterCache: {}, trendCache: {}
+  logStudents: [], rosterCache: {}, trendCache: {},  logStudents: [], rosterCache: {}, trendCache: {},
+  logSearch: '', logSubject: ''   // 🔍 NEW: Follow-Ups Logged filters
 };
 
 const $ = id => document.getElementById(id);
@@ -450,14 +459,35 @@ async function saveFollowUp(){
 }
 function resetLogForm(clear=true){ if(clear){ state.logStudents = []; renderLogStudents(); } ['msgEn','msgZh','callNotes','solution'].forEach(id => { const el = $(id); if(el) el.value = ''; }); const ts = $('templateSelect'); if(ts) ts.value = ''; const t = todayISO(); ['dateCreated','callDate'].forEach(id => { const el = $(id); if(el) el.value = t; }); }
 
-// ---------------- LOGS TABLE (delegated Sent controls) ----------------
+// ---------------- LOGS TABLE (🔍 search + subject filter + delegated Sent controls) ----------------
+const logHay = f => [f.nameCn, f.namePinyin, f.nickname, f.studentNumber, f.school,
+  f.teacherName, f.subject, f.level, f.messageType, f.messageEn, f.messageZh,
+  f.callNotes, f.solution, f.centerName].filter(Boolean).join(' ').toLowerCase();
+
 function renderRecentLogs(){
   const tb = $('recentLogsBody'); if(!tb) return;
   const key = ymKey(state.viewYear, state.viewMonth);
-  const all = centerFollowUps().filter(f => logMonth(f)===key)
+  let all = centerFollowUps().filter(f => logMonth(f)===key)
     .sort((a,b) => (b.dateCreated||b.dateSent||'').localeCompare(a.dateCreated||a.dateSent||'') || (b.createdAt||'').localeCompare(a.createdAt||''));
+  const monthTotal = all.length;
+  // 🔍 NEW: subject filter + free-text search
+  const term = (state.logSearch||'').trim().toLowerCase();
+  const subj = state.logSubject||'';
+  if(subj) all = all.filter(f => (f.subject||'')===subj);
+  if(term) all = all.filter(f => logHay(f).includes(term));
+  const isFiltered = !!(term || subj);
+  const ci = $('logsCountInfo');
+  if(ci){
+    ci.textContent = isFiltered ? `🔎 ${all.length} / ${monthTotal}` : `🗂️ ${monthTotal}`;
+    ci.title = isFiltered ? `${all.length} of ${monthTotal} records match your filters` : `${monthTotal} records logged this month`;
+  }
   const rows = all.slice(0, RECENT_LOGS_LIMIT);
-  if(!rows.length){ tb.innerHTML = `<tr><td colspan="12" class="hint-cell">No follow-ups logged for ${esc(state.centerName||'this center')} in ${monthLabel(state.viewYear,state.viewMonth)} yet.</td></tr>`; return; }
+  if(!rows.length){
+    tb.innerHTML = `<tr><td colspan="12" class="hint-cell">${isFiltered
+      ? `🔍 No records match your search / subject filter for ${esc(state.centerName||'this center')} in ${monthLabel(state.viewYear,state.viewMonth)}. Press Clear to reset.`
+      : `No follow-ups logged for ${esc(state.centerName||'this center')} in ${monthLabel(state.viewYear,state.viewMonth)} yet.`}</td></tr>`;
+    return;
+  }
   tb.innerHTML = rows.map(f => {
     let det; if(f.type==='message'){ det = `<b>${esc(f.messageType||'')}</b>`; if(f.messageEn) det += `<br><span class="sub">EN: ${esc(truncate(f.messageEn))}</span>`; if(f.messageZh) det += `<br><span class="sub">中: ${esc(truncate(f.messageZh))}</span>`; }
     else { det = esc(truncate(f.callNotes,80)); if(f.solution) det += `<br><span class="sub">✅ ${esc(truncate(f.solution,60))}</span>`; }
@@ -467,20 +497,7 @@ function renderRecentLogs(){
       : (isSent(f)
         ? `<span class="sent-wrap"><button class="sent-toggle yes" data-senttoggle="${f.id}" title="Click to mark as NOT sent">Yes</button><button class="sent-dateview" data-sentedit="${f.id}" title="Click to change the sent date">${fmtDate(f.dateSent)} 📅</button></span>`
         : `<button class="sent-toggle no" data-senttoggle="${f.id}" title="Click to mark as sent (defaults to today)">No</button>`);
-    return `<tr>
-      <td data-label="Type" class="nw">${badge}</td>
-      <td data-label="Date" class="nw">${fmtDate(dateLogged)}</td>
-      <td data-label="Sent" class="nw">${sentCell}</td>
-      <td data-label="Name"><b>${esc(f.nameCn||f.namePinyin||'-')}</b>${f.nickname?` <span class="sub">“${esc(f.nickname)}”</span>`:''}${centerTag(f.centerName)}</td>
-      <td data-label="Grade" class="nw">${esc(f.grade||'-')}</td>
-      <td data-label="School" class="school-cell">${esc(f.school||'-')}</td>
-      <td data-label="Teacher">${esc(f.teacherName||'-')}</td>
-      <td data-label="Subject" class="nw"><span class="subj-chip ${subjClass(f.subject)}">${esc(f.subject||'-')}</span> <span class="level-badge">${esc(f.level||'-')}</span></td>
-      <td data-label="Start" class="nw">${fmtDate(f.enrolDate)}</td>
-      <td data-label="Schedule"><span class="sub">${esc(f.schedule||'-')}</span></td>
-      <td data-label="Details" class="details-cell">${det}</td>
-      <td data-label="" class="actions-cell"><button class="icon-btn" data-edit="${f.id}" title="Edit">✏️</button><button class="icon-btn" data-del="${f.id}" title="Delete">🗑️</button></td>
-    </tr>`;
+    return `<tr> <td data-label="Type" class="nw">${badge}</td> <td data-label="Date" class="nw">${fmtDate(dateLogged)}</td> <td data-label="Sent" class="nw">${sentCell}</td> <td data-label="Name"><b>${esc(f.nameCn||f.namePinyin||'-')}</b>${f.nickname?`<span class="sub">“${esc(f.nickname)}”</span>`:''}${centerTag(f.centerName)}</td> <td data-label="Grade" class="nw">${esc(f.grade||'-')}</td> <td data-label="School" class="school-cell">${esc(f.school||'-')}</td> <td data-label="Teacher">${esc(f.teacherName||'-')}</td> <td data-label="Subject" class="nw"><span class="subj-chip ${subjClass(f.subject)}">${esc(f.subject||'-')}</span> <span class="level-badge">${esc(f.level||'-')}</span></td> <td data-label="Start" class="nw">${fmtDate(f.enrolDate)}</td> <td data-label="Schedule"><span class="sub">${esc(f.schedule||'-')}</span></td> <td data-label="Details" class="details-cell">${det}</td> <td data-label="" class="actions-cell"><button class="icon-btn" data-edit="${f.id}" title="Edit">✏️</button><button class="icon-btn" data-del="${f.id}" title="Delete">🗑️</button></td> </tr>`;
   }).join('') + (all.length > RECENT_LOGS_LIMIT ? `<tr><td colspan="12" class="hint-cell">Showing ${RECENT_LOGS_LIMIT} of ${all.length} records. Use Export for the full list.</td></tr>` : '');
 }
 async function toggleSent(id){
@@ -711,6 +728,25 @@ function bindEvents(){
       setTimeout(renderRecentLogs, 80);   // leave edit mode when the picker loses focus
     });
   }
+
+    // 🔍 Logs tab: search + subject filter
+  const debouncedLogSearch = debounce(() => renderRecentLogs(), 250);
+  let logComp = false;
+  const lsi = $('logSearchInput');
+  if(lsi){
+    lsi.addEventListener('compositionstart', () => logComp = true);
+    lsi.addEventListener('compositionend', () => { logComp = false; state.logSearch = lsi.value; debouncedLogSearch(); });
+    lsi.addEventListener('input', () => { if(!logComp){ state.logSearch = lsi.value; debouncedLogSearch(); } });
+  }
+  on('logFilterSubject','change', () => { state.logSubject = $('logFilterSubject')?.value||''; renderRecentLogs(); });
+  set('clearLogFiltersBtn', () => {
+    state.logSearch = ''; state.logSubject = '';
+    const i = $('logSearchInput'); if(i) i.value = '';
+    const s = $('logFilterSubject'); if(s) s.value = '';
+    renderRecentLogs(); showToast('Filters cleared');
+  });
+
+  
   const t = todayISO();
   ['dateCreated','callDate'].forEach(id => { const el = $(id); if(el) el.value = t; });
   document.addEventListener('keydown', e => {

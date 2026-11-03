@@ -762,6 +762,16 @@ function wrCenterAbbr(){ const n=(centerName||'').toLowerCase();
   return (centerName||'').substring(0,2).toUpperCase(); }
 function wrDateLabel(ds, withEn){ const d=new Date(ds+'T00:00:00'); const cn=WR_CN_DOW[d.getDay()];
   return withEn ? `${d.getDate()}/${d.getMonth()+1} (${cn}${WR_EN_DOW[d.getDay()]})` : `${d.getDate()}/${d.getMonth()+1}(${cn})`; }
+
+  // Joins a list report-style: "A" | "A & B" | "A, B, & C"
+function wrJoinList(items) {
+  const list = (items || []).map(x => String(x ?? '').trim()).filter(Boolean);
+  if (list.length === 0) return '';
+  if (list.length === 1) return list[0];
+  if (list.length === 2) return `${list[0]} & ${list[1]}`;
+  return `${list.slice(0, -1).join(', ')}, & ${list[list.length - 1]}`;
+}
+
 function wrPoTime(st, ds){ if (st.poTime) return wrTime12(st.poTime);
   const dayName = new Date(ds+'T00:00:00').toLocaleDateString('en-US',{weekday:'long'});
   const slots = (st.subjects||[]).flatMap(s=>s.timeslots||[]).filter(ts=>ts.day===dayName && ts.time).map(ts=>ts.time).sort();
@@ -778,25 +788,42 @@ function buildWeeklyReport() {
   const dtBlock = [];
   const poBlock = [];
 
-  // ---- DT section (all DT days first) ----
-  days.forEach(ds => {
-    const entries = dtDataMap[ds] || [];
-    if (!entries.length) return;
-    const groups = new Map(); // student + timeslot = one line, subjects merged with &
-    entries.forEach(e => {
-      const key = `${e.id}|${e.dtData.DTtimeslot || ''}`;
-      if (!groups.has(key)) groups.set(key, { e, subjects: [] });
-      groups.get(key).subjects.push(e.dtData.subject);
+    // ---- DT section (all DT days first) ----
+    // One line per student per day: times & subjects merged
+    // e.g. "1) 4:00 & 4:30 3 Name (MSY) M & Chi (22-6-2019)"
+    // e.g. "1) 4:00, 4:30, & 5:00 3 Name (MSY) M, Chi, & ERP (22-6-2019)"
+    days.forEach(ds => {
+      const entries = dtDataMap[ds] || [];
+      if (!entries.length) return;
+      const groups = new Map(); // studentId -> one line, all subjects merged
+      entries.forEach(e => {
+        if (!groups.has(e.id)) groups.set(e.id, { e, pairs: [] });
+        groups.get(e.id).pairs.push({
+          time: e.dtData.DTtimeslot || '',
+          subject: e.dtData.subject || ''
+        });
+      });
+      const lines = [...groups.values()].map(g => {
+        // Sort this student's subjects chronologically by timeslot
+        g.pairs.sort((a, b) =>
+          (a.time || '').localeCompare(b.time || '') ||
+          (a.subject || '').localeCompare(b.subject || '')
+        );
+        g.firstTime = g.pairs[0] ? g.pairs[0].time : '';
+        return g;
+      }).sort((a, b) =>
+        (a.firstTime || '').localeCompare(b.firstTime || '') ||
+        wrName(a.e.studentData).localeCompare(wrName(b.e.studentData))
+      );
+      dtBlock.push(wrDateLabel(ds, true)); // date on its OWN line, CN + EN weekday
+      lines.forEach((g, i) => {
+        const s = g.e.studentData;
+        // Unique times (in case 2 subjects share one slot), joined report-style
+        const times = wrJoinList([...new Set(g.pairs.map(p => wrTime12(p.time)))]);
+        const subjects = wrJoinList(g.pairs.map(p => WR_SUBJ_ABBR[p.subject] || p.subject));
+        dtBlock.push(`${i + 1}) ${times} ${s.grade || ''} ${wrName(s)} (${wrSchoolCode(s.school)}) ${subjects} (${wrDob(s.birthday)})`);
+      });
     });
-    const lines = [...groups.values()].sort((a, b) =>
-      (a.e.dtData.DTtimeslot || '').localeCompare(b.e.dtData.DTtimeslot || '') ||
-      wrName(a.e.studentData).localeCompare(wrName(b.e.studentData)));
-    dtBlock.push(wrDateLabel(ds, true)); // date on its OWN line, CN + EN weekday
-    lines.forEach((g, i) => {
-      const s = g.e.studentData;
-      dtBlock.push(`${i + 1}) ${wrTime12(g.e.dtData.DTtimeslot)} ${s.grade || ''} ${wrName(s)} (${wrSchoolCode(s.school)}) ${g.subjects.map(x => WR_SUBJ_ABBR[x] || x).join(' & ')} (${wrDob(s.birthday)})`);
-    });
-  });
 
 // ---- PO section (all PO days after DT) ----
 // NOTE: PO lines do NOT include a timeslot — times are DT-only.

@@ -274,6 +274,7 @@ table tbody tr:hover td { background: #f8fafc; }
   tbody td::before { content: attr(data-label); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: var(--text-light); text-align: left; flex-shrink: 0; }
   tbody td:last-child::before, tbody td:first-child::before { display: none; }
   tbody td:last-child { justify-content: flex-end; }
+  .logs-count { margin-left: 0; }
 }
 @media print {
   header, .controls, .tabs, .bulk-bar, .pagination, .btn-row, .fu-toolbar { display: none !important; }
@@ -293,3 +294,7 @@ table tbody tr:hover td { background: #f8fafc; }
 .switch-label { font-weight: 700; font-size: 0.8rem; color: var(--text-light); white-space: nowrap; }
 .switch input:checked ~ .switch-label { color: var(--success); }
 input[type="date"]:disabled { background: #f1f5f9; color: #94a3b8; cursor: not-allowed; }
+
+/* ---------- LOGS FILTER BAR ---------- */
+.logs-controls { margin: 0.25rem 0 0.9rem; }
+.logs-count { margin-left: auto; font-size: 0.82rem; font-weight: 700; color: var(--text-light); white-space: nowrap; }

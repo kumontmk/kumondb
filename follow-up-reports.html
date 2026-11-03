@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Student Follow-Up Reports - Kumon DB</title>
+  <title data-i18n="documentTitle">Student Follow-Up Reports - Kumon DB</title>
   <link rel="stylesheet" href="follow-up-reports.css" />
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
@@ -12,9 +12,9 @@
   <!-- ACCESS DENIED (hidden by default; only the 8s safety-net can reveal it) -->
   <div id="accessDenied" class="access-denied hidden">
     <div class="access-denied-content">
-      <h2>🔒 Access Denied</h2>
-      <p>Please log in to view this page.</p>
-      <a href="index.html">← Back to Login</a>
+      <h2 data-i18n="accessDeniedTitle">🔒 Access Denied</h2>
+      <p data-i18n="accessDeniedMsg">Please log in to view this page.</p>
+      <a href="index.html" data-i18n="backToLogin">← Back to Login</a>
     </div>
   </div>
 
@@ -37,19 +37,19 @@
   <!-- MAIN CONTENT -->
   <div id="mainContent" class="hidden">
     <header>
-      <nav><button id="backToDashboardBtn">← Dashboard</button></nav>
-      <div class="page-title">📣 Student Follow-Ups</div>
-      <span id="dataStatus" class="status-chip loading">⏳ Loading students…</span>
+      <nav><button id="backToDashboardBtn" data-i18n="backToDashboard">← Dashboard</button></nav>
+      <div class="page-title" data-i18n="pageTitle">📣 Student Follow-Ups</div>
+      <span id="dataStatus" class="status-chip loading" data-i18n="loadingStudents">⏳ Loading students…</span>
     </header>
 
     <div class="fu-page">
 
       <div class="fu-toolbar">
         <div class="month-pager">
-          <button id="monthPrev" class="pager-btn" title="Previous month">‹</button>
+          <button id="monthPrev" class="pager-btn" title="Previous month" data-i18n-title="prevMonth">‹</button>
           <span id="monthTitle">—</span>
-          <button id="monthNext" class="pager-btn" title="Next month">›</button>
-          <button id="monthToday" class="pager-btn today" title="Jump to current month">Today</button>
+          <button id="monthNext" class="pager-btn" title="Next month" data-i18n-title="nextMonth">›</button>
+          <button id="monthToday" class="pager-btn today" title="Jump to current month" data-i18n="today" data-i18n-title="today">Today</button>
         </div>
         <span class="center-label" id="centerLabel"></span>
       </div>
@@ -57,63 +57,63 @@
       <div id="statStrip" class="balance-strip"></div>
 
       <div class="tabs">
-        <button class="tab-btn active" data-tab="tracker">📋 Follow-Up Tracker</button>
-        <button class="tab-btn" data-tab="log">➕ Log Follow-Up</button>
-        <button class="tab-btn" data-tab="report">📈 Monthly Report</button>
-        <button class="tab-btn" data-tab="logs">🗂️ Follow-Ups Logged</button>
+        <button class="tab-btn active" data-tab="tracker" data-i18n="tabTracker">📋 Follow-Up Tracker</button>
+        <button class="tab-btn" data-tab="log" data-i18n="tabLog">➕ Log Follow-Up</button>
+        <button class="tab-btn" data-tab="report" data-i18n="tabReport">📈 Monthly Report</button>
+        <button class="tab-btn" data-tab="logs" data-i18n="tabLogs">🗂️ Follow-Ups Logged</button>
       </div>
 
       <!-- ==================== TRACKER ==================== -->
       <div id="tab-tracker" class="tab-content active">
         <div class="section">
           <div class="controls">
-            <input type="text" id="searchInput" placeholder="🔍 Search name, pinyin, nickname, student no…" />
-            <div class="filter-group"><label for="filterSubject">Subject</label>
+            <input type="text" id="searchInput" placeholder="🔍 Search name, pinyin, nickname, student no…" data-i18n-placeholder="searchPlaceholder" />
+            <div class="filter-group"><label for="filterSubject" data-i18n="subject">Subject</label>
               <select id="filterSubject">
-                <option value="">All Subjects</option><option>Math</option><option>English ERP</option>
-                <option>English EFL</option><option>Chinese (Trad)</option><option>Chinese (Simp)</option>
+                <option value="" data-i18n="allSubjects">All Subjects</option><option data-i18n="math">Math</option><option data-i18n="englishErp">English ERP</option>
+                <option data-i18n="englishEfl">English EFL</option><option data-i18n="chiTrad">Chinese (Trad)</option><option data-i18n="chiSimp">Chinese (Simp)</option>
               </select></div>
-            <div class="filter-group"><label for="filterTeacher">Teacher</label>
-              <select id="filterTeacher"><option value="">All Teachers</option></select></div>
-            <div class="filter-group"><label for="filterGrade">Grade</label>
+            <div class="filter-group"><label for="filterTeacher" data-i18n="teacher">Teacher</label>
+              <select id="filterTeacher"><option value="" data-i18n="allTeachers">All Teachers</option></select></div>
+            <div class="filter-group"><label for="filterGrade" data-i18n="grade">Grade</label>
               <select id="filterGrade">
-                <option value="">All Grades</option>
+                <option value="" data-i18n="allGrades">All Grades</option>
                 <option>K0</option><option>K1</option><option>K2</option><option>K3</option>
                 <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
                 <option>6</option><option>7</option><option>8</option><option>9</option><option>10</option>
                 <option>11</option><option>12</option><option>13</option>
               </select></div>
-            <div class="filter-group"><label for="filterStatus">Status</label>
+            <div class="filter-group"><label for="filterStatus" data-i18n="status">Status</label>
               <select id="filterStatus">
-                <option value="">All Status</option>
-                <option value="followed">✅ Followed up (this month)</option>
-                <option value="not">❌ Not followed up (this month)</option>
-                <option value="overdue30">⏳ 30+ days no contact</option>
-                <option value="overdue60">🚨 60+ days no contact</option>
-                <option value="never">⛔ Never contacted</option>
+                <option value="" data-i18n="allStatus">All Status</option>
+                <option value="followed" data-i18n="stFollowed">✅ Followed up (this month)</option>
+                <option value="not" data-i18n="stNotFollowed">❌ Not followed up (this month)</option>
+                <option value="overdue30" data-i18n="st30Days">⏳ 30+ days no contact</option>
+                <option value="overdue60" data-i18n="st60Days">🚨 60+ days no contact</option>
+                <option value="never" data-i18n="stNever">⛔ Never contacted</option>
               </select></div>
-            <div class="filter-group"><label for="sortBy">Sort</label>
+            <div class="filter-group"><label for="sortBy" data-i18n="sort">Sort</label>
               <select id="sortBy">
-                <option value="longest">Longest without contact</option>
-                <option value="name">Name</option>
-                <option value="grade">Grade</option>
-                <option value="monthCount">Most follow-ups this month</option>
+                <option value="longest" data-i18n="sortLongest">Longest without contact</option>
+                <option value="name" data-i18n="sortName">Name</option>
+                <option value="grade" data-i18n="sortGrade">Grade</option>
+                <option value="monthCount" data-i18n="sortMost">Most follow-ups this month</option>
               </select></div>
-            <button id="clearFiltersBtn" class="secondary">Clear</button>
+            <button id="clearFiltersBtn" class="secondary" data-i18n="clear">Clear</button>
           </div>
 
           <div id="bulkBar" class="bulk-bar hidden">
-            <span id="bulkCount">0 selected</span>
-            <button id="bulkLogBtn" class="primary">➕ Log follow-up for selected</button>
-            <button id="bulkClearBtn" class="secondary">Clear selection</button>
+            <span id="bulkCount">0 <span data-i18n="selected">selected</span></span>
+            <button id="bulkLogBtn" class="primary" data-i18n="bulkLog">➕ Log follow-up for selected</button>
+            <button id="bulkClearBtn" class="secondary" data-i18n="clearSelection">Clear selection</button>
           </div>
 
           <div class="table-wrapper">
             <table id="trackerTable">
               <thead><tr>
                 <th class="th-check"><input type="checkbox" id="checkAll" /></th>
-                <th>Student</th><th>Grade</th><th>School</th><th>Subjects &amp; Level</th>
-                <th>Teacher</th><th>Last Follow-Up</th><th>This Month</th><th></th>
+                <th data-i18n="thStudent">Student</th><th data-i18n="thGrade">Grade</th><th data-i18n="thSchool">School</th><th data-i18n="thSubjects">Subjects &amp; Level</th>
+                <th data-i18n="thTeacher">Teacher</th><th data-i18n="thLastFollowUp">Last Follow-Up</th><th data-i18n="thThisMonth">This Month</th><th></th>
               </tr></thead>
               <tbody id="trackerBody"></tbody>
             </table>
@@ -136,66 +136,66 @@
       <div id="tab-log" class="tab-content">
         <div class="log-grid">
           <div class="section">
-            <h3>1 · Select Student(s)</h3>
-            <p class="hint-text">💡 Tip: select several students to log the same message/call for all of them at once.</p>
+            <h3 data-i18n="logStep1">1 · Select Student(s)</h3>
+            <p class="hint-text" data-i18n="logTip">💡 Tip: select several students to log the same message/call for all of them at once.</p>
             <div class="search-wrap">
-              <input type="text" id="logStudentSearch" placeholder="🔍 Search all students, all centers…" autocomplete="off" />
+              <input type="text" id="logStudentSearch" placeholder="🔍 Search all students, all centers…" autocomplete="off" data-i18n-placeholder="searchStudentPlaceholder" />
               <ul id="logStudentDropdown" class="dropdown-list hidden"></ul>
             </div>
             <div id="selectedStudents" class="selected-students"></div>
           </div>
 
           <div class="section">
-            <h3>2 · Follow-Up Details</h3>
-            <div id="noStudentMsg" class="empty-inline">👈 Select at least one student to begin.</div>
+            <h3 data-i18n="logStep2">2 · Follow-Up Details</h3>
+            <div id="noStudentMsg" class="empty-inline" data-i18n="noStudentMsg">👈 Select at least one student to begin.</div>
             <div id="formArea" class="hidden">
-              <label class="field-label">Subjects covered by this follow-up</label>
+              <label class="field-label" data-i18n="subjectsCovered">Subjects covered by this follow-up</label>
               <div id="subjectChips" class="subject-chips"></div>
 
-              <label class="field-label">Follow-Up Type</label>
+              <label class="field-label" data-i18n="followUpType">Follow-Up Type</label>
               <div class="seg">
-                <label class="seg-option"><input type="radio" name="fuType" id="fuTypeMessage" checked /><span>📩 Message</span></label>
-                <label class="seg-option"><input type="radio" name="fuType" id="fuTypeCall" /><span>📞 Call</span></label>
+                <label class="seg-option"><input type="radio" name="fuType" id="fuTypeMessage" checked /><span data-i18n="typeMessage">📩 Message</span></label>
+                <label class="seg-option"><input type="radio" name="fuType" id="fuTypeCall" /><span data-i18n="typeCall">📞 Call</span></label>
               </div>
 
               <div id="messageFields">
-                <label class="field-label" for="templateSelect">Template (fills both languages)</label>
+                <label class="field-label" for="templateSelect" data-i18n="template">Template (fills both languages)</label>
                 <select id="templateSelect">
-                  <option value="">— No template —</option>
-                  <option value="progress">Progress Message</option>
-                  <option value="levelup">Level-Up Update</option>
-                  <option value="short">Short Update</option>
+                  <option value="" data-i18n="noTemplate">— No template —</option>
+                  <option value="progress" data-i18n="tmplProgress">Progress Message</option>
+                  <option value="levelup" data-i18n="tmplLevelUp">Level-Up Update</option>
+                  <option value="short" data-i18n="tmplShort">Short Update</option>
                 </select>
-                <label class="field-label" for="messageTypeSelect">Message Type</label>
+                <label class="field-label" for="messageTypeSelect" data-i18n="messageType">Message Type</label>
                 <select id="messageTypeSelect">
-                  <option>Progress Message</option><option>Level-Up Update</option>
-                  <option>Short Update Message</option><option>Reminder</option><option>Other</option>
+                  <option data-i18n="tmplProgress">Progress Message</option><option data-i18n="tmplLevelUp">Level-Up Update</option>
+                  <option data-i18n="tmplShortMsg">Short Update Message</option><option data-i18n="msgReminder">Reminder</option><option data-i18n="msgOther">Other</option>
                 </select>
-                <label class="field-label" for="msgEn">Message to Parents — English</label>
+                <label class="field-label" for="msgEn" data-i18n="msgEnLabel">Message to Parents — English</label>
                 <textarea id="msgEn" rows="5"></textarea>
-                <label class="field-label" for="msgZh">Message to Parents — 中文</label>
+                <label class="field-label" for="msgZh" data-i18n="msgZhLabel">Message to Parents — 中文</label>
                 <textarea id="msgZh" rows="5"></textarea>
                 <div class="form-grid">
-                  <div><label class="field-label" for="dateCreated">Date Created</label><input type="date" id="dateCreated" /></div>
-                  <div class="hint-text" style="align-self:center">📩 Messages save as <b>Not Sent</b>.<br>Mark them Sent later from the Follow-Ups Logged table.</div>
+                  <div><label class="field-label" for="dateCreated" data-i18n="dateCreated">Date Created</label><input type="date" id="dateCreated" /></div>
+                  <div class="hint-text" style="align-self:center" data-i18n="msgHint">📩 Messages save as <b>Not Sent</b>.<br>Mark them Sent later from the Follow-Ups Logged table.</div>
                 </div>
               </div>
 
               <div id="callFields" class="hidden">
-                <label class="field-label" for="callNotes">Call Notes *</label>
+                <label class="field-label" for="callNotes" data-i18n="callNotesLabel">Call Notes *</label>
                 <textarea id="callNotes" rows="4"></textarea>
-                <label class="field-label" for="solution">Solution / Outcome (optional)</label>
+                <label class="field-label" for="solution" data-i18n="solutionLabel">Solution / Outcome (optional)</label>
                 <textarea id="solution" rows="3"></textarea>
-                <label class="field-label" for="callDate">Date Called *</label>
+                <label class="field-label" for="callDate" data-i18n="dateCalled">Date Called *</label>
                 <input type="date" id="callDate" />
               </div>
 
-              <label class="field-label" for="teacherSelect">Followed Up By</label>
+              <label class="field-label" for="teacherSelect" data-i18n="followedUpBy">Followed Up By</label>
               <select id="teacherSelect"></select>
 
               <div class="btn-row">
-                <button id="saveFollowUpBtn" class="primary">💾 Save Follow-Up</button>
-                <button id="clearFormBtn" class="secondary">Clear</button>
+                <button id="saveFollowUpBtn" class="primary" data-i18n="saveFollowUp">💾 Save Follow-Up</button>
+                <button id="clearFormBtn" class="secondary" data-i18n="clearForm">Clear</button>
               </div>
             </div>
           </div>
@@ -206,39 +206,39 @@
       <div id="tab-report" class="tab-content">
         <div class="section">
           <div class="section-head">
-            <h3>📈 Monthly Report — <span id="reportMonthLabel"></span></h3>
+            <h3><span data-i18n="reportTitle">📈 Monthly Report —</span> <span id="reportMonthLabel"></span></h3>
             <div>
-              <button id="exportReportBtn" class="primary">📤 Export Full Report</button>
-              <button id="exportNotFollowedBtn" class="danger">⛔ Export Not-Followed List</button>
+              <button id="exportReportBtn" class="primary" data-i18n="exportFull">📤 Export Full Report</button>
+              <button id="exportNotFollowedBtn" class="danger" data-i18n="exportNotFollowed">⛔ Export Not-Followed List</button>
             </div>
           </div>
           <div id="summaryCards" class="balance-strip"></div>
         </div>
         <div class="report-grid">
           <div class="section">
-            <h3>Messages &amp; Calls vs Students — by Subject</h3>
+            <h3 data-i18n="msgCallsVsStudents">Messages &amp; Calls vs Students — by Subject</h3>
             <div class="table-wrapper"><table>
-              <thead><tr><th>Subject</th><th>Students</th><th>Followed</th><th>Not Followed</th><th>Coverage</th><th>📩 Msgs</th><th>📞 Calls</th></tr></thead>
+              <thead><tr><th data-i18n="subject">Subject</th><th data-i18n="thStudents">Students</th><th data-i18n="thFollowed">Followed</th><th data-i18n="thNotFollowed">Not Followed</th><th data-i18n="thCoverage">Coverage</th><th data-i18n="thMsgs">📩 Msgs</th><th data-i18n="thCalls">📞 Calls</th></tr></thead>
               <tbody id="subjectCoverageBody"></tbody>
             </table></div>
-            <h3 style="margin-top:1rem;">Activity by Subject</h3>
+            <h3 style="margin-top:1rem;" data-i18n="activityBySubject">Activity by Subject</h3>
             <div id="subjectChartArea" class="chart-area"></div>
           </div>
           <div class="section">
-            <h3>6-Month Trend — Follow-Ups vs Active Students</h3>
+            <h3 data-i18n="trend6Month">6-Month Trend — Follow-Ups vs Active Students</h3>
             <div id="trendChart"></div>
           </div>
           <div class="section">
-            <h3>By Teacher</h3>
+            <h3 data-i18n="byTeacher">By Teacher</h3>
             <div class="table-wrapper"><table>
-              <thead><tr><th>Teacher</th><th>📩 Messages</th><th>📞 Calls</th><th>Total</th><th>Students Covered</th></tr></thead>
+              <thead><tr><th data-i18n="thTeacher">Teacher</th><th data-i18n="thMessages">📩 Messages</th><th data-i18n="thCalls">📞 Calls</th><th data-i18n="thTotal">Total</th><th data-i18n="thStudentsCovered">Students Covered</th></tr></thead>
               <tbody id="byTeacherBody"></tbody>
             </table></div>
           </div>
           <div class="section">
-            <h3>Messages by Type</h3>
+            <h3 data-i18n="msgByType">Messages by Type</h3>
             <div class="table-wrapper"><table>
-              <thead><tr><th>Message Type</th><th>Count</th><th>Share</th></tr></thead>
+              <thead><tr><th data-i18n="thMessageType">Message Type</th><th data-i18n="thCount">Count</th><th data-i18n="thShare">Share</th></tr></thead>
               <tbody id="byMsgTypeBody"></tbody>
             </table></div>
           </div>
@@ -249,14 +249,35 @@
       <div id="tab-logs" class="tab-content">
         <div class="section">
           <div class="section-head">
-            <h3>🗂️ Follow-Ups Logged — <span id="recentMonthLabel"></span></h3>
-            <button id="exportMonthlyLogBtn" class="primary">📤 Export Log (Excel)</button>
+            <h3><span data-i18n="loggedTitle">🗂️ Follow-Ups Logged —</span> <span id="recentMonthLabel"></span></h3>
+            <button id="exportMonthlyLogBtn" class="primary" data-i18n="exportLog">📤 Export Log (Excel)</button>
           </div>
+
+                  <!-- 🔍 Logs filter bar -->
+                  <div class="controls logs-controls">
+                    <input type="text" id="logSearchInput" autocomplete="off"
+                          placeholder="🔍 Search name, pinyin, nickname, student no, teacher, school, message…"
+                          data-i18n-placeholder="logsSearchPlaceholder">
+                    <div class="filter-group">
+                      <label for="logFilterSubject" data-i18n="subject">Subject</label>
+                      <select id="logFilterSubject">
+                        <option value="" data-i18n="allSubjects">All Subjects</option>
+                        <option value="Math" data-i18n="math">Math</option>
+                        <option value="English ERP" data-i18n="englishErp">English ERP</option>
+                        <option value="English EFL" data-i18n="englishEfl">English EFL</option>
+                        <option value="Chinese (Trad)" data-i18n="chiTrad">Chinese (Trad)</option>
+                        <option value="Chinese (Simp)" data-i18n="chiSimp">Chinese (Simp)</option>
+                      </select>
+                    </div>
+                    <button id="clearLogFiltersBtn" class="secondary" data-i18n="clear">Clear</button>
+                    <span id="logsCountInfo" class="logs-count" title="Records shown this month"></span>
+                  </div>
+
           <div class="table-wrapper recent-wrap">
             <table id="logsTable">
               <thead><tr>
-                <th>Type</th><th>Date</th><th>Sent</th><th>Name</th><th>Grade</th><th>School</th>
-                <th>Teacher</th><th>Subject &amp; Level</th><th>Start Date</th><th>Schedule</th><th>Details</th><th></th>
+                <th data-i18n="thType">Type</th><th data-i18n="thDate">Date</th><th data-i18n="thSent">Sent</th><th data-i18n="thName">Name</th><th data-i18n="thGrade">Grade</th><th data-i18n="thSchool">School</th>
+                <th data-i18n="thTeacher">Teacher</th><th data-i18n="thSubjects">Subject &amp; Level</th><th data-i18n="thStartDate">Start Date</th><th data-i18n="thSchedule">Schedule</th><th data-i18n="thDetails">Details</th><th></th>
               </tr></thead>
               <tbody id="recentLogsBody"></tbody>
             </table>
@@ -271,7 +292,7 @@
   <div id="historyModal" class="modal-overlay hidden">
     <div class="modal-box wide">
       <span class="modal-close" id="closeHistoryBtn">×</span>
-      <h3 id="historyTitle">🕓 Follow-Up History</h3>
+      <h3 id="historyTitle" data-i18n="historyTitle">🕓 Follow-Up History</h3>
       <div id="historyBody"></div>
     </div>
   </div>
@@ -280,38 +301,38 @@
   <div id="editModal" class="modal-overlay hidden">
     <div class="modal-box">
       <span class="modal-close" id="closeEditBtn">×</span>
-      <h3>✏️ Edit Follow-Up</h3>
+      <h3 data-i18n="editTitle">✏️ Edit Follow-Up</h3>
       <input type="hidden" id="editId" />
       <div id="editStudentLabel" class="edit-student-label"></div>
 
-      <label class="field-label">Follow-Up Type</label>
+      <label class="field-label" data-i18n="followUpType">Follow-Up Type</label>
       <div class="seg">
-        <label class="seg-option"><input type="radio" name="editType" id="editTypeMessage" checked /><span>📩 Message</span></label>
-        <label class="seg-option"><input type="radio" name="editType" id="editTypeCall" /><span>📞 Call</span></label>
+        <label class="seg-option"><input type="radio" name="editType" id="editTypeMessage" checked /><span data-i18n="typeMessage">📩 Message</span></label>
+        <label class="seg-option"><input type="radio" name="editType" id="editTypeCall" /><span data-i18n="typeCall">📞 Call</span></label>
       </div>
 
       <div id="editMessageFields">
-        <label class="field-label" for="editMessageType">Message Type</label>
+        <label class="field-label" for="editMessageType" data-i18n="messageType">Message Type</label>
         <select id="editMessageType">
-          <option>Progress Message</option><option>Level-Up Update</option>
-          <option>Short Update Message</option><option>Reminder</option><option>Other</option>
+          <option data-i18n="tmplProgress">Progress Message</option><option data-i18n="tmplLevelUp">Level-Up Update</option>
+          <option data-i18n="tmplShortMsg">Short Update Message</option><option data-i18n="msgReminder">Reminder</option><option data-i18n="msgOther">Other</option>
         </select>
-        <label class="field-label" for="editMsgEn">Message — English</label>
+        <label class="field-label" for="editMsgEn" data-i18n="msgEnShort">Message — English</label>
         <textarea id="editMsgEn" rows="4"></textarea>
-        <label class="field-label" for="editMsgZh">Message — 中文</label>
+        <label class="field-label" for="editMsgZh" data-i18n="msgZhShort">Message — 中文</label>
         <textarea id="editMsgZh" rows="4"></textarea>
           <div class="form-grid">
             <div>
-              <label class="field-label" for="editDateCreated">Date Created</label>
+              <label class="field-label" for="editDateCreated" data-i18n="dateCreated">Date Created</label>
               <input type="date" id="editDateCreated" />
             </div>
             <div>
               <div class="label-row">
-                <label class="field-label" for="editDateSent">Date Sent</label>
+                <label class="field-label" for="editDateSent" data-i18n="dateSent">Date Sent</label>
                 <label class="switch" title="Toggle sent status">
                   <input type="checkbox" id="editSentToggle" />
                   <span class="switch-track"><span class="switch-knob"></span></span>
-                  <span class="switch-label" id="editSentLabel">Not sent</span>
+                  <span class="switch-label" id="editSentLabel" data-i18n="notSent">Not sent</span>
                 </label>
               </div>
               <input type="date" id="editDateSent" disabled />
@@ -320,21 +341,21 @@
       </div>
 
       <div id="editCallFields" class="hidden">
-        <label class="field-label" for="editCallNotes">Call Notes *</label>
+        <label class="field-label" for="editCallNotes" data-i18n="callNotesLabel">Call Notes *</label>
         <textarea id="editCallNotes" rows="4"></textarea>
-        <label class="field-label" for="editSolution">Solution / Outcome</label>
+        <label class="field-label" for="editSolution" data-i18n="solutionLabelShort">Solution / Outcome</label>
         <textarea id="editSolution" rows="3"></textarea>
-        <label class="field-label" for="editCallDate">Date Called *</label>
+        <label class="field-label" for="editCallDate" data-i18n="dateCalled">Date Called *</label>
         <input type="date" id="editCallDate" />
       </div>
 
-      <label class="field-label" for="editTeacherSelect">Followed Up By</label>
+      <label class="field-label" for="editTeacherSelect" data-i18n="followedUpBy">Followed Up By</label>
       <select id="editTeacherSelect"></select>
 
       <div class="btn-row">
-        <button id="saveEditBtn" class="primary">💾 Save Changes</button>
-        <button id="deleteEditBtn" class="danger">🗑️ Delete</button>
-        <button id="cancelEditBtn" class="secondary">Cancel</button>
+        <button id="saveEditBtn" class="primary" data-i18n="saveChanges">💾 Save Changes</button>
+        <button id="deleteEditBtn" class="danger" data-i18n="delete">🗑️ Delete</button>
+        <button id="cancelEditBtn" class="secondary" data-i18n="cancel">Cancel</button>
       </div>
     </div>
   </div>
@@ -342,17 +363,18 @@
   <!-- CONFIRM MODAL -->
   <div id="confirmModal" class="modal-overlay hidden">
     <div class="modal-box">
-      <h3>⚠️ Please Confirm</h3>
+      <h3 data-i18n="confirmTitle">⚠️ Please Confirm</h3>
       <p id="confirmMessage"></p>
       <div class="confirm-actions">
-        <button id="confirmNoBtn" class="secondary">Cancel</button>
-        <button id="confirmYesBtn" class="danger">Yes, Delete</button>
+        <button id="confirmNoBtn" class="secondary" data-i18n="cancel">Cancel</button>
+        <button id="confirmYesBtn" class="danger" data-i18n="yesDelete">Yes, Delete</button>
       </div>
     </div>
   </div>
 
   <div id="toast" class="toast hidden"></div>
 
+  <script type="module" src="follow-up-reports-i18n.js"></script>
   <script type="module" src="follow-up-reports.js?v=4"></script>
 </body>
 </html>
