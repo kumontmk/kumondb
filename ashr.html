@@ -192,6 +192,12 @@
         </select>
         <button class="btn-small primary" id="generateAllLinksBtn" data-i18n="links.genAll">✨ Generate All Missing Links</button>
         <button id="exportMessagesBtn" class="secondary" data-i18n="links.exportMsg">📤 Export Messages (Excel)</button>
+        <button id="mergeLinksBtn" class="secondary">🔗 Merge Links</button>
+        <div id="mergeBar" class="filter-row hidden">
+          <span id="mergeCount" class="hint" style="margin:0;">0 selected</span>
+          <button id="mergeConfirmBtn" class="primary" disabled>🔗 Merge Selected</button>
+          <button id="mergeCancelBtn" class="secondary">✖ Cancel</button>
+        </div>
       </div>
       <div class="table-wrap">
         <table class="data-table">

@@ -30,6 +30,10 @@ let unsubscribers = [];
 let html5QrCode = null;
 let cameraActive = false;
 
+let manualMerges = {};          // add near the other state vars
+let mergeMode = false;
+let mergeSelection = new Set();
+
 const $ = (id) => document.getElementById(id);
 
 // ============================================
@@ -321,6 +325,7 @@ function subscribeToEvent(eventId) {
     { path: `${base}/checkins`, handler: (snap) => { checkins = snap.val() || {}; renderCheckinSlots(); } },
     { path: `${base}/unmatched`, handler: (snap) => { unmatchedDb = snap.val() || {}; renderUnmatched(); } },
     { path: `publicAshrLinks/${currentEventId}`, handler: (snap) => { portalsCache = {}; if (snap.exists()) snap.forEach(c => { portalsCache[c.key] = c.val(); }); renderLinks(); renderRSVPs(); } },
+    { path: `${base}/manualMerges`, handler: (snap) => { manualMerges = snap.val() || {}; renderLinks(); renderRSVPs(); renderSlotCapacity(); renderCheckinSlots(); } },
   ];
   subs.forEach(({ path, handler }) => {
     const unsub = onValue(ref(db, path), handler, (err) => console.error(`Listener error on ${path}:`, err));
@@ -1501,6 +1506,9 @@ function setupLinks() {
   $('generateAllLinksBtn').addEventListener('click', generateAllMissingLinks);
   $('exportMessagesBtn').addEventListener('click', exportInvitationMessages);
   $('closeLinkCard').addEventListener('click', () => $('linkCardModal').classList.add('hidden'));
+  $('mergeLinksBtn').addEventListener('click', () => setMergeMode(true));
+  $('mergeCancelBtn').addEventListener('click', () => setMergeMode(false));
+  $('mergeConfirmBtn').addEventListener('click', mergeSelectedFamilies);
 }
 
 function buildAshrFamilies() {
@@ -1516,6 +1524,18 @@ function buildAshrFamilies() {
       });
     });
   });
+
+  // 🔗 Admin manual merges (siblings linked AFTER portals were created)
+  Object.values(manualMerges || {}).forEach(mg => {
+    const nodes = [...new Set((mg.members || [])
+      .map(k => honorees[k]).filter(h => h && isInvitable(h))
+      .map(h => `${h.centerId}/${h.studentId}`))];
+    for (let i = 1; i < nodes.length; i++) {
+      (adj[nodes[0]] = adj[nodes[0]] || new Set()).add(nodes[i]);
+      (adj[nodes[i]] = adj[nodes[i]] || new Set()).add(nodes[0]);
+    }
+  });
+
   const honoreeKeys = new Set(invitableEntries.map(([_, h]) => `${h.centerId}/${h.studentId}`));
   const seen = new Set();
   const familyGroups = [];
@@ -1542,6 +1562,17 @@ function buildAshrFamilies() {
   return familyGroups;
 }
 
+function setMergeMode(on) {
+  mergeMode = on;
+  if (!on) mergeSelection.clear();
+  $('mergeBar').classList.toggle('hidden', !on);
+  $('mergeLinksBtn').classList.toggle('hidden', on);
+  renderLinks();
+}
+function updateMergeBar() {
+  $('mergeCount').textContent = `${mergeSelection.size} selected`;
+  $('mergeConfirmBtn').disabled = mergeSelection.size < 2;
+}
 function renderLinks() {
   const familyGroups = buildAshrFamilies();
   const search = ($('linkSearch').value || '').toLowerCase();
@@ -1561,26 +1592,26 @@ function renderLinks() {
       if (!hay.includes(search)) return;
     }
     const names = fam.members.map(m => m.nameCn || m.nameEn).join(', ');
+    const isMerged = Object.values(manualMerges).some(mg =>
+      [...new Set((mg.members || []).filter(k => honorees[k]))].sort().join('|') === fam.key);
     const statusHtml = !hasLink
       ? `<span class="status-badge st-pending">${t('st.noLink', 'No Link')}</span>`
       : isDisabled
         ? `<span class="status-badge st-declined">${t('st.disabled', 'Disabled')}</span>`
         : `<span class="status-badge st-attending">${t('st.active', 'Active')}</span>`;
+    const mergeBox = mergeMode
+      ? `<input type="checkbox" class="merge-check" data-fam-key="${escapeHtml(fam.key)}" ${mergeSelection.has(fam.key) ? 'checked' : ''} style="margin-right:0.5rem;">`
+      : '';
+    const mergedBadge = isMerged ? `<span class="type-badge tb-both">🔗 ${t('links.merged', 'Merged')}</span>` : '';
     const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><strong>${escapeHtml(names)}</strong></td>
-      <td>${fam.members.length}</td>
-      <td>${statusHtml}</td>
-      <td><div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
-        ${hasLink ? `<button class="btn-small primary" data-link-action="card" data-fam-key="${escapeHtml(fam.key)}">${t('links.card', '📇 Card')}</button>` : ''}
-        <button class="btn-small ${hasLink ? 'secondary' : 'primary'}" data-link-action="gen" data-fam-key="${escapeHtml(fam.key)}">
-          ${hasLink ? t('links.regen', '♻️ Regen') : t('links.gen', '✨ Generate')}
-        </button>
-        ${hasLink ? `<button class="btn-small secondary" data-link-action="toggle" data-fam-key="${escapeHtml(fam.key)}">
-          ${isDisabled ? t('links.enable', '▶ Enable') : t('links.disable', '⏸ Disable')}
-        </button>` : ''}
-      </div></td>`;
+    tr.innerHTML = `<td>${mergeBox}<strong>${escapeHtml(names)}</strong> ${mergedBadge}</td> <td>${fam.members.length}</td> <td>${statusHtml}</td> <td><div style="display:flex;gap:0.4rem;flex-wrap:wrap;"> ${hasLink ? `<button class="btn-small primary" data-link-action="card" data-fam-key="${escapeHtml(fam.key)}">${t('links.card', '📇 Card')}</button>` : ''} <button class="btn-small ${hasLink ? 'secondary' : 'primary'}" data-link-action="gen" data-fam-key="${escapeHtml(fam.key)}"> ${hasLink ? t('links.regen', '♻️ Regen') : t('links.gen', '✨ Generate')} </button> ${hasLink ? `<button class="btn-small secondary" data-link-action="toggle" data-fam-key="${escapeHtml(fam.key)}"> ${isDisabled ? t('links.enable', '▶ Enable') : t('links.disable', '⏸ Disable')} </button>` : ''} </div></td>`;
     tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll('.merge-check').forEach(ch => {
+    ch.addEventListener('change', () => {
+      if (ch.checked) mergeSelection.add(ch.dataset.famKey); else mergeSelection.delete(ch.dataset.famKey);
+      updateMergeBar();
+    });
   });
   tbody.querySelectorAll('[data-link-action]').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -1592,6 +1623,84 @@ function renderLinks() {
       else if (btn.dataset.linkAction === 'card') openLinkCard(fam);
     });
   });
+  updateMergeBar();
+}
+// ============================================
+// 🔗 MERGE FAMILY LINKS (post-creation sibling linking)
+// ============================================
+function preferStatus(a, b) {
+  const rank = s => s === 'attending' ? 3 : s === 'declined' ? 2 : 1;
+  return rank(a) >= rank(b) ? a : b;
+}
+function mergeGuests(a, b) {
+  a = a || {}; b = b || {};
+  return {
+    mom: !!(a.mom || b.mom), dad: !!(a.dad || b.dad),
+    grandma: !!(a.grandma || b.grandma), grandpa: !!(a.grandpa || b.grandpa),
+    siblings: Math.max(parseInt(a.siblings) || 0, parseInt(b.siblings) || 0),
+    others: Math.max(parseInt(a.others) || 0, parseInt(b.others) || 0)
+  };
+}
+async function mergeSelectedFamilies() {
+  const groups = buildAshrFamilies().filter(g => mergeSelection.has(g.key));
+  if (groups.length < 2) return showToast('Select at least 2 families to merge', 'error');
+  const memberKeys = [...new Set(groups.flatMap(g => g.members.map(m => m.honoreeKey)))].sort();
+  const newKey = memberKeys.join('|');
+  const names = groups.map(g => g.members.map(m => m.nameCn || m.nameEn).join(', ')).join('  +  ');
+  if (!confirm(`Merge into ONE family link?\n${names}\n\n${memberKeys.length} students → 1 new link. Old links will be DISABLED.`)) return;
+  const now = new Date().toISOString();
+  const updates = {};
+  // 1) persistent override so grouping stays merged forever
+  updates[`ashrEvents/${currentEventId}/manualMerges/mg_${randomToken(8)}`] =
+    { members: memberKeys, createdAt: now, createdBy: auth.currentUser?.email || '' };
+  // 2) old portals + their RSVP records, richest reply first
+  const entries = groups.map(g => {
+    const pe = Object.entries(portalsCache).find(([_, p]) => p.familyKey === g.key);
+    return { group: g, token: pe?.[0] || null, portal: pe?.[1] || null, rec: pe ? (families[pe[1].familyId] || null) : null };
+  }).sort((a, b) => ((b.rec?.rsvp?.status ? 1 : 0) - (a.rec?.rsvp?.status ? 1 : 0)));
+  const primary = entries[0];
+  const primaryFamId = primary.portal?.familyId || ('fam_' + randomToken(8));
+  // 3) merge memberHonoreeIds + RSVP payloads into the primary record
+  const mergedMembers = new Set(primary.rec?.memberHonoreeIds || []);
+  memberKeys.forEach(k => mergedMembers.add(k));
+  let mergedRsvp = primary.rec?.rsvp || null;
+  entries.slice(1).forEach(en => {
+    const r = en.rec?.rsvp;
+    if (!r) return;
+    if (!mergedRsvp) { mergedRsvp = r; return; }
+    const per = { ...(mergedRsvp.perStudentSlots || {}) };
+    if (mergedRsvp.sameTimeslot && mergedRsvp.sharedSlotId)
+      (primary.rec?.memberHonoreeIds || []).forEach(mid => per[mid] = mergedRsvp.sharedSlotId);
+    if (r.sameTimeslot && r.sharedSlotId)
+      (en.rec?.memberHonoreeIds || []).forEach(mid => per[mid] = r.sharedSlotId);
+    else if (r.perStudentSlots) Object.assign(per, r.perStudentSlots);
+    mergedRsvp = {
+      ...mergedRsvp, ...r,
+      status: preferStatus(mergedRsvp.status, r.status),
+      sameTimeslot: false, sharedSlotId: null, perStudentSlots: per,
+      guests: mergeGuests(mergedRsvp.guests, r.guests)
+    };
+  });
+  updates[`ashrEvents/${currentEventId}/families/${primaryFamId}/memberHonoreeIds`] = [...mergedMembers];
+  if (mergedRsvp) updates[`ashrEvents/${currentEventId}/families/${primaryFamId}/rsvp`] = mergedRsvp;
+  // 4) neuter secondary RSVP records (readers ignore them automatically)
+  entries.slice(1).forEach(en => {
+    const fid = en.portal?.familyId;
+    if (!fid || fid === primaryFamId) return;
+    updates[`ashrEvents/${currentEventId}/families/${fid}/memberHonoreeIds`] = null;
+    updates[`ashrEvents/${currentEventId}/families/${fid}/rsvp`] = null;
+    updates[`ashrEvents/${currentEventId}/families/${fid}/mergedInto`] = primaryFamId;
+    updates[`ashrEvents/${currentEventId}/families/${fid}/mergedAt`] = now;
+  });
+  // 5) ONE new active portal; disable every old one
+  updates[`publicAshrLinks/${currentEventId}/${randomToken()}`] =
+    { familyKey: newKey, familyId: primaryFamId, active: true, createdAt: now, members: memberKeys };
+  entries.forEach(en => { if (en.token) updates[`publicAshrLinks/${currentEventId}/${en.token}/active`] = false; });
+  try {
+    await update(ref(db), updates);
+    setMergeMode(false);
+    showToast(t('toast.merged', '✅ Families merged — new link active, old links disabled'), 'success');
+  } catch (err) { showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error'); }
 }
 
 
