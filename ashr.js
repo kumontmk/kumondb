@@ -2412,15 +2412,17 @@ function renderRSVPs() {
   tbody.innerHTML = '';
 
   let attending = 0, declined = 0, pending = 0, totalGuests = 0;
-  let famAttending = 0, famDeclined = 0, famPending = 0;   // optional family counters
+  let famAttending = 0, famDeclined = 0, famPending = 0;
   const rows = buildRsvpRows();
 
+  // 1. Calculate Stats
   rows.forEach(row => {
     const status = row.rsvp?.status || 'pending';
     // ✅ count STUDENTS (siblings sharing one link/RSVP count individually)
-    const students = row.members.length
-                  || row.rsvp?.memberHonoreeIds?.length
+    const students = row.members.length 
+                  || row.rsvp?.memberHonoreeIds?.length 
                   || 1;
+    
     if (status === 'attending') {
       attending += students; famAttending++;
       totalGuests += countGuests(row.rsvp.guests);
@@ -2431,16 +2433,19 @@ function renderRSVPs() {
     }
   });
 
+  // 2. Render Stat Cards
   $('rsvpStats').innerHTML = `
     <div class="stat-card"><div class="stat-value">${attending}</div><div class="stat-label">${t('stat.attending', 'Attending (students)')}</div></div>
     <div class="stat-card"><div class="stat-value">${declined}</div><div class="stat-label">${t('stat.declined', 'Declined (students)')}</div></div>
     <div class="stat-card"><div class="stat-value">${pending}</div><div class="stat-label">${t('stat.pending', 'No Response (students)')}</div></div>
     <div class="stat-card"><div class="stat-value">${totalGuests}</div><div class="stat-label">${t('stat.guests', 'Total Guests')}</div></div>`;
 
+  // 3. Render Table Rows
   rows.forEach(row => {
     const rsvp = row.rsvp || {};
     const status = rsvp.status || 'pending';
     if (filter !== 'all' && status !== filter) return;
+    
     const memberNames = row.members.map(m => m.nameCn || m.nameEn).join(', ') || row.famId;
     let slotDisplay = '—';
     if (status === 'attending') {
@@ -2451,10 +2456,42 @@ function renderRSVPs() {
         slotDisplay = Object.values(rsvp.perStudentSlots).map(sid => timeslots[sid] ? timeslots[sid].start : sid).join(', ');
       }
     }
+    
     const statusClass = status === 'attending' ? 'st-attending' : status === 'declined' ? 'st-declined' : 'st-pending';
+    const studentCount = row.members.length || row.rsvp?.memberHonoreeIds?.length || 1;
+    
+    // ✅ Actions column: Show Reset button ONLY if they have an RSVP record
+    const actionsHtml = row.rsvp 
+      ? `<button class="btn-small danger" data-reset-rsvp="${escapeHtml(row.famId)}">🔄 ${t('rsvp.reset', 'Reset')}</button>` 
+      : '';
+
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${escapeHtml(memberNames)}</td> <td>${row.members.length}</td> <td><span class="status-badge ${statusClass}">${t('st.' + status, status)}</span></td> <td>${rsvp.status === 'declined' && rsvp.reason ? escapeHtml(rsvp.reason) : '—'}</td> <td>${escapeHtml(slotDisplay)}</td> <td>${countGuests(rsvp.guests)}</td> <td>${rsvp.submittedAt ? new Date(rsvp.submittedAt).toLocaleDateString() : '—'}</td>`;
+    tr.innerHTML = `
+      <td>${escapeHtml(memberNames)}</td> 
+      <td>${studentCount}</td> 
+      <td><span class="status-badge ${statusClass}">${t('st.' + status, status)}</span></td> 
+      <td>${rsvp.status === 'declined' && rsvp.reason ? escapeHtml(rsvp.reason) : '—'}</td> 
+      <td>${escapeHtml(slotDisplay)}</td> 
+      <td>${countGuests(rsvp.guests)}</td> 
+      <td>${rsvp.submittedAt ? new Date(rsvp.submittedAt).toLocaleDateString() : '—'}</td>
+      <td>${actionsHtml}</td>`;
     tbody.appendChild(tr);
+  });
+
+  // 4. Wire up the Reset Buttons
+  tbody.querySelectorAll('[data-reset-rsvp]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const famId = btn.dataset.resetRsvp;
+      if (!confirm(t('rsvp.resetConfirm', 'Reset this family\'s RSVP? They will need to fill out the form again using their link.'))) return;
+      
+      try {
+        // Deletes ONLY the rsvp node, keeping the familyId and memberHonoreeIds intact
+        await remove(ref(db, `ashrEvents/${currentEventId}/families/${famId}/rsvp`));
+        showToast(t('toast.rsvpReset', '✅ RSVP reset. The link is now fresh for the parents.'), 'success');
+      } catch (err) {
+        showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error');
+      }
+    });
   });
 }
 

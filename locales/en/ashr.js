@@ -99,7 +99,9 @@ export default {
     slotCap: 'Timeslot Capacity',
     confirmed: 'All Families',
     export: '📊 Export Excel',
-    all: 'All'
+    all: 'All',
+    reset: 'Reset',
+    resetConfirm: 'Reset this family\'s RSVP? They will need to use the link to fill out the form again.'
   },
   ci: {
     title: 'Scan to Check In',
@@ -122,7 +124,7 @@ export default {
     submitted: 'Submitted', sheet: 'Sheet', sid: 'Student ID',
     nameEn: 'Name (EN)', nameCn: 'Name (CN)', subject: 'Subject', stars: 'Stars', slot: 'Timeslot', reason: 'Decline Reason',  source: 'Source',
     ref: 'Ref',
-    detail: 'Detail'
+    detail: 'Detail', actions: 'Actions', barcode: 'Barcode', date: 'Date', venue: 'Venue', deadline: 'RSVP Deadline'
   },
   um: {
     title: '✏️ Resolve Unmatched Record',
@@ -167,7 +169,8 @@ export default {
     slotFullNow: 'is now full. Please choose another.',
     rsvpOk: 'RSVP submitted successfully!',   noCompleters: 'No completer records',
     completersImportDone: 'Completers import complete',
-    completersCleared: 'Completers cleared'
+    completersCleared: 'Completers cleared',
+    rsvpReset: '✅ RSVP 已重置。家長現在可以使用連結重新填寫。'
   },
   common: { save: '💾 Save', cancel: 'Cancel', delete: '🗑', edit: '✏️ Edit', copied: 'Copied!' },
   inv: {

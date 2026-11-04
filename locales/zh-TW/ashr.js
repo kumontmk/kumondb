@@ -103,7 +103,9 @@ export default {
     slotCap: '時段容量',
     confirmed: '所有家庭',
     export: '📊 匯出 Excel',
-    all: '全部'
+    all: '全部',
+    reset: '重置', 
+    resetConfirm: '重置此家庭的 RSVP 嗎？他們需要使用連結重新填寫表單。',
   },
   ci: {
     title: '掃描簽到',
@@ -127,7 +129,7 @@ export default {
     nameEn: '英文名', nameCn: '中文名', subject: '科目', stars: '星數', slot: '時段', reason: '缺席原因',
     source: '來源',
     ref: '參考',
-    detail: '詳細資訊'
+    detail: '詳細資訊', actions: '操作', barcode: '條碼', date: '日期', venue: '場地', deadline: '回覆截止日期'
   },
   um: {
     title: '✏️ 處理未匹配記錄',
@@ -174,7 +176,8 @@ export default {
     rsvpOk: '回覆提交成功！',
     noCompleters: '沒有完成者記錄',
     completersImportDone: '完成者匯入完成',
-    completersCleared: '完成者記錄已清除'
+    completersCleared: '完成者記錄已清除',
+    rsvpReset: '✅ RSVP 已重置。家長現在可以使用連結重新填寫。',
   },
   common: { save: '💾 儲存', cancel: '取消', delete: '🗑', edit: '✏️ 編輯', copied: '已複製！' },
   inv: {
