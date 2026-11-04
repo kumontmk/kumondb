@@ -2301,17 +2301,32 @@ function renderRSVPs() {
   const filter = $('rsvpFilter').value;
   const tbody = $('rsvpTableBody');
   tbody.innerHTML = '';
+
   let attending = 0, declined = 0, pending = 0, totalGuests = 0;
+  let famAttending = 0, famDeclined = 0, famPending = 0;   // optional family counters
   const rows = buildRsvpRows();
 
   rows.forEach(row => {
     const status = row.rsvp?.status || 'pending';
-    if (status === 'attending') { attending++; totalGuests += countGuests(row.rsvp.guests); }
-    else if (status === 'declined') declined++;
-    else pending++;
+    // ✅ count STUDENTS (siblings sharing one link/RSVP count individually)
+    const students = row.members.length
+                  || row.rsvp?.memberHonoreeIds?.length
+                  || 1;
+    if (status === 'attending') {
+      attending += students; famAttending++;
+      totalGuests += countGuests(row.rsvp.guests);
+    } else if (status === 'declined') {
+      declined += students; famDeclined++;
+    } else {
+      pending += students; famPending++;
+    }
   });
 
-  $('rsvpStats').innerHTML = `<div class="stat-card"><div class="stat-value">${attending}</div><div class="stat-label">${t('stat.attending', 'Attending')}</div></div> <div class="stat-card"><div class="stat-value">${declined}</div><div class="stat-label">${t('stat.declined', 'Declined')}</div></div> <div class="stat-card"><div class="stat-value">${pending}</div><div class="stat-label">${t('stat.pending', 'No Response')}</div></div> <div class="stat-card"><div class="stat-value">${totalGuests}</div><div class="stat-label">${t('stat.guests', 'Total Guests')}</div></div>`;
+  $('rsvpStats').innerHTML = `
+    <div class="stat-card"><div class="stat-value">${attending}</div><div class="stat-label">${t('stat.attending', 'Attending (students)')}</div></div>
+    <div class="stat-card"><div class="stat-value">${declined}</div><div class="stat-label">${t('stat.declined', 'Declined (students)')}</div></div>
+    <div class="stat-card"><div class="stat-value">${pending}</div><div class="stat-label">${t('stat.pending', 'No Response (students)')}</div></div>
+    <div class="stat-card"><div class="stat-value">${totalGuests}</div><div class="stat-label">${t('stat.guests', 'Total Guests')}</div></div>`;
 
   rows.forEach(row => {
     const rsvp = row.rsvp || {};
