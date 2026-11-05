@@ -15,6 +15,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
 <div id="page-loader">
@@ -238,7 +239,14 @@
     <div class="card">
       <div class="card-head">
         <h3 data-i18n="rsvp.confirmed">All Families</h3>
-        <button class="btn-small primary" id="exportRsvpBtn" data-i18n="rsvp.export">📊 Export Excel</button>
+        <div class="export-menu-wrap">
+          <button id="exportMenuBtn" class="primary">📤 Export ▾</button>
+          <div id="exportMenu" class="export-menu hidden">
+            <button id="exportExcelBtn" class="export-menu-item" type="button">📊 Export Excel<small>RSVP list — all families</small></button>
+            <button id="exportCardsBtn" class="export-menu-item" type="button">🎟️ Export Cards<small>Invitation cards — attending students only</small></button>
+            <button id="exportBothBtn" class="export-menu-item" type="button">📦 Export Both<small>Excel + attending cards</small></button>
+          </div>
+        </div>
       </div>
       <div class="filter-row">
         <select id="rsvpFilter">
@@ -247,10 +255,12 @@
           <option value="declined" data-i18n="st.declined">Declined</option>
           <option value="pending" data-i18n="st.pending">No Response</option>
         </select>
+        <select id="rsvpCenterFilter"></select>
       </div>
       <div class="table-wrap">
         <table class="data-table">
           <thead><tr>
+            <th class="row-num">#</th>
             <th data-i18n="th.family">Family</th>
             <th data-i18n="th.students">Students</th>
             <th data-i18n="th.status">Status</th>

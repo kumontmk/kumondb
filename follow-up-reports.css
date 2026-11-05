@@ -298,3 +298,5 @@ input[type="date"]:disabled { background: #f1f5f9; color: #94a3b8; cursor: not-a
 /* ---------- LOGS FILTER BAR ---------- */
 .logs-controls { margin: 0.25rem 0 0.9rem; }
 .logs-count { margin-left: auto; font-size: 0.82rem; font-weight: 700; color: var(--text-light); white-space: nowrap; }
+/* follow-up-reports.css */
+.hint-text { white-space: pre-line; }

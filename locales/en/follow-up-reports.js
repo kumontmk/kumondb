@@ -69,7 +69,7 @@ export default {
   msgEnLabel: "Message to Parents — English",
   msgZhLabel: "Message to Parents — 中文",
   dateCreated: "Date Created",
-  msgHint: "📩 Messages save as <b>Not Sent</b>.<br>Mark them Sent later from the Follow-Ups Logged table.",
+  msgHint: "📩 Messages save as Not Sent. Mark them Sent later from the Follow-Ups Logged table.",
   callNotesLabel: "Call Notes *",
   solutionLabel: "Solution / Outcome (optional)",
   dateCalled: "Date Called *",
@@ -118,4 +118,5 @@ export default {
   confirmTitle: "⚠️ Please Confirm",
   yesDelete: "Yes, Delete",
   logsSearchPlaceholder: "🔍 Search name, pinyin, nickname, student no, teacher, school, message… ",
+
 };

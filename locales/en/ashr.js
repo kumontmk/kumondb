@@ -1,6 +1,6 @@
 export default {
   page: {
-    title: '🏅 KumonASHR ',
+    title: '🏅 Kumon ASHR ',
     back: '← Centers',
     loading: 'Loading ASHR...',
     event: 'Event:',
@@ -81,7 +81,8 @@ export default {
     gen: '✨ Generate',
     regen: '♻️ Regen',
     enable: '▶ Enable',
-    disable: '⏸ Disable'
+    disable: '⏸ Disable',
+    merged: 'Merged'
   },
   st: {
     active: 'Active',
@@ -92,7 +93,12 @@ export default {
     pending: 'No Response',
     inactive: 'Inactive',
   },
-  stat: { attending: 'Attending', declined: 'Declined', pending: 'No Response', guests: 'Total Guests' },
+  stat: { 
+    attending: 'Attending (students)', 
+    declined: 'Declined (students)', 
+    pending: 'No Response (students)', 
+    guests: 'Total Guests' 
+  },
   slot: { full: 'FULL', open: 'Open', disabled: 'Disabled' },
   rsvp: {
     summary: 'RSVP Summary',
@@ -122,9 +128,8 @@ export default {
     timeslot: 'Timeslot', students: 'Students', capacity: 'Capacity',
     guests: 'Guests', totalPeople: 'Total People', total: 'Total People',
     submitted: 'Submitted', sheet: 'Sheet', sid: 'Student ID',
-    nameEn: 'Name (EN)', nameCn: 'Name (CN)', subject: 'Subject', stars: 'Stars', slot: 'Timeslot', reason: 'Decline Reason',  source: 'Source',
-    ref: 'Ref',
-    detail: 'Detail', actions: 'Actions', barcode: 'Barcode', date: 'Date', venue: 'Venue', deadline: 'RSVP Deadline'
+    nameEn: 'Name (EN)', nameCn: 'Name (CN)', subject: 'Subject', stars: 'Stars', slot: 'Timeslot', reason: 'Decline Reason',  
+    source: 'Source', ref: 'Ref', detail: 'Detail', barcode: 'Barcode', date: 'Date', venue: 'Venue', deadline: 'RSVP Deadline'
   },
   um: {
     title: '✏️ Resolve Unmatched Record',
@@ -159,7 +164,7 @@ export default {
     slotUpdated: 'Timeslot updated', slotAdded: 'Timeslot added',
     importDone: 'Import complete', cleared: 'List cleared', allCleared: 'All ASHR data cleared',
     selectStudent: 'Select a student first', awardAdded: 'Award added', copied: 'Copied!',
-    linkGen: 'Link generated', linksGen: 'new link(s) generated',
+    linkGen: 'Link generated', linksGen: 'new link(s) generated', merged: '✅ Families merged — new link active, old links disabled',
     noExport: 'No data to export', exportOk: 'Exported!',
     unknownCode: '❌ Unknown barcode', notConfirmed: 'has not confirmed attendance.',
     checkedOut: 'checked OUT.', checkedIn: 'checked in!', cameraErr: 'Camera error',
@@ -167,12 +172,33 @@ export default {
     chooseSlot: 'Please select a timeslot',
     eachSlot: 'Please select a timeslot for each student',
     slotFullNow: 'is now full. Please choose another.',
-    rsvpOk: 'RSVP submitted successfully!',   noCompleters: 'No completer records',
+    rsvpOk: 'RSVP submitted successfully!',   
+    noCompleters: 'No completer records',
     completersImportDone: 'Completers import complete',
     completersCleared: 'Completers cleared',
-    rsvpReset: '✅ RSVP 已重置。家長現在可以使用連結重新填寫。'
+    rsvpReset: '✅ RSVP reset. The link is now fresh for the parents.',
+    // 🆕 Card Export Toasts
+    noAttending: 'No attending families to export',
+    renderCards: 'Rendering cards…',
+    cardsOk: 'Cards exported',
+    cardsFail: 'No cards could be rendered',
+    skipped: 'skipped',
+    noLink: 'No invitation link for this family'
   },
   common: { save: '💾 Save', cancel: 'Cancel', delete: '🗑', edit: '✏️ Edit', copied: 'Copied!' },
+  // 🆕 Export Dropdown & Filters
+  exp: {
+    menu: 'Export',
+    excel: 'Export Excel',
+    excelHint: 'RSVP list — all families',
+    cards: 'Export Cards',
+    cardsHint: 'Invitation cards — attending students only',
+    both: 'Export Both',
+    bothHint: 'Excel + attending cards'
+  },
+  filter: {
+    allCenters: 'All Centers'
+  },
   inv: {
     loading: 'Loading invitation...',
     invalidTitle: 'Invalid Link',
@@ -188,7 +214,7 @@ export default {
     slotTitle: '🕐 Choose Timeslot',
     sameMode: 'Same timeslot for all',
     sepMode: 'Separate per student',
-    guestTitle: "👨‍‍👦 Who's coming with you?",
+    guestTitle: "👨‍👩‍👦 Who's coming with you?",
     mom: '👩 Mom', dad: '👨 Dad', grandma: '👵 Grandma', grandpa: '👴 Grandpa',
     siblings: 'Siblings', others: 'Others',
     submit: 'Submit RSVP',
@@ -208,11 +234,9 @@ export default {
     reasonWord: 'Reason',
     completer: 'Completer',
     honoured: 'Honoured Student',
-    completerCongratsText:
-      'Congratulations to {{names}}! Your hard work and dedication have earned you recognition as a Final Material Completer.',
-    mixedCongratsText:
-      'Congratulations to {{names}}! Your hard work and dedication have earned you recognition as a Final Material Completer and a place on the Advanced Student Honour Roll.',
+    completerCongratsText: 'Congratulations to {{names}}! Your hard work and dedication have earned you recognition as a Final Material Completer.',
+    mixedCongratsText: 'Congratulations to {{names}}! Your hard work and dedication have earned you recognition as a Final Material Completer and a place on the Advanced Student Honour Roll.',
     title: 'Kumon Completers & Advanced Student Honour Roll',
     subtitle: 'Final Material Completers and Advanced Student Honour Roll'
-    }
+  }
 };

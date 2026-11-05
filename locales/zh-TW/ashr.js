@@ -69,7 +69,6 @@ export default {
     typeCompleter: '完成者',
     typeBoth: '兩者',
     completerWord: '完成者'
-    
   },
   links: {
     title: '家庭邀請連結',
@@ -80,12 +79,13 @@ export default {
     noLink: '無連結',
     disabled: '已停用',
     genAll: '✨ 產生所有缺少的連結',
-    exportMsg: '📤 Export Messages (Excel)',
+    exportMsg: '📤 匯出訊息 (Excel)',
     card: '📇 卡片',
     gen: '✨ 產生',
     regen: '♻️ 重新產生',
     enable: '▶ 啟用',
-    disable: '⏸ 停用'
+    disable: '⏸ 停用',
+    merged: '已合併'
   },
   st: {
     active: '啟用中',
@@ -96,7 +96,12 @@ export default {
     pending: '未回覆',
     inactive: '未啟用',
   },
-  stat: { attending: '出席', declined: '缺席', pending: '未回覆', guests: '總賓客數' },
+  stat: { 
+    attending: '出席 (學生)', 
+    declined: '缺席 (學生)', 
+    pending: '未回覆 (學生)', 
+    guests: '總賓客數' 
+  },
   slot: { full: '已滿', open: '開放', disabled: '已停用' },
   rsvp: {
     summary: '回覆摘要',
@@ -104,7 +109,7 @@ export default {
     confirmed: '所有家庭',
     export: '📊 匯出 Excel',
     all: '全部',
-    reset: '重置', 
+    reset: '重置',
     resetConfirm: '重置此家庭的 RSVP 嗎？他們需要使用連結重新填寫表單。',
   },
   ci: {
@@ -127,9 +132,7 @@ export default {
     guests: '賓客', totalPeople: '總人數', total: '總人數',
     submitted: '提交時間', sheet: '分頁', sid: '學號',
     nameEn: '英文名', nameCn: '中文名', subject: '科目', stars: '星數', slot: '時段', reason: '缺席原因',
-    source: '來源',
-    ref: '參考',
-    detail: '詳細資訊', actions: '操作', barcode: '條碼', date: '日期', venue: '場地', deadline: '回覆截止日期'
+    source: '來源', ref: '參考', detail: '詳細資訊', barcode: '條碼', date: '日期', venue: '場地', deadline: '回覆截止日期'
   },
   um: {
     title: '✏️ 處理未匹配記錄',
@@ -156,8 +159,7 @@ export default {
   },
   imp: {
     added: '新增', updated: '更新', skipLow: '跳過（EFL <3★）',
-    skipSubject: '跳過（科目）', unmatched: '未匹配', removed: '移除（無金獎）',   newHonorees: '新增獲獎學生'
-
+    skipSubject: '跳過（科目）', unmatched: '未匹配', removed: '移除（無金獎）', newHonorees: '新增獲獎學生'
   },
   toast: {
     settings: '設定已儲存！', err: '錯誤',
@@ -165,7 +167,7 @@ export default {
     slotUpdated: '時段已更新', slotAdded: '時段已新增',
     importDone: '匯入完成', cleared: '清單已清除', allCleared: '所有 ASHR 資料已清除',
     selectStudent: '請先選擇學生', awardAdded: '獎項已新增', copied: '已複製！',
-    linkGen: '連結已產生', linksGen: '個新連結已產生',
+    linkGen: '連結已產生', linksGen: '個新連結已產生', merged: '✅ 家庭已合併 — 新連結已啟用，舊連結已停用',
     noExport: '沒有可匯出的資料', exportOk: '已匯出！',
     unknownCode: '❌ 無法識別的條碼', notConfirmed: '尚未確認出席。',
     checkedOut: '已取消簽到。', checkedIn: '已簽到！', cameraErr: '鏡頭錯誤',
@@ -178,8 +180,28 @@ export default {
     completersImportDone: '完成者匯入完成',
     completersCleared: '完成者記錄已清除',
     rsvpReset: '✅ RSVP 已重置。家長現在可以使用連結重新填寫。',
+    // 🆕 Card Export Toasts
+    noAttending: '沒有出席的家庭可匯出',
+    renderCards: '正在產生邀請卡…',
+    cardsOk: '邀請卡已匯出',
+    cardsFail: '無法產生邀請卡',
+    skipped: '略過',
+    noLink: '此家庭沒有邀請連結'
   },
   common: { save: '💾 儲存', cancel: '取消', delete: '🗑', edit: '✏️ 編輯', copied: '已複製！' },
+  // 🆕 Export Dropdown & Filters
+  exp: {
+    menu: '匯出',
+    excel: '匯出 Excel',
+    excelHint: 'RSVP 名單 — 所有家庭',
+    cards: '匯出邀請卡',
+    cardsHint: '僅出席學生的邀請卡',
+    both: '全部匯出',
+    bothHint: 'Excel + 出席邀請卡'
+  },
+  filter: {
+    allCenters: '所有中心'
+  },
   inv: {
     loading: '載入邀請中...',
     invalidTitle: '連結無效',
@@ -195,7 +217,7 @@ export default {
     slotTitle: '🕐 選擇時段',
     sameMode: '所有學生同一時段',
     sepMode: '每位學生獨立時段',
-    guestTitle: '👨‍👩‍ 誰會隨行？',
+    guestTitle: '👨‍👩‍👦 誰會隨行？',
     mom: '👩 媽媽', dad: '👨 爸爸', grandma: '👵 嫲嫲/婆婆', grandpa: '👴 爺爺/公公',
     siblings: '兄弟姊妹', others: '其他',
     submit: '提交回覆',
@@ -215,13 +237,8 @@ export default {
     reasonWord: '原因',
     completer: '完成者',
     honoured: '獲獎學生',
-
-    completerCongratsText:
-      '恭喜 {{names}}！你的努力與堅持令你達到了最終教材完成者的成就。',
-
-    mixedCongratsText:
-      '恭喜 {{names}}！你的努力與堅持令你達到了最終教材完成者及超越學年榮譽榜的成就。',
-
+    completerCongratsText: '恭喜 {{names}}！你的努力與堅持令你達到了最終教材完成者的成就。',
+    mixedCongratsText: '恭喜 {{names}}！你的努力與堅持令你達到了最終教材完成者及超越學年榮譽榜的成就。',
     title: '公文式最終教材完成者及超越學年榮譽榜',
     subtitle: '最終教材完成者及超越學年頒獎典禮'
   }

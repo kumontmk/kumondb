@@ -1997,9 +1997,9 @@ fam.members.forEach(m => {
 // 🖼️ PNG EXPORT — manual canvas composition
 //     (barcodes + QR are baked in; html2canvas no longer used)
 // ============================================
-async function downloadCardAsPng(fam) {
+async function buildCardCanvas(fam) {
   const entry = Object.entries(portalsCache).find(([_, p]) => p.familyKey === fam.key);
-  if (!entry) return;
+  if (!entry) return null;
   const [token] = entry;
   const url = `${location.origin}${location.pathname.replace(/[^/]*$/, '')}ashr-invite.html?e=${encodeURIComponent(currentEventId)}&t=${encodeURIComponent(token)}`;
   try {
@@ -2189,16 +2189,88 @@ async function downloadCardAsPng(fam) {
     ctx.fillText(`FAM-${token.slice(0, 6).toUpperCase()}`, W - pad, y + 34);
     ctx.textAlign = 'left';
 
-    // 4) download
-    const a = document.createElement('a');
+    // 4) hand the finished canvas back to the caller
     const names = fam.members.map(m => m.nameCn || m.nameEn).join('_').replace(/\s+/g, '');
-    a.download = `ASHR_Invite_${names || 'family'}.png`;
-    a.href = canvas.toDataURL('image/png');
+    return { canvas, filename: `ASHR_Invite_${names || 'family'}.png` };
+  } catch (err) {
+    console.error('PNG render error:', err);
+    throw err;
+  }
+}
+
+async function downloadCardAsPng(fam) {
+  try {
+    const out = await buildCardCanvas(fam);
+    if (!out) return showToast(t('toast.noLink', 'No invitation link for this family'), 'error');
+    const a = document.createElement('a');
+    a.download = out.filename;
+    a.href = out.canvas.toDataURL('image/png');
     a.click();
     showToast('Card downloaded as PNG!', 'success');
   } catch (err) {
-    console.error('PNG export error:', err);
     showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error');
+  }
+}
+
+// ============================================
+// 🎟️ BULK CARD EXPORT — every ATTENDING family
+//    ZIP via JSZip when available; otherwise staggered PNG downloads
+// ============================================
+let cardsExporting = false;
+function getAttendingFamilies() {
+  return buildAshrFamilies().filter(fam => {
+    const portalEntry = Object.entries(portalsCache).find(([_, p]) => p.familyKey === fam.key);
+    const famRec = portalEntry ? families[portalEntry[1].familyId] : null;
+    return famRec?.rsvp?.status === 'attending';
+  });
+}
+async function exportAttendingCards() {
+  if (cardsExporting) return;
+  const fams = getAttendingFamilies();
+  if (!fams.length) return showToast(t('toast.noAttending', 'No attending families to export'), 'error');
+  cardsExporting = true;
+  const useZip = typeof JSZip !== 'undefined';
+  const zip = useZip ? new JSZip() : null;
+  const usedNames = new Set();
+  let done = 0, skipped = 0;
+  try {
+    for (let i = 0; i < fams.length; i++) {
+      showToast(`${t('toast.renderCards', 'Rendering cards…')} ${i + 1}/${fams.length}`);
+      let out = null;
+      try { out = await buildCardCanvas(fams[i]); } catch (err) { console.error('Card render failed:', err); }
+      if (!out) { skipped++; continue; }
+      let filename = out.filename;
+      let dup = 2;
+      while (usedNames.has(filename)) filename = out.filename.replace(/\.png$/, `_${dup++}.png`);
+      usedNames.add(filename);
+      if (useZip) {
+        zip.file(filename, out.canvas.toDataURL('image/png').split(',')[1], { base64: true });
+      } else {
+        const a = document.createElement('a');
+        a.download = filename;
+        a.href = out.canvas.toDataURL('image/png');
+        document.body.appendChild(a); a.click(); a.remove();
+        await new Promise(r => setTimeout(r, 400));
+      }
+      done++;
+    }
+    if (useZip && done) {
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ASHR_Cards_Attending_${currentEventId}.zip`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+    showToast(
+      done
+        ? `${t('toast.cardsOk', 'Cards exported')}: ${done}${skipped ? ` (${skipped} ${t('toast.skipped', 'skipped')})` : ''}${useZip ? ' 📦 .zip' : ''}`
+        : t('toast.cardsFail', 'No cards could be rendered'),
+      done ? 'success' : 'error'
+    );
+  } finally {
+    cardsExporting = false;
   }
 }
 
@@ -2327,7 +2399,50 @@ function exportInvitationMessages() {
 // ============================================
 function setupRSVPs() {
   $('rsvpFilter').addEventListener('change', renderRSVPs);
-  $('exportRsvpBtn').addEventListener('click', exportRSVPs);
+  $('rsvpCenterFilter').addEventListener('change', renderRSVPs);
+  populateRsvpCenterFilter();
+
+  // 📤 Export dropdown (Excel / Cards / Both)
+  const menuBtn = $('exportMenuBtn');
+  const menu = $('exportMenu');
+  if (menuBtn && menu) {
+    menuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu.classList.toggle('hidden');
+    });
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.export-menu-wrap')) menu.classList.add('hidden');
+    });
+  }
+  
+  const excelBtn = $('exportExcelBtn');
+  const cardsBtn = $('exportCardsBtn');
+  const bothBtn = $('exportBothBtn');
+  
+  if (excelBtn) excelBtn.addEventListener('click', () => { closeExportMenu(); exportRSVPs(); });
+  if (cardsBtn) cardsBtn.addEventListener('click', () => { closeExportMenu(); exportAttendingCards(); });
+  if (bothBtn) bothBtn.addEventListener('click', () => { closeExportMenu(); exportRSVPs(); exportAttendingCards(); });
+
+  // Localized labels
+  if (menuBtn) menuBtn.innerHTML  = `📤 ${t('exp.menu', 'Export')} ▾`;
+  if (excelBtn) excelBtn.innerHTML = `📊 ${t('exp.excel', 'Export Excel')}<small>${t('exp.excelHint', 'RSVP list — all families')}</small>`;
+  if (cardsBtn) cardsBtn.innerHTML = `🎟️ ${t('exp.cards', 'Export Cards')}<small>${t('exp.cardsHint', 'Invitation cards — attending students only')}</small>`;
+  if (bothBtn) bothBtn.innerHTML  = `📦 ${t('exp.both', 'Export Both')}<small>${t('exp.bothHint', 'Excel + attending cards')}</small>`;
+}
+function closeExportMenu() { $('exportMenu')?.classList.add('hidden'); }
+function populateRsvpCenterFilter() {
+  const sel = $('rsvpCenterFilter');
+  if (!sel) return;
+  sel.innerHTML = '';
+  const all = document.createElement('option');
+  all.value = '';
+  all.textContent = t('filter.allCenters', 'All Centers');
+  sel.appendChild(all);
+  Object.entries(allCentersData).forEach(([cid, c]) => {
+    const opt = document.createElement('option');
+    opt.value = cid; opt.textContent = c.name;
+    sel.appendChild(opt);
+  });
 }
 
 function countGuests(g) {
@@ -2408,6 +2523,7 @@ function buildRsvpRows() {
 
 function renderRSVPs() {
   const filter = $('rsvpFilter').value;
+  const centerFilter = $('rsvpCenterFilter')?.value || '';
   const tbody = $('rsvpTableBody');
   tbody.innerHTML = '';
 
@@ -2441,12 +2557,20 @@ function renderRSVPs() {
     <div class="stat-card"><div class="stat-value">${totalGuests}</div><div class="stat-label">${t('stat.guests', 'Total Guests')}</div></div>`;
 
   // 3. Render Table Rows
+  let rowNum = 0;   // 🆕 visible-row counter
   rows.forEach(row => {
     const rsvp = row.rsvp || {};
     const status = rsvp.status || 'pending';
     if (filter !== 'all' && status !== filter) return;
     
-    const memberNames = row.members.map(m => m.nameCn || m.nameEn).join(', ') || row.famId;
+    // 🏫 Center filter — scope this row to students of the selected center
+    const members = centerFilter
+      ? (row.members || []).filter(m => m.centerId === centerFilter)
+      : row.members;
+    if (centerFilter && !members.length) return;
+    rowNum++;   // 🆕
+    const memberNames = members.map(m => m.nameCn || m.nameEn).join(', ') || row.famId;
+    
     let slotDisplay = '—';
     if (status === 'attending') {
       if (rsvp.sameTimeslot && rsvp.sharedSlotId) {
@@ -2458,7 +2582,7 @@ function renderRSVPs() {
     }
     
     const statusClass = status === 'attending' ? 'st-attending' : status === 'declined' ? 'st-declined' : 'st-pending';
-    const studentCount = row.members.length || row.rsvp?.memberHonoreeIds?.length || 1;
+    const studentCount = members.length || row.rsvp?.memberHonoreeIds?.length || 1;
     
     // ✅ Actions column: Show Reset button ONLY if they have an RSVP record
     const actionsHtml = row.rsvp 
@@ -2467,6 +2591,7 @@ function renderRSVPs() {
 
     const tr = document.createElement('tr');
     tr.innerHTML = `
+      <td class="row-num">${rowNum}</td>
       <td>${escapeHtml(memberNames)}</td> 
       <td>${studentCount}</td> 
       <td><span class="status-badge ${statusClass}">${t('st.' + status, status)}</span></td> 

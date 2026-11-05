@@ -69,7 +69,7 @@ export default {
   msgEnLabel: "給家長的訊息 — 英文",
   msgZhLabel: "給家長的訊息 — 中文",
   dateCreated: "建立日期",
-  msgHint: "📩 訊息預設儲存為<b>未發送</b>。<br>請稍後從「已記錄追蹤」表格中標記為已發送。",
+  msgHint: "📩 📩 訊息會儲存為「未發送」。稍後可從「後續追蹤記錄」資料表中將其標記為「已發送」。",
   callNotesLabel: "通話紀錄 *",
   solutionLabel: "解決方案 / 結果 (選填)",
   dateCalled: "通話日期 *",

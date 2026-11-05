@@ -402,3 +402,30 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   color: #5b21b6;
   border: 1px solid #c4b5fd;
 }
+
+/* ============================================
+📤 EXPORT DROPDOWN MENU
+============================================ */
+.export-menu-wrap { position: relative; }
+.export-menu {
+  position: absolute; right: 0; top: calc(100% + 6px);
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.14); min-width: 280px;
+  padding: 0.35rem; display: flex; flex-direction: column; gap: 2px; z-index: 900;
+}
+.export-menu-item {
+  text-align: left; background: transparent; border: none; cursor: pointer;
+  padding: 0.55rem 0.7rem; border-radius: 8px;
+  font-size: 0.92rem; font-weight: 600; color: var(--text);
+}
+.export-menu-item:hover { background: #f0f8ff; color: var(--primary-dark); }
+.export-menu-item small { display: block; font-weight: 500; font-size: 0.75rem; color: var(--text-light); }
+.filter-row select { min-width: 150px; }
+
+/* 🔢 Row-number column */
+.data-table th.row-num, .data-table td.row-num {
+  width: 44px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.data-table td.row-num { color: var(--text-light); font-weight: 600; }
