@@ -182,8 +182,6 @@ function familyTimeText(fam) {
 
 // ============================================
 // 🧬 SAME-STUDENT MERGE / UNIQUE-STUDENT HELPERS
-//    (same student number = same child, even if
-//     duplicate honoree records exist under 2 centers)
 // ============================================
 function studentUid(h) { return String(h?.studentNumber || h?.studentId || '').trim(); }
 function dedupeBy(arr, keyFn) {
@@ -1077,11 +1075,20 @@ async function saveEditHonoree() {
     if (dup) { dup.stars = Math.max(dup.stars, stars); dup.tier = tierFor(dup.stars); }
     else awards.push({ subject, stars, tier: tierFor(stars), reportingMonth: rm });
   }
-  if (!awards.length) return showToast(t('hon.needAward', 'Add at least one award'), 'error');
+  // 🆕 FIX: a honoree may have ZERO awards as long as they keep a Completer
+  //    record (completer-only honoree). Block only when nothing would remain.
+  const existing = honorees[editingHonoreeKey];
+  const hasCompleter = (existing?.completions || []).length > 0;
+  if (!awards.length && !hasCompleter) {
+    return showToast(t('hon.needAward', 'Add at least one award'), 'error');
+  }
   const key = editingHonoreeKey;
   try {
-    await update(ref(db, `ashrEvents/${currentEventId}/honorees/${key}`), { awards });
+    await update(ref(db, `ashrEvents/${currentEventId}/honorees/${key}`), {
+      awards: awards.length ? awards : null   // empty → remove node cleanly
+    });
     showToast(t('hon.updated', 'Updated!'), 'success');
+    renderHonorees();
     $('editHonoreeModal').classList.add('hidden');
   } catch (err) { showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error'); }
 }
@@ -1355,7 +1362,7 @@ function renderLinks() {
     if (filter === 'hasLink' && !hasLink) return;
     if (filter === 'noLink' && hasLink) return;
     if (filter === 'disabled' && !isDisabled) return;
-    const disp = groupMembersForDisplay(fam.members);   // 🧬 merged same-student records
+    const disp = groupMembersForDisplay(fam.members);
     if (search) {
       const hay = disp.flatMap(m => [m.nameCn, m.nameEn]).filter(Boolean).join(' ').toLowerCase();
       if (!hay.includes(search)) return;
@@ -1621,7 +1628,6 @@ async function openLinkCard(fam) {
   $('icTime').textContent = familyTimeText(fam);
   $('icFamilyCode').textContent = `FAM-${token.slice(0, 6).toUpperCase()}`;
 
-  // 🧬 Students + awards (merged same-student records → one name, all badges)
   const studentsDiv = $('icStudents');
   studentsDiv.innerHTML = '';
   groupMembersForDisplay(fam.members).forEach(m => {
@@ -1640,7 +1646,6 @@ async function openLinkCard(fam) {
     studentsDiv.appendChild(div);
   });
 
-  // 🧬 Barcodes: one item per student, all their record-barcodes stacked
   const barcodesDiv = $('icBarcodes');
   barcodesDiv.innerHTML = '';
   groupMembersForDisplay(fam.members).forEach(m => {
@@ -1685,9 +1690,7 @@ async function buildCardCanvas(fam) {
   const [token] = entry;
   const url = `${location.origin}${location.pathname.replace(/[^/]*$/, '')}ashr-invite.html?e=${encodeURIComponent(currentEventId)}&t=${encodeURIComponent(token)}`;
   try {
-    // 🧬 one display entry per real student
     const disp = groupMembersForDisplay(fam.members);
-    // 1) preload barcode + QR images (name travels with each barcode)
     const bcImgs = [];
     for (const m of disp) {
       for (const b of m.barcodes) {
@@ -1697,7 +1700,6 @@ async function buildCardCanvas(fam) {
     }
     let qrImg = null;
     try { qrImg = await loadImg(await qrDataUrl(url, 280)); } catch (e) { qrImg = null; }
-    // 2) layout metrics
     const W = 500, pad = 24, secPad = 16;
     const headerH = 104, divH = 6, footerH = 58;
     const badgeCount = (m) => (m.awards || []).length + (m.completions || []).length;
@@ -1722,7 +1724,6 @@ async function buildCardCanvas(fam) {
     const bcH = secPad + 22 + bcItems.reduce((s, it) => s + it.itemH + 12, 0) + secPad;
     const qrH = qrImg ? (secPad * 2 + 22 + 140 + 24) : 0;
     const H = headerH + divH + 24 + studentsH + 4 + detH + 16 + bcH + 16 + qrH + (qrImg ? 24 : 8) + footerH;
-    // 3) paint
     const S = 2;
     const canvas = document.createElement('canvas');
     canvas.width = W * S; canvas.height = H * S;
@@ -1828,7 +1829,6 @@ async function buildCardCanvas(fam) {
     ctx.font = `700 12px 'Courier New',monospace`; ctx.textAlign = 'right';
     ctx.fillText(`FAM-${token.slice(0, 6).toUpperCase()}`, W - pad, y + 34);
     ctx.textAlign = 'left';
-    // 4) hand the finished canvas back to the caller
     const names = disp.map(m => m.nameCn || m.nameEn).join('_').replace(/\s+/g, '');
     return { canvas, filename: `ASHR_Invite_${names || 'family'}.png` };
   } catch (err) {
@@ -2004,7 +2004,6 @@ function setupRSVPs() {
   $('rsvpFilter').addEventListener('change', renderRSVPs);
   $('rsvpCenterFilter').addEventListener('change', renderRSVPs);
   populateRsvpCenterFilter();
-  // 📤 Export dropdown (Excel / Cards / Both)
   const menuBtn = $('exportMenuBtn');
   const menu = $('exportMenu');
   if (menuBtn && menu) {
@@ -2055,7 +2054,6 @@ function countGuests(g) {
   return c;
 }
 
-// 🧬 Seats = unique children (duplicate records of one child = 1 seat)
 function computeSlotCounts() {
   const counts = {};
   Object.keys(timeslots).forEach(sid => { counts[sid] = { students: 0, guests: 0 }; });
@@ -2124,7 +2122,6 @@ function renderRSVPs() {
   tbody.innerHTML = '';
   let attending = 0, declined = 0, pending = 0, totalGuests = 0;
   const rows = buildRsvpRows();
-  // 1. Stats (unique students)
   rows.forEach(row => {
     const status = row.rsvp?.status || 'pending';
     const students = countUniqueStudents(row.members) || row.rsvp?.memberHonoreeIds?.length || 1;
@@ -2132,13 +2129,11 @@ function renderRSVPs() {
     else if (status === 'declined') declined += students;
     else pending += students;
   });
-  // 2. Stat cards
   $('rsvpStats').innerHTML = `
     <div class="stat-card"><div class="stat-value">${attending}</div><div class="stat-label">${t('stat.attending', 'Attending (students)')}</div></div>
     <div class="stat-card"><div class="stat-value">${declined}</div><div class="stat-label">${t('stat.declined', 'Declined (students)')}</div></div>
     <div class="stat-card"><div class="stat-value">${pending}</div><div class="stat-label">${t('stat.pending', 'No Response (students)')}</div></div>
     <div class="stat-card"><div class="stat-value">${totalGuests}</div><div class="stat-label">${t('stat.guests', 'Total Guests')}</div></div>`;
-  // 3. Table rows (🔢 numbered, 🏫 center-filtered, 🧬 merged names)
   let rowNum = 0;
   rows.forEach(row => {
     const rsvp = row.rsvp || {};
@@ -2178,7 +2173,6 @@ function renderRSVPs() {
       <td>${actionsHtml}</td>`;
     tbody.appendChild(tr);
   });
-  // 4. Reset buttons
   tbody.querySelectorAll('[data-reset-rsvp]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const famId = btn.dataset.resetRsvp;
@@ -2254,7 +2248,7 @@ function downloadExcel(rows, filename) {
 }
 
 // ============================================
-// CHECK-IN MODE (🧬 one row per child, one tap = all their records)
+// CHECK-IN MODE
 // ============================================
 function setupCheckin() {
   $('scanInput').addEventListener('keydown', (e) => {
