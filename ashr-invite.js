@@ -3,8 +3,6 @@ import { getDatabase, ref, get, update, onValue } from "https://www.gstatic.com/
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { t as tCore, applyI18n, getLang, setLang, i18nReady } from './ashr-i18n.js';
 
-// Fallback-safe translator (same pattern as ashr.js):
-// if the key is missing, return the supplied fallback instead of the raw key/undefined.
 const t = (key, fallback) => {
   const v = tCore(key);
   return (v && v !== key) ? v : fallback;
@@ -20,11 +18,9 @@ const firebaseConfig = {
   appId: "1:838725994916:web:87326ba7bec87a0e6b5931"
 };
 
-// 1️⃣ INITIALIZE FIREBASE FIRST
 const app = initializeApp(firebaseConfig, 'ashr-invite');
 const db = getDatabase(app);
 const auth = getAuth(app);
-
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const eventId = params.get('e');
@@ -43,35 +39,73 @@ let selectedSlots = {};
 let isEditing = false;
 let deadlinePassed = false;
 
-// ✅ Helper to safely display free-text reason
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-// 2️⃣ WAIT FOR TRANSLATIONS, THEN BOOT
+// ============================================
+// 🧬 SAME-STUDENT MERGE / UNIQUE-STUDENT HELPERS
+// ============================================
+function studentUid(h) { return String(h?.studentNumber || h?.studentId || '').trim(); }
+function groupMembersForDisplay(members) {
+  const order = [];
+  const byId = new Map();
+  (members || []).forEach(m => {
+    const id = studentUid(m) || m.honoreeKey || '';
+    if (!byId.has(id)) {
+      const g = { ...m, awards: [...(m.awards || [])], completions: [...(m.completions || [])], _hasAwards: (m.awards || []).length > 0 };
+      byId.set(id, g); order.push(g);
+    } else {
+      const g = byId.get(id);
+      g.awards.push(...(m.awards || []));
+      g.completions.push(...(m.completions || []));
+      if ((m.awards || []).length && !g._hasAwards) { g.centerId = m.centerId; g.centerName = m.centerName || g.centerName; g._hasAwards = true; }
+      if (!g.nameCn && (m.nameCn || m.nameEn)) g.nameCn = m.nameCn || m.nameEn;
+      if (!g.nameEn && m.nameEn) g.nameEn = m.nameEn;
+    }
+  });
+  order.forEach(g => {
+    const sa = new Set(); g.awards = g.awards.filter(a => { const k = `${a.subject}|${a.stars}|${a.reportingMonth || ''}`; if (sa.has(k)) return false; sa.add(k); return true; });
+    const sc = new Set(); g.completions = g.completions.filter(c => { const k = c.subjectCanon || c.subject; if (sc.has(k)) return false; sc.add(k); return true; });
+    delete g._hasAwards;
+  });
+  return order;
+}
+function uniqueStudentGroups(memberKeys) {
+  const groups = []; const byUid = new Map();
+  (memberKeys || []).forEach(k => {
+    const h = honorees[k]; if (!h) return;
+    const uid = studentUid(h) || k;
+    if (!byUid.has(uid)) { const g = { uid, keys: [k], name: h.nameCn || h.nameEn || '' }; byUid.set(uid, g); groups.push(g); }
+    else byUid.get(uid).keys.push(k);
+  });
+  return groups;
+}
+function countUniqueFromIds(ids) {
+  const s = new Set();
+  (ids || []).forEach(mid => { const h = honorees[mid]; s.add(studentUid(h) || mid); });
+  return s.size;
+}
+
 await i18nReady.catch(() => {});
 init();
 
-// 3️⃣ INIT FUNCTION
 async function init() {
   applyI18n();
   $('langToggle').textContent = getLang() === 'en' ? '中文' : 'EN';
   $('langToggle').addEventListener('click', () => {
     setLang(getLang() === 'en' ? 'zh-TW' : 'en');
-    location.reload(); // cleanest: core re-boots in the new language
+    location.reload();
   });
   $('retryBtn').addEventListener('click', () => location.reload());
-
   if (!eventId || !token) return showInvalid('Missing ?e= or ?t= parameter in URL.');
-
   try {
     await signInAnonymously(auth);
   } catch (err) {
     console.error('Sign-in failed:', err);
     return showInvalid(`Sign-in failed: ${err.code || err.message}`);
   }
-
   try {
     const linkSnap = await get(ref(db, `publicAshrLinks/${eventId}/${token}`));
     if (!linkSnap.exists()) return showInvalid(`No link found at publicAshrLinks/${eventId}/${token}`);
@@ -83,7 +117,6 @@ async function init() {
     console.error('Link load failed:', err);
     return showInvalid(`Database error: ${err.code || err.message}`);
   }
-
   try {
     const [settingsSnap, slotsSnap, honoreesSnap, familiesSnap] = await Promise.all([
       get(ref(db, `ashrEvents/${eventId}/settings`)),
@@ -100,15 +133,12 @@ async function init() {
     console.error('Event load failed:', err);
     return showInvalid(`Database error: ${err.code || err.message}`);
   }
-
   if (eventSettings.rsvpDeadline) {
     deadlinePassed = new Date() > new Date(eventSettings.rsvpDeadline + 'T23:59:59');
   }
-
   showScreen('main');
   wireEvents();
   renderAll();
-
   onValue(ref(db, `ashrEvents/${eventId}/timeslots`), (snap) => { timeslots = snap.val() || {}; safeRender('timeslots', renderTimeslots); });
   onValue(ref(db, `ashrEvents/${eventId}/settings`), (snap) => { eventSettings = snap.val() || {}; safeRender('details', renderEventDetails); });
   onValue(ref(db, `ashrEvents/${eventId}/families/${familyId}`), (snap) => {
@@ -118,11 +148,9 @@ async function init() {
 }
 
 function wireEvents() {
-  // 💬 Translated placeholder for reason
   if ($('declineReason')) {
     $('declineReason').placeholder = t('inv.reasonPh', 'e.g. family trip, schedule conflict...');
   }
-
   $('btnAttending').addEventListener('click', () => selectStatus('attending'));
   $('btnDeclined').addEventListener('click', () => selectStatus('declined'));
   $('submitRsvpBtn').addEventListener('click', submitRSVP);
@@ -132,19 +160,15 @@ function wireEvents() {
   });
 }
 
-// ============================================
-// 🛡️ RENDER — each section isolated so one error can't blank the rest
-// ============================================
 function safeRender(name, fn) {
   try { fn(); }
   catch (err) { console.error(`[invite:${name}] render failed:`, err); }
 }
 
 function renderAll() {
-  safeRender('header',  renderHeader);
-  safeRender('awards',  renderAwards);
+  safeRender('header', renderHeader);
+  safeRender('awards', renderAwards);
   safeRender('details', renderEventDetails);
-
   if (deadlinePassed) {
     if (familyData?.rsvp?.status) { safeRender('confirm', renderConfirmation); }
     else { showScreen('expired'); }
@@ -162,7 +186,6 @@ function showScreen(name) {
   ['screenLoading', 'screenInvalid', 'screenExpired', 'screenMain'].forEach(id => $(id)?.classList.add('hidden'));
   $(`screen${name.charAt(0).toUpperCase() + name.slice(1)}`)?.classList.remove('hidden');
 }
-
 function showInvalid(reason) {
   const el = $('invalidReason');
   if (el && reason) { el.textContent = reason; el.classList.remove('hidden'); }
@@ -170,26 +193,17 @@ function showInvalid(reason) {
 }
 
 function renderHeader() {
-  // Only write if the element still exists — your hardcoded completer title in HTML is preserved.
   const el = $('eventNameLabel');
   if (el) el.textContent = eventSettings.eventName || `ASHR ${eventId}`;
 }
 
 function renderAwards() {
   const memberKeys = (portal && portal.members) || [];
-  const memberHonorees = memberKeys.map(key => honorees[key]).filter(Boolean);
-
-  const names = memberHonorees
-    .map(h => h.nameCn || h.nameEn)
-    .filter(Boolean)
-    .join(', ');
-
-  const hasAnyAward     = memberHonorees.some(h => (h.awards || []).length > 0);
+  // 🧬 merged: one block per real child, all badges underneath
+  const memberHonorees = groupMembersForDisplay(memberKeys.map(key => honorees[key]).filter(Boolean));
+  const names = memberHonorees.map(h => h.nameCn || h.nameEn).filter(Boolean).join(', ');
+  const hasAnyAward = memberHonorees.some(h => (h.awards || []).length > 0);
   const hasAnyCompleter = memberHonorees.some(h => (h.completions || []).length > 0);
-
-  // ============================================
-  // 🎉 Congrats message (inline fallbacks — never depends on a missing key)
-  // ============================================
   let congrats;
   if (hasAnyCompleter && !hasAnyAward) {
     congrats = t('inv.completerCongratsText',
@@ -205,30 +219,22 @@ function renderAwards() {
     congrats = 'Congratulations to {{names}}!';
   }
   congrats = congrats.replace('{{names}}', names || '');
-
   const congratsEl = $('congratsText');
   if (congratsEl) congratsEl.textContent = congrats;
 
-  // ============================================
-  // 🏅 Student award / completer list  (🎓 completers FIRST, then medals — matches the stage)
-  // ============================================
   const listEl = $('studentAwardsList');
   if (!listEl) return;
-
   const wordCompleter = t('inv.completer', 'Completer');
-  const wordHonoured  = t('inv.honoured', 'Honoured Student');
-
+  const wordHonoured = t('inv.honoured', 'Honoured Student');
   listEl.innerHTML = memberHonorees.map(h => {
-    const awards      = h.awards || [];
+    const awards = h.awards || [];
     const completions = h.completions || [];
-    const hasComp  = completions.length > 0;
+    const hasComp = completions.length > 0;
     const hasAward = awards.length > 0;
-
     const completerBadges = completions.map(c => {
       const subj = c.subject || c.subjectCanon || c.subjectOriginal || '';
       return `<span class="award-tier tier-completer">🎓 ${escapeHtml(subj)} ${escapeHtml(wordCompleter)}</span>`;
     }).join(' ');
-
     const awardBadges = awards.map(a => {
       const medal =
         a.tier === 'Gold' ? '🥇 ' :
@@ -237,16 +243,8 @@ function renderAwards() {
         '';
       return `<span class="award-tier tier-${String(a.tier || 'bronze').toLowerCase()}">${medal}${escapeHtml(a.subject || '')} ${'★'.repeat(Number(a.stars) || 0)}</span>`;
     }).join(' ');
-
-    // 🎓 first, then 🥇/🥈/🥉 — same order as the ceremony stage
-    const detailHtml = [completerBadges, awardBadges].filter(Boolean).join(' ')
-      || escapeHtml(wordHonoured);
-
-    const icon =
-      hasComp && hasAward ? '🎓' :
-      hasComp ? '🎓' :
-      '🏅';
-
+    const detailHtml = [completerBadges, awardBadges].filter(Boolean).join(' ') || escapeHtml(wordHonoured);
+    const icon = hasComp ? '🎓' : '🏅';
     return `
       <div class="award-item ${hasComp ? 'has-completer' : ''}">
         <div class="award-medal">${icon}</div>
@@ -254,22 +252,16 @@ function renderAwards() {
           <div class="student-name">${escapeHtml(h.nameCn || h.nameEn || '')}</div>
           <div class="award-detail">${detailHtml}</div>
         </div>
-      </div>
-    `;
+      </div>`;
   }).join('');
 }
 
 function renderEventDetails() {
   const nl = $('eventNameLabel');
   if (nl) nl.textContent = eventSettings.eventName || `ASHR ${eventId}`;
-
   const de = $('eventDetails');
   if (!de) return;
-
-  de.innerHTML = `
-    <p><strong>${escapeHtml(t('inv.date', '📅 Date:'))}</strong> ${escapeHtml(eventSettings.eventDate || 'TBD')}</p>
-    <p><strong>${escapeHtml(t('inv.venue', '📍 Venue:'))}</strong> ${escapeHtml(eventSettings.venue || 'TBD')}</p>
-    <p><strong>${escapeHtml(t('inv.deadline', '⏰ RSVP Deadline:'))}</strong> ${escapeHtml(eventSettings.rsvpDeadline || 'TBD')}</p>`;
+  de.innerHTML = `<p><strong>${escapeHtml(t('inv.date', '📅 Date:'))}</strong> ${escapeHtml(eventSettings.eventDate || 'TBD')}</p> <p><strong>${escapeHtml(t('inv.venue', '📍 Venue:'))}</strong> ${escapeHtml(eventSettings.venue || 'TBD')}</p> <p><strong>${escapeHtml(t('inv.deadline', '⏰ RSVP Deadline:'))}</strong> ${escapeHtml(eventSettings.rsvpDeadline || 'TBD')}</p>`;
 }
 
 function selectStatus(status) {
@@ -279,12 +271,12 @@ function selectStatus(status) {
   const attending = status === 'attending';
   $('timeslotCard').classList.toggle('hidden', !attending);
   $('guestCard').classList.toggle('hidden', !attending);
-  $('reasonCard').classList.toggle('hidden', attending);   // 💬 Show reason card only for declined
+  $('reasonCard').classList.toggle('hidden', attending);
   $('submitCard').classList.remove('hidden');
   if (attending) safeRender('timeslots', renderTimeslots);
 }
 
-// Slot counts EXCLUDING this family (so editing never blocks your own seat)
+// 🧬 Slot counts EXCLUDING this family — unique children only
 function computeSlotCountsExclude(excludeFamId) {
   const counts = {};
   Object.keys(timeslots).forEach(sid => { counts[sid] = { students: 0 }; });
@@ -294,9 +286,12 @@ function computeSlotCountsExclude(excludeFamId) {
     if (!rsvp || rsvp.status !== 'attending') return;
     const memberIds = fam.memberHonoreeIds || [];
     if (rsvp.sameTimeslot && rsvp.sharedSlotId) {
-      if (counts[rsvp.sharedSlotId]) counts[rsvp.sharedSlotId].students += memberIds.length;
+      if (counts[rsvp.sharedSlotId]) counts[rsvp.sharedSlotId].students += countUniqueFromIds(memberIds);
     } else if (rsvp.perStudentSlots) {
+      const seen = new Set();
       memberIds.forEach(mid => {
+        const uid = studentUid(honorees[mid]) || mid;
+        if (seen.has(uid)) return; seen.add(uid);
         const sid = rsvp.perStudentSlots[mid];
         if (sid && counts[sid]) counts[sid].students += 1;
       });
@@ -305,10 +300,10 @@ function computeSlotCountsExclude(excludeFamId) {
   return counts;
 }
 
-// 👤 Single-student invitations don't need a mode toggle
 function isSingleStudent() {
-  return ((portal && portal.members) || []).length <= 1;
+  return uniqueStudentGroups((portal && portal.members) || []).length <= 1;
 }
+
 function syncSlotModeToggle() {
   const toggleEl = document.querySelector('.slot-mode-toggle');
   if (!toggleEl) return;
@@ -324,26 +319,21 @@ function renderTimeslots() {
   const container = $('timeslotList');
   if (!container) return;
   container.innerHTML = '';
-  syncSlotModeToggle(); // ✅ NEW: hide toggle + force 'same' when only 1 student
+  syncSlotModeToggle();
   const memberKeys = (portal && portal.members) || [];
   const slotCounts = computeSlotCountsExclude(familyId);
   const sorted = Object.entries(timeslots)
     .filter(([_, s]) => s.isEnabled !== false)
     .sort((a, b) => (a[1].start || '').localeCompare(b[1].start || ''));
-
   const buildOption = (slotId, slot, onSelect, isSelected) => {
     const count = slotCounts[slotId]?.students || 0;
     const isFull = count >= (slot.capacity || 30);
     const div = document.createElement('div');
     div.className = `timeslot-option ${isFull ? 'disabled' : ''} ${isSelected ? 'selected' : ''}`;
-    div.innerHTML = `
-      <span class="slot-time">${escapeHtml(slot.start)} – ${escapeHtml(slot.end)}</span>
-      <span class="slot-count">${count}/${slot.capacity || 30}</span>
-      ${isFull ? `<span class="full-badge">${escapeHtml(t('inv.full', 'FULL'))}</span>` : ''}`;
+    div.innerHTML = `<span class="slot-time">${escapeHtml(slot.start)} – ${escapeHtml(slot.end)}</span> <span class="slot-count">${count}/${slot.capacity || 30}</span> ${isFull ? `<span class="full-badge">${escapeHtml(t('inv.full', 'FULL'))}</span>` : ''}`;
     if (!isFull) div.addEventListener('click', onSelect);
     return div;
   };
-
   if (slotMode === 'same') {
     sorted.forEach(([slotId, slot]) => {
       container.appendChild(buildOption(slotId, slot, () => {
@@ -352,16 +342,15 @@ function renderTimeslots() {
       }, selectedSlots.shared === slotId));
     });
   } else {
-    memberKeys.forEach(key => {
-      const h = honorees[key];
-      if (!h) return;
+    // 🧬 one picker per real child (selection applies to all their records)
+    uniqueStudentGroups(memberKeys).forEach(g => {
       const label = document.createElement('div');
-      label.innerHTML = `<p class="slot-student-label">${escapeHtml(h.nameCn || h.nameEn || '')}</p>`;
+      label.innerHTML = `<p class="slot-student-label">${escapeHtml(g.name)}</p>`;
       sorted.forEach(([slotId, slot]) => {
         label.appendChild(buildOption(slotId, slot, () => {
-          selectedSlots[key] = slotId;
+          selectedSlots[g.uid] = slotId;
           safeRender('timeslots', renderTimeslots);
-        }, selectedSlots[key] === slotId));
+        }, selectedSlots[g.uid] === slotId));
       });
       container.appendChild(label);
     });
@@ -371,30 +360,27 @@ function renderTimeslots() {
 async function submitRSVP() {
   if (!selectedStatus) return showToast(t('toast.chooseStatus', 'Please choose whether you will attend'), 'error');
   const memberKeys = (portal && portal.members) || [];
+  const groups = uniqueStudentGroups(memberKeys);
   const rsvp = { status: selectedStatus, submittedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-
-  // 💬 Capture optional reason if declined
   if (selectedStatus === 'declined') {
-    rsvp.reason = $('declineReason').value.trim(); // may be '' — it's optional
+    rsvp.reason = $('declineReason').value.trim();
   }
-
   if (selectedStatus === 'attending') {
-    if (isSingleStudent()) slotMode = 'same';   // ✅ never submit "separate" for 1 student
-    
+    if (isSingleStudent()) slotMode = 'same';
     const counts = computeSlotCountsExclude(familyId);
     if (slotMode === 'same') {
       if (!selectedSlots.shared) return showToast(t('toast.chooseSlot', 'Please select a timeslot'), 'error');
       const slot = timeslots[selectedSlots.shared];
-      if ((counts[selectedSlots.shared]?.students || 0) + memberKeys.length > (slot?.capacity || 30)) {
+      if ((counts[selectedSlots.shared]?.students || 0) + groups.length > (slot?.capacity || 30)) {
         return showToast(`${slot.start}–${slot.end} ${t('toast.slotFullNow', 'is now full. Please choose another.')}`, 'error');
       }
       rsvp.sameTimeslot = true;
       rsvp.sharedSlotId = selectedSlots.shared;
     } else {
-      const missing = memberKeys.filter(key => !selectedSlots[key]);
+      const missing = groups.filter(g => !selectedSlots[g.uid]);
       if (missing.length) return showToast(t('toast.eachSlot', 'Please select a timeslot for each student'), 'error');
       const perSlot = {};
-      memberKeys.forEach(key => { perSlot[selectedSlots[key]] = (perSlot[selectedSlots[key]] || 0) + 1; });
+      groups.forEach(g => { perSlot[selectedSlots[g.uid]] = (perSlot[selectedSlots[g.uid]] || 0) + 1; });
       for (const [sid, add] of Object.entries(perSlot)) {
         const slot = timeslots[sid];
         if ((counts[sid]?.students || 0) + add > (slot?.capacity || 30)) {
@@ -402,7 +388,12 @@ async function submitRSVP() {
         }
       }
       rsvp.sameTimeslot = false;
-      rsvp.perStudentSlots = { ...selectedSlots };
+      const perStudent = {};
+      memberKeys.forEach(k => {
+        const uid = studentUid(honorees[k]) || k;
+        if (selectedSlots[uid]) perStudent[k] = selectedSlots[uid];
+      });
+      rsvp.perStudentSlots = perStudent;
     }
     rsvp.guests = {
       mom: $('guestMom').checked, dad: $('guestDad').checked,
@@ -411,7 +402,6 @@ async function submitRSVP() {
       others: parseInt($('guestOthers').value) || 0
     };
   }
-
   const btn = $('submitRsvpBtn');
   btn.disabled = true;
   try {
@@ -434,23 +424,22 @@ function renderConfirmation() {
   $('guestCard')?.classList.add('hidden');
   $('submitCard')?.classList.add('hidden');
   $('confirmationCard')?.classList.remove('hidden');
-
   const rsvp = familyData?.rsvp;
   if (!rsvp) return;
   let details = `<p><strong>${escapeHtml(t('inv.statusWord', 'Status'))}:</strong> ${rsvp.status === 'attending' ? '✅ ' + escapeHtml(t('st.attending', 'Attending')) : '❌ ' + escapeHtml(t('st.declined', 'Declined'))}</p>`;
-
-  // 💬 Display reason if declined and provided
   if (rsvp.status === 'declined' && rsvp.reason) {
     details += `<p><strong>${escapeHtml(t('inv.reasonWord', 'Reason'))}:</strong> ${escapeHtml(rsvp.reason)}</p>`;
   }
-
   if (rsvp.status === 'attending') {
     if (rsvp.sameTimeslot && rsvp.sharedSlotId) {
       const slot = timeslots[rsvp.sharedSlotId];
       details += `<p><strong>${escapeHtml(t('inv.timeslotsWord', 'Timeslot(s)'))}:</strong> ${slot ? `${escapeHtml(slot.start)} – ${escapeHtml(slot.end)}` : escapeHtml(rsvp.sharedSlotId)}</p>`;
     } else if (rsvp.perStudentSlots) {
       details += `<p><strong>${escapeHtml(t('inv.timeslotsWord', 'Timeslot(s)'))}:</strong></p><ul>`;
+      const seen = new Set();
       Object.entries(rsvp.perStudentSlots).forEach(([key, slotId]) => {
+        const uid = studentUid(honorees[key]) || key;
+        if (seen.has(uid)) return; seen.add(uid);
         const h = honorees[key];
         const slot = timeslots[slotId];
         details += `<li>${escapeHtml(h?.nameCn || h?.nameEn || key)}: ${slot ? `${escapeHtml(slot.start)} – ${escapeHtml(slot.end)}` : escapeHtml(slotId)}</li>`;
@@ -476,27 +465,29 @@ function startEditing() {
   $('rsvpCard').classList.remove('hidden');
   $('btnAttending').classList.toggle('selected', rsvp.status === 'attending');
   $('btnDeclined').classList.toggle('selected', rsvp.status === 'declined');
-
   if (rsvp.status === 'attending') {
     $('timeslotCard').classList.remove('hidden');
     $('guestCard').classList.remove('hidden');
     $('submitCard').classList.remove('hidden');
-    
     if (isSingleStudent()) {
-      // ✅ Only one student: always use the simple shared-slot flow,
-      // even if the old RSVP was saved in per-student format
       slotMode = 'same';
       selectedSlots = rsvp.sameTimeslot
         ? { shared: rsvp.sharedSlotId }
         : { shared: Object.values(rsvp.perStudentSlots || {})[0] || null };
     } else {
       slotMode = rsvp.sameTimeslot ? 'same' : 'separate';
-      selectedSlots = rsvp.sameTimeslot ? { shared: rsvp.sharedSlotId } : { ...(rsvp.perStudentSlots || {}) };
+      if (rsvp.sameTimeslot) {
+        selectedSlots = { shared: rsvp.sharedSlotId };
+      } else {
+        selectedSlots = {};
+        Object.entries(rsvp.perStudentSlots || {}).forEach(([k, sid]) => {
+          const uid = studentUid(honorees[k]) || k;
+          if (!(uid in selectedSlots)) selectedSlots[uid] = sid;
+        });
+      }
     }
-    
     const radio = document.querySelector(`input[name="slotMode"][value="${slotMode}"]`);
     if (radio) radio.checked = true;
-    
     if (rsvp.guests) {
       $('guestMom').checked = !!rsvp.guests.mom;
       $('guestDad').checked = !!rsvp.guests.dad;
@@ -507,11 +498,8 @@ function startEditing() {
     }
     safeRender('timeslots', renderTimeslots);
   } else {
-    // 💬 Restore reason if editing a declined RSVP
-    if ($('declineReason')) {
-      $('declineReason').value = rsvp.reason || '';
-    }
-    $('reasonCard').classList.remove('hidden'); // Ensure it's visible
+    if ($('declineReason')) $('declineReason').value = rsvp.reason || '';
+    $('reasonCard').classList.remove('hidden');
     $('submitCard').classList.remove('hidden');
   }
 }

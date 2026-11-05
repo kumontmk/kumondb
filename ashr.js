@@ -3,7 +3,6 @@ import { ref, get, set, update, remove, onValue } from "https://www.gstatic.com/
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { i18nReady, t as tCore, applyI18n } from './ashr-i18n.js';
 
-// Fallback-safe translator (same pattern as student-form.js)
 const t = (key, fallback) => { const v = tCore(key); return (v && v !== key) ? v : fallback; };
 await i18nReady.catch(() => {});
 
@@ -29,8 +28,7 @@ let unmatchedEditIsCompleter = false;
 let unsubscribers = [];
 let html5QrCode = null;
 let cameraActive = false;
-
-let manualMerges = {};          // add near the other state vars
+let manualMerges = {};
 let mergeMode = false;
 let mergeSelection = new Set();
 
@@ -38,28 +36,19 @@ const $ = (id) => document.getElementById(id);
 
 // ============================================
 // 🥇 MEDAL RULES
-//   1★ Bronze, 2★ Silver, 3★+ Gold  (Math / Chinese / ERP)
-//   EFL exists ONLY at 3★+ (no bronze/silver) → EFL <3★ rows are not awards
 // ============================================
 function tierFor(stars) { return stars >= 3 ? 'Gold' : stars === 2 ? 'Silver' : 'Bronze'; }
 function medalFor(tier) { return tier === 'Gold' ? '🥇' : tier === 'Silver' ? '🥈' : tier === 'Bronze' ? '🥉' : ''; }
-
-// Set to true if ONLY Gold (3★+) students should receive family invitations.
-// false = every imported honoree (Bronze/Silver/Gold) gets an invitation.
 const INVITE_REQUIRES_GOLD = false;
 function isInvitable(h) {
   if ((h.completions || []).length > 0) return true;
   if (!INVITE_REQUIRES_GOLD) return true;
   return (h.awards || []).some(a => (a.stars || 0) >= 3);
 }
-
 function safeKey(...parts) { return parts.join(' ').replace(/[.#$\[\]]/g, ' '); }
-
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
-
-// ✅ IMPORT RULES: Math 1–5 | Chinese 1–5 | ERP 1–5 | EFL 3–5 | others skipped
 function subjectRule(subject) {
   const s = String(subject || '').trim().toLowerCase();
   if (s.includes('efl')) return { canon: 'EFL', minStars: 3 };
@@ -70,43 +59,35 @@ function subjectRule(subject) {
 }
 
 // ============================================
-// 🎟️ CARD HELPERS (bilingual card, PNG-safe images)
+// 🎟️ CARD HELPERS
 // ============================================
-// ✅ Event display name — always prefixed with "Kumon"
 function eventDisplayName() {
   const base = String(eventSettings.eventName || `ASHR ${currentEventId}`).trim();
   return /^kumon\b/i.test(base) ? base : `Kumon ${base}`;
 }
-
-// ✅ Compact CODE128 payload: 8 chars → crisp at width:3
 function shortScanCode(value) {
   let h = 5381;
   for (let i = 0; i < value.length; i++) h = ((h << 5) + h + value.charCodeAt(i)) >>> 0;
   return 'K' + h.toString(36).toUpperCase().padStart(7, '0');
 }
-
-// ✅ Render a barcode to a PNG data-URL (export/print-safe <img>)
 function barcodeDataUrl(value, opts = {}) {
   if (typeof JsBarcode === 'undefined' || !value) return '';
   const canvas = document.createElement('canvas');
   try {
     JsBarcode(canvas, value, Object.assign({
       format: 'CODE128', displayValue: true, fontSize: 14, margin: 8,
-      height: 70, width: 3, background: '#ffffff', lineColor: '#000000' // width bumped to 3 for crispness
+      height: 70, width: 3, background: '#ffffff', lineColor: '#000000'
     }, opts));
     return canvas.toDataURL('image/png');
   } catch (err) { console.error('Barcode render error:', err); return ''; }
 }
-
-// ✅ QR → PNG data-URL via node-qrcode (no DOM canvas = no blank QR)
-// ✅ Paint a QR matrix ourselves (qrcode-generator lib) → guaranteed pixels, no DOM quirks
 function drawQrMatrixToDataUrl(text, px) {
   if (typeof qrcode !== 'function') return '';
-  const qr = qrcode(0, 'M');          // 0 = auto-size version
+  const qr = qrcode(0, 'M');
   qr.addData(text, 'Byte');
   qr.make();
   const n = qr.getModuleCount();
-  const margin = 4;                    // quiet zone
+  const margin = 4;
   const scale = Math.max(2, Math.floor(px / (n + margin * 2)));
   const size = (n + margin * 2) * scale;
   const canvas = document.createElement('canvas');
@@ -119,8 +100,6 @@ function drawQrMatrixToDataUrl(text, px) {
       if (qr.isDark(r, c)) ctx.fillRect((c + margin) * scale, (r + margin) * scale, scale, scale);
   return canvas.toDataURL('image/png');
 }
-
-// ✅ QR → PNG data-URL. Chain: qrcode-generator → node-qrcode → davidshimjs. Never throws.
 async function qrDataUrl(text, size = 280) {
   try {
     const viaMatrix = drawQrMatrixToDataUrl(text, size);
@@ -144,7 +123,6 @@ async function qrDataUrl(text, size = 280) {
   } catch (err) { console.error('QR render error:', err); }
   return '';
 }
-
 function loadImg(src) {
   return new Promise((res, rej) => {
     if (!src) return rej(new Error('Empty image source'));
@@ -154,8 +132,6 @@ function loadImg(src) {
     i.src = src;
   });
 }
-
-// ✅ Word-wrap for canvas (fillText never wraps on its own).
 function wrapText(ctx, text, maxWidth) {
   const raw = String(text ?? '').trim();
   if (!raw) return ['—'];
@@ -163,7 +139,7 @@ function wrapText(ctx, text, maxWidth) {
   const tokens = [];
   raw.split(/\s+/).forEach((word) => {
     if (ctx.measureText(word).width <= maxWidth) { tokens.push(word); return; }
-    let cur = '';                                    // break over-long words per char
+    let cur = '';
     for (const ch of word) {
       if (cur && ctx.measureText(cur + ch).width > maxWidth) { tokens.push(cur); cur = ch; }
       else cur += ch;
@@ -181,7 +157,6 @@ function wrapText(ctx, text, maxWidth) {
   if (line) lines.push(line);
   return lines.length ? lines : ['—'];
 }
-
 function rr(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -193,7 +168,6 @@ function rr(ctx, x, y, w, h, r) {
 }
 const CARD_FONT = "'Segoe UI','PingFang TC','Microsoft JhengHei',sans-serif";
 
-// Shared timeslot text for a family (used by card + print window)
 function familyTimeText(fam) {
   const famId = Object.keys(families).find(fid =>
     (families[fid].memberHonoreeIds || []).some(mid => fam.members.some(m => m.honoreeKey === mid))
@@ -204,6 +178,80 @@ function familyTimeText(fam) {
     return slot ? `${slot.start} – ${slot.end}` : rsvp.sharedSlotId;
   }
   return '—';
+}
+
+// ============================================
+// 🧬 SAME-STUDENT MERGE / UNIQUE-STUDENT HELPERS
+//    (same student number = same child, even if
+//     duplicate honoree records exist under 2 centers)
+// ============================================
+function studentUid(h) { return String(h?.studentNumber || h?.studentId || '').trim(); }
+function dedupeBy(arr, keyFn) {
+  const seen = new Set();
+  return (arr || []).filter(x => {
+    const k = keyFn(x);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+function groupMembersForDisplay(members) {
+  const order = [];
+  const byId = new Map();
+  (members || []).forEach(m => {
+    const id = studentUid(m) || m?.honoreeKey || '';
+    if (!byId.has(id)) {
+      const g = {
+        honoreeKey: m.honoreeKey,
+        studentId: m.studentId,
+        studentNumber: m.studentNumber,
+        nameCn: m.nameCn || m.nameEn || '',
+        nameEn: m.nameEn || '',
+        centerId: m.centerId,
+        centerName: m.centerName || '',
+        awards: [...(m.awards || [])],
+        completions: [...(m.completions || [])],
+        barcodes: [{ value: m.barcodeValue || `ASHR${currentEventId}_${m.honoreeKey}` }],
+        _hasAwards: (m.awards || []).length > 0
+      };
+      byId.set(id, g);
+      order.push(g);
+    } else {
+      const g = byId.get(id);
+      g.awards.push(...(m.awards || []));
+      g.completions.push(...(m.completions || []));
+      g.barcodes.push({ value: m.barcodeValue || `ASHR${currentEventId}_${m.honoreeKey}` });
+      if ((m.awards || []).length && !g._hasAwards) {
+        g.centerId = m.centerId;
+        g.centerName = m.centerName || g.centerName;
+        g._hasAwards = true;
+      }
+      if (!g.nameCn && (m.nameCn || m.nameEn)) g.nameCn = m.nameCn || m.nameEn;
+      if (!g.nameEn && m.nameEn) g.nameEn = m.nameEn;
+    }
+  });
+  order.forEach(g => {
+    g.awards = dedupeBy(g.awards, a => `${a.subject}|${a.stars}|${a.reportingMonth || ''}`);
+    g.completions = dedupeBy(g.completions, c => `${c.subjectCanon || c.subject}`);
+    delete g._hasAwards;
+  });
+  return order;
+}
+function countUniqueStudents(members) {
+  const seen = new Set();
+  (members || []).forEach(m => seen.add(studentUid(m) || m?.honoreeKey || ''));
+  return seen.size;
+}
+function countUniqueFromIds(memberIds) {
+  const seen = new Set();
+  (memberIds || []).forEach(mid => { const h = honorees[mid]; seen.add(studentUid(h) || mid); });
+  return seen.size;
+}
+function siblingHonoreeKeys(h, key) {
+  const uid = studentUid(h);
+  if (!uid) return [key];
+  const keys = Object.entries(honorees).filter(([_, hh]) => studentUid(hh) === uid).map(([k]) => k);
+  return keys.length ? keys : [key];
 }
 
 // ============================================
@@ -246,12 +294,10 @@ async function loadAllCenters() {
     const snap = await get(ref(db, 'centers'));
     allCentersData = {};
     allStudentsFlat = [];
-
     if (snap.exists()) {
       snap.forEach(c => {
         const v = c.val() || {};
         const centerId = c.key;
-
         allCentersData[centerId] = {
           ...v,
           key: centerId,
@@ -261,20 +307,12 @@ async function loadAllCenters() {
           students: v.students || {},
           studentSiblingLinks: v.studentSiblingLinks || {}
         };
-
         Object.entries(v.students || {}).forEach(([sid, s]) => {
-          allStudentsFlat.push({
-            id: sid,
-            centerId,
-            centerName: allCentersData[centerId].name,
-            ...s
-          });
+          allStudentsFlat.push({ id: sid, centerId, centerName: allCentersData[centerId].name, ...s });
         });
       });
     }
-  } catch (err) {
-    console.error('Failed to load centers:', err);
-  }
+  } catch (err) { console.error('Failed to load centers:', err); }
 }
 
 async function loadEventList() {
@@ -352,7 +390,6 @@ function setupControlPanel() {
   $('saveSettingsBtn').addEventListener('click', saveSettings);
   $('addSlotBtn').addEventListener('click', addTimeslot);
 }
-
 function renderControlPanel() {
   $('setEventName').value = eventSettings.eventName || '';
   $('setEventDate').value = eventSettings.eventDate || '';
@@ -361,7 +398,6 @@ function renderControlPanel() {
   $('setDefaultCapacity').value = eventSettings.defaultCapacity || 30;
   $('setIsActive').value = String(eventSettings.isActive !== false);
 }
-
 function updateEventStatus() {
   const badge = $('eventStatusBadge');
   if (eventSettings.isActive !== false) {
@@ -372,7 +408,6 @@ function updateEventStatus() {
     badge.className = 'event-status inactive';
   }
 }
-
 async function saveSettings() {
   const settings = {
     eventName: $('setEventName').value.trim(),
@@ -388,7 +423,6 @@ async function saveSettings() {
     showToast(t('toast.settings', 'Settings saved!'), 'success');
   } catch (err) { showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error'); }
 }
-
 function renderTimeslots() {
   const list = $('timeslotList');
   list.innerHTML = '';
@@ -458,7 +492,6 @@ function renderTimeslots() {
     });
   });
 }
-
 async function addTimeslot() {
   const start = $('newSlotStart').value;
   const end = $('newSlotEnd').value;
@@ -478,14 +511,11 @@ const TAB_TO_CENTER = { champs: 'champs', mk: 'mei keng', ts: 'tap siac', pt: 'p
 function setupHonorees() {
   $('importExcelBtn').addEventListener('click', () => $('excelFileInput').click());
   $('excelFileInput').addEventListener('change', handleExcelImport);
-
-  // 🎓 Completers
   $('importCompletersBtn')?.addEventListener('click', () => $('completersFileInput').click());
   $('completersFileInput')?.addEventListener('change', handleCompletersExcelImport);
   $('clearCompletersBtn')?.addEventListener('click', clearCompleters);
   $('exportCompletersBtn')?.addEventListener('click', exportCompleters);
   $('honoreeTypeFilter')?.addEventListener('change', renderHonorees);
-
   $('clearUnmatchedBtn').addEventListener('click', clearUnmatched);
   $('deleteAllHonoreesBtn').addEventListener('click', deleteAllHonorees);
   $('manualSearchInput').addEventListener('input', handleManualSearch);
@@ -502,11 +532,9 @@ function setupHonorees() {
   $('umSearch').addEventListener('focus', umRunSearch);
   $('umAddAwardBtn').addEventListener('click', () => $('umAwardsList').appendChild(awardEditRow('Math', 3, '')));
   $('umSaveBtn').addEventListener('click', umSave);
-
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.um-search-wrap')) $('umDropdown').classList.add('hidden');
   });
-
   populateCenterFilter();
 }
 
@@ -519,7 +547,6 @@ function populateCenterFilter() {
   });
 }
 
-// ✅ IMPORT — every valid row becomes/updates a honoree (no hiding, no purging)
 async function handleExcelImport(e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -556,7 +583,7 @@ async function handleExcelImport(e) {
         if (!rule) { skippedSubject++; continue; }
         const starCount = (starsRaw.match(/\*/g) || []).length;
         if (starCount < 1 || starCount > 5) { skippedSubject++; continue; }
-        if (starCount < rule.minStars) { skippedLow++; continue; } // EFL <3★ = not an award
+        if (starCount < rule.minStars) { skippedLow++; continue; }
         const rowKey = safeKey(sheetName, studentNumber, rawSubject, reportingMonth);
         const student = allStudentsFlat.find(s =>
           s.centerId === centerId && String(s.studentNumber || '').trim() === studentNumber
@@ -630,262 +657,138 @@ async function handleExcelImport(e) {
 async function handleCompletersExcelImport(e) {
   const file = e.target.files?.[0];
   if (!file) return;
-
   const progress = $('completersImportProgress');
   const summary = $('completersImportSummary');
-
   progress?.classList.remove('hidden');
   summary?.classList.add('hidden');
-
   try {
     const data = await file.arrayBuffer();
     const wb = XLSX.read(data, { type: 'array', cellDates: true });
-
-    let added = 0;
-    let updated = 0;
-    let newHonorees = 0;
-    let skippedSubject = 0;
-    let unmatched = 0;
-
+    let added = 0, updated = 0, newHonorees = 0, skippedSubject = 0, unmatched = 0;
     const work = JSON.parse(JSON.stringify(honorees || {}));
     const touched = new Set();
     const unmatchedUpdates = {};
     const now = new Date().toISOString();
-
     const totalSheets = wb.SheetNames.length;
     let sheetIdx = 0;
-
     for (const sheetName of wb.SheetNames) {
       sheetIdx++;
-
       const statusEl = $('completersImportStatusText');
       const fillEl = $('completersImportProgressFill');
-
       if (statusEl) statusEl.textContent = `Processing sheet: ${sheetName} (${sheetIdx}/${totalSheets})`;
       if (fillEl) fillEl.style.width = `${(sheetIdx / totalSheets) * 100}%`;
-
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' });
-
       for (let rIdx = 0; rIdx < rows.length; rIdx++) {
         const row = rows[rIdx];
-
         const rowNo = String(pickRowValue(row, '#', 'No', 'Row') || (rIdx + 2)).trim();
         const nameEn = String(pickRowValue(row, 'English Name', 'EnglishName', 'Student Name (Alphabet)', 'Student Name（Alphabet）') || '').trim();
         const nameCn = String(pickRowValue(row, 'Chinese Name', 'ChineseName', 'Student Name') || '').trim();
         const studentIdExcel = String(pickRowValue(row, 'Student ID', 'StudentID', 'Student Number') || '').trim();
         const subjectOriginal = String(pickRowValue(row, 'Subject') || '').trim();
-
         if (!studentIdExcel || !subjectOriginal) continue;
-
         const rule = subjectRule(subjectOriginal);
-        if (!rule) {
-          skippedSubject++;
-          continue;
-        }
-
+        if (!rule) { skippedSubject++; continue; }
         const canon = rule.canon;
-
         const dateOfCompletion = parseExcelDate(pickRowValue(row, 'Date of Completion', 'DateOfCompletion', 'Completion Date'));
         const completerTestDate = parseExcelDate(pickRowValue(row, 'Completer Test Date', 'CompleterTestDate', 'Test Date'));
-
         const centreIdExcel = String(pickRowValue(row, 'CentreID', 'CenterID', 'Centre ID', 'Center ID') || '').trim();
         const centreNameExcel = String(pickRowValue(row, 'Centre', 'Center', 'Centre Name', 'Center Name') || '').trim();
         const chineseCentreNameExcel = String(pickRowValue(row, 'Chinese Center Name', 'ChineseCentreName', 'Chinese Center') || '').trim();
-
-        const centerId = resolveCompleterCenterId({
-          centreIdExcel,
-          centreNameExcel,
-          chineseCentreNameExcel
-        });
-
+        const centerId = resolveCompleterCenterId({ centreIdExcel, centreNameExcel, chineseCentreNameExcel });
         const student = centerId
           ? allStudentsFlat.find(s =>
               s.centerId === centerId &&
-              (
-                String(s.studentNumber || '').trim() === studentIdExcel ||
-                String(s.id || '').trim() === studentIdExcel
-              )
-            )
+              (String(s.studentNumber || '').trim() === studentIdExcel || String(s.id || '').trim() === studentIdExcel))
           : null;
-
         const unmatchedKey = safeKey('completer', studentIdExcel, canon);
-
         if (!student) {
           unmatched++;
-
           unmatchedUpdates[`ashrEvents/${currentEventId}/unmatched/${unmatchedKey}`] = {
-            sourceType: 'completer',
-            rowNumber: rowNo,
-            sheetName,
-            studentId: studentIdExcel,
-            nameEn,
-            nameCn,
-            subjectOriginal,
-            subjectCanon: canon,
-            dateOfCompletion,
-            completerTestDate,
-            centreIdExcel,
-            centreNameExcel,
-            chineseCentreNameExcel,
-            centerGuess: centerId || null,
-            createdAt: now
+            sourceType: 'completer', rowNumber: rowNo, sheetName,
+            studentId: studentIdExcel, nameEn, nameCn, subjectOriginal, subjectCanon: canon,
+            dateOfCompletion, completerTestDate, centreIdExcel, centreNameExcel, chineseCentreNameExcel,
+            centerGuess: centerId || null, createdAt: now
           };
-
           continue;
         }
-
-        // If this row previously failed and now succeeds, remove the old unmatched entry.
-        if (unmatchedDb[unmatchedKey]) {
-          unmatchedUpdates[`ashrEvents/${currentEventId}/unmatched/${unmatchedKey}`] = null;
-        }
-
+        if (unmatchedDb[unmatchedKey]) unmatchedUpdates[`ashrEvents/${currentEventId}/unmatched/${unmatchedKey}`] = null;
         const key = `${centerId}_${student.studentNumber || student.id}`;
         touched.add(key);
-
         let h = work[key];
-
         if (!h) {
           h = {
-            studentId: student.id,
-            centerId,
+            studentId: student.id, centerId,
             centerName: allCentersData[centerId]?.name || centreNameExcel,
-            nameCn: student.nameCn || nameCn,
-            nameEn: student.namePinyin || nameEn,
+            nameCn: student.nameCn || nameCn, nameEn: student.namePinyin || nameEn,
             studentNumber: student.studentNumber || studentIdExcel,
             barcodeValue: `ASHR${currentEventId}_${key}`,
-            awards: [],
-            completions: [],
-            createdAt: now
+            awards: [], completions: [], createdAt: now
           };
-
           work[key] = h;
           newHonorees++;
         }
-
         h.completions = h.completions || [];
-
         const completion = {
-          subject: canon,
-          subjectCanon: canon,
-          subjectOriginal,
-          dateOfCompletion,
-          completerTestDate,
-          centreIdExcel,
-          centreNameExcel,
-          chineseCentreNameExcel,
-          sourceRow: rowNo,
-          importedAt: now
+          subject: canon, subjectCanon: canon, subjectOriginal,
+          dateOfCompletion, completerTestDate, centreIdExcel, centreNameExcel, chineseCentreNameExcel,
+          sourceRow: rowNo, importedAt: now
         };
-
-        const existingCompletion = h.completions.find(c =>
-          (c.subjectCanon || c.subject) === canon
-        );
-
-        if (existingCompletion) {
-          Object.assign(existingCompletion, completion);
-          updated++;
-        } else {
-          h.completions.push(completion);
-          added++;
-        }
-
-        // Backfill names if missing
+        const existingCompletion = h.completions.find(c => (c.subjectCanon || c.subject) === canon);
+        if (existingCompletion) { Object.assign(existingCompletion, completion); updated++; }
+        else { h.completions.push(completion); added++; }
         if (!h.nameCn && nameCn) h.nameCn = nameCn;
         if (!h.nameEn && nameEn) h.nameEn = nameEn;
-
         h.updatedAt = now;
       }
     }
-
     const updates = {};
-
-    touched.forEach(k => {
-      updates[`ashrEvents/${currentEventId}/honorees/${k}`] = work[k];
-    });
-
+    touched.forEach(k => { updates[`ashrEvents/${currentEventId}/honorees/${k}`] = work[k]; });
     Object.assign(updates, unmatchedUpdates);
-
-    if (Object.keys(updates).length) {
-      await update(ref(db), updates);
-    }
-
+    if (Object.keys(updates).length) await update(ref(db), updates);
     progress?.classList.add('hidden');
-
     if (summary) {
       summary.classList.remove('hidden');
       summary.innerHTML = `
         <div class="stat-grid">
-          <div class="stat-card">
-            <div class="stat-value">${added}</div>
-            <div class="stat-label">${t('imp.added', 'Added')}</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">${updated}</div>
-            <div class="stat-label">${t('imp.updated', 'Updated')}</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">${newHonorees}</div>
-            <div class="stat-label">${t('imp.newHonorees', 'New Honorees')}</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">${skippedSubject}</div>
-            <div class="stat-label">${t('imp.skipSubject', 'Skipped (subject)')}</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">${unmatched}</div>
-            <div class="stat-label">${t('imp.unmatched', 'Unmatched')}</div>
-          </div>
-        </div>
-      `;
+          <div class="stat-card"><div class="stat-value">${added}</div><div class="stat-label">${t('imp.added', 'Added')}</div></div>
+          <div class="stat-card"><div class="stat-value">${updated}</div><div class="stat-label">${t('imp.updated', 'Updated')}</div></div>
+          <div class="stat-card"><div class="stat-value">${newHonorees}</div><div class="stat-label">${t('imp.newHonorees', 'New Honorees')}</div></div>
+          <div class="stat-card"><div class="stat-value">${skippedSubject}</div><div class="stat-label">${t('imp.skipSubject', 'Skipped (subject)')}</div></div>
+          <div class="stat-card"><div class="stat-value">${unmatched}</div><div class="stat-label">${t('imp.unmatched', 'Unmatched')}</div></div>
+        </div>`;
     }
-
     showToast(`${t('toast.completersImportDone', 'Completers import complete')}: +${added}, ↻${updated}`, 'success');
   } catch (err) {
     console.error('Completers import error:', err);
     showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error');
     $('completersImportProgress')?.classList.add('hidden');
   }
-
   e.target.value = '';
 }
 
 async function clearCompleters() {
   const honoreeEntries = Object.entries(honorees || {}).filter(([_, h]) => (h.completions || []).length > 0);
   const unmatchedEntries = Object.entries(unmatchedDb || {}).filter(([_, r]) => r.sourceType === 'completer');
-
   const total = honoreeEntries.length + unmatchedEntries.length;
   if (!total) return showToast(t('toast.noCompleters', 'No completer records'), 'error');
-
   if (!confirm(
     `Clear ${honoreeEntries.length} completer honoree record(s) and ${unmatchedEntries.length} unmatched completer row(s)?\n\n` +
     `Honorees with ASHR awards will remain; completer-only honorees will be removed.`
   )) return;
-
   const updates = {};
-
   honoreeEntries.forEach(([key, h]) => {
-    if ((h.awards || []).length > 0) {
-      updates[`ashrEvents/${currentEventId}/honorees/${key}/completions`] = null;
-    } else {
-      updates[`ashrEvents/${currentEventId}/honorees/${key}`] = null;
-    }
+    if ((h.awards || []).length > 0) updates[`ashrEvents/${currentEventId}/honorees/${key}/completions`] = null;
+    else updates[`ashrEvents/${currentEventId}/honorees/${key}`] = null;
   });
-
-  unmatchedEntries.forEach(([key]) => {
-    updates[`ashrEvents/${currentEventId}/unmatched/${key}`] = null;
-  });
-
+  unmatchedEntries.forEach(([key]) => { updates[`ashrEvents/${currentEventId}/unmatched/${key}`] = null; });
   try {
     await update(ref(db), updates);
     showToast(t('toast.completersCleared', 'Completers cleared'), 'success');
-  } catch (err) {
-    showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error');
-  }
+  } catch (err) { showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error'); }
 }
 
 function exportCompleters() {
   const rows = [];
-
   Object.values(honorees || {}).forEach(h => {
     (h.completions || []).forEach(c => {
       rows.push({
@@ -901,18 +804,11 @@ function exportCompleters() {
       });
     });
   });
-
-  if (!rows.length) {
-    return showToast(t('toast.noCompleters', 'No completer records'), 'error');
-  }
-
+  if (!rows.length) return showToast(t('toast.noCompleters', 'No completer records'), 'error');
   rows.sort((a, b) =>
     String(a['Centre'] || '').localeCompare(String(b['Centre'] || '')) ||
-    String(a['Chinese Name'] || a['English Name'] || '').localeCompare(
-      String(b['Chinese Name'] || b['English Name'] || '')
-    )
+    String(a['Chinese Name'] || a['English Name'] || '').localeCompare(String(b['Chinese Name'] || b['English Name'] || ''))
   );
-
   downloadExcel(rows, `ASHR_Completers_${currentEventId}.xls`);
   showToast(t('toast.exportOk', 'Exported!'), 'success');
 }
@@ -920,21 +816,14 @@ function exportCompleters() {
 function renderUnmatched() {
   const list = $('unmatchedList');
   const rows = Object.entries(unmatchedDb || {});
-
-  if (!rows.length) {
-    list.innerHTML = '<p class="hint">—</p>';
-    return;
-  }
-
+  if (!rows.length) { list.innerHTML = '<p class="hint">—</p>'; return; }
   rows.sort((a, b) => {
     const sa = a[1].sourceType === 'completer' ? 1 : 0;
     const sb = b[1].sourceType === 'completer' ? 1 : 0;
     if (sa !== sb) return sa - sb;
-
     return String(a[1].sheetName || a[1].centreNameExcel || '').localeCompare(String(b[1].sheetName || b[1].centreNameExcel || '')) ||
            String(a[1].studentNumber || a[1].studentId || '').localeCompare(String(b[1].studentNumber || b[1].studentId || ''));
   });
-
   list.innerHTML = `
     <div class="table-wrap">
       <table class="data-table">
@@ -956,30 +845,19 @@ function renderUnmatched() {
             const source = isComp
               ? `🎓 ${escapeHtml(t('hon.typeCompleter', 'Completer'))}`
               : `🏅 ${escapeHtml(t('hon.typeAward', 'ASHR Award'))}`;
-
             const refText = isComp
               ? `${escapeHtml(t('um.row', 'Row'))} ${escapeHtml(r.rowNumber || '')}`
               : escapeHtml(r.sheetName || '');
-
             const studentId = escapeHtml(r.studentId || r.studentNumber || '');
             const nameEn = escapeHtml(r.nameEn || r.nameAlphabet || '');
             const nameCn = escapeHtml(r.nameCn || '');
             const subject = escapeHtml(r.subjectOriginal || r.subject || '');
-
-            const centerDisplay =
-              r.centreNameExcel ||
-              allCentersData[r.centerGuess]?.name ||
-              r.centerGuess ||
-              '—';
-
+            const centerDisplay = r.centreNameExcel || allCentersData[r.centerGuess]?.name || r.centerGuess || '—';
             const detail = isComp
-              ? `
-                  ${escapeHtml(t('um.completed', 'Completed'))}: ${escapeHtml(r.dateOfCompletion || '—')}<br>
-                  ${escapeHtml(t('um.testDate', 'Test Date'))}: ${escapeHtml(r.completerTestDate || '—')}<br>
-                  ${escapeHtml(t('th.center', 'Center'))}: ${escapeHtml(centerDisplay)}
-                `
+              ? `${escapeHtml(t('um.completed', 'Completed'))}: ${escapeHtml(r.dateOfCompletion || '—')}<br>
+                 ${escapeHtml(t('um.testDate', 'Test Date'))}: ${escapeHtml(r.completerTestDate || '—')}<br>
+                 ${escapeHtml(t('th.center', 'Center'))}: ${escapeHtml(centerDisplay)}`
               : escapeHtml(r.stars || '');
-
             return `
               <tr>
                 <td>${source}</td>
@@ -995,27 +873,21 @@ function renderUnmatched() {
                     <button class="btn-small danger" data-um-del="${escapeHtml(key)}">${t('common.delete', '🗑')}</button>
                   </div>
                 </td>
-              </tr>
-            `;
+              </tr>`;
           }).join('')}
         </tbody>
       </table>
-    </div>
-  `;
-
+    </div>`;
   list.querySelectorAll('[data-um-edit]').forEach(btn => {
     btn.addEventListener('click', () => openUnmatchedEdit(btn.dataset.umEdit));
   });
-
   list.querySelectorAll('[data-um-del]').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!confirm(t('um.deleteConfirm', 'Remove this unmatched record?'))) return;
       try {
         await remove(ref(db, `ashrEvents/${currentEventId}/unmatched/${btn.dataset.umDel}`));
         showToast(t('um.removed', 'Record removed'), 'success');
-      } catch (err) {
-        showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error');
-      }
+      } catch (err) { showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error'); }
     });
   });
 }
@@ -1071,14 +943,12 @@ function handleManualSearch(e) {
   });
   dropdown.classList.remove('hidden');
 }
-
 function selectManualStudent(s) {
   selectedManualStudent = s;
   $('manualSearchInput').value = `${s.nameCn || s.namePinyin} (${s.studentNumber || s.id})`;
   $('manualSearchDropdown').classList.add('hidden');
   $('manualAwardForm').classList.remove('hidden');
 }
-
 async function handleManualAdd() {
   if (!selectedManualStudent) return showToast(t('toast.selectStudent', 'Select a student first'), 'error');
   const s = selectedManualStudent;
@@ -1109,64 +979,34 @@ async function handleManualAdd() {
   } catch (err) { showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error'); }
 }
 
-// ✅ LIST = every imported honoree, with their medal(s)
 function renderHonorees() {
   const search = ($('honoreeSearch').value || '').toLowerCase();
   const centerFilter = $('honoreeCenterFilter').value;
   const typeFilter = $('honoreeTypeFilter')?.value || 'all';
   const tbody = $('honoreeTableBody');
-
   tbody.innerHTML = '';
-
   const entries = Object.entries(honorees).filter(([key, h]) => {
     if (centerFilter && h.centerId !== centerFilter) return false;
-
     const type = getHonoreeType(h);
     if (typeFilter !== 'all' && type !== typeFilter) return false;
-
     if (search) {
-      const compSubjects = (h.completions || [])
-        .map(c => `${c.subject || c.subjectCanon || ''} ${c.subjectOriginal || ''}`)
-        .join(' ');
-
-      const hay = [h.nameCn, h.nameEn, h.studentNumber, compSubjects]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-
+      const compSubjects = (h.completions || []).map(c => `${c.subject || c.subjectCanon || ''} ${c.subjectOriginal || ''}`).join(' ');
+      const hay = [h.nameCn, h.nameEn, h.studentNumber, compSubjects].filter(Boolean).join(' ').toLowerCase();
       if (!hay.includes(search)) return false;
     }
-
     return true;
   });
-
   $('honoreeCount').textContent = entries.length;
-
   entries.forEach(([key, h]) => {
     const type = getHonoreeType(h);
-
-    const typeLabel =
-      type === 'both'
-        ? t('hon.typeBoth', 'Both')
-        : type === 'completer'
-          ? t('hon.typeCompleter', 'Completer')
-          : t('hon.typeAward', 'ASHR Award');
-
-    const typeClass =
-      type === 'both'
-        ? 'tb-both'
-        : type === 'completer'
-          ? 'tb-completer'
-          : 'tb-award';
-
+    const typeLabel = type === 'both' ? t('hon.typeBoth', 'Both') : type === 'completer' ? t('hon.typeCompleter', 'Completer') : t('hon.typeAward', 'ASHR Award');
+    const typeClass = type === 'both' ? 'tb-both' : type === 'completer' ? 'tb-completer' : 'tb-award';
     const awardsHtml = (h.awards || []).map(a =>
       `<span class="award-badge award-${(a.tier || 'bronze').toLowerCase()}">${medalFor(a.tier)} ${escapeHtml(a.subject)} ${'★'.repeat(a.stars || 0)}</span>`
     ).join('');
-
     const completionsHtml = (h.completions || []).map(c =>
       `<span class="award-badge award-completer">🎓 ${escapeHtml(c.subject || c.subjectCanon || '')} ${escapeHtml(t('hon.completerWord', 'Completer'))}</span>`
     ).join('');
-
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>
@@ -1181,15 +1021,12 @@ function renderHonorees() {
           <button class="btn-small primary" data-edit-honoree="${escapeHtml(key)}">${t('hon.edit', '✏️ Edit')}</button>
           <button class="btn-small danger" data-del-honoree="${escapeHtml(key)}">${t('common.delete', '🗑')}</button>
         </div>
-      </td>
-    `;
+      </td>`;
     tbody.appendChild(tr);
   });
-
   tbody.querySelectorAll('[data-edit-honoree]').forEach(btn => {
     btn.addEventListener('click', () => openEditHonoree(btn.dataset.editHonoree));
   });
-
   tbody.querySelectorAll('[data-del-honoree]').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (confirm('Remove this honoree?')) {
@@ -1200,7 +1037,7 @@ function renderHonorees() {
 }
 
 // ============================================
-// ✏️ EDIT HONOREE MODAL (barcode lives on the Card now)
+// ✏️ EDIT HONOREE MODAL
 // ============================================
 function awardEditRow(subject, stars, reportingMonth) {
   const div = document.createElement('div');
@@ -1217,7 +1054,6 @@ function awardEditRow(subject, stars, reportingMonth) {
   div.querySelector('.ae-del').addEventListener('click', () => div.remove());
   return div;
 }
-
 function openEditHonoree(key) {
   const h = honorees[key];
   if (!h) return;
@@ -1229,7 +1065,6 @@ function openEditHonoree(key) {
   if (!list.children.length) list.appendChild(awardEditRow('Math', 3, ''));
   $('editHonoreeModal').classList.remove('hidden');
 }
-
 async function saveEditHonoree() {
   const rows = [...$('editAwardsList').querySelectorAll('.award-edit-row')];
   const awards = [];
@@ -1264,39 +1099,26 @@ function populateUmCenters(selectedId) {
     sel.appendChild(opt);
   });
 }
-
 function openUnmatchedEdit(key) {
   const r = unmatchedDb[key];
   if (!r) return;
-
   unmatchedEditKey = key;
   unmatchedEditIsCompleter = r.sourceType === 'completer';
-
   umSelectedStudent = null;
   $('umSelectedInfo').classList.add('hidden');
   $('umSearch').value = '';
   $('umDropdown').classList.add('hidden');
-
   populateUmCenters(r.centerGuess || Object.keys(allCentersData)[0] || '');
-
   const list = $('umAwardsList');
   const label = $('umAwardsLabel');
   const addBtn = $('umAddAwardBtn');
   const saveBtn = $('umSaveBtn');
-
   list.innerHTML = '';
-
   if (unmatchedEditIsCompleter) {
     if (label) label.textContent = t('um.completerDetailsLabel', 'Completer details');
     if (addBtn) addBtn.classList.add('hidden');
     if (saveBtn) saveBtn.textContent = t('um.saveCompleter', '💾 Save as Completer');
-
-    const centerDisplay =
-      r.centreNameExcel ||
-      allCentersData[r.centerGuess]?.name ||
-      r.centerGuess ||
-      '—';
-
+    const centerDisplay = r.centreNameExcel || allCentersData[r.centerGuess]?.name || r.centerGuess || '—';
     list.innerHTML = `
       <div class="completer-info">
         <p><strong>${escapeHtml(r.nameCn || r.nameEn || '')}</strong> · #${escapeHtml(r.studentId || '')}</p>
@@ -1304,22 +1126,18 @@ function openUnmatchedEdit(key) {
         <p>${escapeHtml(t('um.completed', 'Completed'))}: ${escapeHtml(r.dateOfCompletion || '—')} · ${escapeHtml(t('um.testDate', 'Test Date'))}: ${escapeHtml(r.completerTestDate || '—')}</p>
         <p>${escapeHtml(t('th.center', 'Center'))}: ${escapeHtml(centerDisplay)}</p>
         <p class="hint">${escapeHtml(t('um.completerHint', 'Select the matching student from the database to save this completer record.'))}</p>
-      </div>
-    `;
+      </div>`;
   } else {
     if (label) label.textContent = t('um.awardsLabel', 'Awards (subject & medals)');
     if (addBtn) addBtn.classList.remove('hidden');
     if (saveBtn) saveBtn.textContent = t('um.save', '💾 Save as Honoree');
-
     const rule = subjectRule(r.subject);
     const starCount = Math.min(5, Math.max(1, (String(r.stars || '').match(/★/g) || []).length || 3));
     list.appendChild(awardEditRow(rule ? rule.canon : 'Math', starCount, r.reportingMonth || ''));
   }
-
   $('unmatchedEditModal').classList.remove('hidden');
   setTimeout(() => $('umSearch').focus(), 100);
 }
-
 function umRunSearch() {
   const q = $('umSearch').value.trim().toLowerCase();
   const dd = $('umDropdown');
@@ -1344,7 +1162,6 @@ function umRunSearch() {
   });
   dd.classList.remove('hidden');
 }
-
 function umSelectStudent(s) {
   umSelectedStudent = s;
   $('umSearch').value = `${s.nameCn || s.namePinyin} (${s.studentNumber || s.id})`;
@@ -1354,28 +1171,19 @@ function umSelectStudent(s) {
   info.classList.remove('hidden');
   info.innerHTML = `✅ <strong>${escapeHtml(s.nameCn || s.namePinyin || '')}</strong> · ${escapeHtml(s.centerName || '')} · #${escapeHtml(s.studentNumber || s.id)}`;
 }
-
 async function umSave() {
   if (!umSelectedStudent) return showToast(t('um.selectStudent', '⚠️ Please select a student from the database search.'), 'error');
-
   const r = unmatchedDb[unmatchedEditKey];
   if (!r) return;
-
-  // ============================================
-  // 🎓 COMPLETER BRANCH
-  // ============================================
   if (unmatchedEditIsCompleter) {
     const s = umSelectedStudent;
     const centerId = $('umCenter').value || s.centerId;
     const key = `${centerId}_${s.studentNumber || s.id}`;
-
     const rule = subjectRule(r.subjectOriginal || r.subject);
     const canon = rule?.canon || r.subjectCanon || 'Math';
     const now = new Date().toISOString();
-
     const completion = {
-      subject: canon,
-      subjectCanon: canon,
+      subject: canon, subjectCanon: canon,
       subjectOriginal: r.subjectOriginal || r.subject || canon,
       dateOfCompletion: r.dateOfCompletion || '',
       completerTestDate: r.completerTestDate || '',
@@ -1386,119 +1194,82 @@ async function umSave() {
       importedAt: now,
       resolvedManually: true
     };
-
     try {
       const existing = honorees[key];
-
       if (existing) {
         const completions = [...(existing.completions || [])];
         const ex = completions.find(c => (c.subjectCanon || c.subject) === canon);
-
         if (ex) Object.assign(ex, completion);
         else completions.push(completion);
-
         await update(ref(db, `ashrEvents/${currentEventId}/honorees/${key}`), {
-          completions,
-          centerId,
+          completions, centerId,
           centerName: allCentersData[centerId]?.name || existing.centerName || '',
           updatedAt: now
         });
       } else {
         await set(ref(db, `ashrEvents/${currentEventId}/honorees/${key}`), {
-          studentId: s.id,
-          centerId,
+          studentId: s.id, centerId,
           centerName: allCentersData[centerId]?.name || '',
           nameCn: s.nameCn || r.nameCn || '',
           nameEn: s.namePinyin || r.nameEn || '',
           studentNumber: s.studentNumber || r.studentId || '',
           barcodeValue: `ASHR${currentEventId}_${key}`,
-          awards: [],
-          completions: [completion],
-          createdAt: now
+          awards: [], completions: [completion], createdAt: now
         });
       }
-
       await remove(ref(db, `ashrEvents/${currentEventId}/unmatched/${unmatchedEditKey}`));
       $('unmatchedEditModal').classList.add('hidden');
       showToast(t('um.completerSaved', '✅ Saved as completer!'), 'success');
-    } catch (err) {
-      showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error');
-    }
-
+    } catch (err) { showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error'); }
     return;
   }
-
-  // ============================================
-  // 🏅 ASHR AWARD BRANCH
-  // ============================================
   const rows = [...$('umAwardsList').querySelectorAll('.award-edit-row')];
   const awards = [];
-
   for (const row of rows) {
     const subject = row.querySelector('.ae-subject').value;
     const stars = parseInt(row.querySelector('.ae-stars').value, 10);
     if (subject === 'EFL' && stars < 3) return showToast(t('hon.eflMin', 'EFL requires 3★ or more'), 'error');
-
     const rm = row.dataset.rm || '';
     const dup = awards.find(a => a.subject === subject && (a.reportingMonth || '') === rm);
-    if (dup) {
-      dup.stars = Math.max(dup.stars, stars);
-      dup.tier = tierFor(dup.stars);
-    } else {
-      awards.push({ subject, stars, tier: tierFor(stars), reportingMonth: rm });
-    }
+    if (dup) { dup.stars = Math.max(dup.stars, stars); dup.tier = tierFor(dup.stars); }
+    else awards.push({ subject, stars, tier: tierFor(stars), reportingMonth: rm });
   }
-
   if (!awards.length) return showToast(t('hon.needAward', 'Add at least one award'), 'error');
-
   const s = umSelectedStudent;
   const centerId = $('umCenter').value || s.centerId;
   const key = `${centerId}_${s.studentNumber || s.id}`;
-
   try {
     const existing = honorees[key];
-
     if (existing) {
       const merged = [...(existing.awards || [])];
       awards.forEach(a => {
         const ex = merged.find(m => m.subject === a.subject && (m.reportingMonth || '') === (a.reportingMonth || ''));
-        if (ex) {
-          ex.stars = a.stars;
-          ex.tier = a.tier;
-        } else {
-          merged.push(a);
-        }
+        if (ex) { ex.stars = a.stars; ex.tier = a.tier; }
+        else merged.push(a);
       });
-
       await update(ref(db, `ashrEvents/${currentEventId}/honorees/${key}`), {
-        awards: merged,
-        centerId,
+        awards: merged, centerId,
         centerName: allCentersData[centerId]?.name || ''
       });
     } else {
       await set(ref(db, `ashrEvents/${currentEventId}/honorees/${key}`), {
-        studentId: s.id,
-        centerId,
+        studentId: s.id, centerId,
         centerName: allCentersData[centerId]?.name || '',
-        nameCn: s.nameCn || '',
-        nameEn: s.namePinyin || '',
+        nameCn: s.nameCn || '', nameEn: s.namePinyin || '',
         studentNumber: s.studentNumber || '',
         barcodeValue: `ASHR${currentEventId}_${key}`,
         awards,
         createdAt: new Date().toISOString()
       });
     }
-
     await remove(ref(db, `ashrEvents/${currentEventId}/unmatched/${unmatchedEditKey}`));
     $('unmatchedEditModal').classList.add('hidden');
     showToast(t('um.saved', '✅ Added to honorees!'), 'success');
-  } catch (err) {
-    showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error');
-  }
+  } catch (err) { showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error'); }
 }
 
 // ============================================
-// LINKS — families from student-form sibling links
+// LINKS
 // ============================================
 function setupLinks() {
   $('linkSearch').addEventListener('input', renderLinks);
@@ -1524,8 +1295,6 @@ function buildAshrFamilies() {
       });
     });
   });
-
-  // 🔗 Admin manual merges (siblings linked AFTER portals were created)
   Object.values(manualMerges || {}).forEach(mg => {
     const nodes = [...new Set((mg.members || [])
       .map(k => honorees[k]).filter(h => h && isInvitable(h))
@@ -1535,7 +1304,6 @@ function buildAshrFamilies() {
       (adj[nodes[i]] = adj[nodes[i]] || new Set()).add(nodes[0]);
     }
   });
-
   const honoreeKeys = new Set(invitableEntries.map(([_, h]) => `${h.centerId}/${h.studentId}`));
   const seen = new Set();
   const familyGroups = [];
@@ -1587,11 +1355,12 @@ function renderLinks() {
     if (filter === 'hasLink' && !hasLink) return;
     if (filter === 'noLink' && hasLink) return;
     if (filter === 'disabled' && !isDisabled) return;
+    const disp = groupMembersForDisplay(fam.members);   // 🧬 merged same-student records
     if (search) {
-      const hay = fam.members.flatMap(m => [m.nameCn, m.nameEn]).filter(Boolean).join(' ').toLowerCase();
+      const hay = disp.flatMap(m => [m.nameCn, m.nameEn]).filter(Boolean).join(' ').toLowerCase();
       if (!hay.includes(search)) return;
     }
-    const names = fam.members.map(m => m.nameCn || m.nameEn).join(', ');
+    const names = disp.map(m => m.nameCn || m.nameEn).join(', ');
     const isMerged = Object.values(manualMerges).some(mg =>
       [...new Set((mg.members || []).filter(k => honorees[k]))].sort().join('|') === fam.key);
     const statusHtml = !hasLink
@@ -1604,7 +1373,7 @@ function renderLinks() {
       : '';
     const mergedBadge = isMerged ? `<span class="type-badge tb-both">🔗 ${t('links.merged', 'Merged')}</span>` : '';
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${mergeBox}<strong>${escapeHtml(names)}</strong> ${mergedBadge}</td> <td>${fam.members.length}</td> <td>${statusHtml}</td> <td><div style="display:flex;gap:0.4rem;flex-wrap:wrap;"> ${hasLink ? `<button class="btn-small primary" data-link-action="card" data-fam-key="${escapeHtml(fam.key)}">${t('links.card', '📇 Card')}</button>` : ''} <button class="btn-small ${hasLink ? 'secondary' : 'primary'}" data-link-action="gen" data-fam-key="${escapeHtml(fam.key)}"> ${hasLink ? t('links.regen', '♻️ Regen') : t('links.gen', '✨ Generate')} </button> ${hasLink ? `<button class="btn-small secondary" data-link-action="toggle" data-fam-key="${escapeHtml(fam.key)}"> ${isDisabled ? t('links.enable', '▶ Enable') : t('links.disable', '⏸ Disable')} </button>` : ''} </div></td>`;
+    tr.innerHTML = `<td>${mergeBox}<strong>${escapeHtml(names)}</strong> ${mergedBadge}</td> <td>${disp.length}</td> <td>${statusHtml}</td> <td><div style="display:flex;gap:0.4rem;flex-wrap:wrap;"> ${hasLink ? `<button class="btn-small primary" data-link-action="card" data-fam-key="${escapeHtml(fam.key)}">${t('links.card', '📇 Card')}</button>` : ''} <button class="btn-small ${hasLink ? 'secondary' : 'primary'}" data-link-action="gen" data-fam-key="${escapeHtml(fam.key)}"> ${hasLink ? t('links.regen', '♻️ Regen') : t('links.gen', '✨ Generate')} </button> ${hasLink ? `<button class="btn-small secondary" data-link-action="toggle" data-fam-key="${escapeHtml(fam.key)}"> ${isDisabled ? t('links.enable', '▶ Enable') : t('links.disable', '⏸ Disable')} </button>` : ''} </div></td>`;
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll('.merge-check').forEach(ch => {
@@ -1625,8 +1394,9 @@ function renderLinks() {
   });
   updateMergeBar();
 }
+
 // ============================================
-// 🔗 MERGE FAMILY LINKS (post-creation sibling linking)
+// 🔗 MERGE FAMILY LINKS
 // ============================================
 function preferStatus(a, b) {
   const rank = s => s === 'attending' ? 3 : s === 'declined' ? 2 : 1;
@@ -1650,17 +1420,14 @@ async function mergeSelectedFamilies() {
   if (!confirm(`Merge into ONE family link?\n${names}\n\n${memberKeys.length} students → 1 new link. Old links will be DISABLED.`)) return;
   const now = new Date().toISOString();
   const updates = {};
-  // 1) persistent override so grouping stays merged forever
   updates[`ashrEvents/${currentEventId}/manualMerges/mg_${randomToken(8)}`] =
     { members: memberKeys, createdAt: now, createdBy: auth.currentUser?.email || '' };
-  // 2) old portals + their RSVP records, richest reply first
   const entries = groups.map(g => {
     const pe = Object.entries(portalsCache).find(([_, p]) => p.familyKey === g.key);
     return { group: g, token: pe?.[0] || null, portal: pe?.[1] || null, rec: pe ? (families[pe[1].familyId] || null) : null };
   }).sort((a, b) => ((b.rec?.rsvp?.status ? 1 : 0) - (a.rec?.rsvp?.status ? 1 : 0)));
   const primary = entries[0];
   const primaryFamId = primary.portal?.familyId || ('fam_' + randomToken(8));
-  // 3) merge memberHonoreeIds + RSVP payloads into the primary record
   const mergedMembers = new Set(primary.rec?.memberHonoreeIds || []);
   memberKeys.forEach(k => mergedMembers.add(k));
   let mergedRsvp = primary.rec?.rsvp || null;
@@ -1683,7 +1450,6 @@ async function mergeSelectedFamilies() {
   });
   updates[`ashrEvents/${currentEventId}/families/${primaryFamId}/memberHonoreeIds`] = [...mergedMembers];
   if (mergedRsvp) updates[`ashrEvents/${currentEventId}/families/${primaryFamId}/rsvp`] = mergedRsvp;
-  // 4) neuter secondary RSVP records (readers ignore them automatically)
   entries.slice(1).forEach(en => {
     const fid = en.portal?.familyId;
     if (!fid || fid === primaryFamId) return;
@@ -1692,7 +1458,6 @@ async function mergeSelectedFamilies() {
     updates[`ashrEvents/${currentEventId}/families/${fid}/mergedInto`] = primaryFamId;
     updates[`ashrEvents/${currentEventId}/families/${fid}/mergedAt`] = now;
   });
-  // 5) ONE new active portal; disable every old one
   updates[`publicAshrLinks/${currentEventId}/${randomToken()}`] =
     { familyKey: newKey, familyId: primaryFamId, active: true, createdAt: now, members: memberKeys };
   entries.forEach(en => { if (en.token) updates[`publicAshrLinks/${currentEventId}/${en.token}/active`] = false; });
@@ -1703,22 +1468,16 @@ async function mergeSelectedFamilies() {
   } catch (err) { showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error'); }
 }
 
-
 function pickRowValue(row, ...keys) {
   const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff#]+/g, '');
   const map = {};
-  Object.keys(row || {}).forEach(k => {
-    map[norm(k)] = row[k];
-  });
-
+  Object.keys(row || {}).forEach(k => { map[norm(k)] = row[k]; });
   for (const k of keys) {
     const v = map[norm(k)];
     if (v !== undefined && v !== null && String(v).trim() !== '') return v;
   }
-
   return '';
 }
-
 function normalizeCenterText(s) {
   return String(s || '')
     .toLowerCase()
@@ -1726,7 +1485,6 @@ function normalizeCenterText(s) {
     .replace(/\s+/g, ' ')
     .trim();
 }
-
 function scoreCenterTerms(text, terms) {
   if (!text) return 0;
   let score = 0;
@@ -1736,37 +1494,15 @@ function scoreCenterTerms(text, terms) {
   }
   return score;
 }
-
 const COMPLETER_CENTER_ALIASES = [
-  {
-    id: 'champs',
-    terms: ['champs', '卓思'],
-    abbrev: ['champs']
-  },
-  {
-    id: 'mei keng',
-    terms: ['mei keng', 'meikeng', '美景', 'taipa mei keng', '氹仔美景'],
-    abbrev: ['mk', 'mei-keng', 'meikeng']
-  },
-  {
-    id: 'tap siac',
-    terms: ['tap siac', 'tapsiac', '塔石'],
-    abbrev: ['ts', 'tap-siac', 'tapsiac']
-  },
-  {
-    id: 'pac tat',
-    terms: ['pac tat', 'paktat', '北立', 'taipa pac tat', '氹仔北立'],
-    abbrev: ['pt', 'pac-tat', 'paktat']
-  }
+  { id: 'champs', terms: ['champs', '卓思'], abbrev: ['champs'] },
+  { id: 'mei keng', terms: ['mei keng', 'meikeng', '美景', 'taipa mei keng', '氹仔美景'], abbrev: ['mk', 'mei-keng', 'meikeng'] },
+  { id: 'tap siac', terms: ['tap siac', 'tapsiac', '塔石'], abbrev: ['ts', 'tap-siac', 'tapsiac'] },
+  { id: 'pac tat', terms: ['pac tat', 'paktat', '北立', 'taipa pac tat', '氹仔北立'], abbrev: ['pt', 'pac-tat', 'paktat'] }
 ];
-
 function resolveCompleterCenterId({ centreIdExcel, centreNameExcel, chineseCentreNameExcel }) {
   const code = String(centreIdExcel || '').trim().toUpperCase();
-
-  // 1) Exact center key match
   if (code && allCentersData[code]) return code;
-
-  // 2) Exact centerCode / externalId match
   if (code) {
     const byCode = Object.entries(allCentersData).find(([cid, c]) =>
       String(c.centerCode || '').trim().toUpperCase() === code ||
@@ -1774,103 +1510,63 @@ function resolveCompleterCenterId({ centreIdExcel, centreNameExcel, chineseCentr
     );
     if (byCode) return byCode[0];
   }
-
   const hay = normalizeCenterText(`${centreNameExcel || ''} ${chineseCentreNameExcel || ''}`);
-
-  let bestId = null;
-  let bestScore = 0;
-
+  let bestId = null, bestScore = 0;
   for (const [cid, c] of Object.entries(allCentersData)) {
     const target = normalizeCenterText(`${cid} ${c.name || ''} ${c.nameCn || ''} ${c.centerCode || ''}`);
     let score = 0;
-
     for (const alias of COMPLETER_CENTER_ALIASES) {
-      const excelScore =
-        scoreCenterTerms(hay, alias.terms) +
-        scoreCenterTerms(hay, alias.abbrev);
-
-      const centerScore =
-        scoreCenterTerms(target, alias.terms) +
-        scoreCenterTerms(target, alias.abbrev);
-
-      if (excelScore > 0 && centerScore > 0) {
-        score += excelScore + centerScore;
-      }
+      const excelScore = scoreCenterTerms(hay, alias.terms) + scoreCenterTerms(hay, alias.abbrev);
+      const centerScore = scoreCenterTerms(target, alias.terms) + scoreCenterTerms(target, alias.abbrev);
+      if (excelScore > 0 && centerScore > 0) score += excelScore + centerScore;
     }
-
     if (hay && target) {
       if (hay === target) score += 100;
-      else if (hay.includes(target) || target.includes(hay)) {
-        score += Math.min(hay.length, target.length);
-      }
+      else if (hay.includes(target) || target.includes(hay)) score += Math.min(hay.length, target.length);
     }
-
-    if (score > bestScore) {
-      bestScore = score;
-      bestId = cid;
-    }
+    if (score > bestScore) { bestScore = score; bestId = cid; }
   }
-
   return bestScore >= 5 ? bestId : null;
 }
-
 function parseExcelDate(value) {
   if (value === undefined || value === null || value === '') return '';
-
-  if (value instanceof Date) {
-    return isNaN(value.valueOf()) ? '' : value.toISOString().slice(0, 10);
-  }
-
+  if (value instanceof Date) return isNaN(value.valueOf()) ? '' : value.toISOString().slice(0, 10);
   if (typeof value === 'number') {
     const ms = Math.round((value - 25569) * 86400000);
     const d = new Date(ms);
     return isNaN(d.valueOf()) ? '' : d.toISOString().slice(0, 10);
   }
-
   const s = String(value).trim();
-
-  // Examples: 8-Oct-25, 22-July-2026, 25-August-2026
   const m = s.match(/^(\d{1,2})[-\s/.]([A-Za-z]{3,})[-\s/.](\d{2}|\d{4})$/);
   if (m) {
     const day = Number(m[1]);
     const monthKey = m[2].slice(0, 3).toLowerCase();
     const yearRaw = m[3];
-
-    const months = {
-      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
-    };
-
+    const months = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
     const month = months[monthKey];
     if (month !== undefined) {
       let year = Number(yearRaw);
       if (yearRaw.length === 2) year = year < 50 ? 2000 + year : 1900 + year;
-
       const d = new Date(Date.UTC(year, month, day));
       return isNaN(d.valueOf()) ? s : d.toISOString().slice(0, 10);
     }
   }
-
   const d = new Date(s);
   return isNaN(d.valueOf()) ? s : d.toISOString().slice(0, 10);
 }
-
 function getHonoreeType(h) {
   const hasAward = (h.awards || []).length > 0;
   const hasComp = (h.completions || []).length > 0;
-
   if (hasAward && hasComp) return 'both';
   if (hasComp) return 'completer';
   return 'award';
 }
-
 function randomToken(len = 24) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
   const a = new Uint8Array(len);
   crypto.getRandomValues(a);
   return [...a].map(x => chars[x % chars.length]).join('');
 }
-
 async function generateFamilyLink(fam) {
   const existing = Object.entries(portalsCache).find(([_, p]) => p.familyKey === fam.key);
   const token = randomToken();
@@ -1895,14 +1591,12 @@ async function generateFamilyLink(fam) {
     showToast(t('toast.linkGen', 'Link generated'), 'success');
   } catch (err) { showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error'); }
 }
-
 async function toggleFamilyLink(fam) {
   const entry = Object.entries(portalsCache).find(([_, p]) => p.familyKey === fam.key);
   if (!entry) return;
   const [token, portal] = entry;
   await update(ref(db, `publicAshrLinks/${currentEventId}/${token}`), { active: portal.active === false });
 }
-
 async function generateAllMissingLinks() {
   const familyGroups = buildAshrFamilies();
   let count = 0;
@@ -1914,88 +1608,76 @@ async function generateAllMissingLinks() {
 }
 
 // ============================================
-// 📇 INVITATION CARD (bilingual, image-based barcodes/QR)
+// 📇 INVITATION CARD
 // ============================================
 async function openLinkCard(fam) {
   const entry = Object.entries(portalsCache).find(([_, p]) => p.familyKey === fam.key);
   if (!entry) return;
   const [token] = entry;
   const url = `${location.origin}${location.pathname.replace(/[^/]*$/, '')}ashr-invite.html?e=${encodeURIComponent(currentEventId)}&t=${encodeURIComponent(token)}`;
-
-  // Header / details (bilingual labels live in the HTML)
   $('icEventName').textContent = eventDisplayName();
   $('icDate').textContent = eventSettings.eventDate ? new Date(eventSettings.eventDate).toLocaleDateString('en-GB') : '—';
   $('icVenue').textContent = eventSettings.venue || '—';
   $('icTime').textContent = familyTimeText(fam);
   $('icFamilyCode').textContent = `FAM-${token.slice(0, 6).toUpperCase()}`;
 
-  // Students + awards
+  // 🧬 Students + awards (merged same-student records → one name, all badges)
   const studentsDiv = $('icStudents');
   studentsDiv.innerHTML = '';
-fam.members.forEach(m => {
-  const div = document.createElement('div');
-  div.className = 'inv-student';
+  groupMembersForDisplay(fam.members).forEach(m => {
+    const div = document.createElement('div');
+    div.className = 'inv-student';
+    const awardsHtml = (m.awards || []).map(a =>
+      `<span class="award-badge award-${(a.tier || 'bronze').toLowerCase()}">${medalFor(a.tier)} ${escapeHtml(a.subject)} ${'★'.repeat(a.stars || 0)}</span>`
+    ).join('');
+    const completionsHtml = (m.completions || []).map(c =>
+      `<span class="award-badge award-completer">🎓 ${escapeHtml(c.subject || c.subjectCanon || '')} ${escapeHtml(t('hon.completerWord', 'Completer'))}</span>`
+    ).join('');
+    div.innerHTML = `
+      <div class="inv-student-name">${escapeHtml(m.nameCn || m.nameEn || '')}</div>
+      <div class="inv-student-center">${escapeHtml(m.centerName || '')} · #${escapeHtml(m.studentNumber || '')}</div>
+      <div class="inv-student-awards">${awardsHtml}${completionsHtml}</div>`;
+    studentsDiv.appendChild(div);
+  });
 
-  const awardsHtml = (m.awards || []).map(a =>
-    `<span class="award-badge award-${(a.tier || 'bronze').toLowerCase()}">${medalFor(a.tier)} ${escapeHtml(a.subject)} ${'★'.repeat(a.stars || 0)}</span>`
-  ).join('');
-
-  const completionsHtml = (m.completions || []).map(c =>
-    `<span class="award-badge award-completer">🎓 ${escapeHtml(c.subject || c.subjectCanon || '')} ${escapeHtml(t('hon.completerWord', 'Completer'))}</span>`
-  ).join('');
-
-  div.innerHTML = `
-    <div class="inv-student-name">${escapeHtml(m.nameCn || m.nameEn || '')}</div>
-    <div class="inv-student-center">${escapeHtml(m.centerName || '')} · #${escapeHtml(m.studentNumber || '')}</div>
-    <div class="inv-student-awards">${awardsHtml}${completionsHtml}</div>
-  `;
-
-  studentsDiv.appendChild(div);
-});
-
-  // ✅ Barcodes as PNG <img> (survives export & printing)
+  // 🧬 Barcodes: one item per student, all their record-barcodes stacked
   const barcodesDiv = $('icBarcodes');
   barcodesDiv.innerHTML = '';
-  fam.members.forEach(m => {
-    const value = m.barcodeValue || `ASHR${currentEventId}_${m.honoreeKey}`;
-    const dataUrl = barcodeDataUrl(shortScanCode(value)); // ✅ Short code used here
+  groupMembersForDisplay(fam.members).forEach(m => {
     const item = document.createElement('div');
     item.className = 'inv-barcode-item';
-    item.innerHTML = (dataUrl
-      ? `<img class="inv-barcode-img" src="${dataUrl}" alt="${escapeHtml(value)}" style="image-rendering: pixelated; width: auto; max-width: 100%; height: auto;">`
-      : `<div class="inv-barcode-fallback">${escapeHtml(value)}</div>`) +
+    item.innerHTML = m.barcodes.map(b => {
+      const dataUrl = barcodeDataUrl(shortScanCode(b.value));
+      return (dataUrl
+        ? `<img class="inv-barcode-img" src="${dataUrl}" alt="${escapeHtml(b.value)}" style="image-rendering: pixelated; width: auto; max-width: 100%; height: auto;">`
+        : `<div class="inv-barcode-fallback">${escapeHtml(b.value)}</div>`);
+    }).join('') +
       `<div class="inv-barcode-student">${escapeHtml(m.nameCn || m.nameEn || m.studentNumber || '')}</div>`;
     barcodesDiv.appendChild(item);
   });
 
-  // ✅ SHOW THE MODAL FIRST — card appears instantly, even if QR is slow/fails
   $('linkCardModal').classList.remove('hidden');
-
-  // QR filled in asynchronously after the modal is open
   const qrDiv = $('icQr');
   const qrSection = qrDiv.closest('.inv-qr-section');
   const qrUrl = await qrDataUrl(url, 280);
   if (qrSection) qrSection.classList.remove('hidden');
-  if (qrUrl) {
-    qrDiv.innerHTML = `<img class="inv-qr-img" src="${qrUrl}" alt="RSVP QR">`;
-  } else {
+  if (qrUrl) qrDiv.innerHTML = `<img class="inv-qr-img" src="${qrUrl}" alt="RSVP QR">`;
+  else {
     qrDiv.innerHTML = `<div class="inv-qr-missing">⚠️ QR unavailable<br>無法產生QR碼</div>`;
     showToast('QR script failed to load — check the qrcode-generator script tag', 'error');
   }
-
-  // Toolbar actions (no Print button)
   $('lcCopy').onclick = async () => {
     try { await navigator.clipboard.writeText(url); showToast(t('common.copied', 'Copied!'), 'success'); } catch {}
   };
   $('lcWa').onclick = () => {
-    const names = fam.members.map(m => m.nameCn || m.nameEn).join(', ');
+    const names = groupMembersForDisplay(fam.members).map(m => m.nameCn || m.nameEn).join(', ');
     window.open(`https://wa.me/?text=${encodeURIComponent(`🏅 ${eventDisplayName()} Invitation for ${names}`)}`, '_blank');
   };
   $('lcDownloadPng').onclick = () => downloadCardAsPng(fam);
 }
+
 // ============================================
 // 🖼️ PNG EXPORT — manual canvas composition
-//     (barcodes + QR are baked in; html2canvas no longer used)
 // ============================================
 async function buildCardCanvas(fam) {
   const entry = Object.entries(portalsCache).find(([_, p]) => p.familyKey === fam.key);
@@ -2003,52 +1685,52 @@ async function buildCardCanvas(fam) {
   const [token] = entry;
   const url = `${location.origin}${location.pathname.replace(/[^/]*$/, '')}ashr-invite.html?e=${encodeURIComponent(currentEventId)}&t=${encodeURIComponent(token)}`;
   try {
-    // 1) preload barcode + QR images
+    // 🧬 one display entry per real student
+    const disp = groupMembersForDisplay(fam.members);
+    // 1) preload barcode + QR images (name travels with each barcode)
     const bcImgs = [];
-    for (const m of fam.members) {
-      const du = barcodeDataUrl(shortScanCode(m.barcodeValue || `ASHR${currentEventId}_${m.honoreeKey}`)); // ✅ Short code
-      bcImgs.push(await loadImg(du));
+    for (const m of disp) {
+      for (const b of m.barcodes) {
+        const du = barcodeDataUrl(shortScanCode(b.value));
+        bcImgs.push({ img: await loadImg(du), name: m.nameCn || m.nameEn || m.studentNumber || '' });
+      }
     }
     let qrImg = null;
     try { qrImg = await loadImg(await qrDataUrl(url, 280)); } catch (e) { qrImg = null; }
-
     // 2) layout metrics
     const W = 500, pad = 24, secPad = 16;
     const headerH = 104, divH = 6, footerH = 58;
     const badgeCount = (m) => (m.awards || []).length + (m.completions || []).length;
     const studentH = (m) => 74 + (badgeCount(m) ? 30 : 0);
-    const studentsH = 22 + fam.members.reduce((s, m) => s + studentH(m) + 12, 0);
-    const lineH = 20;                                    // height per wrapped line
+    const studentsH = 22 + disp.reduce((s, m) => s + studentH(m) + 12, 0);
+    const lineH = 20;
     const mctx = document.createElement('canvas').getContext('2d');
-    mctx.font = `700 15px ${CARD_FONT}`;                 // must match the paint font
-    const colW  = (W - 2 * pad) / 2 - 24;                // usable width of a half column
-    const fullW = W - 2 * pad - 32;                      // usable width full row
-    const dateLines  = wrapText(mctx, eventSettings.eventDate ? new Date(eventSettings.eventDate).toLocaleDateString('en-GB') : '—', colW);
-    const timeLines  = wrapText(mctx, familyTimeText(fam), colW);
+    mctx.font = `700 15px ${CARD_FONT}`;
+    const colW = (W - 2 * pad) / 2 - 24;
+    const fullW = W - 2 * pad - 32;
+    const dateLines = wrapText(mctx, eventSettings.eventDate ? new Date(eventSettings.eventDate).toLocaleDateString('en-GB') : '—', colW);
+    const timeLines = wrapText(mctx, familyTimeText(fam), colW);
     const venueLines = wrapText(mctx, eventSettings.venue || '—', fullW);
     const row1H = Math.max(dateLines.length, timeLines.length) * lineH;
-    const detH  = 112 + row1H + (venueLines.length - 1) * lineH;  // box grows with wraps
+    const detH = 112 + row1H + (venueLines.length - 1) * lineH;
     const iw = W - 2 * pad - 2 * secPad;
-    const bcItems = bcImgs.map(img => {
-      const bw = Math.min(img.naturalWidth, iw - 32); // ✅ Prevent stretching beyond natural width
+    const bcItems = bcImgs.map(({ img }) => {
+      const bw = Math.min(img.naturalWidth, iw - 32);
       const bh = Math.round(bw * (img.naturalHeight / img.naturalWidth));
       return { bw, bh, itemH: 12 + bh + 24 + 12 };
     });
     const bcH = secPad + 22 + bcItems.reduce((s, it) => s + it.itemH + 12, 0) + secPad;
     const qrH = qrImg ? (secPad * 2 + 22 + 140 + 24) : 0;
     const H = headerH + divH + 24 + studentsH + 4 + detH + 16 + bcH + 16 + qrH + (qrImg ? 24 : 8) + footerH;
-
     // 3) paint
     const S = 2;
     const canvas = document.createElement('canvas');
     canvas.width = W * S; canvas.height = H * S;
     const ctx = canvas.getContext('2d');
     ctx.scale(S, S);
-    ctx.imageSmoothingEnabled = false; // ✅ Crisp pixel rendering
+    ctx.imageSmoothingEnabled = false;
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
-
     let y = 0;
-    // header
     const g = ctx.createLinearGradient(0, 0, W, headerH);
     g.addColorStop(0, '#4682B4'); g.addColorStop(1, '#87CEEB');
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, headerH);
@@ -2066,11 +1748,9 @@ async function buildCardCanvas(fam) {
     ctx.fillText('Advanced Student Honour Roll 進階學生榮譽榜', pad + 64, 74);
     y += headerH;
     ctx.fillStyle = '#FFD700'; ctx.fillRect(0, y, W, divH); y += divH + 24;
-
-    // students
     ctx.fillStyle = '#4682B4'; ctx.font = `700 11px ${CARD_FONT}`;
     ctx.fillText('HONOURED STUDENT(S) 獲獎學生', pad, y + 11); y += 22;
-    fam.members.forEach((m) => {
+    disp.forEach((m) => {
       const h = studentH(m);
       ctx.fillStyle = '#f8fafc'; rr(ctx, pad, y, W - 2 * pad, h, 6); ctx.fill();
       ctx.fillStyle = '#FFD700'; ctx.fillRect(pad, y, 4, h);
@@ -2079,61 +1759,27 @@ async function buildCardCanvas(fam) {
       ctx.fillStyle = '#666'; ctx.font = `12px ${CARD_FONT}`;
       ctx.fillText(`${m.centerName || ''} · #${m.studentNumber || ''}`, pad + 14, y + 47);
       const badges = [
-        ...(m.awards || []).map(a => ({
-          label: `${medalFor(a.tier)} ${a.subject} ${'★'.repeat(a.stars || 0)}`,
-          kind: (a.tier || 'bronze').toLowerCase()
-        })),
-        ...(m.completions || []).map(c => ({
-          label: `🎓 ${c.subject || c.subjectCanon || ''} Completer`,
-          kind: 'completer'
-        }))
+        ...(m.awards || []).map(a => ({ label: `${medalFor(a.tier)} ${a.subject} ${'★'.repeat(a.stars || 0)}`, kind: (a.tier || 'bronze').toLowerCase() })),
+        ...(m.completions || []).map(c => ({ label: `🎓 ${c.subject || c.subjectCanon || ''} Completer`, kind: 'completer' }))
       ];
-
       if (badges.length) {
         let x = pad + 14;
         ctx.font = `700 11px ${CARD_FONT}`;
-
         badges.forEach(b => {
           const w = ctx.measureText(b.label).width + 18;
-
-          let bg = '#ffedd5';
-          let border = '#fdba74';
-          let text = '#c2410c';
-
-          if (b.kind === 'gold') {
-            bg = '#fef3c7';
-            border = '#fde047';
-            text = '#92400e';
-          } else if (b.kind === 'silver') {
-            bg = '#f1f5f9';
-            border = '#cbd5e1';
-            text = '#475569';
-          } else if (b.kind === 'completer') {
-            bg = '#ecfdf5';
-            border = '#34d399';
-            text = '#065f46';
-          }
-
-          ctx.fillStyle = bg;
-          rr(ctx, x, y + 56, w, 22, 11);
-          ctx.fill();
-
-          ctx.strokeStyle = border;
-          ctx.lineWidth = 1;
-          rr(ctx, x, y + 56, w, 22, 11);
-          ctx.stroke();
-
-          ctx.fillStyle = text;
-          ctx.fillText(b.label, x + 9, y + 71);
-
+          let bg = '#ffedd5', border = '#fdba74', text = '#c2410c';
+          if (b.kind === 'gold') { bg = '#fef3c7'; border = '#fde047'; text = '#92400e'; }
+          else if (b.kind === 'silver') { bg = '#f1f5f9'; border = '#cbd5e1'; text = '#475569'; }
+          else if (b.kind === 'completer') { bg = '#ecfdf5'; border = '#34d399'; text = '#065f46'; }
+          ctx.fillStyle = bg; rr(ctx, x, y + 56, w, 22, 11); ctx.fill();
+          ctx.strokeStyle = border; ctx.lineWidth = 1; rr(ctx, x, y + 56, w, 22, 11); ctx.stroke();
+          ctx.fillStyle = text; ctx.fillText(b.label, x + 9, y + 71);
           x += w + 6;
         });
       }
       y += h + 12;
     });
     y += 4;
-
-    // details box (wrapped text)
     ctx.fillStyle = '#f1f5f9'; rr(ctx, pad, y, W - 2 * pad, detH, 10); ctx.fill();
     const c1 = pad + 16, c2 = pad + (W - 2 * pad) / 2 + 8;
     ctx.font = `600 10px ${CARD_FONT}`; ctx.fillStyle = '#666';
@@ -2148,26 +1794,22 @@ async function buildCardCanvas(fam) {
     ctx.font = `700 15px ${CARD_FONT}`; ctx.fillStyle = '#4682B4';
     venueLines.forEach((ln, i) => ctx.fillText(ln, c1, venueLabelY + 24 + i * lineH));
     y += detH + 16;
-
-    // barcode section
     ctx.setLineDash([5, 4]); ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 1.5;
     rr(ctx, pad, y, W - 2 * pad, bcH, 10); ctx.stroke(); ctx.setLineDash([]);
     ctx.fillStyle = '#4682B4'; ctx.font = `700 11px ${CARD_FONT}`;
     ctx.fillText('CHECK-IN BARCODE(S) 報到條碼', pad + secPad, y + secPad + 11);
     let yy = y + secPad + 22;
-    bcImgs.forEach((img, i) => {
+    bcImgs.forEach((entry2, i) => {
       const it = bcItems[i];
       ctx.fillStyle = '#fafafa'; rr(ctx, pad + secPad, yy, iw, it.itemH, 6); ctx.fill();
-      ctx.drawImage(img, pad + secPad + 16, yy + 12, it.bw, it.bh);
+      ctx.drawImage(entry2.img, pad + secPad + 16, yy + 12, it.bw, it.bh);
       ctx.fillStyle = '#333'; ctx.font = `600 12px ${CARD_FONT}`;
       ctx.textAlign = 'center';
-      ctx.fillText(fam.members[i].nameCn || fam.members[i].nameEn || '', W / 2, yy + 12 + it.bh + 18);
+      ctx.fillText(entry2.name, W / 2, yy + 12 + it.bh + 18);
       ctx.textAlign = 'left';
       yy += it.itemH + 12;
     });
     y += bcH + 16;
-
-    // QR section
     if (qrImg) {
       ctx.fillStyle = '#f8fafc'; rr(ctx, pad, y, W - 2 * pad, qrH, 10); ctx.fill();
       ctx.textAlign = 'center';
@@ -2179,8 +1821,6 @@ async function buildCardCanvas(fam) {
       ctx.textAlign = 'left';
       y += qrH + 24;
     } else y += 8;
-
-    // footer
     ctx.fillStyle = '#4682B4'; ctx.fillRect(0, y, W, footerH);
     ctx.fillStyle = '#fff'; ctx.font = `500 11px ${CARD_FONT}`;
     ctx.fillText('Please present this card at check-in', pad, y + 25);
@@ -2188,9 +1828,8 @@ async function buildCardCanvas(fam) {
     ctx.font = `700 12px 'Courier New',monospace`; ctx.textAlign = 'right';
     ctx.fillText(`FAM-${token.slice(0, 6).toUpperCase()}`, W - pad, y + 34);
     ctx.textAlign = 'left';
-
     // 4) hand the finished canvas back to the caller
-    const names = fam.members.map(m => m.nameCn || m.nameEn).join('_').replace(/\s+/g, '');
+    const names = disp.map(m => m.nameCn || m.nameEn).join('_').replace(/\s+/g, '');
     return { canvas, filename: `ASHR_Invite_${names || 'family'}.png` };
   } catch (err) {
     console.error('PNG render error:', err);
@@ -2207,14 +1846,11 @@ async function downloadCardAsPng(fam) {
     a.href = out.canvas.toDataURL('image/png');
     a.click();
     showToast('Card downloaded as PNG!', 'success');
-  } catch (err) {
-    showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error');
-  }
+  } catch (err) { showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error'); }
 }
 
 // ============================================
 // 🎟️ BULK CARD EXPORT — every ATTENDING family
-//    ZIP via JSZip when available; otherwise staggered PNG downloads
 // ============================================
 let cardsExporting = false;
 function getAttendingFamilies() {
@@ -2276,8 +1912,6 @@ async function exportAttendingCards() {
 
 // ============================================
 // 📤 EXPORT INVITATION MESSAGES → Excel
-//    One tab per center: C / MK / PT / TS
-//    Columns: Name | Message (Chinese) | Message (English)
 // ============================================
 function inviteMessageCn(name, url) {
   return `家長您好,
@@ -2297,7 +1931,6 @@ ${url}
 
 如有任何疑問，歡迎回覆查詢。衷心感謝各位家長一直以來的支持，並再次誠摯祝賀同學取得出色的成就！`;
 }
-
 function inviteMessageEn(name, url) {
   return `Dear Parent,
 Congratulations! 🎉 As of August ${currentEventId}, ${name} has progressed beyond their school grade level and earned an award. Will ${name} be able to attend the awards ceremony?
@@ -2316,63 +1949,37 @@ ${url}
 
 If you have any questions, please feel free to reply. Thank you for your continued support, and congratulations once again to your child on their outstanding achievement!`;
 }
-
-// Center → Excel tab abbreviation (mirrors TAB_TO_CENTER used by the import)
 function centerExcelTab(centerId, centerName) {
   const hay = `${centerId || ''} ${centerName || ''}`.toLowerCase();
   if (hay.includes('champs')) return 'C';
   if (hay.includes('mei keng') || hay.includes('meikeng')) return 'MK';
   if (hay.includes('pac tat') || hay.includes('paktat')) return 'PT';
   if (hay.includes('tap siac') || hay.includes('tapsiac')) return 'TS';
-  return String(centerName || centerId || 'Other')
-    .replace(/[\[\]:*?/\\]/g, ' ').trim().slice(0, 31) || 'Other';
+  return String(centerName || centerId || 'Other').replace(/[\[\]:*?/\\]/g, ' ').trim().slice(0, 31) || 'Other';
 }
-
 function exportInvitationMessages() {
-  if (typeof XLSX === 'undefined') {
-    return showToast(`${t('toast.err', 'Error')}: SheetJS (XLSX) not loaded`, 'error');
-  }
-
+  if (typeof XLSX === 'undefined') return showToast(`${t('toast.err', 'Error')}: SheetJS (XLSX) not loaded`, 'error');
   const familyGroups = buildAshrFamilies();
-
-  // 1) One row per honoree whose family has an ACTIVE invitation link
   const rows = [];
   familyGroups.forEach(fam => {
-    const entry = Object.entries(portalsCache).find(
-      ([_, p]) => p.familyKey === fam.key && p.active !== false
-    );
+    const entry = Object.entries(portalsCache).find(([_, p]) => p.familyKey === fam.key && p.active !== false);
     if (!entry) return;
     const url = `${location.origin}${location.pathname.replace(/[^/]*$/, '')}ashr-invite.html?e=${encodeURIComponent(currentEventId)}&t=${encodeURIComponent(entry[0])}`;
-    fam.members.forEach(m => rows.push({ ...m, inviteUrl: url }));
+    groupMembersForDisplay(fam.members).forEach(m => rows.push({ ...m, inviteUrl: url }));
   });
-
-  if (!rows.length) {
-    return showToast('No students with active invitation links yet — generate links first', 'error');
-  }
-
-  // 2) Group rows by center tab
+  if (!rows.length) return showToast('No students with active invitation links yet — generate links first', 'error');
   const tabMap = {};
   rows.forEach(r => {
     const tab = centerExcelTab(r.centerId, r.centerName);
     (tabMap[tab] = tabMap[tab] || []).push(r);
   });
-
   const preferred = ['C', 'MK', 'PT', 'TS'];
-  const tabNames = [
-    ...preferred.filter(x => tabMap[x]),
-    ...Object.keys(tabMap).filter(x => !preferred.includes(x)).sort()
-  ];
-
-  // 3) Build the workbook — one sheet per center
+  const tabNames = [...preferred.filter(x => tabMap[x]), ...Object.keys(tabMap).filter(x => !preferred.includes(x)).sort()];
   const wb = XLSX.utils.book_new();
   tabNames.forEach(tab => {
-    const students = tabMap[tab].sort((a, b) => {
-      const na = String(a.nameCn || a.nameEn || '');
-      const nb = String(b.nameCn || b.nameEn || '');
-      return na.localeCompare(nb) ||
-        String(a.studentNumber || '').localeCompare(String(b.studentNumber || ''));
-    });
-
+    const students = tabMap[tab].sort((a, b) =>
+      String(a.nameCn || a.nameEn || '').localeCompare(String(b.nameCn || b.nameEn || '')) ||
+      String(a.studentNumber || '').localeCompare(String(b.studentNumber || '')));
     const sheetRows = students.map(s => {
       const cnName = s.nameCn || s.nameEn || '';
       const enName = s.nameEn || s.nameCn || '';
@@ -2382,17 +1989,13 @@ function exportInvitationMessages() {
         'Message (English)': inviteMessageEn(enName, s.inviteUrl)
       };
     });
-
     const ws = XLSX.utils.json_to_sheet(sheetRows);
     ws['!cols'] = [{ wch: 26 }, { wch: 80 }, { wch: 80 }];
     XLSX.utils.book_append_sheet(wb, ws, tab);
   });
-
   XLSX.writeFile(wb, `ASHR_Invitation_Messages_${currentEventId}.xlsx`);
   showToast(`✅ Exported ${rows.length} message(s) — tabs: ${tabNames.join(', ')}`, 'success');
 }
-
-
 
 // ============================================
 // RSVPS & REPORTS
@@ -2401,7 +2004,6 @@ function setupRSVPs() {
   $('rsvpFilter').addEventListener('change', renderRSVPs);
   $('rsvpCenterFilter').addEventListener('change', renderRSVPs);
   populateRsvpCenterFilter();
-
   // 📤 Export dropdown (Excel / Cards / Both)
   const menuBtn = $('exportMenuBtn');
   const menu = $('exportMenu');
@@ -2414,20 +2016,16 @@ function setupRSVPs() {
       if (!e.target.closest('.export-menu-wrap')) menu.classList.add('hidden');
     });
   }
-  
   const excelBtn = $('exportExcelBtn');
   const cardsBtn = $('exportCardsBtn');
   const bothBtn = $('exportBothBtn');
-  
   if (excelBtn) excelBtn.addEventListener('click', () => { closeExportMenu(); exportRSVPs(); });
   if (cardsBtn) cardsBtn.addEventListener('click', () => { closeExportMenu(); exportAttendingCards(); });
   if (bothBtn) bothBtn.addEventListener('click', () => { closeExportMenu(); exportRSVPs(); exportAttendingCards(); });
-
-  // Localized labels
-  if (menuBtn) menuBtn.innerHTML  = `📤 ${t('exp.menu', 'Export')} ▾`;
+  if (menuBtn) menuBtn.innerHTML = `📤 ${t('exp.menu', 'Export')} ▾`;
   if (excelBtn) excelBtn.innerHTML = `📊 ${t('exp.excel', 'Export Excel')}<small>${t('exp.excelHint', 'RSVP list — all families')}</small>`;
   if (cardsBtn) cardsBtn.innerHTML = `🎟️ ${t('exp.cards', 'Export Cards')}<small>${t('exp.cardsHint', 'Invitation cards — attending students only')}</small>`;
-  if (bothBtn) bothBtn.innerHTML  = `📦 ${t('exp.both', 'Export Both')}<small>${t('exp.bothHint', 'Excel + attending cards')}</small>`;
+  if (bothBtn) bothBtn.innerHTML = `📦 ${t('exp.both', 'Export Both')}<small>${t('exp.bothHint', 'Excel + attending cards')}</small>`;
 }
 function closeExportMenu() { $('exportMenu')?.classList.add('hidden'); }
 function populateRsvpCenterFilter() {
@@ -2457,6 +2055,7 @@ function countGuests(g) {
   return c;
 }
 
+// 🧬 Seats = unique children (duplicate records of one child = 1 seat)
 function computeSlotCounts() {
   const counts = {};
   Object.keys(timeslots).forEach(sid => { counts[sid] = { students: 0, guests: 0 }; });
@@ -2465,17 +2064,25 @@ function computeSlotCounts() {
     if (!rsvp || rsvp.status !== 'attending') return;
     const memberIds = fam.memberHonoreeIds || [];
     const guestCount = countGuests(rsvp.guests);
+    const seatCount = countUniqueFromIds(memberIds) || memberIds.length;
     if (rsvp.sameTimeslot && rsvp.sharedSlotId) {
       if (counts[rsvp.sharedSlotId]) {
-        counts[rsvp.sharedSlotId].students += memberIds.length;
+        counts[rsvp.sharedSlotId].students += seatCount;
         counts[rsvp.sharedSlotId].guests += guestCount;
       }
     } else if (rsvp.perStudentSlots) {
+      const studentSlot = {};
       memberIds.forEach(mid => {
         const sid = rsvp.perStudentSlots[mid];
-        if (sid && counts[sid]) {
+        if (!sid) return;
+        const uid = studentUid(honorees[mid]) || mid;
+        if (!studentSlot[uid]) studentSlot[uid] = sid;
+      });
+      const seats = Object.keys(studentSlot).length || 1;
+      Object.values(studentSlot).forEach(sid => {
+        if (counts[sid]) {
           counts[sid].students += 1;
-          counts[sid].guests += Math.round(guestCount / memberIds.length);
+          counts[sid].guests += Math.round(guestCount / seats);
         }
       });
     }
@@ -2483,24 +2090,16 @@ function computeSlotCounts() {
   return counts;
 }
 
-// ============================================
-// 📊 RSVP REPORT SOURCE
-//   The `families` node only exists AFTER a family replies.
-//   To show "No Response" we left-join:
-//   family groups → invite link (publicAshrLinks) → RSVP record (families).
-//   A family appears as pending as soon as its link is generated.
-// ============================================
 function buildRsvpRows() {
   const rows = [];
   const matchedFamIds = new Set();
-
   buildAshrFamilies().forEach(fam => {
     const portalEntry = Object.entries(portalsCache).find(([_, p]) => p.familyKey === fam.key);
     const portal = portalEntry ? portalEntry[1] : null;
     const famId = portal ? portal.familyId : null;
     const famRec = famId ? families[famId] : null;
     if (famId) matchedFamIds.add(famId);
-    if (!portal && !famRec) return;   // not invited yet → not "No Response"
+    if (!portal && !famRec) return;
     rows.push({
       famId: famId || fam.key,
       members: fam.members,
@@ -2509,15 +2108,12 @@ function buildRsvpRows() {
       linkDisabled: portal?.active === false
     });
   });
-
-  // Orphan RSVP records (honoree deleted / link regenerated under a new familyKey)
   Object.entries(families).forEach(([famId, famRec]) => {
     if (matchedFamIds.has(famId)) return;
     const members = (famRec.memberHonoreeIds || []).map(mid => honorees[mid]).filter(Boolean);
     if (!members.length && !famRec.rsvp) return;
     rows.push({ famId, members, rsvp: famRec.rsvp || null, hasLink: false, linkDisabled: false });
   });
-
   return rows;
 }
 
@@ -2526,51 +2122,35 @@ function renderRSVPs() {
   const centerFilter = $('rsvpCenterFilter')?.value || '';
   const tbody = $('rsvpTableBody');
   tbody.innerHTML = '';
-
   let attending = 0, declined = 0, pending = 0, totalGuests = 0;
-  let famAttending = 0, famDeclined = 0, famPending = 0;
   const rows = buildRsvpRows();
-
-  // 1. Calculate Stats
+  // 1. Stats (unique students)
   rows.forEach(row => {
     const status = row.rsvp?.status || 'pending';
-    // ✅ count STUDENTS (siblings sharing one link/RSVP count individually)
-    const students = row.members.length 
-                  || row.rsvp?.memberHonoreeIds?.length 
-                  || 1;
-    
-    if (status === 'attending') {
-      attending += students; famAttending++;
-      totalGuests += countGuests(row.rsvp.guests);
-    } else if (status === 'declined') {
-      declined += students; famDeclined++;
-    } else {
-      pending += students; famPending++;
-    }
+    const students = countUniqueStudents(row.members) || row.rsvp?.memberHonoreeIds?.length || 1;
+    if (status === 'attending') { attending += students; totalGuests += countGuests(row.rsvp.guests); }
+    else if (status === 'declined') declined += students;
+    else pending += students;
   });
-
-  // 2. Render Stat Cards
+  // 2. Stat cards
   $('rsvpStats').innerHTML = `
     <div class="stat-card"><div class="stat-value">${attending}</div><div class="stat-label">${t('stat.attending', 'Attending (students)')}</div></div>
     <div class="stat-card"><div class="stat-value">${declined}</div><div class="stat-label">${t('stat.declined', 'Declined (students)')}</div></div>
     <div class="stat-card"><div class="stat-value">${pending}</div><div class="stat-label">${t('stat.pending', 'No Response (students)')}</div></div>
     <div class="stat-card"><div class="stat-value">${totalGuests}</div><div class="stat-label">${t('stat.guests', 'Total Guests')}</div></div>`;
-
-  // 3. Render Table Rows
-  let rowNum = 0;   // 🆕 visible-row counter
+  // 3. Table rows (🔢 numbered, 🏫 center-filtered, 🧬 merged names)
+  let rowNum = 0;
   rows.forEach(row => {
     const rsvp = row.rsvp || {};
     const status = rsvp.status || 'pending';
     if (filter !== 'all' && status !== filter) return;
-    
-    // 🏫 Center filter — scope this row to students of the selected center
     const members = centerFilter
       ? (row.members || []).filter(m => m.centerId === centerFilter)
       : row.members;
     if (centerFilter && !members.length) return;
-    rowNum++;   // 🆕
-    const memberNames = members.map(m => m.nameCn || m.nameEn).join(', ') || row.famId;
-    
+    rowNum++;
+    const disp = groupMembersForDisplay(members);
+    const memberNames = disp.map(m => m.nameCn || m.nameEn).join(', ') || row.famId;
     let slotDisplay = '—';
     if (status === 'attending') {
       if (rsvp.sameTimeslot && rsvp.sharedSlotId) {
@@ -2580,42 +2160,33 @@ function renderRSVPs() {
         slotDisplay = Object.values(rsvp.perStudentSlots).map(sid => timeslots[sid] ? timeslots[sid].start : sid).join(', ');
       }
     }
-    
     const statusClass = status === 'attending' ? 'st-attending' : status === 'declined' ? 'st-declined' : 'st-pending';
-    const studentCount = members.length || row.rsvp?.memberHonoreeIds?.length || 1;
-    
-    // ✅ Actions column: Show Reset button ONLY if they have an RSVP record
-    const actionsHtml = row.rsvp 
-      ? `<button class="btn-small danger" data-reset-rsvp="${escapeHtml(row.famId)}">🔄 ${t('rsvp.reset', 'Reset')}</button>` 
+    const studentCount = disp.length || row.rsvp?.memberHonoreeIds?.length || 1;
+    const actionsHtml = row.rsvp
+      ? `<button class="btn-small danger" data-reset-rsvp="${escapeHtml(row.famId)}">🔄 ${t('rsvp.reset', 'Reset')}</button>`
       : '';
-
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="row-num">${rowNum}</td>
-      <td>${escapeHtml(memberNames)}</td> 
-      <td>${studentCount}</td> 
-      <td><span class="status-badge ${statusClass}">${t('st.' + status, status)}</span></td> 
-      <td>${rsvp.status === 'declined' && rsvp.reason ? escapeHtml(rsvp.reason) : '—'}</td> 
-      <td>${escapeHtml(slotDisplay)}</td> 
-      <td>${countGuests(rsvp.guests)}</td> 
+      <td>${escapeHtml(memberNames)}</td>
+      <td>${studentCount}</td>
+      <td><span class="status-badge ${statusClass}">${t('st.' + status, status)}</span></td>
+      <td>${rsvp.status === 'declined' && rsvp.reason ? escapeHtml(rsvp.reason) : '—'}</td>
+      <td>${escapeHtml(slotDisplay)}</td>
+      <td>${countGuests(rsvp.guests)}</td>
       <td>${rsvp.submittedAt ? new Date(rsvp.submittedAt).toLocaleDateString() : '—'}</td>
       <td>${actionsHtml}</td>`;
     tbody.appendChild(tr);
   });
-
-  // 4. Wire up the Reset Buttons
+  // 4. Reset buttons
   tbody.querySelectorAll('[data-reset-rsvp]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const famId = btn.dataset.resetRsvp;
       if (!confirm(t('rsvp.resetConfirm', 'Reset this family\'s RSVP? They will need to fill out the form again using their link.'))) return;
-      
       try {
-        // Deletes ONLY the rsvp node, keeping the familyId and memberHonoreeIds intact
         await remove(ref(db, `ashrEvents/${currentEventId}/families/${famId}/rsvp`));
         showToast(t('toast.rsvpReset', '✅ RSVP reset. The link is now fresh for the parents.'), 'success');
-      } catch (err) {
-        showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error');
-      }
+      } catch (err) { showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error'); }
     });
   });
 }
@@ -2644,7 +2215,7 @@ function exportRSVPs() {
   const rows = [];
   buildRsvpRows().forEach(row => {
     const rsvp = row.rsvp || {};
-    row.members.forEach(m => {
+    groupMembersForDisplay(row.members).forEach(m => {
       rows.push({
         'Student': m.nameCn || m.nameEn,
         'Pinyin': m.nameEn || '',
@@ -2683,36 +2254,37 @@ function downloadExcel(rows, filename) {
 }
 
 // ============================================
-// CHECK-IN MODE
+// CHECK-IN MODE (🧬 one row per child, one tap = all their records)
 // ============================================
 function setupCheckin() {
-  // 1. Physical scanner & manual typing (acts as a keyboard)
   $('scanInput').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { handleScanValue(e.target.value.trim()); e.target.value = ''; }
   });
-  // 2. Phone camera scan
   $('phoneScanBtn').addEventListener('click', startCameraScan);
   $('closeCameraModal').addEventListener('click', stopCameraScan);
 }
 
-async function handleScanValue(value) {
-  if (!value) return;
+async function handleScanValue(value, groupKeys = null) {
+  if (!value && !groupKeys) return;
   const result = $('scanResult');
-  
-  // ✅ Match against short code, long code, ID, or student number
-  const entry = Object.entries(honorees).find(([key, h]) => {
-    const bv = h.barcodeValue || `ASHR${currentEventId}_${key}`;
-    return bv === value || key === value || h.studentId === value || 
-           String(h.studentNumber || '') === value || shortScanCode(bv) === value;
-  });
-  
-  if (!entry) {
-    result.className = 'error';
-    result.textContent = `${t('toast.unknownCode', '❌ Unknown barcode')}: ${escapeHtml(value)}`;
-    return;
+  let keys, h;
+  if (groupKeys) {
+    keys = groupKeys; h = honorees[keys[0]];
+  } else {
+    const entry = Object.entries(honorees).find(([key, hh]) => {
+      const bv = hh.barcodeValue || `ASHR${currentEventId}_${key}`;
+      return bv === value || key === value || hh.studentId === value ||
+             String(hh.studentNumber || '') === value || shortScanCode(bv) === value;
+    });
+    if (!entry) {
+      result.className = 'error';
+      result.textContent = `${t('toast.unknownCode', '❌ Unknown barcode')}: ${escapeHtml(value)}`;
+      return;
+    }
+    const [key, hh] = entry; h = hh; keys = siblingHonoreeKeys(hh, key);
   }
-  const [honoreeKey, h] = entry;
-  const famId = Object.keys(families).find(fid => (families[fid].memberHonoreeIds || []).includes(honoreeKey));
+  if (!h) return;
+  const famId = Object.keys(families).find(fid => (families[fid].memberHonoreeIds || []).some(mid => keys.includes(mid)));
   const rsvp = famId ? families[famId]?.rsvp : null;
   if (!rsvp || rsvp.status !== 'attending') {
     result.className = 'error';
@@ -2720,12 +2292,13 @@ async function handleScanValue(value) {
     return;
   }
   try {
-    if (checkins[honoreeKey]) {
-      await remove(ref(db, `ashrEvents/${currentEventId}/checkins/${honoreeKey}`));
+    const anyChecked = keys.some(k => checkins[k]);
+    if (anyChecked) {
+      for (const k of keys) if (checkins[k]) await remove(ref(db, `ashrEvents/${currentEventId}/checkins/${k}`));
       result.className = 'success';
       result.textContent = `↩️ ${escapeHtml(h.nameCn || h.nameEn)} ${t('toast.checkedOut', 'checked OUT.')}`;
     } else {
-      await set(ref(db, `ashrEvents/${currentEventId}/checkins/${honoreeKey}`), {
+      for (const k of keys) await set(ref(db, `ashrEvents/${currentEventId}/checkins/${k}`), {
         checkedInAt: new Date().toISOString(),
         checkedInBy: auth.currentUser?.email || ''
       });
@@ -2744,13 +2317,21 @@ function getConfirmedAttendeesBySlot() {
       const rsvp = fam.rsvp;
       if (!rsvp || rsvp.status !== 'attending') return;
       const memberIds = fam.memberHonoreeIds || [];
-      if (rsvp.sameTimeslot && rsvp.sharedSlotId === slotId) {
-        memberIds.forEach(mid => { if (honorees[mid]) attendees.push({ honoreeKey: mid, ...honorees[mid] }); });
+      const slotForUid = {};
+      if (rsvp.sameTimeslot && rsvp.sharedSlotId) {
+        memberIds.forEach(mid => { const uid = studentUid(honorees[mid]) || mid; if (!slotForUid[uid]) slotForUid[uid] = rsvp.sharedSlotId; });
       } else if (rsvp.perStudentSlots) {
-        memberIds.forEach(mid => {
-          if (rsvp.perStudentSlots[mid] === slotId && honorees[mid]) attendees.push({ honoreeKey: mid, ...honorees[mid] });
-        });
+        memberIds.forEach(mid => { const uid = studentUid(honorees[mid]) || mid; if (!(uid in slotForUid)) slotForUid[uid] = rsvp.perStudentSlots[mid]; });
       }
+      Object.entries(slotForUid).forEach(([uid, sid]) => {
+        if (sid !== slotId) return;
+        const keys = memberIds.filter(mid => (studentUid(honorees[mid]) || mid) === uid);
+        const first = honorees[keys[0]];
+        if (!first) return;
+        const existing = attendees.find(a => a.uid === uid);
+        if (existing) existing.honoreeKeys.push(...keys);
+        else attendees.push({ uid, honoreeKeys: keys, honoreeKey: keys[0], ...first });
+      });
     });
     if (attendees.length) bySlot[slotId] = { slot, attendees };
   });
@@ -2762,7 +2343,7 @@ function renderCheckinSlots() {
   container.innerHTML = '';
   const bySlot = getConfirmedAttendeesBySlot();
   Object.entries(bySlot).forEach(([slotId, { slot, attendees }]) => {
-    const checkedCount = attendees.filter(a => checkins[a.honoreeKey]).length;
+    const checkedCount = attendees.filter(a => a.honoreeKeys.some(k => checkins[k])).length;
     const section = document.createElement('div');
     section.className = 'checkin-slot-section';
     section.innerHTML = `
@@ -2771,20 +2352,21 @@ function renderCheckinSlots() {
         <span>${checkedCount}/${attendees.length} ${t('ci.arrived', 'arrived')}</span>
       </div>
       ${attendees.map(a => {
-        const isChecked = !!checkins[a.honoreeKey];
-        const checkTime = isChecked ? new Date(checkins[a.honoreeKey].checkedInAt).toLocaleTimeString() : '';
+        const isChecked = a.honoreeKeys.some(k => checkins[k]);
+        const checkedKey = a.honoreeKeys.find(k => checkins[k]);
+        const checkTime = isChecked ? new Date(checkins[checkedKey].checkedInAt).toLocaleTimeString() : '';
         return `<div class="checkin-student-row ${isChecked ? 'checked-in' : ''}">
           <span class="student-name">${escapeHtml(a.nameCn || a.nameEn)}</span>
           ${isChecked ? `<span class="check-time">✓ ${escapeHtml(checkTime)}</span>` : ''}
-          <button class="checkin-toggle ${isChecked ? 'uncheck' : 'check'}" data-checkin-key="${escapeHtml(a.honoreeKey)}">
+          <button class="checkin-toggle ${isChecked ? 'uncheck' : 'check'}" data-checkin-keys="${escapeHtml(a.honoreeKeys.join(','))}">
             ${isChecked ? t('ci.undo', 'Undo') : t('ci.check', 'Check In')}
           </button>
         </div>`;
       }).join('')}`;
     container.appendChild(section);
   });
-  container.querySelectorAll('[data-checkin-key]').forEach(btn => {
-    btn.addEventListener('click', () => handleScanValue(btn.dataset.checkinKey));
+  container.querySelectorAll('[data-checkin-keys]').forEach(btn => {
+    btn.addEventListener('click', () => handleScanValue('', btn.dataset.checkinKeys.split(',')));
   });
 }
 
@@ -2795,8 +2377,7 @@ async function startCameraScan() {
   }
   $('cameraModal').classList.remove('hidden');
   const reader = $('cameraReader');
-  reader.style.height = '';                    // clear leftover sizing from last session
-
+  reader.style.height = '';
   if (html5QrCode && html5QrCode.isScanning) {
     try { await html5QrCode.stop(); } catch (e) {}
   }
@@ -2816,24 +2397,20 @@ async function startCameraScan() {
       }
       html5QrCode = new Html5Qrcode('cameraReader', ctorOpts);
     }
-    await new Promise(r => requestAnimationFrame(r));  // let modal lay out
-
+    await new Promise(r => requestAnimationFrame(r));
     await html5QrCode.start(
       { facingMode: 'environment' },
       {
         fps: 15,
-        // vw/vh = the rendered viewfinder size; clamp so the box can
-        // never exceed the video (that's what caused the spill-over)
         qrbox: (vw, vh) => ({
-          width:  Math.floor(Math.min(vw * 0.85, 420)),
+          width: Math.floor(Math.min(vw * 0.85, 420)),
           height: Math.floor(Math.min(vw * 0.85 * 0.45, vh * 0.55))
         }),
         videoConstraints: {
           facingMode: 'environment',
-          width:  { ideal: 1280 },
+          width: { ideal: 1280 },
           height: { ideal: 720 }
         }
-        // ⚠️ no aspectRatio here — forcing it letterboxes the video
       },
       (decodedText) => { handleScanValue(decodedText); stopCameraScan(); },
       (errMsg) => {
@@ -2844,9 +2421,6 @@ async function startCameraScan() {
       }
     );
     cameraActive = true;
-
-    // 🔧 Snap the container to the real video height so the grey overlay
-    //    and brackets can never extend past the preview again
     requestAnimationFrame(() => {
       const video = reader.querySelector('video');
       if (!video) return;
@@ -2882,7 +2456,6 @@ function showToast(msg, type = 'success') {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.add('hidden'), 3500);
 }
-
 function applyPlaceholders() {
   const ph = {
     manualSearchInput: 'hon.searchPh',
@@ -2896,7 +2469,6 @@ function applyPlaceholders() {
     if (el) el.placeholder = t(key, el.placeholder);
   });
 }
-
 window.addEventListener('beforeunload', () => {
   unsubscribers.forEach(fn => fn());
   if (html5QrCode && cameraActive) html5QrCode.stop().catch(() => {});
