@@ -127,6 +127,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupSchedulePOModalListeners();
     setupSearchStudentModalListeners();
     setupDashboardAttendanceModals();
+    setupLogFollowUpModalListeners();
   } catch (err) {
     console.error("Error initializing dashboard:", err);
   } finally {
@@ -151,11 +152,19 @@ function initFAB() {
   const fabScheduleDT = document.getElementById('fabScheduleDT');
   const fabAttendance = document.getElementById('fabAttendance');
   const fabChangeClasses = document.getElementById('fabChangeClasses');
+  const fabLogFollowUp = document.getElementById('fabLogFollowUp');
 
   if (fabChangeClasses) {
     fabChangeClasses.addEventListener('click', () => {
       closeFAB();
       window.location.href = 'change-classes.html';
+    });
+  }
+
+  if (fabLogFollowUp) {
+    fabLogFollowUp.addEventListener('click', () => {
+      closeFAB();
+      openLogFollowUpModal();
     });
   }
 
@@ -166,37 +175,45 @@ function initFAB() {
     fabMenu.classList.add('hidden');
     fabOverlay.classList.add('hidden');
   }
+
   fabBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     const isActive = fabBtn.classList.toggle('active');
     fabMenu.classList.toggle('hidden', !isActive);
     fabOverlay.classList.toggle('hidden', !isActive);
   });
+
   fabOverlay.addEventListener('click', closeFAB);
+
   fabAddStudent.addEventListener('click', () => {
     closeFAB();
-    window.location.href = 'student-form.html?returnUrl=dashboard.html'; 
+    window.location.href = 'student-form.html?returnUrl=dashboard.html';
   });
+
   fabSchedulePO.addEventListener('click', () => {
     closeFAB();
     openSchedulePOModal();
   });
+
   fabSearchStudent.addEventListener('click', () => {
     closeFAB();
     openSearchStudentModal();
   });
+
   if (fabScheduleDT) {
     fabScheduleDT.addEventListener('click', () => {
       closeFAB();
       openScheduleDTModalDash();
     });
   }
+
   if (fabAttendance) {
     fabAttendance.addEventListener('click', async () => {
       closeFAB();
       await openDashboardAttendanceEntry();
     });
   }
+
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !fabMenu.classList.contains('hidden')) {
       closeFAB();
@@ -5309,4 +5326,315 @@ async function startDashboardAttendanceScanner() {
 
     attendanceHtml5QrCode = null;
   }
+}
+// ============================================
+// 📣 LOG FOLLOW-UP MODAL LOGIC
+// ============================================
+let fuSelectedStudents = [];
+let fuTeachers = [];
+let fuTeachersLoaded = false;
+
+async function loadTeachersForFU() {
+  if (fuTeachersLoaded) return;
+  try {
+    const empSnap = await get(ref(db, 'employees'));
+    if (empSnap.exists()) {
+      empSnap.forEach(child => {
+        const e = child.val();
+        if (!e.isDisabled) {
+          fuTeachers.push({
+            uid: child.key,
+            name: e.englishName || e.chineseName || 'Unknown'
+          });
+        }
+      });
+      fuTeachers.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    fuTeachersLoaded = true;
+  } catch (err) {
+    console.error('Error loading teachers:', err);
+  }
+}
+
+async function openLogFollowUpModal() {
+  const modal = document.getElementById('logFollowUpModal');
+  if (!modal) return;
+
+  fuSelectedStudents = [];
+  const searchInput = document.getElementById('fuStudentSearch');
+  const dropdown = document.getElementById('fuStudentDropdown');
+  const selectedWrap = document.getElementById('fuSelectedStudents');
+  const formArea = document.getElementById('fuFormArea');
+
+  searchInput.value = '';
+  dropdown.innerHTML = '';
+  dropdown.style.display = 'none';
+  selectedWrap.innerHTML = '';
+  formArea.style.display = 'none';
+
+  document.getElementById('fuTypeMessage').checked = true;
+  toggleFuModalFields();
+  document.getElementById('fuMsgEn').value = '';
+  document.getElementById('fuMsgZh').value = '';
+  document.getElementById('fuCallNotes').value = '';
+  document.getElementById('fuSolution').value = '';
+
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('fuDateCreated').value = today;
+  document.getElementById('fuCallDate').value = today;
+
+  await loadAllStudentsGlobal();
+  await loadTeachersForFU();
+
+  const teacherSelect = document.getElementById('fuTeacherSelect');
+  teacherSelect.innerHTML = '<option value="">— Select Teacher —</option>' +
+    fuTeachers.map(t => `<option value="${t.uid}">${t.name}</option>`).join('');
+
+  const storedUser = sessionStorage.getItem('kumonUser');
+  if (storedUser) {
+    try {
+      const user = JSON.parse(storedUser);
+      const match = fuTeachers.find(t => t.uid === user.uid || t.name === user.name);
+      if (match) teacherSelect.value = match.uid;
+    } catch (e) {}
+  }
+
+  modal.classList.remove('hidden');
+}
+
+function toggleFuModalFields() {
+  const isMsg = document.getElementById('fuTypeMessage').checked;
+  const msgFields = document.getElementById('fuMessageFields');
+  const callFields = document.getElementById('fuCallFields');
+  if (msgFields) msgFields.style.display = isMsg ? 'block' : 'none';
+  if (callFields) callFields.style.display = isMsg ? 'none' : 'block';
+}
+
+function setupFuStudentSearch() {
+  const input = document.getElementById('fuStudentSearch');
+  const dropdown = document.getElementById('fuStudentDropdown');
+
+  input.addEventListener('input', () => {
+    const term = input.value.toLowerCase().trim();
+    if (!term) {
+      dropdown.style.display = 'none';
+      return;
+    }
+
+    const selectedIds = new Set(fuSelectedStudents.map(s => s.id));
+    const matches = allStudentsGlobal.filter(s => {
+      if (selectedIds.has(s.id)) return false;
+      const hay = [s.nameCn, s.namePinyin, s.nickname, s.studentNumber, s.school, s.nameEn, s.englishName].filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(term);
+    }).slice(0, 20);
+
+    if (matches.length === 0) {
+      dropdown.innerHTML = `<li style="padding:0.75rem; color:#999; text-align:center;">${t('dashboard.noStudentsFound')}</li>`;
+    } else {
+      dropdown.innerHTML = matches.map(s => {
+        const name = s.nameCn || s.namePinyin || s.nickname || 'Unknown';
+        const pinyin = s.namePinyin ? `(${s.namePinyin})` : '';
+        return `<li data-id="${s.id}" style="padding:0.75rem; cursor:pointer; border-bottom:1px solid #f1f5f9;">
+          <div style="font-weight:600;">${name} ${pinyin}</div>
+          <div style="font-size:0.8rem; color:#666;">${t('dashboard.gradeNo', { grade: s.grade || '-', number: s.studentNumber || '-' })} | ${s.homeCenterName || ''}</div>
+        </li>`;
+      }).join('');
+    }
+    dropdown.style.display = 'block';
+  });
+
+  dropdown.addEventListener('click', (e) => {
+    const li = e.target.closest('li');
+    if (!li || !li.dataset.id) return;
+    const student = allStudentsGlobal.find(s => s.id === li.dataset.id);
+    if (student) {
+      fuSelectedStudents.push(student);
+      renderFuSelectedStudents();
+      input.value = '';
+      dropdown.innerHTML = '';
+      dropdown.style.display = 'none';
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+      dropdown.style.display = 'none';
+    }
+  });
+}
+
+function renderFuSelectedStudents() {
+  const container = document.getElementById('fuSelectedStudents');
+  const formArea = document.getElementById('fuFormArea');
+
+  if (fuSelectedStudents.length === 0) {
+    container.innerHTML = '';
+    formArea.style.display = 'none';
+    return;
+  }
+
+  formArea.style.display = 'block';
+  container.innerHTML = fuSelectedStudents.map(s => {
+    const name = s.nameCn || s.namePinyin || s.nickname || 'Unknown';
+    return `<div style="background:#e3f2fd; color:#1565c0; padding:0.4rem 0.8rem; border-radius:16px; display:flex; align-items:center; gap:0.5rem; font-weight:600;">
+      ${name} (${t('dashboard.gradeNo', { grade: s.grade || '-', number: s.studentNumber || '-' })})
+      <button type="button" data-remove-id="${s.id}" style="background:none; border:none; color:#1565c0; cursor:pointer; font-size:1.2rem; line-height:1;">×</button>
+    </div>`;
+  }).join('');
+
+  container.querySelectorAll('[data-remove-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      fuSelectedStudents = fuSelectedStudents.filter(s => s.id !== btn.dataset.removeId);
+      renderFuSelectedStudents();
+    });
+  });
+
+  renderFuSubjectChips();
+}
+
+function getSubjectsForLogging(student) {
+  const subjects = Array.isArray(student.subjects) ? student.subjects : Object.values(student.subjects || {});
+  return subjects.filter(sub => sub && sub.name && ['current', 'pause', 'inquiry'].includes(String(sub.status || '').toLowerCase()));
+}
+
+function renderFuSubjectChips() {
+  const container = document.getElementById('fuSubjectChips');
+  const counts = {};
+  
+  fuSelectedStudents.forEach(s => {
+    getSubjectsForLogging(s).forEach(sub => {
+      counts[sub.name] = (counts[sub.name] || 0) + 1;
+    });
+  });
+  
+  const names = Object.keys(counts);
+  if (names.length === 0) {
+    container.innerHTML = `<span style="color:#999;">${t('dashboard.noActiveSubjects')}</span>`;
+    return;
+  }
+  
+  container.innerHTML = names.map(n => `
+    <label style="display:inline-flex; align-items:center; gap:0.3rem; cursor:pointer; background:#f1f5f9; padding:0.4rem 0.8rem; border-radius:16px; font-size:0.9rem;">
+      <input type="checkbox" class="fu-subject-check" value="${n}" checked>
+      ${n} (${counts[n]})
+    </label>
+  `).join('');
+}
+
+async function saveFuModal() {
+  if (fuSelectedStudents.length === 0) {
+    alert(t('dashboard.schedulePO.selectStudent'));
+    return;
+  }
+  
+  const selectedSubjects = Array.from(document.querySelectorAll('.fu-subject-check:checked')).map(cb => cb.value);
+  if (selectedSubjects.length === 0) {
+    alert('⚠️ Please select at least one subject.');
+    return;
+  }
+  
+  const isMsg = document.getElementById('fuTypeMessage').checked;
+  const type = isMsg ? 'message' : 'call';
+  
+  let dateSent = '', month = '', sent = false;
+  if (type === 'call') {
+    dateSent = document.getElementById('fuCallDate').value;
+    if (!dateSent) return alert('⚠️ Please select the call date.');
+    const callNotes = document.getElementById('fuCallNotes').value.trim();
+    if (!callNotes) return alert('⚠️ Please enter call notes.');
+    month = dateSent.slice(0, 7);
+    sent = true;
+  } else {
+    const msgEn = document.getElementById('fuMsgEn').value.trim();
+    const msgZh = document.getElementById('fuMsgZh').value.trim();
+    if (!msgEn && !msgZh) return alert('⚠️ Please enter the message in English or Chinese.');
+    sent = false;
+    month = '';
+    dateSent = '';
+  }
+  
+  const teacherUid = document.getElementById('fuTeacherSelect').value;
+  const teacherName = teacherUid ? (fuTeachers.find(t => t.uid === teacherUid)?.name || 'Unknown') : 'Unknown';
+  
+  const btn = document.getElementById('fuSaveBtn');
+  btn.disabled = true;
+  btn.textContent = t('common.saving');
+  
+  const now = new Date().toISOString();
+  const jobs = [];
+  
+  fuSelectedStudents.forEach(student => {
+    const cid = student.homeCenterId || centerId;
+    const cname = student.homeCenterName || centerName;
+    
+    getSubjectsForLogging(student).forEach(sub => {
+      if (!selectedSubjects.includes(sub.name)) return;
+      
+      const timeslots = Array.isArray(sub.timeslots) ? sub.timeslots : Object.values(sub.timeslots || {});
+      const schedule = timeslots.filter(t => t && (t.day || t.time)).map(t => `${String(t.day || '').slice(0, 3)} ${t.time || ''}`.trim()).join(', ');
+      
+      const assignedTeachers = student.assignedTeachers?.[sub.name];
+      const assignedTeacher = Array.isArray(assignedTeachers) ? assignedTeachers.map(uid => fuTeachers.find(t => t.uid === uid)?.name || '').filter(Boolean).join(', ') : '';
+      
+      jobs.push(push(ref(db, `centers/${cid}/followUps`), {
+        studentId: student.id,
+        studentNumber: student.studentNumber || '',
+        nameCn: student.nameCn || '',
+        namePinyin: student.namePinyin || '',
+        nickname: student.nickname || '',
+        grade: student.grade || '',
+        school: student.school || '',
+        centerId: cid,
+        centerName: cname,
+        subject: sub.name,
+        level: sub.currentLevel || sub.startLevel || '',
+        startWS: sub.startWS ?? '',
+        enrolDate: sub.enrolDate || '',
+        schedule: schedule,
+        assignedTeacher: assignedTeacher,
+        teacherUid: teacherUid,
+        teacherName: teacherName,
+        type: type,
+        sent: sent,
+        messageType: type === 'message' ? (document.getElementById('fuMessageType').value || '') : '',
+        messageEn: type === 'message' ? (document.getElementById('fuMsgEn').value || '').trim() : '',
+        messageZh: type === 'message' ? (document.getElementById('fuMsgZh').value || '').trim() : '',
+        callNotes: type === 'call' ? (document.getElementById('fuCallNotes').value || '').trim() : '',
+        solution: type === 'call' ? (document.getElementById('fuSolution').value || '').trim() : '',
+        dateCreated: type === 'message' ? (document.getElementById('fuDateCreated').value || '') : '',
+        dateSent: dateSent,
+        month: month,
+        createdBy: auth.currentUser?.uid || '',
+        createdAt: now,
+        updatedAt: now
+      }));
+    });
+  });
+  
+  try {
+    await Promise.all(jobs);
+    showDashboardToast(`✅ Saved ${jobs.length} follow-up(s)`);
+    document.getElementById('logFollowUpModal').classList.add('hidden');
+  } catch (err) {
+    console.error('Error saving follow-ups:', err);
+    showDashboardToast('❌ Failed to save follow-ups', true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = t('dashboard.followUp.save');
+  }
+}
+
+function setupLogFollowUpModalListeners() {
+  const modal = document.getElementById('logFollowUpModal');
+  const closeBtn = document.getElementById('closeLogFollowUpModal');
+  if (closeBtn) closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
+  if (modal) modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.classList.add('hidden');
+  });
+  
+  document.getElementById('fuTypeMessage')?.addEventListener('change', toggleFuModalFields);
+  document.getElementById('fuTypeCall')?.addEventListener('change', toggleFuModalFields);
+  document.getElementById('fuSaveBtn')?.addEventListener('click', saveFuModal);
+  
+  setupFuStudentSearch();
 }

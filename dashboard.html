@@ -426,6 +426,91 @@
   </div>
 
   <!-- ==========================================
+       📣 LOG FOLLOW-UP MODAL
+  =========================================== -->
+  <div id="logFollowUpModal" class="modal-overlay hidden">
+    <div class="modal-content" style="max-width: 700px; text-align: left;">
+      <span class="close-modal" id="closeLogFollowUpModal">&times;</span>
+      <h2 style="margin-bottom: 1rem; color: var(--primary-dark);" data-i18n="dashboard.followUp.title">📣 Log Follow-Up</h2>
+      
+      <div class="form-group" style="margin-bottom: 1rem;">
+        <label data-i18n="dashboard.followUp.searchStudent">Search Student(s)</label>
+        <input type="text" id="fuStudentSearch" placeholder="🔍 Search name, pinyin, nickname, student no…" autocomplete="off" style="width: 100%; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 8px;">
+        <ul id="fuStudentDropdown" class="search-dropdown hidden" style="position: relative; max-height: 200px; overflow-y: auto; margin-top: 4px; border: 1px solid #ddd; border-radius: 8px; list-style: none; padding: 0; background: white; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"></ul>
+        <div id="fuSelectedStudents" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;"></div>
+      </div>
+
+      <div id="fuFormArea" class="hidden">
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label data-i18n="dashboard.followUp.subjectsCovered">Subjects covered</label>
+          <div id="fuSubjectChips" style="display: flex; flex-wrap: wrap; gap: 0.5rem;"></div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label data-i18n="dashboard.followUp.type">Follow-Up Type</label>
+          <div style="display: flex; gap: 1rem;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="radio" name="fuType" id="fuTypeMessage" checked> <span data-i18n="dashboard.followUp.typeMessage">📩 Message</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="radio" name="fuType" id="fuTypeCall"> <span data-i18n="dashboard.followUp.typeCall">📞 Call</span>
+            </label>
+          </div>
+        </div>
+
+        <div id="fuMessageFields">
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label data-i18n="dashboard.followUp.messageType">Message Type</label>
+            <select id="fuMessageType" style="width: 100%; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 8px;">
+              <option>Progress Message</option>
+              <option>Level-Up Update</option>
+              <option>Short Update Message</option>
+              <option>Reminder</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label data-i18n="dashboard.followUp.msgEn">Message — English</label>
+            <textarea id="fuMsgEn" rows="4" style="width: 100%; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 8px;"></textarea>
+          </div>
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label data-i18n="dashboard.followUp.msgZh">Message — 中文</label>
+            <textarea id="fuMsgZh" rows="4" style="width: 100%; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 8px;"></textarea>
+          </div>
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label data-i18n="dashboard.followUp.dateCreated">Date Created</label>
+            <input type="date" id="fuDateCreated" style="width: 100%; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 8px;">
+          </div>
+        </div>
+
+        <div id="fuCallFields" class="hidden">
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label data-i18n="dashboard.followUp.callNotes">Call Notes *</label>
+            <textarea id="fuCallNotes" rows="4" style="width: 100%; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 8px;"></textarea>
+          </div>
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label data-i18n="dashboard.followUp.solution">Solution / Outcome</label>
+            <textarea id="fuSolution" rows="3" style="width: 100%; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 8px;"></textarea>
+          </div>
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label data-i18n="dashboard.followUp.dateCalled">Date Called *</label>
+            <input type="date" id="fuCallDate" style="width: 100%; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 8px;">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label data-i18n="dashboard.followUp.teacher">Followed Up By</label>
+          <select id="fuTeacherSelect" style="width: 100%; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 8px;"></select>
+        </div>
+
+        <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+          <button id="fuSaveBtn" class="save-note-btn" style="padding: 0.75rem 1.5rem; font-size: 1rem;" data-i18n="dashboard.followUp.save">💾 Save Follow-Up</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
        FLOATING ACTION BUTTON
   =========================================== -->
   <div id="fabOverlay" class="fab-overlay hidden"></div>
@@ -454,6 +539,10 @@
       <button id="fabSchedulePO" class="fab-menu-item">
         <span class="fab-icon">👨‍👩‍👧</span>
         <span data-i18n="dashboard.fab.schedulePO">Schedule Parent Orientation</span>
+      </button>
+      <button id="fabLogFollowUp" class="fab-menu-item">
+        <span class="fab-icon">📣</span>
+        <span data-i18n="dashboard.fab.logFollowUp">Log Follow-Up</span>
       </button>
       <!--<button class="fab-menu-item" id="fabChangeClasses">
         <span class="fab-icon">🔄</span>

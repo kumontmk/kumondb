@@ -30,14 +30,32 @@ export default {
       continueAnyway: "⚠️ The selected date may be a holiday or closed day. Continue anyway?"
     },
 
-    fab: {
-      addInquiry: "Add New Inquiry",
-      addStudent: "Add New Student",
-      searchStudent: "Search Student",
-      scheduleDT: "Schedule Diagnostic Test",
-      schedulePO: "Schedule Parent Orientation",
-      attendance: "New Attendance",
-      changeClasses: "Change Classes",
+     fab: {
+   addInquiry: "Add New Inquiry",
+   addStudent: "Add New Student",
+   searchStudent: "Search Student",
+   scheduleDT: "Schedule Diagnostic Test",
+   schedulePO: "Schedule Parent Orientation",
+   attendance: "New Attendance",
+   changeClasses: "Change Classes",
+   logFollowUp: "Log Follow-Up",
+    },
+    followUp: {
+      title: "📣 Log Follow-Up",
+      searchStudent: "Search Student(s)",
+      subjectsCovered: "Subjects covered",
+      type: "Follow-Up Type",
+      typeMessage: "📩 Message",
+      typeCall: "📞 Call",
+      messageType: "Message Type",
+      msgEn: "Message — English",
+      msgZh: "Message — 中文",
+      dateCreated: "Date Created",
+      callNotes: "Call Notes *",
+      solution: "Solution / Outcome",
+      dateCalled: "Date Called *",
+      teacher: "Followed Up By",
+      save: "💾 Save Follow-Up"
     },
 
     attendance: {
