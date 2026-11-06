@@ -117,6 +117,21 @@ export default {
   cancel: "Cancel",
   confirmTitle: "⚠️ Please Confirm",
   yesDelete: "Yes, Delete",
-  logsSearchPlaceholder: "🔍 Search name, pinyin, nickname, student no, teacher, school, message… ",
-
+  logsSearchPlaceholder: "🔍 Search name, pinyin, nickname, student no, teacher, school, message…",
+  pshTab: "👤 Per Student History",
+  pshTitle: "👤 Per Student History — every follow-up for one student",
+  pshSearchPlaceholder: "🔍 Search student (name, pinyin, nickname, #)…",
+  pshSearchAllCenters: "🌐 Searching all centers while typing",
+  pshThStatus: "Status", pshThTotal: "Total FUs", pshThLast: "Last Contact",
+  pshSortRecent: "Most recent contact", pshSortLast: "Longest without contact", pshSortName: "Name", pshSortTotal: "Most follow-ups",
+  pshStCurrent: "Current", pshStInquiry: "Inquiry", pshStPause: "Paused", pshStDrop: "Drop", pshStCompleter: "Completer",
+  pshEmptyList: "No students match your search / filter.",
+  pshEmptyDetail: "👈 Pick a student on the left to see their full follow-up history.",
+  pshNoRecords: "No follow-ups recorded for this student yet.",
+  pshStatTotal: "Follow-Ups", pshStatMsgs: "Messages", pshStatCalls: "Calls",
+  pshStatLast: "Last Contact", pshStatNever: "Never", pshMonths: "Last 6 months",
+  pshExport: "📤 Export History (Excel)", pshLogFor: "📝 Log Follow-Up",
+  pshCopy: "📋 Copy message", pshOpenTab: "👤 Open in Per-Student tab",
+  pshLoading: "⏳ Loading students…",
+  pshOnlyWithFu: "Has follow-ups only"
 };

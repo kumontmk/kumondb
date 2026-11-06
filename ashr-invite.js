@@ -133,6 +133,14 @@ async function init() {
     console.error('Event load failed:', err);
     return showInvalid(`Database error: ${err.code || err.message}`);
   }
+  // 🧟 Zombie-link guard: ignore members whose honoree record was deleted
+  const validMembers = (portal.members || []).filter(k => honorees[k]);
+  if (!validMembers.length) {
+    return showInvalid(t('inv.reasonNoMembers',
+      'This invitation is no longer valid — the honoured student record was removed. Please contact your Kumon center.'));
+  }
+  if (validMembers.length !== (portal.members || []).length) portal.members = validMembers;
+
   if (eventSettings.rsvpDeadline) {
     deadlinePassed = new Date() > new Date(eventSettings.rsvpDeadline + 'T23:59:59');
   }
@@ -199,7 +207,6 @@ function renderHeader() {
 
 function renderAwards() {
   const memberKeys = (portal && portal.members) || [];
-  // 🧬 merged: one block per real child, all badges underneath
   const memberHonorees = groupMembersForDisplay(memberKeys.map(key => honorees[key]).filter(Boolean));
   const names = memberHonorees.map(h => h.nameCn || h.nameEn).filter(Boolean).join(', ');
   const hasAnyAward = memberHonorees.some(h => (h.awards || []).length > 0);
@@ -276,7 +283,6 @@ function selectStatus(status) {
   if (attending) safeRender('timeslots', renderTimeslots);
 }
 
-// 🧬 Slot counts EXCLUDING this family — unique children only
 function computeSlotCountsExclude(excludeFamId) {
   const counts = {};
   Object.keys(timeslots).forEach(sid => { counts[sid] = { students: 0 }; });
@@ -342,7 +348,6 @@ function renderTimeslots() {
       }, selectedSlots.shared === slotId));
     });
   } else {
-    // 🧬 one picker per real child (selection applies to all their records)
     uniqueStudentGroups(memberKeys).forEach(g => {
       const label = document.createElement('div');
       label.innerHTML = `<p class="slot-student-label">${escapeHtml(g.name)}</p>`;
@@ -360,6 +365,7 @@ function renderTimeslots() {
 async function submitRSVP() {
   if (!selectedStatus) return showToast(t('toast.chooseStatus', 'Please choose whether you will attend'), 'error');
   const memberKeys = (portal && portal.members) || [];
+  if (!memberKeys.length) return showToast(t('inv.reasonNoMembers', 'This invitation is no longer valid.'), 'error');
   const groups = uniqueStudentGroups(memberKeys);
   const rsvp = { status: selectedStatus, submittedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
   if (selectedStatus === 'declined') {
@@ -438,6 +444,7 @@ function renderConfirmation() {
       details += `<p><strong>${escapeHtml(t('inv.timeslotsWord', 'Timeslot(s)'))}:</strong></p><ul>`;
       const seen = new Set();
       Object.entries(rsvp.perStudentSlots).forEach(([key, slotId]) => {
+        if (!honorees[key]) return;   // 🧟 student was deleted after RSVP
         const uid = studentUid(honorees[key]) || key;
         if (seen.has(uid)) return; seen.add(uid);
         const h = honorees[key];

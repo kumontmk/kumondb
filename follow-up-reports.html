@@ -4,12 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title data-i18n="documentTitle">Student Follow-Up Reports - Kumon DB</title>
-  <link rel="stylesheet" href="follow-up-reports.css" />
+  <link rel="stylesheet" href="follow-up-reports.css?v=5" />
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
-  <!-- ACCESS DENIED (hidden by default; only the 8s safety-net can reveal it) -->
   <div id="accessDenied" class="access-denied hidden">
     <div class="access-denied-content">
       <h2 data-i18n="accessDeniedTitle">🔒 Access Denied</h2>
@@ -19,8 +18,6 @@
   </div>
 
   <script>
-    // Safety net: if follow-up-reports.js fails to boot (old cache / syntax error / network),
-    // stop the spinner after 8s and reveal the gate so nobody is stuck on a blank loader.
     setTimeout(function () {
       if (!window.__fuBooted) {
         var ad = document.getElementById('accessDenied');
@@ -31,10 +28,8 @@
     }, 8000);
   </script>
 
-  <!-- PAGE LOADER -->
   <div id="page-loader"><div class="spinner"></div></div>
 
-  <!-- MAIN CONTENT -->
   <div id="mainContent" class="hidden">
     <header>
       <nav><button id="backToDashboardBtn" data-i18n="backToDashboard">← Dashboard</button></nav>
@@ -43,7 +38,6 @@
     </header>
 
     <div class="fu-page">
-
       <div class="fu-toolbar">
         <div class="month-pager">
           <button id="monthPrev" class="pager-btn" title="Previous month" data-i18n-title="prevMonth">‹</button>
@@ -61,9 +55,10 @@
         <button class="tab-btn" data-tab="log" data-i18n="tabLog">➕ Log Follow-Up</button>
         <button class="tab-btn" data-tab="report" data-i18n="tabReport">📈 Monthly Report</button>
         <button class="tab-btn" data-tab="logs" data-i18n="tabLogs">🗂️ Follow-Ups Logged</button>
+        <button class="tab-btn" data-tab="studentHistory" data-i18n="pshTab">👤 Per Student History</button>
       </div>
 
-      <!-- ==================== TRACKER ==================== -->
+      <!-- TRACKER -->
       <div id="tab-tracker" class="tab-content active">
         <div class="section">
           <div class="controls">
@@ -101,13 +96,11 @@
               </select></div>
             <button id="clearFiltersBtn" class="secondary" data-i18n="clear">Clear</button>
           </div>
-
           <div id="bulkBar" class="bulk-bar hidden">
             <span id="bulkCount">0 <span data-i18n="selected">selected</span></span>
             <button id="bulkLogBtn" class="primary" data-i18n="bulkLog">➕ Log follow-up for selected</button>
             <button id="bulkClearBtn" class="secondary" data-i18n="clearSelection">Clear selection</button>
           </div>
-
           <div class="table-wrapper">
             <table id="trackerTable">
               <thead><tr>
@@ -118,7 +111,6 @@
               <tbody id="trackerBody"></tbody>
             </table>
           </div>
-
           <div class="pagination">
             <span id="pgInfo">0 students</span>
             <div class="pg-btns">
@@ -132,7 +124,7 @@
         </div>
       </div>
 
-      <!-- ==================== LOG ==================== -->
+      <!-- LOG -->
       <div id="tab-log" class="tab-content">
         <div class="log-grid">
           <div class="section">
@@ -144,20 +136,17 @@
             </div>
             <div id="selectedStudents" class="selected-students"></div>
           </div>
-
           <div class="section">
             <h3 data-i18n="logStep2">2 · Follow-Up Details</h3>
             <div id="noStudentMsg" class="empty-inline" data-i18n="noStudentMsg">👈 Select at least one student to begin.</div>
             <div id="formArea" class="hidden">
               <label class="field-label" data-i18n="subjectsCovered">Subjects covered by this follow-up</label>
               <div id="subjectChips" class="subject-chips"></div>
-
               <label class="field-label" data-i18n="followUpType">Follow-Up Type</label>
               <div class="seg">
                 <label class="seg-option"><input type="radio" name="fuType" id="fuTypeMessage" checked /><span data-i18n="typeMessage">📩 Message</span></label>
                 <label class="seg-option"><input type="radio" name="fuType" id="fuTypeCall" /><span data-i18n="typeCall">📞 Call</span></label>
               </div>
-
               <div id="messageFields">
                 <label class="field-label" for="templateSelect" data-i18n="template">Template (fills both languages)</label>
                 <select id="templateSelect">
@@ -177,10 +166,9 @@
                 <textarea id="msgZh" rows="5"></textarea>
                 <div class="form-grid">
                   <div><label class="field-label" for="dateCreated" data-i18n="dateCreated">Date Created</label><input type="date" id="dateCreated" /></div>
-                  <div class="hint-text" style="align-self:center" data-i18n="msgHint">📩 Messages save as <b>Not Sent</b>.<br>Mark them Sent later from the Follow-Ups Logged table.</div>
+                  <div class="hint-text" style="align-self:center" data-i18n="msgHint">📩 Messages save as Not Sent. Mark them Sent later from the Follow-Ups Logged table.</div>
                 </div>
               </div>
-
               <div id="callFields" class="hidden">
                 <label class="field-label" for="callNotes" data-i18n="callNotesLabel">Call Notes *</label>
                 <textarea id="callNotes" rows="4"></textarea>
@@ -189,10 +177,8 @@
                 <label class="field-label" for="callDate" data-i18n="dateCalled">Date Called *</label>
                 <input type="date" id="callDate" />
               </div>
-
               <label class="field-label" for="teacherSelect" data-i18n="followedUpBy">Followed Up By</label>
               <select id="teacherSelect"></select>
-
               <div class="btn-row">
                 <button id="saveFollowUpBtn" class="primary" data-i18n="saveFollowUp">💾 Save Follow-Up</button>
                 <button id="clearFormBtn" class="secondary" data-i18n="clearForm">Clear</button>
@@ -202,7 +188,7 @@
         </div>
       </div>
 
-      <!-- ==================== REPORT ==================== -->
+      <!-- REPORT -->
       <div id="tab-report" class="tab-content">
         <div class="section">
           <div class="section-head">
@@ -245,34 +231,29 @@
         </div>
       </div>
 
-      <!-- ==================== LOGS ==================== -->
+      <!-- LOGS -->
       <div id="tab-logs" class="tab-content">
         <div class="section">
           <div class="section-head">
             <h3><span data-i18n="loggedTitle">🗂️ Follow-Ups Logged —</span> <span id="recentMonthLabel"></span></h3>
             <button id="exportMonthlyLogBtn" class="primary" data-i18n="exportLog">📤 Export Log (Excel)</button>
           </div>
-
-                  <!-- 🔍 Logs filter bar -->
-                  <div class="controls logs-controls">
-                    <input type="text" id="logSearchInput" autocomplete="off"
-                          placeholder="🔍 Search name, pinyin, nickname, student no, teacher, school, message…"
-                          data-i18n-placeholder="logsSearchPlaceholder">
-                    <div class="filter-group">
-                      <label for="logFilterSubject" data-i18n="subject">Subject</label>
-                      <select id="logFilterSubject">
-                        <option value="" data-i18n="allSubjects">All Subjects</option>
-                        <option value="Math" data-i18n="math">Math</option>
-                        <option value="English ERP" data-i18n="englishErp">English ERP</option>
-                        <option value="English EFL" data-i18n="englishEfl">English EFL</option>
-                        <option value="Chinese (Trad)" data-i18n="chiTrad">Chinese (Trad)</option>
-                        <option value="Chinese (Simp)" data-i18n="chiSimp">Chinese (Simp)</option>
-                      </select>
-                    </div>
-                    <button id="clearLogFiltersBtn" class="secondary" data-i18n="clear">Clear</button>
-                    <span id="logsCountInfo" class="logs-count" title="Records shown this month"></span>
-                  </div>
-
+          <div class="controls logs-controls">
+            <input type="text" id="logSearchInput" autocomplete="off" placeholder="🔍 Search name, pinyin, nickname, student no, teacher, school, message…" data-i18n-placeholder="logsSearchPlaceholder">
+            <div class="filter-group">
+              <label for="logFilterSubject" data-i18n="subject">Subject</label>
+              <select id="logFilterSubject">
+                <option value="" data-i18n="allSubjects">All Subjects</option>
+                <option value="Math" data-i18n="math">Math</option>
+                <option value="English ERP" data-i18n="englishErp">English ERP</option>
+                <option value="English EFL" data-i18n="englishEfl">English EFL</option>
+                <option value="Chinese (Trad)" data-i18n="chiTrad">Chinese (Trad)</option>
+                <option value="Chinese (Simp)" data-i18n="chiSimp">Chinese (Simp)</option>
+              </select>
+            </div>
+            <button id="clearLogFiltersBtn" class="secondary" data-i18n="clear">Clear</button>
+            <span id="logsCountInfo" class="logs-count" title="Records shown this month"></span>
+          </div>
           <div class="table-wrapper recent-wrap">
             <table id="logsTable">
               <thead><tr>
@@ -285,8 +266,60 @@
         </div>
       </div>
 
-    </div><!-- /.fu-page -->
-  </div><!-- /#mainContent -->
+      <!-- PER STUDENT HISTORY -->
+      <div id="tab-studentHistory" class="tab-content">
+        <div class="section">
+          <div class="section-head">
+            <h3 data-i18n="pshTitle">👤 Per Student History — every follow-up for one student</h3>
+            <span class="logs-count" id="pshCountInfo"></span>
+          </div>
+          <div class="controls psh-controls">
+            <input type="text" id="pshSearch" data-i18n-placeholder="pshSearchPlaceholder" placeholder="🔍 Search student (name, pinyin, nickname, #)…">
+            <span id="pshScopeNote" class="sub hidden" data-i18n="pshSearchAllCenters">🌐 Searching all centers while typing</span>
+            <div class="filter-group">
+              <label data-i18n="status">Status</label>
+              <select id="pshStatus">
+                <option value="" data-i18n="allStatus">All Status</option>
+                <option value="Current" data-i18n="pshStCurrent">Current</option>
+                <option value="Inquiry" data-i18n="pshStInquiry">Inquiry</option>
+                <option value="Pause" data-i18n="pshStPause">Paused</option>
+                <option value="Completer" data-i18n="pshStCompleter">Completer</option>
+                <option value="Drop" data-i18n="pshStDrop">Drop</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label data-i18n="sort">Sort</label>
+              <select id="pshSort">
+                <option value="recent" selected data-i18n="pshSortRecent">Most recent contact</option>
+                <option value="last" data-i18n="pshSortLast">Longest without contact</option>
+                <option value="name" data-i18n="pshSortName">Name</option>
+                <option value="total" data-i18n="pshSortTotal">Most follow-ups</option>
+              </select>
+            </div>
+            <label class="psh-check"><input type="checkbox" id="pshOnlyWithFu" /> <span data-i18n="pshOnlyWithFu">Has follow-ups only</span></label>
+          </div>
+          <div class="psh-layout">
+            <div class="psh-list">
+              <div class="table-wrapper psh-wrap">
+                <table id="pshTable">
+                  <thead><tr>
+                    <th data-i18n="thStudent">Student</th>
+                    <th data-i18n="thGrade">Grade</th>
+                    <th data-i18n="pshThStatus">Status</th>
+                    <th data-i18n="pshThTotal">Total FUs</th>
+                    <th data-i18n="pshThLast">Last Contact</th>
+                  </tr></thead>
+                  <tbody id="pshListBody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="psh-detail" id="pshDetail"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
 
   <!-- HISTORY MODAL -->
   <div id="historyModal" class="modal-overlay hidden">
@@ -294,23 +327,22 @@
       <span class="modal-close" id="closeHistoryBtn">×</span>
       <h3 id="historyTitle" data-i18n="historyTitle">🕓 Follow-Up History</h3>
       <div id="historyBody"></div>
+      <div class="btn-row"><button class="primary" id="historyOpenTabBtn" data-i18n="pshOpenTab">👤 Open in Per-Student tab</button></div>
     </div>
   </div>
 
-  <!-- EDIT MODAL (everything INSIDE modal-box) -->
+  <!-- EDIT MODAL -->
   <div id="editModal" class="modal-overlay hidden">
     <div class="modal-box">
       <span class="modal-close" id="closeEditBtn">×</span>
       <h3 data-i18n="editTitle">✏️ Edit Follow-Up</h3>
       <input type="hidden" id="editId" />
       <div id="editStudentLabel" class="edit-student-label"></div>
-
       <label class="field-label" data-i18n="followUpType">Follow-Up Type</label>
       <div class="seg">
         <label class="seg-option"><input type="radio" name="editType" id="editTypeMessage" checked /><span data-i18n="typeMessage">📩 Message</span></label>
         <label class="seg-option"><input type="radio" name="editType" id="editTypeCall" /><span data-i18n="typeCall">📞 Call</span></label>
       </div>
-
       <div id="editMessageFields">
         <label class="field-label" for="editMessageType" data-i18n="messageType">Message Type</label>
         <select id="editMessageType">
@@ -339,7 +371,6 @@
             </div>
           </div>
       </div>
-
       <div id="editCallFields" class="hidden">
         <label class="field-label" for="editCallNotes" data-i18n="callNotesLabel">Call Notes *</label>
         <textarea id="editCallNotes" rows="4"></textarea>
@@ -348,10 +379,8 @@
         <label class="field-label" for="editCallDate" data-i18n="dateCalled">Date Called *</label>
         <input type="date" id="editCallDate" />
       </div>
-
       <label class="field-label" for="editTeacherSelect" data-i18n="followedUpBy">Followed Up By</label>
       <select id="editTeacherSelect"></select>
-
       <div class="btn-row">
         <button id="saveEditBtn" class="primary" data-i18n="saveChanges">💾 Save Changes</button>
         <button id="deleteEditBtn" class="danger" data-i18n="delete">🗑️ Delete</button>
@@ -375,6 +404,6 @@
   <div id="toast" class="toast hidden"></div>
 
   <script type="module" src="follow-up-reports-i18n.js"></script>
-  <script type="module" src="follow-up-reports.js?v=4"></script>
+  <script type="module" src="follow-up-reports.js?v=5"></script>
 </body>
 </html>

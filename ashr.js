@@ -31,6 +31,8 @@ let cameraActive = false;
 let manualMerges = {};
 let mergeMode = false;
 let mergeSelection = new Set();
+let honoreesLoaded = false;   //  repair guard
+let repairRunning = false;    // 🧟 repair guard
 
 const $ = (id) => document.getElementById(id);
 
@@ -352,21 +354,62 @@ async function loadEventList() {
 function subscribeToEvent(eventId) {
   unsubscribers.forEach(fn => fn());
   unsubscribers = [];
+  honoreesLoaded = false;
   const base = `ashrEvents/${eventId}`;
   const subs = [
     { path: `${base}/settings`, handler: (snap) => { eventSettings = snap.val() || {}; renderControlPanel(); updateEventStatus(); } },
     { path: `${base}/timeslots`, handler: (snap) => { timeslots = snap.val() || {}; renderTimeslots(); renderSlotCapacity(); renderCheckinSlots(); } },
-    { path: `${base}/honorees`, handler: (snap) => { honorees = snap.val() || {}; renderHonorees(); renderLinks(); renderRSVPs(); renderCheckinSlots(); } },
+    { path: `${base}/honorees`, handler: (snap) => { honorees = snap.val() || {}; honoreesLoaded = true; renderHonorees(); renderLinks(); renderRSVPs(); renderCheckinSlots(); maybeRepairAfterDeletions(); } },
     { path: `${base}/families`, handler: (snap) => { families = snap.val() || {}; renderLinks(); renderRSVPs(); renderSlotCapacity(); renderCheckinSlots(); } },
     { path: `${base}/checkins`, handler: (snap) => { checkins = snap.val() || {}; renderCheckinSlots(); } },
     { path: `${base}/unmatched`, handler: (snap) => { unmatchedDb = snap.val() || {}; renderUnmatched(); } },
-    { path: `publicAshrLinks/${currentEventId}`, handler: (snap) => { portalsCache = {}; if (snap.exists()) snap.forEach(c => { portalsCache[c.key] = c.val(); }); renderLinks(); renderRSVPs(); } },
+    { path: `publicAshrLinks/${currentEventId}`, handler: (snap) => { portalsCache = {}; if (snap.exists()) snap.forEach(c => { portalsCache[c.key] = c.val(); }); renderLinks(); renderRSVPs(); maybeRepairAfterDeletions(); } },
     { path: `${base}/manualMerges`, handler: (snap) => { manualMerges = snap.val() || {}; renderLinks(); renderRSVPs(); renderSlotCapacity(); renderCheckinSlots(); } },
   ];
   subs.forEach(({ path, handler }) => {
     const unsub = onValue(ref(db, path), handler, (err) => console.error(`Listener error on ${path}:`, err));
     unsubscribers.push(() => unsub());
   });
+}
+
+// ============================================
+// 🧟 ZOMBIE-LINK REPAIR
+//   When an honoree is deleted, portals & family records still
+//   reference the dead key. This trims dead members, rewrites the
+//   portal familyKey so it keeps matching its family (RSVP kept),
+//   and DISABLES portals whose last honoured student disappeared.
+//   Runs automatically whenever honorees/links change; idempotent.
+// ============================================
+function maybeRepairAfterDeletions() {
+  if (!honoreesLoaded || repairRunning) return;
+  const updates = {};
+  Object.entries(portalsCache).forEach(([token, p]) => {
+    const orig = p.members || [];
+    if (!orig.length) return;
+    const valid = orig.filter(k => honorees[k]);
+    if (valid.length === orig.length) return;
+    const base = `publicAshrLinks/${currentEventId}/${token}`;
+    if (valid.length) {
+      updates[`${base}/members`] = valid;
+      updates[`${base}/familyKey`] = valid.slice().sort().join('|');
+    } else {
+      updates[`${base}/active`] = false;
+      updates[`${base}/disabledReason`] = 'honoree-deleted';
+    }
+  });
+  Object.entries(families).forEach(([fid, f]) => {
+    const ids = f.memberHonoreeIds || [];
+    if (!ids.length) return;
+    const kept = ids.filter(k => honorees[k]);
+    if (kept.length !== ids.length) {
+      updates[`ashrEvents/${currentEventId}/families/${fid}/memberHonoreeIds`] = kept;
+    }
+  });
+  if (!Object.keys(updates).length) return;
+  repairRunning = true;
+  update(ref(db), updates)
+    .catch(err => console.error('Portal repair failed:', err))
+    .finally(() => { repairRunning = false; });
 }
 
 function setupTabs() {
@@ -1027,7 +1070,7 @@ function renderHonorees() {
   });
   tbody.querySelectorAll('[data-del-honoree]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      if (confirm('Remove this honoree?')) {
+      if (confirm('Remove this honoree? Their family invitation link will be updated automatically — or disabled if no honoured students remain in that family.')) {
         await remove(ref(db, `ashrEvents/${currentEventId}/honorees/${btn.dataset.delHonoree}`));
       }
     });
@@ -1075,8 +1118,8 @@ async function saveEditHonoree() {
     if (dup) { dup.stars = Math.max(dup.stars, stars); dup.tier = tierFor(dup.stars); }
     else awards.push({ subject, stars, tier: tierFor(stars), reportingMonth: rm });
   }
-  // 🆕 FIX: a honoree may have ZERO awards as long as they keep a Completer
-  //    record (completer-only honoree). Block only when nothing would remain.
+  // 🆕 A honoree may have ZERO awards as long as they keep a Completer
+  //    record (completer-only honoree). Block only when nothing remains.
   const existing = honorees[editingHonoreeKey];
   const hasCompleter = (existing?.completions || []).length > 0;
   if (!awards.length && !hasCompleter) {
@@ -1085,7 +1128,7 @@ async function saveEditHonoree() {
   const key = editingHonoreeKey;
   try {
     await update(ref(db, `ashrEvents/${currentEventId}/honorees/${key}`), {
-      awards: awards.length ? awards : null   // empty → remove node cleanly
+      awards: awards.length ? awards : null
     });
     showToast(t('hon.updated', 'Updated!'), 'success');
     renderHonorees();
