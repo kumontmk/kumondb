@@ -461,6 +461,13 @@ function placeFilterChip() {
 // ============================================================
 function updateOffsiteButtonState() {
   if (!osClockBtn) return;
+  // 🚫 kumonchamps@gmail.com = approval-only, never requests off-site.
+  // Other Master Admins who are employees keep the button (osIsMasterAdmin
+  // is email-based, so position-based Master Admins are unaffected).
+  if (osIsMasterAdmin) {
+    osZone.style.display = 'none';
+    return;
+  }
   const canUse = !!osCurrentEmpId;
   osClockBtn.style.display = canUse ? '' : 'none';
   osZone.style.display = canUse ? '' : 'none';
@@ -850,7 +857,7 @@ function maybeInjectSuggestion() {
   const isOutsideRange = icon.includes('❌') && (msg.includes('Outside') || msg.includes('超出'));
   const recentSelfTap = (Date.now() - lastSelfTapAt) < 8000;
 
-  if (visible && isOutsideRange && recentSelfTap && osCurrentEmpId && isTodaySelected() && !injected) {
+if (visible && isOutsideRange && recentSelfTap && osCurrentEmpId && !osIsMasterAdmin && isTodaySelected() && !injected) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'os-suggest-btn';
