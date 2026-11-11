@@ -1,0 +1,180 @@
+/* ============================================================
+   timecard-offsite.css — 📍 OFF-SITE ADDON STYLES (v1)
+   Fully scoped: every class is prefixed with "os-".
+   Does NOT modify timecard.css.
+   ============================================================ */
+:root {
+  --os-pending: #f59e0b;
+  --os-pending-bg: #fef3c7;
+  --os-pending-text: #92400e;
+  --os-approved: #059669;
+  --os-approved-bg: #d1fae5;
+  --os-rejected: #dc2626;
+  --os-rejected-bg: #fee2e2;
+  --os-blue: #4682B4;
+  --os-radius: 10px;
+  --os-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+/* ---------- 📍 Off-site action button ---------- */
+.os-zone { display: flex; flex-direction: column; align-items: center; gap: .5rem; margin: 0 auto 1.2rem; }
+.os-clock-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  min-height: 48px; padding: .8rem 1.6rem;
+  background: #fff; color: var(--os-pending-text);
+  border: 2px dashed var(--os-pending); border-radius: 999px;
+  font-size: .95rem; font-weight: 700; cursor: pointer;
+  transition: all .2s ease; box-shadow: 0 2px 6px rgba(245,158,11,.15);
+}
+.os-clock-btn:hover:not(:disabled) { background: var(--os-pending-bg); transform: translateY(-1px); }
+.os-clock-btn:active:not(:disabled) { transform: translateY(0) scale(.98); }
+.os-clock-btn:disabled { opacity: .55; cursor: not-allowed; filter: grayscale(.5); }
+.os-clock-btn.is-busy { color: transparent; position: relative; }
+.os-clock-btn.is-busy::after {
+  content: ''; position: absolute; width: 20px; height: 20px; border-radius: 50%;
+  border: 3px solid rgba(146,64,14,.25); border-top-color: var(--os-pending-text);
+  animation: osSpin .8s linear infinite;
+}
+@keyframes osSpin { to { transform: rotate(360deg); } }
+.os-pending-chip {
+  font-size: .78rem; font-weight: 700; color: var(--os-pending-text);
+  background: var(--os-pending-bg); border: 1px solid var(--os-pending);
+  padding: .3rem .8rem; border-radius: 999px;
+  animation: osChipPulse 2.2s ease-in-out infinite;
+}
+@keyframes osChipPulse { 0%,100% { opacity: 1; } 50% { opacity: .6; } }
+
+/* ---------- 🏷️ Filter chip (next to position filter) ---------- */
+.os-filter-chip {
+  flex: 0 0 auto; align-self: flex-end; min-height: 44px;
+  padding: .6rem 1rem; margin-bottom: 1px;
+  background: #fff; color: var(--os-blue);
+  border: 1px solid #cbd5e1; border-radius: var(--os-radius);
+  font-size: .88rem; font-weight: 700; cursor: pointer; white-space: nowrap;
+  transition: all .2s ease;
+}
+.os-filter-chip:hover { border-color: var(--os-blue); background: #f0f8ff; }
+.os-filter-chip.active { background: var(--os-blue); border-color: var(--os-blue); color: #fff; }
+
+/* ---------- ✅ Pending Approvals panel (master admin) ---------- */
+.os-panel {
+  background: #fff; border-radius: 12px; box-shadow: var(--os-shadow);
+  border: 2px solid var(--os-pending); padding: 1rem 1.25rem; margin-bottom: 1.25rem;
+}
+.os-panel-head { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-bottom: .25rem; }
+.os-panel-head h2 { font-size: 1.05rem; color: var(--os-pending-text); margin: 0; }
+.os-panel-sub { font-size: .82rem; color: #666; margin-bottom: .9rem; }
+.os-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 24px; height: 24px; padding: 0 .45rem; border-radius: 999px;
+  background: var(--os-pending); color: #fff; font-size: .8rem; font-weight: 800;
+}
+.os-empty { text-align: center; padding: 1.4rem; color: #94a3b8; background: #f8fafc; border-radius: var(--os-radius); font-size: .92rem; }
+
+.os-card {
+  border: 1px solid #e2e8f0; border-left: 5px solid var(--os-pending);
+  border-radius: var(--os-radius); padding: .9rem 1rem; margin-bottom: .8rem; background: #fffdf7;
+}
+.os-card.resolved { background: #f8fafc; border-left-color: #94a3b8; }
+.os-card.resolved.approved { border-left-color: var(--os-approved); }
+.os-card.resolved.rejected { border-left-color: var(--os-rejected); }
+.os-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; font-weight: 700; color: #1e293b; }
+.os-card-head .os-type { font-size: .75rem; font-weight: 800; padding: .15rem .5rem; border-radius: 6px; }
+.os-type.in  { background: #dbeafe; color: #1e40af; }
+.os-type.out { background: #dcfce7; color: #166534; }
+.os-card-meta { font-size: .82rem; color: #64748b; margin-top: .35rem; display: flex; flex-wrap: wrap; gap: .35rem .9rem; }
+.os-card-meta .os-acc-warn { color: var(--os-rejected); font-weight: 700; }
+.os-reason { margin-top: .5rem; font-size: .9rem; background: #fff; border: 1px dashed #e2e8f0; border-radius: 8px; padding: .5rem .7rem; color: #334155; }
+.os-address { font-size: .8rem; color: #64748b; margin-top: .4rem; }
+.os-map-wrap { margin-top: .6rem; border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0; }
+.os-map-wrap iframe { display: block; width: 100%; height: 220px; border: 0; }
+.os-card-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+.os-btn {
+  padding: .55rem 1rem; border: none; border-radius: 8px;
+  font-weight: 700; font-size: .88rem; cursor: pointer; min-height: 42px;
+  display: inline-flex; align-items: center; gap: .4rem; text-decoration: none; color: #fff;
+  transition: all .15s ease;
+}
+.os-btn:disabled { opacity: .5; cursor: wait; }
+.os-btn.approve { background: var(--os-approved); } .os-btn.approve:hover:not(:disabled) { background: #047857; }
+.os-btn.reject  { background: var(--os-rejected); }  .os-btn.reject:hover:not(:disabled)  { background: #b91c1c; }
+.os-btn.ghost   { background: #f1f5f9; color: #475569; } .os-btn.ghost:hover { background: #e2e8f0; }
+.os-history-toggle { background: none; border: none; color: var(--os-blue); font-weight: 700; cursor: pointer; font-size: .85rem; padding: .4rem 0; text-decoration: underline; }
+
+/* ---------- 🏷️ Status badges + pin inside the attendance table ---------- */
+.os-status-badge {
+  display: inline-block; margin-left: .4rem; padding: .15rem .5rem; border-radius: 999px;
+  font-size: .7rem; font-weight: 800; letter-spacing: .04em; vertical-align: middle;
+}
+.os-status-badge.pending  { background: var(--os-pending-bg);  color: var(--os-pending-text); animation: osChipPulse 2.2s ease-in-out infinite; }
+.os-status-badge.approved { background: var(--os-approved-bg); color: var(--os-approved); }
+.os-status-badge.rejected { background: var(--os-rejected-bg); color: var(--os-rejected); }
+.os-pin-btn {
+  background: none; border: none; cursor: pointer; font-size: 1rem; padding: 0 .15rem 0 0;
+  vertical-align: middle; transition: transform .15s ease; min-height: auto;
+}
+.os-pin-btn:hover { transform: scale(1.25); }
+tr.os-row-rejected td { text-decoration: line-through; color: #94a3b8; }
+tr.os-row-rejected td .os-status-badge { text-decoration: none; }
+.os-card .os-status-badge { margin-left: .4rem; }
+
+/* ---------- 🗺️ Modals (request confirmation / map viewer) ---------- */
+.os-modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 2500;
+  display: flex; align-items: center; justify-content: center; padding: 1rem;
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); animation: osFadeIn .2s ease;
+}
+.os-modal-content {
+  background: #fff; border-radius: 14px; box-shadow: 0 12px 32px rgba(0,0,0,.25);
+  width: 100%; max-width: 460px; max-height: 92vh; overflow-y: auto;
+  padding: 1.5rem; position: relative; animation: osSlideUp .25s ease;
+}
+.os-modal-content h3 { color: var(--os-blue); margin-bottom: .9rem; font-size: 1.1rem; }
+.os-modal-close { position: absolute; top: 10px; right: 14px; font-size: 1.7rem; background: none; border: none; color: #666; cursor: pointer; padding: 0; min-height: auto; }
+.os-coords { font-size: .85rem; background: #f1f5f9; border-radius: 8px; padding: .55rem .75rem; color: #475569; margin-bottom: .6rem; word-break: break-all; }
+.os-acc-line { font-size: .85rem; color: #475569; margin-bottom: .6rem; }
+.os-acc-line.warn { color: var(--os-rejected); font-weight: 700; }
+.os-modal .os-map-wrap { margin-top: 0; margin-bottom: .8rem; }
+.os-field { margin-top: .8rem; }
+.os-field label { display: block; font-size: .85rem; font-weight: 700; color: #555; margin-bottom: .35rem; }
+.os-field textarea { width: 100%; min-height: 74px; resize: vertical; font-family: inherit; }
+.os-char-count { font-size: .75rem; color: #94a3b8; text-align: right; margin-top: .2rem; }
+.os-char-count.ok { color: var(--os-approved); }
+.os-modal-actions { display: flex; gap: .75rem; margin-top: 1.1rem; }
+.os-modal-actions .os-btn { flex: 1; justify-content: center; min-height: 48px; font-size: .95rem; }
+@keyframes osFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes osSlideUp { from { transform: translateY(18px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+/* ---------- 🚀 Smart suggestion inside existing result modal ---------- */
+.os-suggest-btn {
+  margin-top: 1rem; width: 100%; min-height: 48px;
+  background: var(--os-pending-bg); color: var(--os-pending-text);
+  border: 2px dashed var(--os-pending); border-radius: var(--os-radius);
+  font-weight: 800; font-size: .95rem; cursor: pointer;
+}
+.os-suggest-btn:hover { background: #fde68a; }
+
+/* ---------- 🔔 Toasts ---------- */
+.os-toasts { position: fixed; bottom: 1.2rem; left: 50%; transform: translateX(-50%); z-index: 3000; display: flex; flex-direction: column; gap: .5rem; width: min(92vw, 420px); }
+.os-toast {
+  padding: .8rem 1.1rem; border-radius: 10px; color: #fff; font-size: .9rem; font-weight: 600;
+  box-shadow: 0 6px 18px rgba(0,0,0,.22); animation: osSlideUp .25s ease; text-align: center;
+}
+.os-toast.success { background: var(--os-approved); }
+.os-toast.info    { background: var(--os-blue); }
+.os-toast.warn    { background: #d97706; }
+.os-toast.error   { background: var(--os-rejected); }
+.os-toast.out { opacity: 0; transform: translateY(8px); transition: all .3s ease; }
+
+/* ---------- 📱 Responsive / ♿ motion / 🖨️ print ---------- */
+@media (max-width: 768px) {
+  .os-panel { padding: .85rem; }
+  .os-card-actions .os-btn { flex: 1 1 45%; justify-content: center; }
+  .os-modal-content { padding: 1.2rem 1rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .os-pending-chip, .os-status-badge.pending, .os-clock-btn.is-busy::after { animation: none; }
+}
+@media print {
+  .os-zone, .os-panel, .os-filter-chip, .os-toasts, .os-modal, .os-pin-btn { display: none !important; }
+}
