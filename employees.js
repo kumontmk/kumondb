@@ -1835,31 +1835,39 @@ function renderTable(filter = '') {
     return { logs: fixedLogs, changed };
   }
 
+  // 📍 OFF-SITE marker detection (matches the addon's log.location)
+  // ⚠️ Must live OUTSIDE getLogsRows so exportToExcel() can call it too.
+  function isOffsiteLocation(location) {
+    return String(location || '').trim().toLowerCase() === 'off-site';
+  }
+
   function getLogsRows(logs) {
     const sortedLogs = [...logs].sort((a, b) => a.time.localeCompare(b.time));
     const rows = [];
-    let currentRow = { inTime: '', inIndex: -1, outTime: '', outIndex: -1, inLocation: '' };
+    let currentRow = { inTime: '', inIndex: -1, outTime: '', outIndex: -1, inLocation: '', inLog: null, outLog: null };
     for (let i = 0; i < sortedLogs.length; i++) {
       const log = sortedLogs[i];
       if (log.type === 'in') {
         if (currentRow.inTime !== '') {
           rows.push(currentRow);
-          currentRow = { inTime: log.time, inIndex: i, outTime: '', outIndex: -1, inLocation: log.location };
+          currentRow = { inTime: log.time, inIndex: i, outTime: '', outIndex: -1, inLocation: log.location, inLog: log, outLog: null };
         } else {
           currentRow.inTime = log.time;
           currentRow.inIndex = i;
           currentRow.inLocation = log.location;
+          currentRow.inLog = log;
         }
       } else if (log.type === 'out') {
         if (currentRow.outTime !== '') {
           rows.push(currentRow);
-          currentRow = { inTime: '', inIndex: -1, outTime: log.time, outIndex: i, inLocation: '' };
-        } else if (currentRow.inTime !== '' && currentRow.inLocation !== log.location) {
-          rows.push(currentRow);
-          currentRow = { inTime: '', inIndex: -1, outTime: log.time, outIndex: i, inLocation: '' };
+          currentRow = { inTime: '', inIndex: -1, outTime: log.time, outIndex: i, inLocation: '', inLog: null, outLog: log };
         } else {
+          // ✅ PAIRING v2: an OUT closes the open IN even if recorded at a
+          // different location (off-site or another center).
           currentRow.outTime = log.time;
           currentRow.outIndex = i;
+          currentRow.outLocation = log.location;
+          currentRow.outLog = log;
         }
       }
     }
@@ -1921,7 +1929,8 @@ function renderTable(filter = '') {
               currentIn = timeToMinutes(log.time);
               currentInLocation = log.location;
             } else if (log.type === 'out') {
-              if (currentIn !== null && currentInLocation === log.location) {
+                // ✅ PAIRING v2: OUT closes the open IN regardless of location
+                if (currentIn !== null) {
                 const outMins = timeToMinutes(log.time);
                 if (outMins !== null && outMins >= currentIn) {
                   totalMinutes += (outMins - currentIn);
@@ -1986,7 +1995,7 @@ function renderTable(filter = '') {
               </td>
               <td data-label="${i+1}${['st','nd','rd','th','th'][i]} Out">
                 <div class="time-cell">
-                  <input type="time" value="${cycle.outTime}" disabled class="tc-input" data-type="out" data-location="${inLoc}">
+                  <input type="time" value="${cycle.outTime}" disabled class="tc-input" data-type="out" data-location="${cycle.outLocation || inLoc}">
                   ${cycle.outTime ? `<button class="delete-log-btn" data-type="out" data-time="${cycle.outTime}" data-idx="${cycle.outIndex}" title="Delete">️</button>` : ''}
                 </div>
               </td>
@@ -2454,35 +2463,57 @@ async function exportToExcel(options = {}) {
             terms: empInfo.terms || 'Full-time',
             totalMinutes: 0,
             days: new Set(),
-            centers: {}
+            centers: {},
+            offsite: { minutes: 0, records: [] }
           };
         }
         const rawLogs = empDayData.logs || [];
         const { logs } = autoFixLogs(rawLogs, empInfo.terms || 'Full-time');
-        const centerLogs = {};
-        logs.forEach(log => {
-          const abbr = getCenterAbbr(log.location);
-          if (abbr === 'Unknown') return;
-          (centerLogs[abbr] = centerLogs[abbr] || []).push(log);
-        });
-        Object.entries(centerLogs).forEach(([abbr, cLogs]) => {
-          const c = empData[empId].centers[abbr] || (empData[empId].centers[abbr] = { minutes: 0, records: [], days: new Set() });
-          cLogs.sort((a, b) => a.time.localeCompare(b.time));
-          const rows = getLogsRows(cLogs);
-          let dayTotalMinutes = 0;
-          const cycles = [];
-          rows.forEach(row => {
-            if (row.inTime && row.outTime) {
+        // ✅ PAIRING v2: pair on the FULL day log list (an OUT closes the open IN
+        // even off-site / cross-center), then attribute each cycle to the
+        // clock-IN's center. Off-site clock-ins stay excluded from center columns.
+        const rows = getLogsRows([...logs].sort((a, b) => String(a.time || '').localeCompare(String(b.time || ''))));
+        const perCenter = {};
+        rows.forEach(row => {
+          // 📍 OFF-SITE cycle → Off-site sheet + counted in Total Hours & Days
+          if (row.inTime && isOffsiteLocation(row.inLocation)) {
+            const os = empData[empId].offsite;
+            let mins = 0;
+            if (row.outTime) {
               const inM = timeToMinutes(row.inTime), outM = timeToMinutes(row.outTime);
-              if (inM !== null && outM !== null && outM >= inM) { dayTotalMinutes += (outM - inM); cycles.push({ in: row.inTime, out: row.outTime }); }
-            } else if (row.inTime && !row.outTime) cycles.push({ in: row.inTime, out: '' });
-            else if (!row.inTime && row.outTime) cycles.push({ in: '', out: row.outTime });
-          });
-          c.minutes += dayTotalMinutes;
+              if (inM !== null && outM !== null && outM >= inM) mins = outM - inM;
+            }
+            os.minutes += mins;
+            os.records.push({
+              date,
+              in: row.inTime,
+              out: row.outTime || '',
+              minutes: mins,
+              status: row.inLog?.status || 'approved',
+              reason: row.inLog?.reason || ''
+            });
+            empData[empId].totalMinutes += mins;
+            empData[empId].days.add(date);
+            return;
+          }
+          let abbr = null;
+          if (row.inTime) abbr = getCenterAbbr(row.inLocation);
+          else if (row.outTime) abbr = getCenterAbbr(row.outLocation || row.inLocation);
+          if (!abbr || abbr === 'Unknown') return; // unknown → not a center column
+          const c = perCenter[abbr] || (perCenter[abbr] = { minutes: 0, cycles: [] });
+          if (row.inTime && row.outTime) {
+            const inM = timeToMinutes(row.inTime), outM = timeToMinutes(row.outTime);
+            if (inM !== null && outM !== null && outM >= inM) { c.minutes += (outM - inM); c.cycles.push({ in: row.inTime, out: row.outTime }); }
+          } else if (row.inTime) c.cycles.push({ in: row.inTime, out: '' });
+          else c.cycles.push({ in: '', out: row.outTime });
+        });
+        Object.entries(perCenter).forEach(([abbr, data]) => {
+          const c = empData[empId].centers[abbr] || (empData[empId].centers[abbr] = { minutes: 0, records: [], days: new Set() });
+          c.minutes += data.minutes;
           c.days.add(date);                       // 📍 day counted at this center
-          empData[empId].totalMinutes += dayTotalMinutes;
+          empData[empId].totalMinutes += data.minutes;
           empData[empId].days.add(date);          // 📍 unique day worked
-          if (cycles.length) c.records.push({ date, cycles });
+          if (data.cycles.length) c.records.push({ date, cycles: data.cycles });
         });
       });
     });
@@ -2511,12 +2542,13 @@ async function exportToExcel(options = {}) {
     const ptEmps = sortedEmps.filter(e => e.terms === 'Part-time');
 
     // --- Summary sheet(s) ---
-    const summaryHeader = ['Name', 'Position', 'Terms', 'Days Worked', 'Total Hours', 'Avg Hours/Day', ...allAbbrs];
+    const summaryHeader = ['Name', 'Position', 'Terms', 'Days Worked', 'Total Hours', 'Avg Hours/Day', ...allAbbrs, 'Off-site'];
     const summaryRow = (e) => [
       e.name, e.position, e.terms, e.days.size,
       formatExcelTime(e.totalMinutes),
       e.days.size ? formatDuration(Math.round(e.totalMinutes / e.days.size)) : '-',
-      ...allAbbrs.map(a => formatExcelTime(e.centers[a]?.minutes || 0))
+      ...allAbbrs.map(a => formatExcelTime(e.centers[a]?.minutes || 0)),
+      formatExcelTime(e.offsite?.minutes || 0)
     ];
     if (opts.separateTerms) {
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([summaryHeader, ...ftEmps.map(summaryRow)]), uniqueSheetName('Summary - Full-time'));
@@ -2535,6 +2567,28 @@ async function exportToExcel(options = {}) {
         formatExcelTime(e.totalMinutes)
       ]);
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([ptHeader, ...ptRows]), uniqueSheetName('PT Days per Center'));
+    }
+
+     // --- 📍 OFF-SITE sheet (created only when off-site sessions exist) ---
+    const osEmps = sortedEmps.filter(e => (e.offsite?.records || []).length > 0);
+    if (osEmps.length) {
+      const osHeader = ['Name', 'Position', 'Terms', 'Date', 'In', 'Out', 'Hours', 'Status', 'Reason'];
+      const osRows = [];
+      osEmps.forEach(e => {
+        e.offsite.records
+          .slice()
+          .sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.in).localeCompare(String(b.in)))
+          .forEach(r => {
+            osRows.push([
+              e.name, e.position, e.terms, r.date, r.in, r.out || '-',
+              formatExcelTime(r.minutes),
+              String(r.status || 'approved').toUpperCase(),
+              r.reason
+            ]);
+          });
+        osRows.push([`${e.name} — OFF-SITE TOTAL`, '', '', `${e.offsite.records.length} session(s)`, '', '', formatExcelTime(e.offsite.minutes), '', '']);
+      });
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([osHeader, ...osRows]), uniqueSheetName('Off-site'));
     }
 
     // --- Detail sheets (same as before, now optional) ---
@@ -2647,15 +2701,12 @@ async function exportToExcel(options = {}) {
                 if (!seenKeys.has(key)) { seenKeys.add(key); count++; }
               }
               pendingIn = log;
-            } else if (log.type === 'out') {
-              if (pendingIn && pendingIn.location === log.location) {
-                pendingIn = null;
-              } else {
+              } else if (log.type === 'out') {
+                // ✅ PAIRING v2: any OUT closes the open IN
                 if (pendingIn) {
-                  const key = `${empId}_${date}_${pendingIn.time}_out`;
-                  if (!seenKeys.has(key)) { seenKeys.add(key); count++; }
-                }
-                const key = `${empId}_${date}_${log.time}_in`;
+                  pendingIn = null;
+                } else {
+                  const key = `${empId}_${date}_${log.time}_in`;
                 if (!seenKeys.has(key)) { seenKeys.add(key); count++; }
                 pendingIn = null;
               }
@@ -2865,17 +2916,11 @@ async function loadIncompleteTimecards() {
               incompleteRecords.push({ empId, date, name: emp.englishName || '', chineseName: emp.chineseName || '', position: getEmpPositions(emp).join(', ') || '', terms: emp.terms || 'Full-time', center: currentIn.location || '', type: 'IN', time: currentIn.time, missingType: 'out' });
             }
             currentIn = log;
-          } else if (log.type === 'out') {
-            if (currentIn !== null && currentIn.location === log.location) {
-              currentIn = null;
-            } else {
-              if (currentIn !== null) {
-                incompleteRecords.push({ empId, date, name: emp.englishName || '', chineseName: emp.chineseName || '', position: getEmpPositions(emp).join(', ') || '', terms: emp.terms || 'Full-time', center: currentIn.location || '', type: 'IN', time: currentIn.time, missingType: 'out' });
-              }
+            } else if (log.type === 'out') {
+              // ✅ PAIRING v2: any OUT closes the open IN (off-site / other center included)
               currentIn = null;
             }
           }
-        }
         if (currentIn !== null) {
           incompleteRecords.push({ empId, date, name: emp.englishName || '', chineseName: emp.chineseName || '', position: getEmpPositions(emp).join(', ') || '', terms: emp.terms || 'Full-time', center: currentIn.location || '', type: 'IN', time: currentIn.time, missingType: 'out' });
         }

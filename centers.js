@@ -524,11 +524,13 @@ async function checkMissingClockOuts() {
             }
           }
           currentIn = log;
-        } else if (log.type === 'out') {
-          if (currentIn && currentIn.location === log.location) {
-            currentIn = null; // Valid pair found
-          }
-        }
+          } else if (log.type === 'out') {
+            // ✅ PAIRING v2: any clock-out closes the open clock-in,
+            // even if recorded off-site or at a different center.
+            if (currentIn) {
+              currentIn = null;
+            }
+         }
       }
 
       if (currentIn) {
