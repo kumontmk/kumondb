@@ -33,7 +33,9 @@ export default {
     payslipGenerator: "Pay Slip Generator",
     payslipGeneratorDesc: "Generate & export A4 payslips (Word) for non-resident workers",
     eventSchedule: "Event Schedule",
-    eventScheduleDesc: "Visual drag & drop event schedule with timeline bars"
+    eventScheduleDesc: "Visual drag & drop event schedule with timeline bars",
+    boothGames: "Booth Games Registration",
+    boothGamesDesc: "Public sign-up forms with banner, grade rules, time slots, short links, QR posters & live reports",
   },
   bulletin: {
     title: "📢 Bulletin Board",

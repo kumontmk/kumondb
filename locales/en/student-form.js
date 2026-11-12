@@ -329,5 +329,6 @@ export default {
     unsavedTitle: '⚠️ Unsaved Changes',
     leave: 'Leave',
     removeSiblingTitle: '👨‍👩‍👧 Remove Sibling',
+    overF6: "Over F6",
   }
 };

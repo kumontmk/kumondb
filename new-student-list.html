@@ -1,164 +1,160 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- Shows the logo in the browser tab -->
-  <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <!-- Optional: PNG fallback for older browsers -->
-  <link rel="icon" type="image/png" sizes="512x512" href="dblogo-maskable-512.png">
-  <!-- Optional: icon when saved to iOS home screen -->
-  <link rel="apple-touch-icon" href="dblogo-maskable-512.png">
-    
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title data-i18n="nsl.title">New Student List - Kumon DB</title>
-  <link rel="stylesheet" href="./new-student-list.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>New Student List - Kumon DB</title>
+<link rel="stylesheet" href="new-student-list.css">
 </head>
 <body>
 
-  <div id="page-loader"><div class="spinner"></div></div>
+<div id="page-loader"><div class="spinner" role="status" aria-label="Loading"></div></div>
 
-  <!-- Access Denied -->
-  <div id="accessDenied" class="access-denied hidden">
-    <div class="access-denied-content">
-      <h2 data-i18n="nsl.accessRestricted">🔐 Access Restricted</h2>
-      <p data-i18n="nsl.accessDeniedMsg">You do not have permission to view the New Student List.</p>
-      <button id="backToDashboardBtn" class="primary" data-i18n="nsl.backToDashboard">← Back to Dashboard</button>
-    </div>
+<div id="accessDenied" class="access-denied hidden">
+  <div class="access-denied-content">
+    <h2 data-i18n="nsl.accessRestricted">🔐 Access Restricted</h2>
+    <p data-i18n="nsl.accessDeniedMsg">You do not have permission to view the New Student List.</p>
+    <button id="backToDashboardBtn" type="button" class="primary" data-i18n="nsl.backToDashboard">← Back to Dashboard</button>
   </div>
+</div>
 
-  <!-- Main Content -->
-  <div id="mainContent" class="hidden">
-    <header>
+<div id="mainContent" class="hidden">
+  <header>
     <nav>
-        <a href="dashboard.html" data-i18n="nsl.backToDashboardLink">← Dashboard</a>
+      <a href="dashboard.html" data-i18n="nsl.backToDashboardLink">← Dashboard</a>
     </nav>
-      <h2 data-i18n="nsl.pageTitle">📋 New Student List</h2>
-    </header>
+    <h2 data-i18n="nsl.pageTitle">📋 New Student List</h2>
+  </header>
 
-    <main class="page-container">
-
-      <!-- Filters -->
-      <div class="filters-container">
-        <div class="filter-group">
-          <label for="viewMode" data-i18n="nsl.viewMode">View Mode:</label>
-          <select id="viewMode">
-            <option value="single" data-i18n="nsl.singleMonth">Single Month</option>
-            <option value="year" selected data-i18n="nsl.wholeYear">Whole Year</option>
-            <option value="range" data-i18n="nsl.range12">12-Month Range</option>
-          </select>
-        </div>
-
-        <div class="filter-group hidden" id="singleMonthControls">
-          <label for="filterMonth" data-i18n="nsl.month">Month:</label>
-          <select id="filterMonth"></select>
-          <label for="filterYear" data-i18n="nsl.year">Year:</label>
-          <select id="filterYear"></select>
-        </div>
-
-        <div class="filter-group" id="rangeControls">
-          <label for="rangeStartMonth" data-i18n="nsl.start">Start:</label>
-          <select id="rangeStartMonth"></select>
-          <select id="rangeStartYear"></select>
-          <span id="rangeEndLabel" class="range-end-label"></span>
-        </div>
+  <main class="page-container">
+    <section class="filters-container">
+      <div class="filter-group">
+        <label for="viewMode" data-i18n="nsl.viewMode">View Mode:</label>
+        <select id="viewMode">
+          <option value="single" data-i18n="nsl.singleMonth">Single Month</option>
+          <option value="year" selected data-i18n="nsl.wholeYear">Whole Year</option>
+          <option value="range12" data-i18n="nsl.range12">12-Month Range</option>
+        </select>
       </div>
+      <div class="filter-group hidden" id="singleMonthControls">
+        <label for="filterMonth" data-i18n="nsl.month">Month:</label>
+        <select id="filterMonth"></select>
+        <label for="filterYear" data-i18n="nsl.year">Year:</label>
+        <select id="filterYear"></select>
+      </div>
+      <div class="filter-group" id="rangeControls">
+        <label for="rangeStartMonth" data-i18n="nsl.start">Start:</label>
+        <select id="rangeStartMonth"></select>
+        <select id="rangeStartYear" aria-label="Start year"></select>
+        <span id="rangeEndLabel" class="range-end-label"></span>
+      </div>
+    </section>
 
-      <!-- Month Tabs (rendered by JS, already translated via MONTH_NAMES) -->
-      <div class="tabs" id="monthTabs"></div>
+    <div id="monthTabs" class="tabs" role="tablist"></div>
+    <div id="resultCount" class="result-count"></div>
 
-      <div class="result-count" id="resultCount"></div>
-
-      <!-- Data Area: desktop table + mobile cards -->
-      <div id="dataArea">
+    <section id="dataArea">
+      <div class="table-zone">
         <div class="table-wrapper" id="tableWrapper">
-          <table>
+          <table id="newStudentTable">
             <thead>
-              <tr>
-                <th rowspan="2" data-i18n="nsl.thNum">#</th>
-                <th rowspan="2" data-i18n="nsl.thName">NAME</th>
-                <th rowspan="2" data-i18n="nsl.thRef">REF</th>
-                <th rowspan="2" data-i18n="nsl.thEnrolled">ENROLLED</th>
-                <th rowspan="2" data-i18n="nsl.thPhone">PHONE</th>
-                <th rowspan="2" data-i18n="nsl.thSchool">SCHOOL</th>
-                <th rowspan="2" data-i18n="nsl.thGrade">GRADE</th>
-                <th rowspan="2" data-i18n="nsl.thDob">DOB</th>
-                <th rowspan="2" data-i18n="nsl.thPo">PO</th>
-                <th rowspan="2" data-i18n="nsl.thPoComment">PO COMMENT</th>
-                <th rowspan="2" data-i18n="nsl.thSubject">SUBJECT</th>
-                <th rowspan="2" data-i18n="nsl.thTimeslots">TIMESLOT(s)</th>
-                <th rowspan="2" data-i18n="nsl.thStartDate">START DATE</th>
-                <th rowspan="2" data-i18n="nsl.thPayment">PAYMENT</th>
-                <th colspan="2" data-i18n="nsl.thCd">CD</th>
-                <th rowspan="2" data-i18n="nsl.thDt">DT</th>
-                <th rowspan="2" data-i18n="nsl.thEnrolledDate">ENROLLED DATE</th>
-                <th rowspan="2" data-i18n="nsl.thAdmFee">ADM FEE</th>
-                <th rowspan="2" data-i18n="nsl.thPay1">1ST PAY</th>
-                <th rowspan="2" data-i18n="nsl.thPay2">2ND PAY</th>
-                <th rowspan="2" data-i18n="nsl.thBag">BAG</th>
+              <tr class="group-row">
+                <th colspan="2" class="group-student sticky-col-group" data-i18n="nsl.groupStudent">Student</th>
+                <th colspan="4" class="group-enrollment" data-i18n="nsl.groupEnrollment">Enrollment</th>
+                <th colspan="6" class="group-payment" data-i18n="nsl.groupPayment">Payment</th>
+                <th colspan="9" class="group-profile" data-i18n="nsl.groupProfile">Profile &amp; Reference</th>
               </tr>
-              <tr>
-                <th data-i18n="nsl.thCd1">CD 1</th>
-                <th data-i18n="nsl.thCd2">CD 2</th>
+              <tr class="column-row">
+                <th class="sticky-col col-index g-student" data-i18n="nsl.thNum">#</th>
+                <th class="sticky-col col-name g-student" data-i18n="nsl.thName">Name</th>
+                <th class="g-enrollment" data-i18n="nsl.thSubject">Subject</th>
+                <th class="g-enrollment" data-i18n="nsl.thEnrolled">Enrolled</th>
+                <th class="g-enrollment" data-i18n="nsl.thStartDate">Start Date</th>
+                <th class="g-enrollment" data-i18n="nsl.thDt">DT</th>
+                <th class="g-payment" data-i18n="nsl.thPayment">Payment</th>
+                <th class="g-payment" data-i18n="nsl.thCd">CD</th>
+                <th class="g-payment" data-i18n="nsl.thPay1">1st Pay</th>
+                <th class="g-payment" data-i18n="nsl.thPay2">2nd Pay</th>
+                <th class="g-payment" data-i18n="nsl.thAdmFee">Adm Fee</th>
+                <th class="g-payment" data-i18n="nsl.thBag">Bag</th>
+                <th class="g-profile" data-i18n="nsl.thRef">Ref</th>
+                <th class="g-profile" data-i18n="nsl.thEnrolledDate">Enrolled Date</th>
+                <th class="g-profile" data-i18n="nsl.thTimeslots">Timeslot(s)</th>
+                <th class="g-profile" data-i18n="nsl.thPhone">Phone</th>
+                <th class="g-profile" data-i18n="nsl.thSchool">School</th>
+                <th class="g-profile" data-i18n="nsl.thGrade">Grade</th>
+                <th class="g-profile" data-i18n="nsl.thDob">DOB</th>
+                <th class="g-profile" data-i18n="nsl.thPo">PO</th>
+                <th class="g-profile" data-i18n="nsl.thPoComment">PO Comment</th>
               </tr>
             </thead>
             <tbody id="newStudentBody"></tbody>
           </table>
         </div>
-
-        <!-- Mobile card list (rendered by JS) -->
-        <div class="card-list" id="cardList"></div>
+        <div class="scroll-edge edge-left" id="edgeLeft" aria-hidden="true"></div>
+        <div class="scroll-edge edge-right" id="edgeRight" aria-hidden="true"></div>
+        <div class="hscroll-bar" id="hScrollBar" role="scrollbar" tabindex="0"
+             aria-controls="newStudentTable" aria-orientation="horizontal"
+             aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
+             aria-label="Scroll table horizontally">
+          <div class="hscroll-thumb" id="hScrollThumb"></div>
+        </div>
       </div>
-    </main>
+      <div id="cardList" class="card-list"></div>
+    </section>
+  </main>
+</div>
+
+<div id="cdPopover" class="cd-popover hidden" role="dialog" aria-labelledby="cdPopoverTitle">
+  <div class="cd-popover-head">
+    <span id="cdPopoverTitle" class="cd-popover-title">CD</span>
+    <button type="button" id="cdPopoverClose" class="cd-popover-close" aria-label="Close">×</button>
   </div>
+  <div class="cd-popover-fields">
+    <label class="field"><span class="lbl" data-i18n="nsl.thCd1">CD 1</span>
+      <input type="text" id="cdPopoverCd1" class="inline-save" data-field="cd1" autocomplete="off">
+    </label>
+    <label class="field"><span class="lbl" data-i18n="nsl.thCd2">CD 2</span>
+      <input type="text" id="cdPopoverCd2" class="inline-save" data-field="cd2" autocomplete="off">
+    </label>
+  </div>
+  <p class="cd-popover-hint" data-i18n="nsl.cdHint">Edits are kept until you tap Save Changes.</p>
+</div>
 
-  <!-- Diagnostic Test Modal -->
-  <!-- Note: dtModalTitle / dtModalHint are NOT given data-i18n on purpose —
-       the JS sets them via t() every time the modal opens (with subject/student name). -->
-  <div id="dtModal" class="modal hidden">
-    <div class="modal-content">
-      <span class="close-modal" id="closeDtModal">&times;</span>
-      <h3 id="dtModalTitle">Select Diagnostic Test (DT)</h3>
-      <p class="hint" id="dtModalHint">Click a row to select it for this subject.</p>
-      <div class="dt-table-wrap">
-        <table id="dtModalTable">
-          <thead>
-            <tr>
-              <th data-i18n="nsl.thDtDate">DATE</th>
-              <th data-i18n="nsl.thDtTest">DT</th>
-              <th data-i18n="nsl.thDtSubject">SUBJECT</th>
-              <th data-i18n="nsl.thDtTime">TIME</th>
-              <th data-i18n="nsl.thDtScore">SCR</th>
-              <th data-i18n="nsl.thDtStartLvl">STRT LVL</th>
-            </tr>
-          </thead>
-          <tbody id="dtModalBody"></tbody>
-        </table>
-      </div>
-      <div class="modal-actions">
-        <button class="secondary" id="cancelDtBtn" data-i18n="nsl.cancel">Cancel</button>
-      </div>
+<div id="dtModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="dtModalTitle">
+  <div class="modal-content">
+    <button type="button" class="close-modal" id="closeDtModal" aria-label="Close">×</button>
+    <h3 id="dtModalTitle" data-i18n="nsl.dtModalTitle">Select Diagnostic Test (DT)</h3>
+    <p id="dtModalHint" class="hint" data-i18n="nsl.dtModalHint">Click a row to select it for this subject.</p>
+    <div class="dt-table-wrap">
+      <table id="dtModalTable">
+        <thead>
+          <tr>
+            <th data-i18n="nsl.thDtDate">Date</th>
+            <th data-i18n="nsl.thDtTest">DT</th>
+            <th data-i18n="nsl.thDtSubject">Subject</th>
+            <th data-i18n="nsl.thDtTime">Time</th>
+            <th data-i18n="nsl.thDtScore">Scr</th>
+            <th data-i18n="nsl.thDtStartLvl">Strt Lvl</th>
+          </tr>
+        </thead>
+        <tbody id="dtModalBody"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <span id="dtModalStatus" class="dt-modal-status"></span>
+      <button type="button" id="cancelDtBtn" class="secondary" data-i18n="nsl.cancel">Cancel</button>
+      <button type="button" id="confirmDtBtn" class="primary" data-i18n="nsl.confirm" disabled>Confirm</button>
     </div>
   </div>
+</div>
 
-  <!-- Floating Save Bar -->
-  <div id="saveActionBar" class="save-action-bar hidden" aria-live="polite">
-    <span id="saveStatusText"></span>
+<div id="saveActionBar" class="save-action-bar hidden" role="status">
+  <span id="saveStatusText"></span>
+  <button type="button" id="discardChangesBtn" class="secondary" data-i18n="nsl.discard">Discard</button>
+  <button type="button" id="saveChangesBtn" class="primary" data-i18n="nsl.saveChanges">Save Changes</button>
+</div>
 
-    <button id="discardChangesBtn" type="button" class="secondary">
-      Discard
-    </button>
-
-    <button id="saveChangesBtn" type="button" class="primary">
-      Save Changes
-    </button>
-  </div>
-  
-  <!-- Translate all static [data-i18n] elements once translations are ready -->
-  <script type="module">
-    import { i18nReady, applyI18n } from './new-student-list-i18n.js';
-    i18nReady.then(() => applyI18n()).catch(() => {});
-  </script>
-
-  <script type="module" src="./new-student-list.js"></script>
+<script type="module" src="new-student-list.js"></script>
 </body>
 </html>

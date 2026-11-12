@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Booth Games Registration - Kumon DB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="booth-games.css">
+<script defer src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script type="module" src="booth-games.js"></script>
+</head>
+<body>
+
+<div id="page-loader">
+  <div class="spinner"></div>
+  <p>Loading booth games… 載入中…</p>
+</div>
+
+<header>
+  <nav>
+    <a href="centers.html">← Centers</a>
+  </nav>
+  <h2>🎪 Booth Games Registration</h2>
+</header>
+
+<main id="mainContent" class="dashboard hidden">
+
+  <div class="event-bar">
+    <label for="eventSelect">Event 活動</label>
+    <select id="eventSelect"></select>
+    <button id="newEventBtn" class="btn primary">＋ New Event</button>
+    <button id="demoBtn" class="btn ghost">✨ Sample</button>
+    <span id="windowBadge" class="event-status"></span>
+    <span class="spacer"></span>
+    <button id="dupEventBtn" class="btn ghost">⧉ Duplicate</button>
+    <button id="delEventBtn" class="btn ghost danger-ghost">🗑 Delete</button>
+  </div>
+
+  <div id="emptyState" class="empty-hero hidden">
+    <div class="empty-emoji">🎪</div>
+    <h2>No booth events yet</h2>
+    <p>Create your first sign-up form — banner, games, grade rules, time slots, a short public link and a QR poster. Reports update live as parents register.</p>
+    <div class="empty-actions">
+      <button id="emptyCreateBtn" class="btn primary big">＋ Create an event</button>
+      <button id="emptyDemoBtn" class="btn secondary big">✨ Try a sample event</button>
+    </div>
+  </div>
+
+  <nav class="tabs" id="tabsBar">
+    <button class="tab-btn active" data-tab="dashboard">📊 Dashboard</button>
+    <button class="tab-btn" data-tab="regs">📋 Registrations</button>
+    <button class="tab-btn" data-tab="builder">🛠️ Form &amp; Games</button>
+    <button class="tab-btn" data-tab="share">🔗 Share &amp; QR</button>
+  </nav>
+
+  <!-- ================= DASHBOARD ================= -->
+  <section id="tab-dashboard" class="tab-content active">
+    <div class="stat-grid" id="dashStats"></div>
+
+    <div class="charts-grid">
+      <div class="card chart-card wide">
+        <h3>📈 Submissions over time 每日報名</h3>
+        <div class="chart-box"><canvas id="chTimeline"></canvas></div>
+      </div>
+      <div class="card chart-card">
+        <h3>🎓 Grade distribution 年級分佈</h3>
+        <div class="chart-box"><canvas id="chGrades"></canvas></div>
+      </div>
+      <div class="card chart-card">
+        <h3>🎮 Game popularity 遊戲受歡迎程度</h3>
+        <div class="chart-box"><canvas id="chGames"></canvas></div>
+      </div>
+      <div class="card chart-card">
+        <h3>💡 Subject interest 科目興趣</h3>
+        <div class="chart-box"><canvas id="chInterests"></canvas></div>
+      </div>
+      <div class="card chart-card">
+        <h3>💬 Contact apps 聯絡方式</h3>
+        <div class="chart-box"><canvas id="chApps"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>🎟️ Slot occupancy 場次名額</h3>
+      <div id="slotOccupancy"></div>
+    </div>
+
+    <div class="card">
+      <h3>🕒 Latest registrations 最新報名</h3>
+      <div id="recentList"></div>
+    </div>
+  </section>
+
+  <!-- ================= REGISTRATIONS ================= -->
+  <section id="tab-regs" class="tab-content">
+    <div class="card">
+      <div class="regs-toolbar">
+        <input id="regSearch" type="search" placeholder="🔎 Search name, phone, center, code… 搜尋">
+        <select id="regGameFilter"><option value="">All games 全部遊戲</option></select>
+        <select id="regBandFilter">
+          <option value="">All grades 全部年級</option>
+          <option value="K">Kindergarten 幼兒 (K)</option>
+          <option value="P">Primary 小學 (P)</option>
+          <option value="F">Secondary 中學 (F)</option>
+        </select>
+        <select id="regCurrentFilter">
+          <option value="">All families 全部</option>
+          <option value="yes">Current students 現有學生</option>
+          <option value="no">Prospects 新客戶</option>
+        </select>
+        <select id="regStatusFilter">
+          <option value="">All statuses 全部狀態</option>
+          <option value="registered">Registered 已報名</option>
+          <option value="attended">Attended 已出席</option>
+        </select>
+        <select id="regSort">
+          <option value="newest">Newest first 最新</option>
+          <option value="oldest">Oldest first 最舊</option>
+          <option value="name">Name 姓名</option>
+          <option value="grade">Grade 年級</option>
+          <option value="age">Age 年齡</option>
+        </select>
+        <button id="regClearFilters" class="btn ghost">✖ Clear</button>
+        <button id="exportRegsBtn" class="btn primary">📊 Export Excel</button>
+      </div>
+
+      <div id="bulkBar" class="bulk-bar hidden">
+        <span id="bulkCount"></span>
+        <button id="bulkAttendBtn" class="btn small primary">✓ Mark attended</button>
+        <button id="bulkExportBtn" class="btn small secondary">📊 Export selected</button>
+        <button id="bulkDeleteBtn" class="btn small danger">🗑 Delete</button>
+        <button id="bulkClearBtn" class="btn small ghost">Clear selection</button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="col-check"><input type="checkbox" id="checkAll"></th>
+              <th class="row-num">#</th>
+              <th>Student 學生</th>
+              <th>Contact 聯絡</th>
+              <th>Kumon 公文式</th>
+              <th>Games &amp; slots 遊戲場次</th>
+              <th>Submitted 提交</th>
+              <th>Status 狀態</th>
+              <th>Actions 操作</th>
+            </tr>
+          </thead>
+          <tbody id="regTableBody"></tbody>
+        </table>
+      </div>
+      <div id="regsEmpty" class="empty-block hidden">
+        <div class="empty-emoji">🎟️</div>
+        <p>No registrations match. Share the public link to start collecting sign-ups!<br>未有報名紀錄 — 請先分享公開連結。</p>
+      </div>
+      <div class="regs-foot"><span id="regCount"></span></div>
+    </div>
+  </section>
+
+  <!-- ================= BUILDER ================= -->
+  <section id="tab-builder" class="tab-content">
+    <div id="builderNewHint" class="new-hint hidden">✏️ Creating a new event — fill in the details below, then press Save. Nothing is stored until you save.</div>
+
+    <div class="card">
+      <h3>🎫 Event details 活動資料</h3>
+        <div class="form-grid settings-grid">
+            <div class="field"><label>Event title (English) 活動名稱</label><input id="bTitle" type="text" placeholder="e.g. Kumon Open Day — Booth Games"></div>
+            <div class="field"><label>Event title (Chinese) 中文名稱</label><input id="bTitleCn" type="text" placeholder="例：公文式開放日 · 攤位遊戲"></div>
+            <div class="field span2"><label>Description 簡介 (shown on the public form)</label><textarea id="bDesc" rows="2" placeholder="Join us for games… 歡迎參加攤位遊戲日…"></textarea></div>
+            <div class="field"><label>Event start date 活動開始日期</label><input id="bEventStart" type="date"></div>
+            <div class="field"><label>Event end date 活動結束日期</label><input id="bEventEnd" type="date"></div>
+            <div class="field"><label>Event time text 活動時間</label><input id="bTimeText" type="text" placeholder="12:00 – 19:00"></div>
+            <div class="field"><label>Accepting registrations 接受報名</label>
+            <select id="bActive"><option value="true">Yes 是</option><option value="false">Paused 暫停</option></select>
+            </div>
+            <div class="field span2"><label>Venue (English) 地點（英文）</label><input id="bVenueEn" type="text" placeholder="The Venetian Macao, Cotai Exhibition Hall A, Booth E03 &amp; F04"></div>
+            <div class="field span2"><label>Venue (Chinese) 地點（中文）</label><input id="bVenueCn" type="text" placeholder="威尼斯人金光會展展館A 展位E03、F04"></div>
+            <div class="field"><label>Registration opens 報名開始</label><input id="bRegStart" type="date"></div>
+            <div class="field"><label>Registration closes 報名截止</label><input id="bRegEnd" type="date"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>🖼️ Banner 橫額</h3>
+      <div id="bannerPreview" class="banner-preview"></div>
+      <div class="banner-tools">
+        <label class="btn secondary file-btn">📁 Upload image<input id="bannerFile" type="file" accept="image/*" hidden></label>
+        <button id="bannerRemove" class="btn ghost">✖ Remove image</button>
+        <span class="hint">Uploads are auto-resized &amp; compressed. Or pick a gradient below 或選擇漸層底色：</span>
+      </div>
+      <div id="presetRow" class="preset-row"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h3>🎮 Games &amp; time slots 遊戲與時段</h3>
+        <button id="addGameBtn" class="btn primary">＋ Add game</button>
+      </div>
+      <p class="hint">Set a grade range per game (e.g. P1–P6). The public form locks games outside the child's grade. Each slot has its own capacity 每場次可設名額上限。</p>
+      <div id="gamesList"></div>
+    </div>
+
+    <div class="save-bar" id="saveBar">
+      <span id="draftChip" class="draft-chip hidden">● Unsaved draft 未儲存</span>
+      <span class="spacer"></span>
+      <button id="cancelDraftBtn" class="btn secondary">✖ Cancel</button>
+      <button id="saveEventBtn" class="btn primary big">💾 Save event</button>
+    </div>
+  </section>
+
+  <!-- ================= SHARE ================= -->
+  <section id="tab-share" class="tab-content">
+    <div class="share-grid">
+      <div class="card">
+        <h3>🔗 Public link 公開連結</h3>
+        <div class="link-box"><code id="publicUrl">—</code><button id="copyLinkBtn" class="btn small primary">📋 Copy</button></div>
+        <div class="share-actions">
+          <button id="waShareBtn" class="btn secondary">💬 WhatsApp</button>
+          <button id="openLinkBtn" class="btn ghost">↗ Open preview</button>
+        </div>
+        <div class="code-row">
+          <label>Short code 短代碼</label>
+          <input id="customCode" type="text" maxlength="14" spellcheck="false">
+          <button id="applyCodeBtn" class="btn small secondary">Apply</button>
+          <button id="regenCodeBtn" class="btn small ghost">♻️ Random</button>
+        </div>
+        <div class="toggle-row">
+          <label class="switch"><input type="checkbox" id="activeToggle"><span class="slider"></span></label>
+          <span>Accepting registrations 接受報名</span>
+        </div>
+        <div id="shareWindowState" class="window-state"></div>
+      </div>
+
+      <div class="card qr-card">
+        <h3>📱 QR code 二維碼</h3>
+        <div id="qrPreview" class="qr-preview"></div>
+        <div class="qr-tools">
+          <select id="qrSize">
+            <option value="512">512 px</option>
+            <option value="768" selected>768 px</option>
+            <option value="1024">1024 px</option>
+          </select>
+          <button id="dlQrBtn" class="btn secondary">⬇ QR PNG</button>
+          <button id="dlPosterBtn" class="btn primary">⬇ Poster PNG</button>
+        </div>
+        <p class="hint">Poster includes your banner, event title, QR and registration dates — ready to print or send. 海報包含橫額、名稱、二維碼及報名日期。</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ================= DETAIL DRAWER ================= -->
+<div id="drawerScrim" class="drawer-scrim hidden"></div>
+<aside id="regDrawer" class="drawer hidden" aria-label="Registration details">
+  <div class="drawer-head">
+    <h3 id="drawerTitle">Registration</h3>
+    <button id="drawerClose" class="close-btn" type="button">×</button>
+  </div>
+  <div id="drawerBody" class="drawer-body"></div>
+  <div class="drawer-actions">
+    <button id="drawerAttendBtn" class="btn primary"></button>
+    <button id="drawerDeleteBtn" class="btn danger">🗑 Delete</button>
+  </div>
+</aside>
+
+<div id="toast" class="toast hidden"><span id="toastMsg"></span><button id="toastAction" class="toast-action hidden"></button></div>
+
+</body>
+</html>

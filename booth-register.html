@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Booth Games Registration · 攤位遊戲報名</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="booth-register.css">
+<script defer src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<script type="module" src="booth-register.js"></script>
+</head>
+<body>
+
+<div class="bg-deco" aria-hidden="true"><span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span><span class="grain"></span></div>
+
+<!-- LOADING -->
+<div id="screenLoading" class="screen state-screen">
+  <div class="spinner"></div>
+  <p>Loading registration 載入中…</p>
+</div>
+
+<!-- INVALID -->
+<div id="screenInvalid" class="screen state-screen hidden">
+  <div class="state-card">
+    <div class="state-emoji">🎫</div>
+    <h2>Link not available 連結無效</h2>
+    <p id="invalidReason"></p>
+    <p class="state-hint">Please contact your Kumon center for help. 請聯絡公文式教室查詢。</p>
+  </div>
+</div>
+
+<!-- OPENS LATER -->
+<div id="screenBefore" class="screen state-screen hidden">
+  <div class="state-card">
+    <div class="state-emoji">⏳</div>
+    <h2>Registration opens soon 報名即將開始</h2>
+    <p id="beforeInfo"></p>
+    <p class="state-hint">Save this link and come back on the opening day! 請儲存此連結，於開始當日再來報名。</p>
+  </div>
+</div>
+
+<!-- CLOSED / PAUSED -->
+<div id="screenClosed" class="screen state-screen hidden">
+  <div class="state-card">
+    <div class="state-emoji">🌙</div>
+    <h2 id="closedTitle">Registration closed 報名已結束</h2>
+    <p id="closedInfo"></p>
+    <p class="state-hint">Please contact your Kumon center for assistance. 請聯絡公文式教室查詢。</p>
+  </div>
+</div>
+
+<!-- HEADER -->
+<header id="pubHeader" class="pub-header hidden">
+  <div class="pub-brand"><span class="pub-logo">🎪</span><div><strong>Kumon Booth Games</strong><small id="hdrTitle"></small></div></div>
+</header>
+
+<!-- MAIN WIZARD -->
+<main id="screenMain" class="screen hidden">
+  <section id="hero" class="hero">
+    <img id="heroImg" class="hero-img hidden" alt="">
+    <div class="hero-deco" aria-hidden="true"><span class="float f1">🎈</span><span class="float f2">🎯</span><span class="float f3">⭐</span></div>
+    <div class="hero-inner">
+      <h1 id="evTitle"></h1>
+      <div id="evTitleCn" class="hero-cn"></div>
+      <p id="evDesc" class="hero-desc"></p>
+      <div id="evMeta" class="hero-meta"></div>
+      <div id="evDeadline" class="hero-deadline"></div>
+    </div>
+  </section>
+
+  <div class="wizard">
+    <div class="steps-bar" id="stepsBar">
+      <div class="step-dot" data-s="1"><span class="dot">1</span><span class="s-label">Child 小朋友</span></div>
+      <div class="step-dot" data-s="2"><span class="dot">2</span><span class="s-label">Kumon 公文式</span></div>
+      <div class="step-dot" data-s="3"><span class="dot">3</span><span class="s-label">Games 遊戲</span></div>
+      <div class="step-dot" data-s="4"><span class="dot">4</span><span class="s-label">Confirm 確認</span></div>
+    </div>
+
+    <form id="wizForm" novalidate>
+      <!-- STEP 1 -->
+      <section class="step-panel" data-step="1">
+        <h2 tabindex="-1">🧒 About the child 小朋友資料</h2>
+
+        <div class="field">
+          <label for="fName">Student's name 學生姓名 <em>*</em></label>
+          <input id="fName" type="text" autocomplete="name" placeholder="Chan Tai Man 陳大文">
+        </div>
+
+        <div class="field">
+          <label>Grade 年級 <em>*</em></label>
+          <div id="gradeGrid" class="grade-groups"></div>
+        </div>
+
+        <div class="field">
+          <label for="fBirth">Birthday 出生日期 <em>*</em></label>
+          <input id="fBirth" type="date">
+          <div id="agePill" class="age-pill" aria-live="polite">Age will be calculated automatically 年齡將自動計算</div>
+        </div>
+
+        <div class="field">
+          <label for="fPhone">Parent's phone number 家長電話 <em>*</em></label>
+          <input id="fPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="6612 3456">
+          <div class="f-hint">Macau 澳門 mobile: 6xxx xxxx</div>
+        </div>
+
+        <div class="field">
+          <label>App used for contact 聯絡方式 <em>*</em> <span class="f-hint-inline">(choose one or both 可選一或兩者)</span></label>
+          <div class="app-cards">
+            <button type="button" id="appWeChat" class="app-card"><span class="app-emoji">💬</span><span>WeChat 微信</span><span class="tick">✓</span></button>
+            <button type="button" id="appWhatsApp" class="app-card"><span class="app-emoji">📱</span><span>WhatsApp</span><span class="tick">✓</span></button>
+          </div>
+        </div>
+
+        <div class="field hidden" id="wechatIdWrap">
+          <label for="fWeChatId">WeChat ID 微信號 <span class="f-hint-inline">(optional 選填)</span></label>
+          <input id="fWeChatId" type="text" placeholder="your WeChat ID">
+        </div>
+      </section>
+
+      <!-- STEP 2 -->
+      <section class="step-panel" data-step="2">
+        <h2 tabindex="-1">📚 Kumon background 公文式背景</h2>
+
+        <p class="question">Are you a current Kumon student?<br><span class="q-cn">您目前在讀公文式嗎？</span> <em>*</em></p>
+        <div class="choice-cards">
+          <button type="button" id="curYes" class="choice-card"><span class="app-emoji">✅</span><span>Yes 是</span><span class="tick">✓</span></button>
+          <button type="button" id="curNo" class="choice-card"><span class="app-emoji">🆕</span><span>No 否</span><span class="tick">✓</span></button>
+        </div>
+
+        <div id="currentDetails" class="hidden sub-block">
+          <p class="f-hint">If yes, please indicate the center and subject. 若是請填寫所讀教室及科目。</p>
+          <div class="field">
+            <label for="fCenter">Center 教室 <em>*</em></label>
+            <input id="fCenter" type="text" placeholder="e.g. Kumon Champs 卓思">
+          </div>
+          <div class="field">
+            <label for="fCurSubjects">Subject(s) 科目 <em>*</em></label>
+            <input id="fCurSubjects" type="text" placeholder="Math, English… 數學、英文…">
+          </div>
+        </div>
+
+        <p class="question" style="margin-top:1.4rem">Subject(s) you want to know more about<br><span class="q-cn">想了解更多的科目</span> <em>*</em></p>
+        <div id="interestList" class="interest-list"></div>
+      </section>
+
+      <!-- STEP 3 -->
+      <section class="step-panel" data-step="3">
+        <h2 tabindex="-1">🎪 Choose your games 選擇遊戲</h2>
+        <p class="f-hint">Pick one time slot for each game you want to play. Seats are limited! 每項遊戲請選擇一個時段，名額有限！</p>
+        <div id="gradeReminder" class="reminder hidden">⚠️ Please choose the grade in step 1 first. 請先於第一步選擇年級。 <button type="button" class="link-btn" data-goto="1">Go to step 1 →</button></div>
+        <div id="gamesWrap"></div>
+        <div id="overlapWarn" class="overlap-warn hidden"></div>
+        <div id="selSummary" class="sel-summary"></div>
+      </section>
+
+      <!-- STEP 4 -->
+      <section class="step-panel" data-step="4">
+        <h2 tabindex="-1">✅ Review &amp; submit 確認及提交</h2>
+        <div id="reviewWrap"></div>
+        <div class="field" style="margin-top:1rem">
+          <label for="fRemarks">Anything we should know? 備註 <span class="f-hint-inline">(optional 選填)</span></label>
+          <textarea id="fRemarks" rows="2" placeholder="Allergies, accessibility needs… 過敏、特別需要…"></textarea>
+        </div>
+        <div id="submitNote" class="submit-note"></div>
+      </section>
+    </form>
+
+    <div class="wizard-nav">
+      <button type="button" id="backBtn" class="btn-secondary hidden">← Back 上一步</button>
+      <button type="button" id="nextBtn" class="btn-primary">Next 下一步 →</button>
+      <button type="button" id="submitBtn" class="btn-primary btn-submit hidden">🎉 Submit registration 提交報名</button>
+    </div>
+  </div>
+  <footer class="pub-footer">Powered by Kumon DB · 公文式</footer>
+</main>
+
+<!-- SUCCESS -->
+<div id="screenSuccess" class="screen state-screen hidden">
+  <div class="success-card">
+    <canvas id="confettiCanvas" class="confetti" aria-hidden="true"></canvas>
+    <div class="state-emoji">🎉</div>
+    <h2>You're registered! 報名成功！</h2>
+    <div class="reg-code-wrap"><span class="rc-label">Registration code 報名編號</span><div id="regCode" class="reg-code"></div></div>
+    <div id="successQr" class="success-qr"></div>
+    <div id="successSummary" class="success-summary"></div>
+    <p class="state-hint">Show this code at check-in. 報到時請出示此編號。</p>
+    <div class="success-actions">
+      <button type="button" id="copyCodeBtn" class="btn-secondary">📋 Copy code 複製編號</button>
+      <button type="button" id="againBtn" class="btn-primary">👧 Register another child 登記另一位小朋友</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="invite-toast hidden"><span id="toastMsg"></span></div>
+
+</body>
+</html>

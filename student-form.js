@@ -2,6 +2,7 @@ import { auth, db, logout } from './auth.js';
 import { ref, push, set, get, remove, update } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { i18nReady, t } from './student-form-i18n.js';
+import { getAcademicYear, OVER_F6 } from './grade-rollover.js';
 
 const REQUIRED_PERMISSION = 'editStudent';
 
@@ -177,26 +178,6 @@ function initApp() {
 
     const GRADE_ORDER = ['K0', 'K1', 'K2', 'K3', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13'];
     let currentStudentData = null;
-
-    function getNextGrade(grade) {
-        const idx = GRADE_ORDER.indexOf(String(grade));
-        return (idx !== -1 && idx < GRADE_ORDER.length - 1) ? GRADE_ORDER[idx + 1] : grade;
-    }
-
-    function checkAugustGradeUpdate(studentData) {
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const isAug15OrLater = (now.getMonth() > 7) || (now.getMonth() === 7 && now.getDate() >= 15);
-        const academicYear = isAug15OrLater ? currentYear : currentYear - 1;
-        if (isAug15OrLater && (!studentData.lastGradeUpdateYear || studentData.lastGradeUpdateYear < academicYear)) {
-            const oldGrade = studentData.grade;
-            studentData.grade = getNextGrade(oldGrade);
-            studentData.lastGradeUpdateYear = academicYear;
-            studentData.updatedAt = new Date().toISOString();
-            return oldGrade !== studentData.grade;
-        }
-        return false;
-    }
 
     function processPendingRequests(studentData) {
         if (!studentData.subjects) return false;
@@ -1142,6 +1123,16 @@ function initApp() {
                 });
             }
         });
+    }
+
+    // "Over F6" terminal grade option (set by the Aug 15 rollover, editable if ever needed)
+    const gradeSelectEl = document.getElementById('grade');
+    if (gradeSelectEl && !gradeSelectEl.querySelector(`option[value="${OVER_F6}"]`)) {
+        const opt = document.createElement('option');
+        opt.value = OVER_F6;
+        opt.textContent = tr('studentForm.overF6', OVER_F6);
+        const otherOpt = gradeSelectEl.querySelector('option[value="Other"]');
+        gradeSelectEl.insertBefore(opt, otherOpt);
     }
 
     function updateAgeDisplay() {
@@ -2599,10 +2590,7 @@ function renderSchedule() {
                     console.log(t('studentForm.resumeExecuted'));
                 }
                 currentStudentData = s;
-                if (checkAugustGradeUpdate(s)) {
-                    await set(ref(db, `centers/${centerId}/students/${studentId}`), s);
-                    console.log(`${t('studentForm.gradeUpdated')}${s.grade}`);
-                }
+                // Grade rollover lives on the dashboard (Aug 15 only). Opening a student never changes the grade.
                 const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
                 const setFieldWithOther = (id, value) => {
                     const select = document.getElementById(id);
@@ -2973,6 +2961,11 @@ function renderSchedule() {
         }
         if (isEdit && JSON.stringify(currentFormData) === JSON.stringify(originalFormData)) return showError(t('studentForm.noChanges'));
         const studentData = { ...currentFormData, updatedAt: new Date().toISOString() };
+            if (!isEdit) {
+                // New student is enrolled at the grade typed, for the current school year.
+                // This stamp makes the dashboard's Aug 15 rollover skip them until next year.
+                studentData.lastGradeUpdateYear = getAcademicYear();
+            }
         if (isEdit) {
             const snap = await get(ref(db, `centers/${centerId}/students/${studentId}`));
             if (snap.exists()) {
@@ -2990,11 +2983,9 @@ function renderSchedule() {
                 });
                 if (existingData.poNote) studentData.poNote = existingData.poNote;
 
-                // ✅ FIX: Preserve lastGradeUpdateYear so manual grade edits
-                //         don't get re-bumped on the next form load
-                if (existingData.lastGradeUpdateYear) {
-                    studentData.lastGradeUpdateYear = existingData.lastGradeUpdateYear;
-                }
+                // Preserve the stamp so manual grade edits are never re-bumped.
+                // Legacy records without a stamp get stamped (grade assumed correct, no bump).
+                studentData.lastGradeUpdateYear = existingData.lastGradeUpdateYear || getAcademicYear();
             }
         }
         try {

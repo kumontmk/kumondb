@@ -339,5 +339,6 @@ export default {
     unsavedTitle: '⚠️ 未儲存的更改',
     leave: '離開',
     removeSiblingTitle: '👨‍👩‍👧 移除兄弟姊妹',
+    overF6: "超過 F6",
   }
 };

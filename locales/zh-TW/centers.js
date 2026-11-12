@@ -33,7 +33,10 @@ export default {
     payslipGenerator: "薪資單產生器",
     payslipGeneratorDesc: "為非居民員工產生並匯出 A4 薪資單 (Word)",
     eventSchedule: "活動時間表",
-    eventScheduleDesc: "可視化拖放活動時間表，帶有時間軸條"
+    eventScheduleDesc: "可視化拖放活動時間表，帶有時間軸條",
+    boothGames: "展台遊戲註冊",
+    boothGamesDesc: "帶有橫幅、年級規則、時間槽、短鏈接、QR 海報和即時報告的公開報名表"
+
   },
   bulletin: {
     title: "📢 佈告欄",

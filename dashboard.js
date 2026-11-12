@@ -3,6 +3,7 @@ import './dashboard-i18n.js';
 import { i18nReady, t, currentLanguage } from './i18n-core.js';
 import { auth, requireAuth, logout, db, syncPendingRequests } from './auth.js';
 import { ref, get, update, remove, push, serverTimestamp, onValue, off, onChildAdded, onChildChanged, onChildRemoved } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { runGradeRollover, getAcademicYear, OVER_F6 } from './grade-rollover.js';
 
 // ============================================
 // GLOBAL STATE
@@ -114,7 +115,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 5. Load and display Center Name in Calendar
   await loadCenterName();
   await processResumeRequests();
-  await processGradeUpdates();
+  await runGradeRollover(db); // Aug 15 only; self-guarded to once per day; errors caught inside
   await syncPendingRequests(centerId);
 
   // 6. Initialize PO Calendar and Hide Loader
@@ -136,6 +137,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   console.log('Dashboard loaded successfully for user:', auth.currentUser?.email);
 });
+
 
 // ============================================
 // FAB & SCHEDULE PO LOGIC
@@ -440,38 +442,6 @@ async function processResumeRequests() {
     }
   } catch (err) {
     console.error("Error processing resume requests:", err);
-  }
-}
-
-async function processGradeUpdates() {
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const isAug15OrLater = (now.getMonth() > 7) || (now.getMonth() === 7 && now.getDate() >= 15);
-  if (!isAug15OrLater) return; 
-  const academicYear = currentYear;
-  const studentsRef = ref(db, `centers/${centerId}/students`);
-  const snapshot = await get(studentsRef);
-  if (!snapshot.exists()) return;
-  const GRADE_ORDER = ['K0', 'K1', 'K2', 'K3', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13'];
-  const getNextGrade = (grade) => {
-    const idx = GRADE_ORDER.indexOf(String(grade));
-    return (idx !== -1 && idx < GRADE_ORDER.length - 1) ? GRADE_ORDER[idx + 1] : grade;
-  };
-  const updates = {};
-  snapshot.forEach(child => {
-    const student = child.val();
-    const studentId = child.key;
-    if (!student.lastGradeUpdateYear || student.lastGradeUpdateYear < academicYear) {
-      const oldGrade = student.grade;
-      const newGrade = getNextGrade(oldGrade);
-      updates[`${studentId}/grade`] = newGrade;
-      updates[`${studentId}/lastGradeUpdateYear`] = academicYear;
-      updates[`${studentId}/updatedAt`] = new Date().toISOString();
-    }
-  });
-  if (Object.keys(updates).length > 0) {
-    await update(studentsRef, updates);
-    console.log(`🍂 Auto-updated grades for ${Object.keys(updates).length / 3} students.`);
   }
 }
 
@@ -2493,7 +2463,7 @@ async function fetchStudentsForSearch() {
 // 🔍 QUICK INQUIRY MODAL LOGIC
 // ============================================
 const SUBJECTS_QI = ['Math', 'Chinese (Trad)', 'Chinese (Simp)', 'English ERP', 'English EFL'];
-const GRADES_QI = ['K0', 'K1', 'K2', 'K3', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13'];
+const GRADES_QI = ['K0', 'K1', 'K2', 'K3', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', OVER_F6];
 let qiSubjectCount = 0;
 
 function initQuickInquiry() {
@@ -2799,6 +2769,7 @@ async function saveQuickInquiry() {
     diagnosticTests: diagnosticTests,
     achievementTests: [],
     assignedTeachers: {},
+    lastGradeUpdateYear: getAcademicYear(), // enrolled at the grade typed, for this school year
     updatedAt: new Date().toISOString()
   };
 

@@ -1,6 +1,7 @@
+// ashr-invite.js
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, get, update, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { t as tCore, applyI18n, getLang, setLang, i18nReady } from './ashr-i18n.js';
 
 const t = (key, fallback) => {
@@ -21,6 +22,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig, 'ashr-invite');
 const db = getDatabase(app);
 const auth = getAuth(app);
+
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const eventId = params.get('e');
@@ -40,52 +42,179 @@ let isEditing = false;
 let deadlinePassed = false;
 
 function escapeHtml(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
 }
 
 // ============================================
 // 🧬 SAME-STUDENT MERGE / UNIQUE-STUDENT HELPERS
 // ============================================
 function studentUid(h) { return String(h?.studentNumber || h?.studentId || '').trim(); }
+
 function groupMembersForDisplay(members) {
   const order = [];
   const byId = new Map();
   (members || []).forEach(m => {
     const id = studentUid(m) || m.honoreeKey || '';
     if (!byId.has(id)) {
-      const g = { ...m, awards: [...(m.awards || [])], completions: [...(m.completions || [])], _hasAwards: (m.awards || []).length > 0 };
-      byId.set(id, g); order.push(g);
+      const g = {
+        ...m,
+        awards: [...(m.awards || [])],
+        completions: [...(m.completions || [])],
+        _hasAwards: (m.awards || []).length > 0
+      };
+      byId.set(id, g);
+      order.push(g);
     } else {
       const g = byId.get(id);
       g.awards.push(...(m.awards || []));
       g.completions.push(...(m.completions || []));
-      if ((m.awards || []).length && !g._hasAwards) { g.centerId = m.centerId; g.centerName = m.centerName || g.centerName; g._hasAwards = true; }
+      if ((m.awards || []).length && !g._hasAwards) {
+        g.centerId = m.centerId;
+        g.centerName = m.centerName || g.centerName;
+        g._hasAwards = true;
+      }
       if (!g.nameCn && (m.nameCn || m.nameEn)) g.nameCn = m.nameCn || m.nameEn;
       if (!g.nameEn && m.nameEn) g.nameEn = m.nameEn;
     }
   });
   order.forEach(g => {
-    const sa = new Set(); g.awards = g.awards.filter(a => { const k = `${a.subject}|${a.stars}|${a.reportingMonth || ''}`; if (sa.has(k)) return false; sa.add(k); return true; });
-    const sc = new Set(); g.completions = g.completions.filter(c => { const k = c.subjectCanon || c.subject; if (sc.has(k)) return false; sc.add(k); return true; });
+    const sa = new Set();
+    g.awards = g.awards.filter(a => {
+      const k = `${a.subject}|${a.stars}|${a.reportingMonth || ''}`;
+      if (sa.has(k)) return false;
+      sa.add(k); return true;
+    });
+    const sc = new Set();
+    g.completions = g.completions.filter(c => {
+      const k = c.subjectCanon || c.subject;
+      if (sc.has(k)) return false;
+      sc.add(k); return true;
+    });
     delete g._hasAwards;
   });
   return order;
 }
+
 function uniqueStudentGroups(memberKeys) {
-  const groups = []; const byUid = new Map();
+  const groups = [];
+  const byUid = new Map();
   (memberKeys || []).forEach(k => {
-    const h = honorees[k]; if (!h) return;
+    const h = honorees[k];
+    if (!h) return;
     const uid = studentUid(h) || k;
-    if (!byUid.has(uid)) { const g = { uid, keys: [k], name: h.nameCn || h.nameEn || '' }; byUid.set(uid, g); groups.push(g); }
-    else byUid.get(uid).keys.push(k);
+    if (!byUid.has(uid)) {
+      const g = { uid, keys: [k], name: h.nameCn || h.nameEn || '' };
+      byUid.set(uid, g);
+      groups.push(g);
+    } else {
+      byUid.get(uid).keys.push(k);
+    }
   });
   return groups;
 }
+
 function countUniqueFromIds(ids) {
   const s = new Set();
-  (ids || []).forEach(mid => { const h = honorees[mid]; s.add(studentUid(h) || mid); });
+  (ids || []).forEach(mid => {
+    const h = honorees[mid];
+    s.add(studentUid(h) || mid);
+  });
   return s.size;
+}
+
+// ============================================
+// 🔐 SELF-HEALING ANONYMOUS SESSION
+//   Fixes intermittent PERMISSION_DENIED caused by
+//   expired ID tokens in suspended in-app browsers.
+// ============================================
+let authBootstrapped = false;
+
+// Resolves once Firebase has restored (or not) any persisted session.
+const authReady = new Promise((resolve) => {
+  const unsub = onAuthStateChanged(auth, (user) => { unsub(); resolve(user); });
+});
+
+async function ensureAuth({ force = false } = {}) {
+  await authReady;
+  let user = auth.currentUser;
+  if (!user) user = (await signInAnonymously(auth)).user;
+
+  let refreshed = force;
+  try {
+    if (force) {
+      await user.getIdToken(true);
+    } else {
+      const tr = await user.getIdTokenResult();
+      const msLeft = new Date(tr.expirationTime).getTime() - Date.now();
+      if (msLeft < 5 * 60 * 1000) {
+        await user.getIdToken(true);
+        refreshed = true;
+      }
+    }
+  } catch (err) {
+    // Stored anonymous session is no longer usable — create a fresh one.
+    console.warn('[invite] token refresh failed, re-signing anonymously:', err?.code || err);
+    user = (await signInAnonymously(auth)).user;
+    await user.getIdToken(true);
+    refreshed = true;
+  }
+
+  // Give the Realtime Database connection a moment to attach the new token.
+  if (refreshed) await new Promise(r => setTimeout(r, 200));
+  authBootstrapped = true;
+  return user;
+}
+
+// Watchdog: if the session is ever dropped (tab suspended, storage cleared,
+// anonymous account purged), sign straight back in.
+onAuthStateChanged(auth, (user) => {
+  if (!user && authBootstrapped) {
+    signInAnonymously(auth).catch(err => console.error('[invite] re-auth failed:', err));
+  }
+});
+
+// Parents open this page from WhatsApp, leave, and come back later.
+// Refresh the session the moment the page becomes visible / back online.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && authBootstrapped) {
+    ensureAuth({ force: true }).catch(() => {});
+  }
+});
+window.addEventListener('online', () => {
+  if (authBootstrapped) ensureAuth({ force: true }).catch(() => {});
+});
+
+function isRetryableWriteError(err) {
+  const s = String(err?.code || err?.message || '').toLowerCase();
+  return s.includes('permission_denied') || s.includes('permission denied')
+    || s.includes('auth/') || s.includes('network') || s.includes('unavailable')
+    || s.includes('disconnected') || s.includes('expired');
+}
+
+// Write with automatic re-auth + retry, so a stale session never blocks RSVP.
+async function updateWithAuthRetry(path, payload, maxAttempts = 3) {
+  let lastErr = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await ensureAuth({ force: attempt > 1 });
+      await update(ref(db, path), payload);
+      return;
+    } catch (err) {
+      lastErr = err;
+      if (!isRetryableWriteError(err)) throw err;
+      console.warn(`[invite] write failed (attempt ${attempt}/${maxAttempts}):`, err?.code || err?.message);
+      try {
+        await signInAnonymously(auth);
+        await auth.currentUser?.getIdToken(true);
+      } catch (reauthErr) {
+        console.error('[invite] re-auth during retry failed:', reauthErr);
+      }
+      await new Promise(r => setTimeout(r, 350 * attempt));
+    }
+  }
+  throw lastErr;
 }
 
 await i18nReady.catch(() => {});
@@ -99,13 +228,16 @@ async function init() {
     location.reload();
   });
   $('retryBtn').addEventListener('click', () => location.reload());
+
   if (!eventId || !token) return showInvalid('Missing ?e= or ?t= parameter in URL.');
+
   try {
-    await signInAnonymously(auth);
+    await ensureAuth({ force: true });
   } catch (err) {
     console.error('Sign-in failed:', err);
     return showInvalid(`Sign-in failed: ${err.code || err.message}`);
   }
+
   try {
     const linkSnap = await get(ref(db, `publicAshrLinks/${eventId}/${token}`));
     if (!linkSnap.exists()) return showInvalid(`No link found at publicAshrLinks/${eventId}/${token}`);
@@ -117,6 +249,7 @@ async function init() {
     console.error('Link load failed:', err);
     return showInvalid(`Database error: ${err.code || err.message}`);
   }
+
   try {
     const [settingsSnap, slotsSnap, honoreesSnap, familiesSnap] = await Promise.all([
       get(ref(db, `ashrEvents/${eventId}/settings`)),
@@ -133,6 +266,7 @@ async function init() {
     console.error('Event load failed:', err);
     return showInvalid(`Database error: ${err.code || err.message}`);
   }
+
   // 🧟 Zombie-link guard: ignore members whose honoree record was deleted
   const validMembers = (portal.members || []).filter(k => honorees[k]);
   if (!validMembers.length) {
@@ -144,15 +278,25 @@ async function init() {
   if (eventSettings.rsvpDeadline) {
     deadlinePassed = new Date() > new Date(eventSettings.rsvpDeadline + 'T23:59:59');
   }
+
   showScreen('main');
   wireEvents();
   renderAll();
-  onValue(ref(db, `ashrEvents/${eventId}/timeslots`), (snap) => { timeslots = snap.val() || {}; safeRender('timeslots', renderTimeslots); });
-  onValue(ref(db, `ashrEvents/${eventId}/settings`), (snap) => { eventSettings = snap.val() || {}; safeRender('details', renderEventDetails); });
+
+  onValue(ref(db, `ashrEvents/${eventId}/timeslots`), (snap) => {
+    timeslots = snap.val() || {};
+    safeRender('timeslots', renderTimeslots);
+  }, (err) => console.error('[invite] timeslots listener:', err));
+
+  onValue(ref(db, `ashrEvents/${eventId}/settings`), (snap) => {
+    eventSettings = snap.val() || {};
+    safeRender('details', renderEventDetails);
+  }, (err) => console.error('[invite] settings listener:', err));
+
   onValue(ref(db, `ashrEvents/${eventId}/families/${familyId}`), (snap) => {
     familyData = snap.val() || null;
     if (familyData?.rsvp?.status && !isEditing) safeRender('confirm', renderConfirmation);
-  });
+  }, (err) => console.error('[invite] family listener:', err));
 }
 
 function wireEvents() {
@@ -164,7 +308,10 @@ function wireEvents() {
   $('submitRsvpBtn').addEventListener('click', submitRSVP);
   $('editRsvpBtn').addEventListener('click', startEditing);
   document.querySelectorAll('input[name="slotMode"]').forEach(radio => {
-    radio.addEventListener('change', (e) => { slotMode = e.target.value; safeRender('timeslots', renderTimeslots); });
+    radio.addEventListener('change', (e) => {
+      slotMode = e.target.value;
+      safeRender('timeslots', renderTimeslots);
+    });
   });
 }
 
@@ -194,6 +341,7 @@ function showScreen(name) {
   ['screenLoading', 'screenInvalid', 'screenExpired', 'screenMain'].forEach(id => $(id)?.classList.add('hidden'));
   $(`screen${name.charAt(0).toUpperCase() + name.slice(1)}`)?.classList.remove('hidden');
 }
+
 function showInvalid(reason) {
   const el = $('invalidReason');
   if (el && reason) { el.textContent = reason; el.classList.remove('hidden'); }
@@ -211,6 +359,7 @@ function renderAwards() {
   const names = memberHonorees.map(h => h.nameCn || h.nameEn).filter(Boolean).join(', ');
   const hasAnyAward = memberHonorees.some(h => (h.awards || []).length > 0);
   const hasAnyCompleter = memberHonorees.some(h => (h.completions || []).length > 0);
+
   let congrats;
   if (hasAnyCompleter && !hasAnyAward) {
     congrats = t('inv.completerCongratsText',
@@ -233,33 +382,34 @@ function renderAwards() {
   if (!listEl) return;
   const wordCompleter = t('inv.completer', 'Completer');
   const wordHonoured = t('inv.honoured', 'Honoured Student');
+
   listEl.innerHTML = memberHonorees.map(h => {
     const awards = h.awards || [];
     const completions = h.completions || [];
     const hasComp = completions.length > 0;
-    const hasAward = awards.length > 0;
+
     const completerBadges = completions.map(c => {
       const subj = c.subject || c.subjectCanon || c.subjectOriginal || '';
       return `<span class="award-tier tier-completer">🎓 ${escapeHtml(subj)} ${escapeHtml(wordCompleter)}</span>`;
     }).join(' ');
+
     const awardBadges = awards.map(a => {
       const medal =
-        a.tier === 'Gold' ? '🥇 ' :
-        a.tier === 'Silver' ? '🥈 ' :
-        a.tier === 'Bronze' ? '🥉 ' :
-        '';
+        a.tier === 'Gold' ? '🥇' :
+        a.tier === 'Silver' ? '🥈' :
+        a.tier === 'Bronze' ? '🥉' : '';
       return `<span class="award-tier tier-${String(a.tier || 'bronze').toLowerCase()}">${medal}${escapeHtml(a.subject || '')} ${'★'.repeat(Number(a.stars) || 0)}</span>`;
     }).join(' ');
+
     const detailHtml = [completerBadges, awardBadges].filter(Boolean).join(' ') || escapeHtml(wordHonoured);
     const icon = hasComp ? '🎓' : '🏅';
-    return `
-      <div class="award-item ${hasComp ? 'has-completer' : ''}">
-        <div class="award-medal">${icon}</div>
-        <div class="award-info">
-          <div class="student-name">${escapeHtml(h.nameCn || h.nameEn || '')}</div>
-          <div class="award-detail">${detailHtml}</div>
-        </div>
-      </div>`;
+    return `<div class="award-item ${hasComp ? 'has-completer' : ''}">
+      <div class="award-medal">${icon}</div>
+      <div class="award-info">
+        <div class="student-name">${escapeHtml(h.nameCn || h.nameEn || '')}</div>
+        <div class="award-detail">${detailHtml}</div>
+      </div>
+    </div>`;
   }).join('');
 }
 
@@ -268,7 +418,9 @@ function renderEventDetails() {
   if (nl) nl.textContent = eventSettings.eventName || `ASHR ${eventId}`;
   const de = $('eventDetails');
   if (!de) return;
-  de.innerHTML = `<p><strong>${escapeHtml(t('inv.date', '📅 Date:'))}</strong> ${escapeHtml(eventSettings.eventDate || 'TBD')}</p> <p><strong>${escapeHtml(t('inv.venue', '📍 Venue:'))}</strong> ${escapeHtml(eventSettings.venue || 'TBD')}</p> <p><strong>${escapeHtml(t('inv.deadline', '⏰ RSVP Deadline:'))}</strong> ${escapeHtml(eventSettings.rsvpDeadline || 'TBD')}</p>`;
+  de.innerHTML = `<p><strong>${escapeHtml(t('inv.date', '📅 Date:'))}</strong> ${escapeHtml(eventSettings.eventDate || 'TBD')}</p>
+    <p><strong>${escapeHtml(t('inv.venue', '📍 Venue:'))}</strong> ${escapeHtml(eventSettings.venue || 'TBD')}</p>
+    <p><strong>${escapeHtml(t('inv.deadline', '⏰ RSVP Deadline:'))}</strong> ${escapeHtml(eventSettings.rsvpDeadline || 'TBD')}</p>`;
 }
 
 function selectStatus(status) {
@@ -297,7 +449,8 @@ function computeSlotCountsExclude(excludeFamId) {
       const seen = new Set();
       memberIds.forEach(mid => {
         const uid = studentUid(honorees[mid]) || mid;
-        if (seen.has(uid)) return; seen.add(uid);
+        if (seen.has(uid)) return;
+        seen.add(uid);
         const sid = rsvp.perStudentSlots[mid];
         if (sid && counts[sid]) counts[sid].students += 1;
       });
@@ -326,20 +479,25 @@ function renderTimeslots() {
   if (!container) return;
   container.innerHTML = '';
   syncSlotModeToggle();
+
   const memberKeys = (portal && portal.members) || [];
   const slotCounts = computeSlotCountsExclude(familyId);
   const sorted = Object.entries(timeslots)
     .filter(([_, s]) => s.isEnabled !== false)
     .sort((a, b) => (a[1].start || '').localeCompare(b[1].start || ''));
+
   const buildOption = (slotId, slot, onSelect, isSelected) => {
     const count = slotCounts[slotId]?.students || 0;
     const isFull = count >= (slot.capacity || 30);
     const div = document.createElement('div');
     div.className = `timeslot-option ${isFull ? 'disabled' : ''} ${isSelected ? 'selected' : ''}`;
-    div.innerHTML = `<span class="slot-time">${escapeHtml(slot.start)} – ${escapeHtml(slot.end)}</span> <span class="slot-count">${count}/${slot.capacity || 30}</span> ${isFull ? `<span class="full-badge">${escapeHtml(t('inv.full', 'FULL'))}</span>` : ''}`;
+    div.innerHTML = `<span class="slot-time">${escapeHtml(slot.start)} – ${escapeHtml(slot.end)}</span>
+      <span class="slot-count">${count}/${slot.capacity || 30}</span>
+      ${isFull ? `<span class="full-badge">${escapeHtml(t('inv.full', 'FULL'))}</span>` : ''}`;
     if (!isFull) div.addEventListener('click', onSelect);
     return div;
   };
+
   if (slotMode === 'same') {
     sorted.forEach(([slotId, slot]) => {
       container.appendChild(buildOption(slotId, slot, () => {
@@ -366,14 +524,18 @@ async function submitRSVP() {
   if (!selectedStatus) return showToast(t('toast.chooseStatus', 'Please choose whether you will attend'), 'error');
   const memberKeys = (portal && portal.members) || [];
   if (!memberKeys.length) return showToast(t('inv.reasonNoMembers', 'This invitation is no longer valid.'), 'error');
+
   const groups = uniqueStudentGroups(memberKeys);
   const rsvp = { status: selectedStatus, submittedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+
   if (selectedStatus === 'declined') {
-    rsvp.reason = $('declineReason').value.trim();
+    rsvp.reason = $('declineReason')?.value.trim() || '';
   }
+
   if (selectedStatus === 'attending') {
     if (isSingleStudent()) slotMode = 'same';
     const counts = computeSlotCountsExclude(familyId);
+
     if (slotMode === 'same') {
       if (!selectedSlots.shared) return showToast(t('toast.chooseSlot', 'Please select a timeslot'), 'error');
       const slot = timeslots[selectedSlots.shared];
@@ -401,27 +563,39 @@ async function submitRSVP() {
       });
       rsvp.perStudentSlots = perStudent;
     }
+
     rsvp.guests = {
-      mom: $('guestMom').checked, dad: $('guestDad').checked,
-      grandma: $('guestGrandma').checked, grandpa: $('guestGrandpa').checked,
-      siblings: parseInt($('guestSiblings').value) || 0,
-      others: parseInt($('guestOthers').value) || 0
+      mom: !!$('guestMom')?.checked,
+      dad: !!$('guestDad')?.checked,
+      grandma: !!$('guestGrandma')?.checked,
+      grandpa: !!$('guestGrandpa')?.checked,
+      siblings: parseInt($('guestSiblings')?.value) || 0,
+      others: parseInt($('guestOthers')?.value) || 0
     };
   }
+
   const btn = $('submitRsvpBtn');
   btn.disabled = true;
   try {
-    await update(ref(db, `ashrEvents/${eventId}/families/${familyId}`), {
+    // 🔐 Self-healing write: re-auth + automatic retry on PERMISSION_DENIED
+    await updateWithAuthRetry(`ashrEvents/${eventId}/families/${familyId}`, {
       memberHonoreeIds: memberKeys,
       rsvp
     });
+    familyData = { ...(familyData || {}), memberHonoreeIds: memberKeys, rsvp };
     showToast(t('toast.rsvpOk', 'RSVP submitted successfully!'), 'success');
     isEditing = false;
     safeRender('confirm', renderConfirmation);
   } catch (err) {
     console.error(err);
-    showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error');
-  } finally { btn.disabled = false; }
+    if (isRetryableWriteError(err)) {
+      showToast(t('toast.sessionRetry', 'Your session could not be refreshed. Please check your connection and tap Submit again.'), 'error');
+    } else {
+      showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error');
+    }
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function renderConfirmation() {
@@ -429,13 +603,18 @@ function renderConfirmation() {
   $('timeslotCard')?.classList.add('hidden');
   $('guestCard')?.classList.add('hidden');
   $('submitCard')?.classList.add('hidden');
+  $('reasonCard')?.classList.add('hidden');
   $('confirmationCard')?.classList.remove('hidden');
+
   const rsvp = familyData?.rsvp;
   if (!rsvp) return;
+
   let details = `<p><strong>${escapeHtml(t('inv.statusWord', 'Status'))}:</strong> ${rsvp.status === 'attending' ? '✅ ' + escapeHtml(t('st.attending', 'Attending')) : '❌ ' + escapeHtml(t('st.declined', 'Declined'))}</p>`;
+
   if (rsvp.status === 'declined' && rsvp.reason) {
     details += `<p><strong>${escapeHtml(t('inv.reasonWord', 'Reason'))}:</strong> ${escapeHtml(rsvp.reason)}</p>`;
   }
+
   if (rsvp.status === 'attending') {
     if (rsvp.sameTimeslot && rsvp.sharedSlotId) {
       const slot = timeslots[rsvp.sharedSlotId];
@@ -446,7 +625,8 @@ function renderConfirmation() {
       Object.entries(rsvp.perStudentSlots).forEach(([key, slotId]) => {
         if (!honorees[key]) return;   // 🧟 student was deleted after RSVP
         const uid = studentUid(honorees[key]) || key;
-        if (seen.has(uid)) return; seen.add(uid);
+        if (seen.has(uid)) return;
+        seen.add(uid);
         const h = honorees[key];
         const slot = timeslots[slotId];
         details += `<li>${escapeHtml(h?.nameCn || h?.nameEn || key)}: ${slot ? `${escapeHtml(slot.start)} – ${escapeHtml(slot.end)}` : escapeHtml(slotId)}</li>`;
@@ -457,6 +637,7 @@ function renderConfirmation() {
     const guestCount = (g.mom ? 1 : 0) + (g.dad ? 1 : 0) + (g.grandma ? 1 : 0) + (g.grandpa ? 1 : 0) + (g.siblings || 0) + (g.others || 0);
     details += `<p><strong>${escapeHtml(t('inv.guestsWord', 'Guests'))}:</strong> ${guestCount}</p>`;
   }
+
   details += `<p><strong>${escapeHtml(t('inv.submittedWord', 'Submitted'))}:</strong> ${new Date(rsvp.submittedAt).toLocaleString()}</p>`;
   const cd = $('confirmationDetails');
   if (cd) cd.innerHTML = details;
@@ -472,6 +653,7 @@ function startEditing() {
   $('rsvpCard').classList.remove('hidden');
   $('btnAttending').classList.toggle('selected', rsvp.status === 'attending');
   $('btnDeclined').classList.toggle('selected', rsvp.status === 'declined');
+
   if (rsvp.status === 'attending') {
     $('timeslotCard').classList.remove('hidden');
     $('guestCard').classList.remove('hidden');
