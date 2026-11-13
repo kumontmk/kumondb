@@ -3,7 +3,7 @@
 // New standalone module. Does not touch any existing page logic.
 // ============================================================
 import { auth, db } from './auth.js';
-import { ref, get, update, remove, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { ref, get, update, remove, onValue, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
   GRADES, GRADE_CN, gradeIdx, gradeBand, gradeLabel, gradeInRange, rangeLabel,
@@ -65,26 +65,7 @@ async function refreshEventList() {
   if (currentEventId) { localStorage.setItem('booth_eventId', currentEventId); sel.value = currentEventId; }
 }
 
-function subscribeEvent(id) {
-  unsubs.forEach(fn => fn()); unsubs = [];
-  config = {}; games = {}; counts = {}; regs = {};
-  loaded = { config:false, games:false, counts:false, regs:false };
-  selected.clear();
-  const base = `boothEvents/${id}`;
-  const sub = (path, fn) => {
-    const un = onValue(ref(db, path), s => { fn(s.val() || {}); renderAll(); },
-      err => console.error(`Listener error on ${path}:`, err));
-    unsubs.push(un);
-  };
-  sub(`${base}/config`, v => {
-    config = normalizeEventConfig(v);
-    games = normalizeGames(games, config);   // re-date legacy slots once config arrives
-    loaded.config = true;
-  });
-  sub(`${base}/games`, v => { games = normalizeGames(v, config); loaded.games = true; });
-  sub(`${base}/counts`, v => { counts = v; loaded.counts = true; });
-  sub(`${base}/registrations`, v => { regs = v; loaded.regs = true; });
-}
+
 
 // ============================================
 // MODE / TABS
@@ -383,25 +364,6 @@ function renderCharts(list) {
   });
 }
 
-function renderOccupancy() {
-  const wrap = $('slotOccupancy');
-  const entries = Object.entries(games);
-  if (!entries.length) { wrap.innerHTML = '<p class="hint">No games yet — add them in Form & Games. 請先新增遊戲。</p>'; return; }
-  wrap.innerHTML = entries.map(([gid, g]) => {
-    const slots = Object.entries(g.slots || {}).sort((a, b) =>
-      String(a[1].date || '').localeCompare(String(b[1].date || '')) || String(a[1].start).localeCompare(String(b[1].start)));
-    const rows = slots.map(([sid, s]) => {
-      const b = Number(counts[gid]?.[sid]) || 0;
-      const cap = Number(s.capacity) || 0;
-      const pct = cap ? Math.min(100, Math.round(b / cap * 100)) : 0;
-      const full = cap > 0 && b >= cap;
-      return `<div class="occ-row"><span class="occ-time">${escapeHtml(fmtDateShort(s.date))} · ${escapeHtml(slotLabel(s))}</span><div class="occ-bar"><div class="occ-fill" style="--oc:${g.color || PALETTE[0]};width:${pct}%"></div></div><span class="occ-num">${b} / ${cap}</span><span class="status-badge ${full ? 'st-full' : 'st-open'}">${full ? 'FULL 額滿' : 'OPEN'}</span></div>`;
-    }).join('');
-    return `<div class="occ-game"><div class="occ-game-head"><span>${g.emoji || '🎮'}</span><span>${escapeHtml(g.name || '')} ${escapeHtml(g.nameCn || '')}</span><span class="range-chip">${escapeHtml(rangeLabel(g.minGrade, g.maxGrade))}</span></div>${rows || '<p class="hint">No slots.</p>'}</div>`;
-  }).join('');
-}
-
-
 function renderRecent(list) {
   const wrap = $('recentList');
   const top = [...list].sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || ''))).slice(0, 5);
@@ -556,30 +518,246 @@ async function markAttended(ids) {
   catch (err) { showToast(`Error: ${err.message}`, 'error'); }
 }
 
+// ============================================================
+// SEAT COUNT INTEGRITY
+// Registrations are the source of truth; counts is the fast
+// aggregate the public form uses. Every admin mutation keeps
+// them in step, and reconcileCounts() repairs any drift.
+// ============================================================
+let reconcileRunning = false;
+let autoReconcileTimer = null;
+
+function selectionsOf(list) {
+  const out = [];
+  (list || []).forEach(r => (r?.selections || []).forEach(s => {
+    if (s && s.gameId && s.slotId) out.push({ gid: s.gameId, sid: s.slotId });
+  }));
+  return out;
+}
+
+function expectedCountsFrom(sourceRegs, sourceGames) {
+  const exp = {};
+  Object.entries(sourceGames || {}).forEach(([gid, g]) => {
+    exp[gid] = {};
+    Object.keys((g && g.slots) || {}).forEach(sid => { exp[gid][sid] = 0; });
+  });
+  Object.values(sourceRegs || {}).forEach(r => {
+    ((r && r.selections) || []).forEach(s => {
+      if (s && exp[s.gameId] && exp[s.gameId][s.slotId] !== undefined) exp[s.gameId][s.slotId] += 1;
+    });
+  });
+  return exp;
+}
+
+function countsDrift() {
+  const exp = expectedCountsFrom(regs, games);
+  const diffs = [];
+  Object.entries(exp).forEach(([gid, slots]) => {
+    Object.entries(slots).forEach(([sid, n]) => {
+      const actual = Number(counts[gid]?.[sid]) || 0;
+      if (actual !== n) diffs.push({ gid, sid, actual, expected: n });
+    });
+  });
+  Object.keys(counts).forEach(gid => {
+    Object.keys(counts[gid] || {}).forEach(sid => {
+      if (!exp[gid] || exp[gid][sid] === undefined) {
+        const actual = Number(counts[gid][sid]) || 0;
+        if (actual !== 0) diffs.push({ gid, sid, actual, expected: 0 });
+      }
+    });
+  });
+  return diffs;
+}
+
+function applyLocalCount(gid, sid, delta) {
+  counts[gid] = counts[gid] || {};
+  const next = Math.max(0, (Number(counts[gid][sid]) || 0) + delta);
+  if (next === 0) delete counts[gid][sid]; else counts[gid][sid] = next;
+  if (!Object.keys(counts[gid]).length) delete counts[gid];
+}
+
+async function bumpSlotCount(eid, gid, sid, delta) {
+  await runTransaction(
+    ref(db, `boothEvents/${eid}/counts/${gid}/${sid}`),
+    cur => Math.max(0, (Number(cur) || 0) + delta),
+    { applyLocally: false }
+  );
+}
+
+async function reconcileCounts({ silent = true } = {}) {
+  if (!currentEventId || creatingNew || reconcileRunning) return;
+  reconcileRunning = true;
+  const eid = currentEventId;
+  const btn = $('rebuildCountsBtn');
+  if (btn && !silent) { btn.disabled = true; btn.textContent = '⏳ Rebuilding…'; }
+  try {
+    const [regsSnap, gamesSnap, countsSnap] = await Promise.all([
+      get(ref(db, `boothEvents/${eid}/registrations`)),
+      get(ref(db, `boothEvents/${eid}/games`)),
+      get(ref(db, `boothEvents/${eid}/counts`))
+    ]);
+    const freshGames = normalizeGames(gamesSnap.val() || {}, config);
+    const exp = expectedCountsFrom(regsSnap.val() || {}, freshGames);
+    const actual = countsSnap.val() || {};
+    const updates = {};
+
+    Object.entries(exp).forEach(([gid, slots]) => {
+      Object.entries(slots).forEach(([sid, n]) => {
+        if ((Number(actual[gid]?.[sid]) || 0) !== n) updates[`boothEvents/${eid}/counts/${gid}/${sid}`] = n;
+      });
+    });
+    Object.keys(actual).forEach(gid => {
+      if (!exp[gid]) { updates[`boothEvents/${eid}/counts/${gid}`] = null; return; }
+      Object.keys(actual[gid] || {}).forEach(sid => {
+        if (exp[gid][sid] === undefined) updates[`boothEvents/${eid}/counts/${gid}/${sid}`] = null;
+      });
+    });
+
+    const changed = Object.keys(updates).length;
+    if (changed) {
+      await update(ref(db), updates);
+      if (eid === currentEventId) {
+        const local = {};
+        Object.entries(exp).forEach(([gid, slots]) => {
+          Object.entries(slots).forEach(([sid, v]) => {
+            if (v > 0) { local[gid] = local[gid] || {}; local[gid][sid] = v; }
+          });
+        });
+        counts = local;
+        renderAll();
+      }
+    }
+    if (!silent) {
+      showToast(changed
+        ? `🔧 Seat counts rebuilt — ${changed} slot(s) corrected 已重算名額`
+        : '✅ Seat counts already correct 名額正確', 'success');
+    }
+  } catch (err) {
+    if (!silent) showToast(`Error: ${err.message}`, 'error');
+    else console.error('Seat count reconcile failed:', err);
+  } finally {
+    reconcileRunning = false;
+    if (btn && !silent) { btn.disabled = false; btn.textContent = '🔧 Rebuild seat counts 重算名額'; }
+  }
+}
+
+function subscribeEvent(id) {
+  unsubs.forEach(fn => fn()); unsubs = [];
+  if (autoReconcileTimer) { clearTimeout(autoReconcileTimer); autoReconcileTimer = null; }
+  config = {}; games = {}; counts = {}; regs = {};
+  loaded = { config:false, games:false, counts:false, regs:false };
+  selected.clear();
+  const base = `boothEvents/${id}`;
+  const sub = (path, fn) => {
+    const un = onValue(ref(db, path), s => { fn(s.val() || {}); renderAll(); },
+      err => console.error(`Listener error on ${path}:`, err));
+    unsubs.push(un);
+  };
+  sub(`${base}/config`, v => {
+    config = normalizeEventConfig(v);
+    games = normalizeGames(games, config);
+    loaded.config = true;
+  });
+  sub(`${base}/games`, v => { games = normalizeGames(v, config); loaded.games = true; });
+  sub(`${base}/counts`, v => { counts = v; loaded.counts = true; });
+  sub(`${base}/registrations`, v => { regs = v; loaded.regs = true; });
+
+  // Self-heal any drift left by older builds, once the event has settled.
+  autoReconcileTimer = setTimeout(() => {
+    autoReconcileTimer = null;
+    reconcileCounts({ silent: true });
+  }, 2500);
+}
+
 async function deleteRegs(ids) {
   const stash = ids.filter(id => regs[id]).map(id => ({ id, data: JSON.parse(JSON.stringify(regs[id])) }));
   if (!stash.length) return;
   const eid = currentEventId;
+  const affected = selectionsOf(stash.map(s => s.data));
   const updates = {};
-  stash.forEach(({ id }) => { delete regs[id]; selected.delete(id); updates[`boothEvents/${eid}/registrations/${id}`] = null; });
+  stash.forEach(({ id }) => {
+    delete regs[id];
+    selected.delete(id);
+    updates[`boothEvents/${eid}/registrations/${id}`] = null;
+  });
+  affected.forEach(({ gid, sid }) => applyLocalCount(gid, sid, -1));
   renderAll();
   try {
     await update(ref(db), updates);
-    showToast(`🗑 Deleted ${stash.length} registration(s) 已刪除`, 'info', {
-      label:'Undo 復原',
+    for (const { gid, sid } of affected) {
+      try { await bumpSlotCount(eid, gid, sid, -1); }
+      catch (e) { console.error('Seat release failed:', e); }
+    }
+    showToast(`🗑 Deleted ${stash.length} registration(s) — seats released 已刪除並釋放名額`, 'info', {
+      label: 'Undo 復原',
       fn: async () => {
         const back = {};
-        stash.forEach(({ id, data }) => { back[`boothEvents/${eid}/registrations/${id}`] = data; if (eid === currentEventId) regs[id] = data; });
-        try { await update(ref(db), back); renderAll(); showToast('↩ Restored 已復原', 'success'); }
-        catch (err) { showToast(`Error: ${err.message}`, 'error'); }
+        stash.forEach(({ id, data }) => {
+          back[`boothEvents/${eid}/registrations/${id}`] = data;
+          if (eid === currentEventId) regs[id] = data;
+        });
+        try {
+          await update(ref(db), back);
+          for (const { gid, sid } of affected) {
+            if (eid === currentEventId && !games[gid]?.slots?.[sid]) continue;
+            try { await bumpSlotCount(eid, gid, sid, +1); }
+            catch (e) { console.error('Seat re-book failed:', e); }
+            if (eid === currentEventId) applyLocalCount(gid, sid, +1);
+          }
+          renderAll();
+          showToast('↩ Restored — seats re-booked 已復原並重新佔位', 'success');
+        } catch (err) { showToast(`Error: ${err.message}`, 'error'); }
       }
     });
   } catch (err) {
     stash.forEach(({ id, data }) => { regs[id] = data; });
+    affected.forEach(({ gid, sid }) => applyLocalCount(gid, sid, +1));
     renderAll();
     showToast(`Error: ${err.message}`, 'error');
   }
 }
+
+function renderOccupancy() {
+  const wrap = $('slotOccupancy');
+  const warn = $('countsSyncWarn');
+  const entries = Object.entries(games);
+  if (!entries.length) {
+    wrap.innerHTML = '<p class="hint">No games yet — add them in Form & Games. 請先新增遊戲。</p>';
+    if (warn) warn.classList.add('hidden');
+    return;
+  }
+  const exp = expectedCountsFrom(regs, games);
+  const drift = countsDrift();
+  if (warn) {
+    warn.classList.toggle('hidden', drift.length === 0);
+    if (drift.length) {
+      warn.textContent = `⚠️ ${drift.length} slot count(s) do not match the registration records. Press “Rebuild seat counts”. 名額與報名紀錄不一致，請按「重算名額」。`;
+    }
+  }
+  wrap.innerHTML = entries.map(([gid, g]) => {
+    const slots = Object.entries(g.slots || {}).sort((a, b) =>
+      String(a[1].date || '').localeCompare(String(b[1].date || '')) || String(a[1].start).localeCompare(String(b[1].start)));
+    const rows = slots.map(([sid, s]) => {
+      const b = Number(counts[gid]?.[sid]) || 0;
+      const truth = (exp[gid] && exp[gid][sid] !== undefined) ? exp[gid][sid] : 0;
+      const cap = Number(s.capacity) || 0;
+      const pct = cap ? Math.min(100, Math.round(b / cap * 100)) : 0;
+      const full = cap > 0 && b >= cap;
+      const fix = b !== truth ? `<span class="occ-fix" title="Should be ${truth} 應為 ${truth}">→ ${truth}</span>` : '';
+      return `<div class="occ-row"><span class="occ-time">${escapeHtml(fmtDateShort(s.date))} · ${escapeHtml(slotLabel(s))}</span><div class="occ-bar"><div class="occ-fill" style="--oc:${g.color || PALETTE[0]};width:${pct}%"></div></div><span class="occ-num">${b} / ${cap}${fix}</span><span class="status-badge ${full ? 'st-full' : 'st-open'}">${full ? 'FULL 額滿' : 'OPEN'}</span></div>`;
+    }).join('');
+    return `<div class="occ-game"><div class="occ-game-head"><span>${g.emoji || '🎮'}</span><span>${escapeHtml(g.name || '')} ${escapeHtml(g.nameCn || '')}</span><span class="range-chip">${escapeHtml(rangeLabel(g.minGrade, g.maxGrade))}</span></div>${rows || '<p class="hint">No slots.</p>'}</div>`;
+  }).join('');
+}
+
+// Bind the rebuild button once (module runs after the DOM is parsed).
+(function bindRebuildCounts() {
+  const btn = document.getElementById('rebuildCountsBtn');
+  if (btn && !btn.dataset.bound) {
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', () => reconcileCounts({ silent: false }));
+  }
+})();
 
 // ============================================
 // DETAIL DRAWER
@@ -1148,21 +1326,36 @@ async function downloadPoster() {
   const qr = renderQrCanvas(url, 440);
   if (!qr) return showToast('QR library not loaded', 'error');
   try {
-    const W = 900, S = 2;
+    const W = 900, S = 2, M = 56, CW = W - M * 2;
     const FONT = "'Nunito','Segoe UI','PingFang TC','Microsoft JhengHei',sans-serif";
+    const cap = (lines, n) => lines.length > n
+      ? lines.slice(0, n).map((l, i) => i === n - 1 ? l + '…' : l)
+      : lines;
 
-    // Measure first so the header grows to fit wrapped bilingual venue lines.
+    // ---- measure every header line first, same width for all ----
     const m = document.createElement('canvas').getContext('2d');
-    m.font = '900 42px ' + FONT;
-    const titleLines = wrapLines(m, config.title || config.titleCn || 'Booth Games', W - 190).slice(0, 2);
+    m.font = '900 40px ' + FONT;
+    const titleLines = cap(wrapLines(m, config.title || config.titleCn || 'Booth Games', CW), 2);
     m.font = '700 26px ' + FONT;
-    const cnLines = (config.title && config.titleCn) ? wrapLines(m, config.titleCn, W - 190).slice(0, 2) : [];
-    m.font = '600 19px ' + FONT;
-    const dateLines = wrapLines(m, '📅 ' + eventRangeLabel(config) + (config.timeText ? '  ·  ⏰ ' + config.timeText : ''), W - 190).slice(0, 2);
+    const cnLines = (config.title && config.titleCn) ? cap(wrapLines(m, config.titleCn, CW), 2) : [];
+    m.font = '600 20px ' + FONT;
+    const dateText = '📅 ' + eventRangeLabel(config) + (config.timeText ? '   ·   ⏰ ' + config.timeText : '');
+    const dateLines = cap(wrapLines(m, dateText, CW), 2);
     m.font = '600 18px ' + FONT;
-    const venEnLines = config.venueEn ? wrapLines(m, '📍 ' + config.venueEn, W - 96).slice(0, 2) : [];
-    const venCnLines = config.venueCn ? wrapLines(m, config.venueCn, W - 96).slice(0, 2) : [];
-    const headerH = Math.max(280, 104 + titleLines.length * 50 + cnLines.length * 34 + dateLines.length * 28 + venEnLines.length * 26 + venCnLines.length * 26);
+    const venEnLines = config.venueEn ? cap(wrapLines(m, '📍 ' + config.venueEn, CW), 2) : [];
+    const venCnLines = config.venueCn ? cap(wrapLines(m, config.venueCn, CW), 2) : [];
+
+    const blocks = [{ lines:['🎪'], font:'56px ' + FONT, lh:64, gap:0, color:'#ffffff' }];
+    blocks.push({ lines:titleLines, font:'900 40px ' + FONT, lh:48, gap:16, color:'#ffffff' });
+    if (cnLines.length) blocks.push({ lines:cnLines, font:'700 26px ' + FONT, lh:34, gap:6, color:'rgba(255,255,255,.96)' });
+    blocks.push({ lines:dateLines, font:'600 20px ' + FONT, lh:28, gap:16, color:'rgba(255,255,255,.96)' });
+    if (venEnLines.length) blocks.push({ lines:venEnLines, font:'600 18px ' + FONT, lh:26, gap:12, color:'rgba(255,255,255,.93)' });
+    if (venCnLines.length) blocks.push({ lines:venCnLines, font:'600 18px ' + FONT, lh:26, gap:4, color:'rgba(255,255,255,.93)' });
+
+    let naturalH = 76; // 40 top + 36 bottom padding
+    blocks.forEach(b => { naturalH += b.gap + b.lines.length * b.lh; });
+    const headerH = Math.max(280, naturalH);
+    const topPad = 40 + (headerH - naturalH) / 2;
 
     const cardY = headerH + 52, cardH = 560;
     const urlY = cardY + cardH + 46;
@@ -1177,39 +1370,39 @@ async function downloadPoster() {
     ctx.scale(S, S);
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
 
+    // ---- header background ----
     if (config.bannerDataUrl) {
       try {
         const img = await loadImg(config.bannerDataUrl);
         const sc = Math.max(W / img.naturalWidth, headerH / img.naturalHeight);
         const sw = W / sc, sh = headerH / sc;
         ctx.drawImage(img, (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2, sw, sh, 0, 0, W, headerH);
-        ctx.fillStyle = 'rgba(12,20,38,.42)'; ctx.fillRect(0, 0, W, headerH);
+        ctx.fillStyle = 'rgba(12,20,38,.45)'; ctx.fillRect(0, 0, W, headerH);
       } catch { drawGradientHeader(ctx, W, headerH); }
     } else drawGradientHeader(ctx, W, headerH);
 
-    ctx.fillStyle = '#fff';
-    ctx.font = '64px ' + FONT;
-    ctx.fillText('🎪', 44, 118);
-    let y = 96;
-    ctx.font = '900 42px ' + FONT;
-    titleLines.forEach(ln => { ctx.fillText(ln, 140, y); y += 50; });
-    ctx.font = '700 26px ' + FONT;
-    cnLines.forEach(ln => { ctx.fillText(ln, 140, y); y += 34; });
-    y += 6;
-    ctx.font = '600 19px ' + FONT;
-    dateLines.forEach(ln => { ctx.fillText(ln, 140, y); y += 28; });
-    y += 4;
-    ctx.font = '600 18px ' + FONT;
-    venEnLines.forEach(ln => { ctx.fillText(ln, 48, y); y += 26; });
-    venCnLines.forEach(ln => { ctx.fillText(ln, 48, y); y += 26; });
+    // ---- centered header text, one column, equal margins ----
+    ctx.textAlign = 'center';
+    ctx.shadowColor = 'rgba(10,18,36,.35)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 2;
+    let y = topPad;
+    blocks.forEach(b => {
+      ctx.font = b.font;
+      ctx.fillStyle = b.color;
+      y += b.gap;
+      b.lines.forEach(ln => { y += b.lh; ctx.fillText(ln, W / 2, y); });
+    });
+    ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
 
     ctx.fillStyle = '#f2b100'; ctx.fillRect(0, headerH, W, 10);
 
+    // ---- QR card ----
     const cardX = 190, cardW = 520;
     ctx.fillStyle = '#ffffff';
     ctx.strokeStyle = '#dbe5f2'; ctx.lineWidth = 3;
     rr(ctx, cardX, cardY, cardW, cardH, 26); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#16233b'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#16233b';
     ctx.font = '900 26px ' + FONT;
     ctx.fillText('SCAN ME · 掃描報名', W / 2, cardY + 48);
     ctx.drawImage(qr, W / 2 - 200, cardY + 76, 400, 400);
@@ -1217,19 +1410,27 @@ async function downloadPoster() {
     ctx.fillStyle = '#2f6fb2';
     ctx.fillText(config.shortCode, W / 2, cardY + 532);
 
+    // ---- link (auto-shrinks to fit) ----
+    const u = url.replace(/^https?:\/\//, '');
+    let uSize = 17;
+    ctx.font = '600 ' + uSize + 'px "Courier New",monospace';
+    while (ctx.measureText(u).width > CW && uSize > 11) {
+      uSize--;
+      ctx.font = '600 ' + uSize + 'px "Courier New",monospace';
+    }
     ctx.fillStyle = '#5b6b84';
-    ctx.font = '600 17px "Courier New",monospace';
-    ctx.fillText(url.replace(/^https?:\/\//, ''), W / 2, urlY);
+    ctx.fillText(u, W / 2, urlY);
+
     ctx.fillStyle = '#16233b';
     ctx.font = '900 28px ' + FONT;
     ctx.fillText('Scan to register · 掃描即時報名', W / 2, hintY);
     ctx.fillStyle = '#5b6b84';
     ctx.font = '700 19px ' + FONT;
     ctx.fillText('Registration 報名期: ' + fmtDate(config.regStart, false) + ' → ' + fmtDate(config.regEnd, false), W / 2, winY);
-    ctx.textAlign = 'left';
 
+    // ---- footer ----
     ctx.fillStyle = '#16233b'; ctx.fillRect(0, footerY, W, 72);
-    ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff';
     ctx.font = '800 21px ' + FONT;
     ctx.fillText('Kumon Booth Games · 公文式攤位遊戲', W / 2, footerY + 44);
     ctx.textAlign = 'left';

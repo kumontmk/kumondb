@@ -27,7 +27,8 @@ export const INTERESTS = [
   { id:'chinese', cn:'中文', en:'Chinese' },
   { id:'kindies', cn:'幼兒學習啟蒙班', en:'Kumon Kindies Programme' },
   { id:'connect', cn:'Kumon Connect 公文式平板學習體驗', en:'Kumon Connect · Tablet Study Experience' },
-  { id:'none',    cn:'沒有，我的孩子目前是公文式學生', en:'None. My child is a current Kumon student', exclusive:true }
+  { id:'none',    cn:'沒有，我的孩子目前是公文式學生', en:'None. My child is a current Kumon student', exclusive:true },
+  { id:'noneNow', cn:'暫時沒有', en:'None at the moment', exclusive:true }
 ];
 export const interestLabel = id => {
   const o = INTERESTS.find(x => x.id === id);

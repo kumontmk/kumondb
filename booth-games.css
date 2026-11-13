@@ -374,3 +374,15 @@ header h1 {
     font-size: 0.8rem;
   }
 }
+
+/* ---- seat count integrity ---- */
+.sync-warn {
+  background: var(--bg-amber); border: 1.5px solid #fde68a; color: var(--amber);
+  font-weight: 800; font-size: .84rem; padding: .6rem .85rem;
+  border-radius: 10px; margin-bottom: .8rem;
+}
+.occ-fix {
+  display: inline-block; margin-left: .35rem; font-size: .72rem; font-weight: 900;
+  color: var(--red); background: var(--bg-red); border: 1px solid #fca5a5;
+  padding: .05rem .4rem; border-radius: 999px; white-space: nowrap;
+}

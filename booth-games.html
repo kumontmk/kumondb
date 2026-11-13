@@ -84,7 +84,11 @@
     </div>
 
     <div class="card">
-      <h3>🎟️ Slot occupancy 場次名額</h3>
+      <div class="card-head">
+        <h3>🎟️ Slot occupancy 場次名額</h3>
+        <button id="rebuildCountsBtn" class="btn small secondary">🔧 Rebuild seat counts 重算名額</button>
+      </div>
+      <div id="countsSyncWarn" class="sync-warn hidden"></div>
       <div id="slotOccupancy"></div>
     </div>
 

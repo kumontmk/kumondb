@@ -231,20 +231,23 @@ function buildStaticUI() {
   $('curYes').addEventListener('click', () => setCurrent('yes'));
   $('curNo').addEventListener('click', () => setCurrent('no'));
 
-  // Interest cards (the "None / current student" option is exclusive)
+  // Interest cards — both "None" options are exclusive:
+  // picking one clears all subjects and the other "None"; picking a subject clears both.
   const list = $('interestList');
+  const exclusiveIds = INTERESTS.filter(o => o.exclusive).map(o => o.id);
+  list.innerHTML = '';
   INTERESTS.forEach(o => {
     const card = document.createElement('button');
     card.type = 'button';
     card.className = 'interest-card' + (o.exclusive ? ' exclusive' : '');
     card.dataset.id = o.id;
-    card.innerHTML = `<span class="box">✓</span><span><span class="i-cn">${escapeHtml(o.cn)}</span><span class="i-en">${escapeHtml(o.en)}</span></span>`;
+    card.innerHTML = '<span class="box">✓</span><span><span class="i-cn">' + escapeHtml(o.cn) + '</span><span class="i-en">' + escapeHtml(o.en) + '</span></span>';
     card.addEventListener('click', () => {
       if (o.exclusive) {
         if (answers.interests.has(o.id)) answers.interests.delete(o.id);
         else { answers.interests.clear(); answers.interests.add(o.id); }
       } else {
-        answers.interests.delete('none');
+        exclusiveIds.forEach(id => answers.interests.delete(id));
         if (answers.interests.has(o.id)) answers.interests.delete(o.id);
         else answers.interests.add(o.id);
       }
