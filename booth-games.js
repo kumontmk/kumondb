@@ -1,6 +1,7 @@
 // ============================================================
 // BOOTH GAMES — ADMIN
-// New standalone module. Does not touch any existing page logic.
+// Dashboard · Registrations · Builder · Share/QR · Check-in
+// Seat-count integrity · School field · Multi-day events
 // ============================================================
 import { auth, db } from './auth.js';
 import { ref, get, update, remove, onValue, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
@@ -26,11 +27,13 @@ let config = {}, games = {}, counts = {}, regs = {};
 let loaded = { config:false, games:false, counts:false, regs:false };
 let unsubs = [];
 let charts = {};
-let drafts = {};                 // per-event drafts; '__new' for a new event
+let drafts = {};
 let selected = new Set();
 let lastVisible = [];
 let drawerRegId = null;
 let staticBound = false;
+let reconcileRunning = false;
+let autoReconcileTimer = null;
 
 const draftKey = () => creatingNew ? '__new' : currentEventId;
 
@@ -65,7 +68,32 @@ async function refreshEventList() {
   if (currentEventId) { localStorage.setItem('booth_eventId', currentEventId); sel.value = currentEventId; }
 }
 
+function subscribeEvent(id) {
+  unsubs.forEach(fn => fn()); unsubs = [];
+  if (autoReconcileTimer) { clearTimeout(autoReconcileTimer); autoReconcileTimer = null; }
+  config = {}; games = {}; counts = {}; regs = {};
+  loaded = { config:false, games:false, counts:false, regs:false };
+  selected.clear();
+  const base = `boothEvents/${id}`;
+  const sub = (path, fn) => {
+    const un = onValue(ref(db, path), s => { fn(s.val() || {}); renderAll(); },
+      err => console.error(`Listener error on ${path}:`, err));
+    unsubs.push(un);
+  };
+  sub(`${base}/config`, v => {
+    config = normalizeEventConfig(v);
+    games = normalizeGames(games, config);
+    loaded.config = true;
+  });
+  sub(`${base}/games`, v => { games = normalizeGames(v, config); loaded.games = true; });
+  sub(`${base}/counts`, v => { counts = v; loaded.counts = true; });
+  sub(`${base}/registrations`, v => { regs = v; loaded.regs = true; });
 
+  autoReconcileTimer = setTimeout(() => {
+    autoReconcileTimer = null;
+    reconcileCounts({ silent:true });
+  }, 2500);
+}
 
 // ============================================
 // MODE / TABS
@@ -129,6 +157,7 @@ function renderAll() {
   else if (t === 'regs') renderRegs();
   else if (t === 'builder') renderBuilder(false);
   else if (t === 'share') renderShare();
+  else if (t === 'checkin') renderCheckin();
 }
 
 // ============================================
@@ -153,7 +182,6 @@ function setupStatic() {
   $('dupEventBtn').addEventListener('click', duplicateEvent);
   $('delEventBtn').addEventListener('click', deleteEvent);
 
-  // Builder fields — draft only; nothing is checked or saved until Save is pressed
   const bind = (id, fn) => $(id).addEventListener('input', () => {
     const d = drafts[draftKey()]; if (!d) return;
     fn(d, $(id)); d.dirty = true; $('draftChip').classList.remove('hidden');
@@ -182,7 +210,7 @@ function setupStatic() {
     d.config.bannerDataUrl = null; d.dirty = true;
     $('draftChip').classList.remove('hidden');
     $('bannerFile').value = '';
-    renderBannerPreview(d);
+    renderPresetRow(d); renderBannerPreview(d);
   });
   $('addGameBtn').addEventListener('click', () => {
     const d = drafts[draftKey()]; if (!d) return;
@@ -243,7 +271,11 @@ function setupStatic() {
   $('drawerClose').addEventListener('click', closeDrawer);
   $('drawerScrim').addEventListener('click', closeDrawer);
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
-  $('drawerAttendBtn').addEventListener('click', () => { if (drawerRegId) { toggleAttend(drawerRegId); setTimeout(() => { if (drawerRegId) fillDrawer(drawerRegId); }, 60); } });
+  $('drawerAttendBtn').addEventListener('click', () => {
+    if (!drawerRegId) return;
+    toggleAttend(drawerRegId);
+    setTimeout(() => { if (drawerRegId) fillDrawer(drawerRegId); }, 60);
+  });
   $('drawerDeleteBtn').addEventListener('click', () => {
     if (!drawerRegId) return;
     if (confirm('Delete this registration? You can undo right after. 刪除後可即時復原。')) { deleteRegs([drawerRegId]); closeDrawer(); }
@@ -302,13 +334,9 @@ function makeChart(key, cfg) {
 }
 
 function renderCharts(list) {
-  const baseOpts = {
-    responsive:true, maintainAspectRatio:false, animation:{ duration:450 },
-    plugins:{ legend:{ display:false } }
-  };
+  const baseOpts = { responsive:true, maintainAspectRatio:false, animation:{ duration:450 }, plugins:{ legend:{ display:false } } };
   const axis = { ticks:{ color:'#5b6b84', font:{ family:'Nunito', weight:'700', size:11 } }, grid:{ color:'rgba(47,111,178,.08)' } };
 
-  // Timeline
   const dayCount = {};
   list.forEach(r => { const d = localDateStr(new Date(r.submittedAt || Date.now())); dayCount[d] = (dayCount[d] || 0) + 1; });
   let start = config.regStart || localDateStr();
@@ -326,26 +354,22 @@ function renderCharts(list) {
     options:{ ...baseOpts, scales:{ x:axis, y:{ ...axis, beginAtZero:true, ticks:{ ...axis.ticks, precision:0 } } } }
   });
 
-  // Grades
-  const gradeCount = GRADES.map(g => list.filter(r => r.grade === g).length);
   const bandColor = { K:PALETTE[2], P:PALETTE[0], F:PALETTE[4] };
   makeChart('chGrades', {
     type:'bar',
-    data:{ labels:GRADES, datasets:[{ data:gradeCount, backgroundColor:GRADES.map(g => bandColor[g[0]]), borderRadius:5 }] },
+    data:{ labels:GRADES, datasets:[{ data:GRADES.map(g => list.filter(r => r.grade === g).length), backgroundColor:GRADES.map(g => bandColor[g[0]]), borderRadius:5 }] },
     options:{ ...baseOpts, scales:{ x:axis, y:{ ...axis, beginAtZero:true, ticks:{ ...axis.ticks, precision:0 } } } }
   });
 
-  // Games
   const gEntries = Object.entries(games);
-  const gCounts = gEntries.map(([gid]) => list.filter(r => (r.selections || []).some(s => s.gameId === gid)).length);
   makeChart('chGames', {
     type:'doughnut',
     data:{ labels:gEntries.map(([, g]) => `${g.emoji || '🎮'} ${g.name || g.nameCn || 'Game'}`),
-      datasets:[{ data:gCounts, backgroundColor:gEntries.map(([, g], i) => g.color || PALETTE[i % PALETTE.length]), borderWidth:2, borderColor:'#fff' }] },
+      datasets:[{ data:gEntries.map(([gid]) => list.filter(r => (r.selections || []).some(s => s.gameId === gid)).length),
+        backgroundColor:gEntries.map(([, g], i) => g.color || PALETTE[i % PALETTE.length]), borderWidth:2, borderColor:'#fff' }] },
     options:{ ...baseOpts, cutout:'56%', plugins:{ legend:{ display:true, position:'right', labels:{ color:'#3b4a63', font:{ family:'Nunito', weight:'700', size:11 }, boxWidth:14 } } } }
   });
 
-  // Interests
   makeChart('chInterests', {
     type:'bar',
     data:{ labels:INTERESTS.map(o => o.cn),
@@ -353,7 +377,6 @@ function renderCharts(list) {
     options:{ ...baseOpts, indexAxis:'y', scales:{ x:{ ...axis, beginAtZero:true, ticks:{ ...axis.ticks, precision:0 } }, y:axis } }
   });
 
-  // Contact apps
   const wcOnly = list.filter(r => r.contactApps?.wechat && !r.contactApps?.whatsapp).length;
   const waOnly = list.filter(r => r.contactApps?.whatsapp && !r.contactApps?.wechat).length;
   const both = list.filter(r => r.contactApps?.wechat && r.contactApps?.whatsapp).length;
@@ -369,7 +392,7 @@ function renderRecent(list) {
   const top = [...list].sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || ''))).slice(0, 5);
   if (!top.length) { wrap.innerHTML = '<p class="hint">Nothing yet — share the link! 分享連結後即會顯示。</p>'; return; }
   wrap.innerHTML = top.map(r => {
-    const emojis = (r.selections || []).map(s => games[s.gameId]?.emoji || s.gameName || '🎮').join(' ');
+    const emojis = (r.selections || []).map(s => games[s.gameId]?.emoji || '🎮').join(' ');
     return `<div class="recent-row"><span class="recent-name">${escapeHtml(r.studentName || '')}</span><span class="grade-chip band-${gradeBand(r.grade)}">${escapeHtml(r.grade || '')}</span><span>${emojis}</span><span class="recent-time">${escapeHtml(timeAgo(r.submittedAt))}</span></div>`;
   }).join('');
 }
@@ -406,7 +429,7 @@ function filteredRegs() {
     if (cf && (r.isCurrentStudent || 'no') !== cf) return false;
     if (sf && (r.status || 'registered') !== sf) return false;
     if (q) {
-      const hay = [r.studentName, r.parentPhone, r.currentCenter, r.code, r.wechatId].filter(Boolean).join(' ').toLowerCase();
+      const hay = [r.studentName, r.school, r.parentPhone, r.currentCenter, r.code, r.wechatId].filter(Boolean).join(' ').toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -417,7 +440,7 @@ function filteredRegs() {
     name:(a, b) => String(a[1].studentName || '').localeCompare(String(b[1].studentName || ''), 'zh-Hant'),
     grade:(a, b) => gradeIdx(a[1].grade) - gradeIdx(b[1].grade),
     age:(a, b) => (Number(a[1].ageYears) || 0) - (Number(b[1].ageYears) || 0)
-  }[sort] || ((a, b) => 0);
+  }[sort] || (() => 0);
   return entries.sort(cmp);
 }
 
@@ -449,12 +472,13 @@ function renderRegs() {
       const day = s.date ? fmtDateShort(s.date) + ' ' : '';
       return `<span class="game-chip" style="--gc:${g?.color || PALETTE[0]}">${g?.emoji || '🎮'} ${day}${escapeHtml(s.start || '')}</span>`;
     }).join('');
+    const schoolLine = r.school ? `<div class="cell-sub">🏫 ${escapeHtml(r.school)}</div>` : '';
     const tr = document.createElement('tr');
     if (selected.has(id)) tr.classList.add('row-selected');
     tr.innerHTML =
       `<td class="col-check"><input type="checkbox" class="row-check" data-id="${escapeHtml(id)}" ${selected.has(id) ? 'checked' : ''}></td>` +
       `<td class="row-num">${i + 1}</td>` +
-      `<td><div class="cell-name">${escapeHtml(r.studentName || '')}</div><span class="grade-chip band-${gradeBand(r.grade)}">${escapeHtml(r.grade || '')}</span> <span class="cell-sub">${r.ageYears != null ? r.ageYears + 'y' : ''}</span></td>` +
+      `<td><div class="cell-name">${escapeHtml(r.studentName || '')}</div><span class="grade-chip band-${gradeBand(r.grade)}">${escapeHtml(r.grade || '')}</span> <span class="cell-sub">${r.ageYears != null ? r.ageYears + 'y' : ''}</span>${schoolLine}</td>` +
       `<td><div>${escapeHtml(r.parentPhone || '')}</div>${apps}</td>` +
       `<td>${kumon}</td>` +
       `<td>${chips || '—'}</td>` +
@@ -490,7 +514,6 @@ function renderRegs() {
   all.indeterminate = selected.size > 0 && !all.checked;
 }
 
-// ---------- mutations (optimistic + undo) ----------
 async function toggleAttend(id) {
   const r = regs[id]; if (!r) return;
   const to = r.status === 'attended' ? 'registered' : 'attended';
@@ -518,19 +541,13 @@ async function markAttended(ids) {
   catch (err) { showToast(`Error: ${err.message}`, 'error'); }
 }
 
-// ============================================================
+// ============================================
 // SEAT COUNT INTEGRITY
-// Registrations are the source of truth; counts is the fast
-// aggregate the public form uses. Every admin mutation keeps
-// them in step, and reconcileCounts() repairs any drift.
-// ============================================================
-let reconcileRunning = false;
-let autoReconcileTimer = null;
-
+// ============================================
 function selectionsOf(list) {
   const out = [];
   (list || []).forEach(r => (r?.selections || []).forEach(s => {
-    if (s && s.gameId && s.slotId) out.push({ gid: s.gameId, sid: s.slotId });
+    if (s && s.gameId && s.slotId) out.push({ gid:s.gameId, sid:s.slotId });
   }));
   return out;
 }
@@ -555,14 +572,14 @@ function countsDrift() {
   Object.entries(exp).forEach(([gid, slots]) => {
     Object.entries(slots).forEach(([sid, n]) => {
       const actual = Number(counts[gid]?.[sid]) || 0;
-      if (actual !== n) diffs.push({ gid, sid, actual, expected: n });
+      if (actual !== n) diffs.push({ gid, sid, actual, expected:n });
     });
   });
   Object.keys(counts).forEach(gid => {
     Object.keys(counts[gid] || {}).forEach(sid => {
       if (!exp[gid] || exp[gid][sid] === undefined) {
         const actual = Number(counts[gid][sid]) || 0;
-        if (actual !== 0) diffs.push({ gid, sid, actual, expected: 0 });
+        if (actual !== 0) diffs.push({ gid, sid, actual, expected:0 });
       }
     });
   });
@@ -580,7 +597,7 @@ async function bumpSlotCount(eid, gid, sid, delta) {
   await runTransaction(
     ref(db, `boothEvents/${eid}/counts/${gid}/${sid}`),
     cur => Math.max(0, (Number(cur) || 0) + delta),
-    { applyLocally: false }
+    { applyLocally:false }
   );
 }
 
@@ -600,7 +617,6 @@ async function reconcileCounts({ silent = true } = {}) {
     const exp = expectedCountsFrom(regsSnap.val() || {}, freshGames);
     const actual = countsSnap.val() || {};
     const updates = {};
-
     Object.entries(exp).forEach(([gid, slots]) => {
       Object.entries(slots).forEach(([sid, n]) => {
         if ((Number(actual[gid]?.[sid]) || 0) !== n) updates[`boothEvents/${eid}/counts/${gid}/${sid}`] = n;
@@ -612,7 +628,6 @@ async function reconcileCounts({ silent = true } = {}) {
         if (exp[gid][sid] === undefined) updates[`boothEvents/${eid}/counts/${gid}/${sid}`] = null;
       });
     });
-
     const changed = Object.keys(updates).length;
     if (changed) {
       await update(ref(db), updates);
@@ -627,11 +642,7 @@ async function reconcileCounts({ silent = true } = {}) {
         renderAll();
       }
     }
-    if (!silent) {
-      showToast(changed
-        ? `🔧 Seat counts rebuilt — ${changed} slot(s) corrected 已重算名額`
-        : '✅ Seat counts already correct 名額正確', 'success');
-    }
+    if (!silent) showToast(changed ? `🔧 Seat counts rebuilt — ${changed} slot(s) corrected 已重算名額` : '✅ Seat counts already correct 名額正確', 'success');
   } catch (err) {
     if (!silent) showToast(`Error: ${err.message}`, 'error');
     else console.error('Seat count reconcile failed:', err);
@@ -641,43 +652,45 @@ async function reconcileCounts({ silent = true } = {}) {
   }
 }
 
-function subscribeEvent(id) {
-  unsubs.forEach(fn => fn()); unsubs = [];
-  if (autoReconcileTimer) { clearTimeout(autoReconcileTimer); autoReconcileTimer = null; }
-  config = {}; games = {}; counts = {}; regs = {};
-  loaded = { config:false, games:false, counts:false, regs:false };
-  selected.clear();
-  const base = `boothEvents/${id}`;
-  const sub = (path, fn) => {
-    const un = onValue(ref(db, path), s => { fn(s.val() || {}); renderAll(); },
-      err => console.error(`Listener error on ${path}:`, err));
-    unsubs.push(un);
-  };
-  sub(`${base}/config`, v => {
-    config = normalizeEventConfig(v);
-    games = normalizeGames(games, config);
-    loaded.config = true;
-  });
-  sub(`${base}/games`, v => { games = normalizeGames(v, config); loaded.games = true; });
-  sub(`${base}/counts`, v => { counts = v; loaded.counts = true; });
-  sub(`${base}/registrations`, v => { regs = v; loaded.regs = true; });
-
-  // Self-heal any drift left by older builds, once the event has settled.
-  autoReconcileTimer = setTimeout(() => {
-    autoReconcileTimer = null;
-    reconcileCounts({ silent: true });
-  }, 2500);
+function renderOccupancy() {
+  const wrap = $('slotOccupancy');
+  const warn = $('countsSyncWarn');
+  const entries = Object.entries(games);
+  if (!entries.length) {
+    wrap.innerHTML = '<p class="hint">No games yet — add them in Form & Games. 請先新增遊戲。</p>';
+    if (warn) warn.classList.add('hidden');
+    return;
+  }
+  const exp = expectedCountsFrom(regs, games);
+  const drift = countsDrift();
+  if (warn) {
+    warn.classList.toggle('hidden', drift.length === 0);
+    if (drift.length) warn.textContent = `⚠️ ${drift.length} slot count(s) do not match the registration records. Press “Rebuild seat counts”. 名額與報名紀錄不一致，請按「重算名額」。`;
+  }
+  wrap.innerHTML = entries.map(([gid, g]) => {
+    const slots = Object.entries(g.slots || {}).sort((a, b) =>
+      String(a[1].date || '').localeCompare(String(b[1].date || '')) || String(a[1].start).localeCompare(String(b[1].start)));
+    const rows = slots.map(([sid, s]) => {
+      const b = Number(counts[gid]?.[sid]) || 0;
+      const truth = (exp[gid] && exp[gid][sid] !== undefined) ? exp[gid][sid] : 0;
+      const cap = Number(s.capacity) || 0;
+      const pct = cap ? Math.min(100, Math.round(b / cap * 100)) : 0;
+      const full = cap > 0 && b >= cap;
+      const fix = b !== truth ? `<span class="occ-fix" title="Should be ${truth} 應為 ${truth}">→ ${truth}</span>` : '';
+      return `<div class="occ-row"><span class="occ-time">${escapeHtml(fmtDateShort(s.date))} · ${escapeHtml(slotLabel(s))}</span><div class="occ-bar"><div class="occ-fill" style="--oc:${g.color || PALETTE[0]};width:${pct}%"></div></div><span class="occ-num">${b} / ${cap}${fix}</span><span class="status-badge ${full ? 'st-full' : 'st-open'}">${full ? 'FULL 額滿' : 'OPEN'}</span></div>`;
+    }).join('');
+    return `<div class="occ-game"><div class="occ-game-head"><span>${g.emoji || '🎮'}</span><span>${escapeHtml(g.name || '')} ${escapeHtml(g.nameCn || '')}</span><span class="range-chip">${escapeHtml(rangeLabel(g.minGrade, g.maxGrade))}</span></div>${rows || '<p class="hint">No slots.</p>'}</div>`;
+  }).join('');
 }
 
 async function deleteRegs(ids) {
-  const stash = ids.filter(id => regs[id]).map(id => ({ id, data: JSON.parse(JSON.stringify(regs[id])) }));
+  const stash = ids.filter(id => regs[id]).map(id => ({ id, data:JSON.parse(JSON.stringify(regs[id])) }));
   if (!stash.length) return;
   const eid = currentEventId;
   const affected = selectionsOf(stash.map(s => s.data));
   const updates = {};
   stash.forEach(({ id }) => {
-    delete regs[id];
-    selected.delete(id);
+    delete regs[id]; selected.delete(id);
     updates[`boothEvents/${eid}/registrations/${id}`] = null;
   });
   affected.forEach(({ gid, sid }) => applyLocalCount(gid, sid, -1));
@@ -689,7 +702,7 @@ async function deleteRegs(ids) {
       catch (e) { console.error('Seat release failed:', e); }
     }
     showToast(`🗑 Deleted ${stash.length} registration(s) — seats released 已刪除並釋放名額`, 'info', {
-      label: 'Undo 復原',
+      label:'Undo 復原',
       fn: async () => {
         const back = {};
         stash.forEach(({ id, data }) => {
@@ -717,45 +730,11 @@ async function deleteRegs(ids) {
   }
 }
 
-function renderOccupancy() {
-  const wrap = $('slotOccupancy');
-  const warn = $('countsSyncWarn');
-  const entries = Object.entries(games);
-  if (!entries.length) {
-    wrap.innerHTML = '<p class="hint">No games yet — add them in Form & Games. 請先新增遊戲。</p>';
-    if (warn) warn.classList.add('hidden');
-    return;
-  }
-  const exp = expectedCountsFrom(regs, games);
-  const drift = countsDrift();
-  if (warn) {
-    warn.classList.toggle('hidden', drift.length === 0);
-    if (drift.length) {
-      warn.textContent = `⚠️ ${drift.length} slot count(s) do not match the registration records. Press “Rebuild seat counts”. 名額與報名紀錄不一致，請按「重算名額」。`;
-    }
-  }
-  wrap.innerHTML = entries.map(([gid, g]) => {
-    const slots = Object.entries(g.slots || {}).sort((a, b) =>
-      String(a[1].date || '').localeCompare(String(b[1].date || '')) || String(a[1].start).localeCompare(String(b[1].start)));
-    const rows = slots.map(([sid, s]) => {
-      const b = Number(counts[gid]?.[sid]) || 0;
-      const truth = (exp[gid] && exp[gid][sid] !== undefined) ? exp[gid][sid] : 0;
-      const cap = Number(s.capacity) || 0;
-      const pct = cap ? Math.min(100, Math.round(b / cap * 100)) : 0;
-      const full = cap > 0 && b >= cap;
-      const fix = b !== truth ? `<span class="occ-fix" title="Should be ${truth} 應為 ${truth}">→ ${truth}</span>` : '';
-      return `<div class="occ-row"><span class="occ-time">${escapeHtml(fmtDateShort(s.date))} · ${escapeHtml(slotLabel(s))}</span><div class="occ-bar"><div class="occ-fill" style="--oc:${g.color || PALETTE[0]};width:${pct}%"></div></div><span class="occ-num">${b} / ${cap}${fix}</span><span class="status-badge ${full ? 'st-full' : 'st-open'}">${full ? 'FULL 額滿' : 'OPEN'}</span></div>`;
-    }).join('');
-    return `<div class="occ-game"><div class="occ-game-head"><span>${g.emoji || '🎮'}</span><span>${escapeHtml(g.name || '')} ${escapeHtml(g.nameCn || '')}</span><span class="range-chip">${escapeHtml(rangeLabel(g.minGrade, g.maxGrade))}</span></div>${rows || '<p class="hint">No slots.</p>'}</div>`;
-  }).join('');
-}
-
-// Bind the rebuild button once (module runs after the DOM is parsed).
 (function bindRebuildCounts() {
   const btn = document.getElementById('rebuildCountsBtn');
   if (btn && !btn.dataset.bound) {
     btn.dataset.bound = '1';
-    btn.addEventListener('click', () => reconcileCounts({ silent: false }));
+    btn.addEventListener('click', () => reconcileCounts({ silent:false }));
   }
 })();
 
@@ -789,6 +768,7 @@ function fillDrawer(id) {
   $('drawerBody').innerHTML =
     `<div class="dw-section"><h4>🧒 Child 小朋友</h4>` +
       dwRow('Grade 年級', `<span class="grade-chip band-${gradeBand(r.grade)}">${escapeHtml(gradeLabel(r.grade))}</span>`) +
+      dwRow('School 學校', escapeHtml(r.school || '')) +
       dwRow('Birthday 生日', escapeHtml(r.birthday ? fmtDate(r.birthday, false) : '')) +
       dwRow('Age 年齡', r.ageYears != null ? `${r.ageYears}y ${r.ageMonths ?? 0}m · ${r.ageYears}歲` : '') +
     `</div>` +
@@ -804,13 +784,11 @@ function fillDrawer(id) {
     `</div>` +
     `<div class="dw-section"><h4>🎪 Games 遊戲</h4><div class="dw-chips">${selHtml || '—'}</div></div>` +
     `<div class="dw-section"><h4>🗂 Record 紀錄</h4>` +
-      dwRow('Code 編號', `<code>${escapeHtml(r.code || '')}</code>`) +
       dwRow('Submitted 提交', r.submittedAt ? new Date(r.submittedAt).toLocaleString('en-GB') : '') +
       dwRow('Remarks 備註', escapeHtml(r.remarks || '')) +
     `</div>`;
   $('drawerAttendBtn').textContent = status === 'attended' ? '↩ Undo check-in 取消報到' : '✓ Check in 報到';
 }
-
 
 // ============================================
 // EXCEL EXPORT
@@ -825,6 +803,7 @@ function exportExcel(ids) {
     'Code 編號': r.code || '',
     'Student 學生': r.studentName || '',
     'Grade 年級': r.grade || '',
+    'School 學校': r.school || '',
     'Birthday 生日': r.birthday || '',
     'Age 年齡': r.ageYears ?? '',
     'Phone 電話': r.parentPhone || '',
@@ -841,7 +820,7 @@ function exportExcel(ids) {
     'Remarks 備註': r.remarks || ''
   }));
   const ws = XLSX.utils.json_to_sheet(rows);
-  ws['!cols'] = [{ wch:12 },{ wch:20 },{ wch:8 },{ wch:12 },{ wch:6 },{ wch:15 },{ wch:8 },{ wch:10 },{ wch:16 },{ wch:12 },{ wch:22 },{ wch:20 },{ wch:50 },{ wch:60 },{ wch:11 },{ wch:22 },{ wch:30 }];
+  ws['!cols'] = [{ wch:12 },{ wch:20 },{ wch:8 },{ wch:26 },{ wch:12 },{ wch:6 },{ wch:15 },{ wch:8 },{ wch:10 },{ wch:16 },{ wch:12 },{ wch:22 },{ wch:20 },{ wch:50 },{ wch:60 },{ wch:11 },{ wch:22 },{ wch:30 }];
   XLSX.utils.book_append_sheet(wb, ws, 'Registrations');
 
   Object.entries(games).forEach(([gid, g]) => {
@@ -850,13 +829,13 @@ function exportExcel(ids) {
       'Date 日期': s.date || '',
       'Slot 場次': slotLabel(s),
       'Code 編號': r.code || '', 'Student 學生': r.studentName || '', 'Grade 年級': r.grade || '',
-      'Age 年齡': r.ageYears ?? '', 'Phone 電話': r.parentPhone || '',
+      'School 學校': r.school || '', 'Age 年齡': r.ageYears ?? '', 'Phone 電話': r.parentPhone || '',
       'Current 現讀': r.isCurrentStudent === 'yes' ? 'Yes' : 'No', 'Status 狀態': r.status || 'registered'
     })));
     if (!roster.length) return;
     roster.sort((a, b) => String(a['Date 日期']).localeCompare(String(b['Date 日期'])) || String(a['Slot 場次']).localeCompare(String(b['Slot 場次'])) || String(a['Student 學生']).localeCompare(String(b['Student 學生']), 'zh-Hant'));
     const ws2 = XLSX.utils.json_to_sheet(roster);
-    ws2['!cols'] = [{ wch:12 },{ wch:14 },{ wch:12 },{ wch:20 },{ wch:8 },{ wch:6 },{ wch:15 },{ wch:10 },{ wch:11 }];
+    ws2['!cols'] = [{ wch:12 },{ wch:14 },{ wch:12 },{ wch:20 },{ wch:8 },{ wch:26 },{ wch:6 },{ wch:15 },{ wch:10 },{ wch:11 }];
     const name = `${g.name || g.nameCn || 'Game'}`.replace(/[\\/?*\[\]:]/g, ' ').slice(0, 31);
     XLSX.utils.book_append_sheet(wb, ws2, name);
   });
@@ -866,7 +845,7 @@ function exportExcel(ids) {
 }
 
 // ============================================
-// BUILDER (draft-based: save only on Save)
+// BUILDER
 // ============================================
 function defaultDraft() {
   const today = localDateStr();
@@ -884,6 +863,7 @@ function defaultDraft() {
       slots:{ [uid('s')]:{ date:today, start:'14:00', end:'14:20', capacity:10 } } } }
   };
 }
+
 function snapshotDraft() {
   return { dirty:false, config:JSON.parse(JSON.stringify(config || {})), games:JSON.parse(JSON.stringify(games || {})) };
 }
@@ -896,8 +876,7 @@ function renderBuilder(force = false) {
   $('builderNewHint').classList.toggle('hidden', !creatingNew);
   $('draftChip').classList.toggle('hidden', !d.dirty);
   if (!force) return;
-  $('bTitle').value = d.config.title || '';
-  $('bTitleCn').value = d.config.titleCn || '';
+  $('bTitle').value = d.config.title || '';  $('bTitleCn').value = d.config.titleCn || '';
   $('bDesc').value = d.config.description || '';
   $('bEventStart').value = d.config.eventStart || '';
   $('bEventEnd').value = d.config.eventEnd || '';
@@ -1059,7 +1038,6 @@ function renderGamesEditor(d) {
   });
   if (!Object.keys(d.games).length) wrap.innerHTML = '<p class="hint">No games yet — press “Add game”. 請按「Add game」新增遊戲。</p>';
 }
-
 
 function addMinutes(hhmm, mins) {
   const [h, m] = String(hhmm).split(':').map(Number);
@@ -1328,11 +1306,8 @@ async function downloadPoster() {
   try {
     const W = 900, S = 2, M = 56, CW = W - M * 2;
     const FONT = "'Nunito','Segoe UI','PingFang TC','Microsoft JhengHei',sans-serif";
-    const cap = (lines, n) => lines.length > n
-      ? lines.slice(0, n).map((l, i) => i === n - 1 ? l + '…' : l)
-      : lines;
+    const cap = (lines, n) => lines.length > n ? lines.slice(0, n).map((l, i) => i === n - 1 ? l + '…' : l) : lines;
 
-    // ---- measure every header line first, same width for all ----
     const m = document.createElement('canvas').getContext('2d');
     m.font = '900 40px ' + FONT;
     const titleLines = cap(wrapLines(m, config.title || config.titleCn || 'Booth Games', CW), 2);
@@ -1352,7 +1327,7 @@ async function downloadPoster() {
     if (venEnLines.length) blocks.push({ lines:venEnLines, font:'600 18px ' + FONT, lh:26, gap:12, color:'rgba(255,255,255,.93)' });
     if (venCnLines.length) blocks.push({ lines:venCnLines, font:'600 18px ' + FONT, lh:26, gap:4, color:'rgba(255,255,255,.93)' });
 
-    let naturalH = 76; // 40 top + 36 bottom padding
+    let naturalH = 76;
     blocks.forEach(b => { naturalH += b.gap + b.lines.length * b.lh; });
     const headerH = Math.max(280, naturalH);
     const topPad = 40 + (headerH - naturalH) / 2;
@@ -1370,7 +1345,6 @@ async function downloadPoster() {
     ctx.scale(S, S);
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
 
-    // ---- header background ----
     if (config.bannerDataUrl) {
       try {
         const img = await loadImg(config.bannerDataUrl);
@@ -1381,7 +1355,6 @@ async function downloadPoster() {
       } catch { drawGradientHeader(ctx, W, headerH); }
     } else drawGradientHeader(ctx, W, headerH);
 
-    // ---- centered header text, one column, equal margins ----
     ctx.textAlign = 'center';
     ctx.shadowColor = 'rgba(10,18,36,.35)';
     ctx.shadowBlur = 10;
@@ -1397,7 +1370,6 @@ async function downloadPoster() {
 
     ctx.fillStyle = '#f2b100'; ctx.fillRect(0, headerH, W, 10);
 
-    // ---- QR card ----
     const cardX = 190, cardW = 520;
     ctx.fillStyle = '#ffffff';
     ctx.strokeStyle = '#dbe5f2'; ctx.lineWidth = 3;
@@ -1410,7 +1382,6 @@ async function downloadPoster() {
     ctx.fillStyle = '#2f6fb2';
     ctx.fillText(config.shortCode, W / 2, cardY + 532);
 
-    // ---- link (auto-shrinks to fit) ----
     const u = url.replace(/^https?:\/\//, '');
     let uSize = 17;
     ctx.font = '600 ' + uSize + 'px "Courier New",monospace';
@@ -1428,7 +1399,6 @@ async function downloadPoster() {
     ctx.font = '700 19px ' + FONT;
     ctx.fillText('Registration 報名期: ' + fmtDate(config.regStart, false) + ' → ' + fmtDate(config.regEnd, false), W / 2, winY);
 
-    // ---- footer ----
     ctx.fillStyle = '#16233b'; ctx.fillRect(0, footerY, W, 72);
     ctx.fillStyle = '#fff';
     ctx.font = '800 21px ' + FONT;
@@ -1440,7 +1410,6 @@ async function downloadPoster() {
   } catch (err) { showToast(`Poster error: ${err.message}`, 'error'); }
 }
 
-
 function drawGradientHeader(ctx, W, H) {
   const g = ctx.createLinearGradient(0, 0, W, H);
   bannerStops(config.bannerPreset).forEach(([p, c]) => g.addColorStop(p, c));
@@ -1448,7 +1417,7 @@ function drawGradientHeader(ctx, W, H) {
 }
 
 // ============================================
-// DEMO EVENT — fully seeded, deletable anytime
+// DEMO EVENT
 // ============================================
 async function createDemoEvent() {
   if (!confirm('Create a sample event with demo registrations? It is a separate event you can delete anytime. 建立示範活動（可隨時刪除）？')) return;
@@ -1494,29 +1463,29 @@ async function createDemoEvent() {
     };
     const birth = (age, m, d) => `${new Date().getFullYear() - age}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const seed = [
-      ['陳大文 Chan Tai Man','P2',7,1,14,'66123401',{wechat:true,whatsapp:true},'wx_taiman','yes','Kumon Champs 卓思','Math 數學',['none'],[S(gid.toss,'toss',0),S(gid.math,'math',0)],0,'attended'],
-      ['黃美琪 Wong Mei Kei','K2',4,3,2,'66123402',{wechat:true,whatsapp:false},'wx_meikei','yes','Kumon Mei Keng 美景','Chinese 中文',['none'],[S(gid.toss,'toss',0),S(gid.art,'art',0)],0,'registered'],
-      ['李卓恆 Lei Cheok Hang','F1',12,5,21,'66123403',{wechat:false,whatsapp:true},'','no','','',['math','erp'],[S(gid.sci,'sci',0)],1,'registered'],
-      ['張嘉偉 Cheong Ka Wai','P5',10,2,8,'66123404',{wechat:true,whatsapp:true},'','yes','Kumon Tap Siac 塔石','Math, English',['none'],[S(gid.math,'math',0),S(gid.sci,'sci',0)],1,'registered'],
-      ['林月美 Lam Ut Mei','K1',3,6,11,'66123405',{wechat:true,whatsapp:false},'wx_utmei','no','','',['kindies','connect'],[S(gid.art,'art',0)],2,'registered'],
-      ['何承南 Ho Seng Nam','P3',8,4,19,'66123406',{wechat:false,whatsapp:true},'','yes','Kumon Pac Tat 北立','Math 數學',['none'],[S(gid.toss,'toss',1),S(gid.math,'math',1),S(gid.sci,'sci',1)],2,'attended'],
-      ['梁慧珊 Leong Wai San','P6',11,1,25,'66123407',{wechat:true,whatsapp:true},'wx_waisan','no','','',['math','efl'],[S(gid.math,'math',1),S(gid.sci,'sci',0)],3,'registered'],
-      ['吳子豪 Ng Chi Hou','P1',6,3,30,'66123408',{wechat:true,whatsapp:false},'','yes','Kumon Champs 卓思','English 英文',['none'],[S(gid.toss,'toss',1),S(gid.math,'math',0)],3,'registered'],
-      ['陳浩韻 Chan Hou Wan','K3',5,5,6,'66123409',{wechat:false,whatsapp:true},'','yes','Kumon Mei Keng 美景','Math 數學',['none'],[S(gid.toss,'toss',2),S(gid.art,'art',1)],4,'attended'],
-      ['楊美燕 Iong Mei Ieng','F3',14,2,17,'66123410',{wechat:true,whatsapp:true},'wx_meiien','no','','',['math','chinese'],[S(gid.sci,'sci',1)],4,'registered'],
-      ['方家樂 Fong Ka Lok','P4',9,6,3,'66123411',{wechat:true,whatsapp:false},'wx_kalok','no','','',['connect'],[S(gid.toss,'toss',2),S(gid.math,'math',1),S(gid.sci,'sci',0)],5,'registered'],
-      ['蘇凱晴 Sou Hoi Ching','K0',2,4,22,'66123412',{wechat:false,whatsapp:true},'','no','','',['kindies'],[S(gid.art,'art',1)],5,'registered'],
-      ['麥志朗 Mak Chi Long','P2',7,1,9,'66123413',{wechat:true,whatsapp:true},'','yes','Kumon Champs 卓思','Math, Chinese',['none'],[S(gid.toss,'toss',0),S(gid.math,'math',0)],6,'registered'],
-      ['鄺泳欣 Kuong Weng Ian','P6',12,5,14,'66123414',{wechat:true,whatsapp:false},'wx_wengian','no','','',['erp','chinese'],[S(gid.math,'math',1),S(gid.sci,'sci',1)],6,'registered']
+      ['陳大文 Chan Tai Man','P2',7,1,14,'66123401',{wechat:true,whatsapp:true},'wx_taiman','yes','Kumon Champs 卓思','Math 數學',['none'],[S(gid.toss,'toss',0),S(gid.math,'math',0)],0,'attended','Pui Ching Middle School 培正中學'],
+      ['黃美琪 Wong Mei Kei','K2',4,3,2,'66123402',{wechat:true,whatsapp:false},'wx_meikei','yes','Kumon Mei Keng 美景','Chinese 中文',['none'],[S(gid.toss,'toss',0),S(gid.art,'art',0)],0,'registered','Kwong Tai Kindergarten 廣大幼稚園'],
+      ['李卓恆 Lei Cheok Hang','F1',12,5,21,'66123403',{wechat:false,whatsapp:true},'','no','','',['math','erp'],[S(gid.sci,'sci',0)],1,'registered','Salesian School 慈幼中學'],
+      ['張嘉偉 Cheong Ka Wai','P5',10,2,8,'66123404',{wechat:true,whatsapp:true},'','yes','Kumon Tap Siac 塔石','Math, English',['none'],[S(gid.math,'math',0),S(gid.sci,'sci',0)],1,'registered','St. Joseph Diocesan College 聖若瑟教區中學'],
+      ['林月美 Lam Ut Mei','K1',3,6,11,'66123405',{wechat:true,whatsapp:false},'wx_utmei','no','','',['kindies','connect'],[S(gid.art,'art',0)],2,'registered','Holy Rosary Kindergarten 聖玫瑰幼稚園'],
+      ['何承南 Ho Seng Nam','P3',8,4,19,'66123406',{wechat:false,whatsapp:true},'','yes','Kumon Pac Tat 北立','Math 數學',['none'],[S(gid.toss,'toss',1),S(gid.math,'math',1),S(gid.sci,'sci',1)],2,'attended','Chan Sui Ki Perpetual Help College 陳瑞祺永援中學'],
+      ['梁慧珊 Leong Wai San','P6',11,1,25,'66123407',{wechat:true,whatsapp:true},'wx_waisan','no','','',['math','efl'],[S(gid.math,'math',1),S(gid.sci,'sci',0)],3,'registered','Sacred Heart Canossian School 嘉諾撒聖心中學'],
+      ['吳子豪 Ng Chi Hou','P1',6,3,30,'66123408',{wechat:true,whatsapp:false},'','yes','Kumon Champs 卓思','English 英文',['none'],[S(gid.toss,'toss',1),S(gid.math,'math',0)],3,'registered','Pui Ching Middle School 培正中學'],
+      ['陳浩韻 Chan Hou Wan','K3',5,5,6,'66123409',{wechat:false,whatsapp:true},'','yes','Kumon Mei Keng 美景','Math 數學',['none'],[S(gid.toss,'toss',2),S(gid.art,'art',1)],4,'attended','Kwong Tai Kindergarten 廣大幼稚園'],
+      ['楊美燕 Iong Mei Ieng','F3',14,2,17,'66123410',{wechat:true,whatsapp:true},'wx_meiien','no','','',['math','chinese'],[S(gid.sci,'sci',1)],4,'registered','Our Lady of Fatima Girls School 化地瑪聖母女子學校'],
+      ['方家樂 Fong Ka Lok','P4',9,6,3,'66123411',{wechat:true,whatsapp:false},'wx_kalok','no','','',['connect'],[S(gid.toss,'toss',2),S(gid.math,'math',1),S(gid.sci,'sci',0)],5,'registered','Hou Kong Middle School 濠江中學'],
+      ['蘇凱晴 Sou Hoi Ching','K0',2,4,22,'66123412',{wechat:false,whatsapp:true},'','no','','',['kindies'],[S(gid.art,'art',1)],5,'registered',''],
+      ['麥志朗 Mak Chi Long','P2',7,1,9,'66123413',{wechat:true,whatsapp:true},'','yes','Kumon Champs 卓思','Math, Chinese',['none'],[S(gid.toss,'toss',0),S(gid.math,'math',0)],6,'registered','Pui Ching Middle School 培正中學'],
+      ['鄺泳欣 Kuong Weng Ian','P6',12,5,14,'66123414',{wechat:true,whatsapp:false},'wx_wengian','no','','',['erp','chinese'],[S(gid.math,'math',1),S(gid.sci,'sci',1)],6,'registered','Sacred Heart Canossian School 嘉諾撒聖心中學']
     ];
     const registrations = {};
     const countsSeed = {};
     seed.forEach((row, i) => {
-      const [name, grade, age, bm, bd, phone, apps, wx, cur, center, subs, interests, selections, off, status] = row;
+      const [name, grade, age, bm, bd, phone, apps, wx, cur, center, subs, interests, selections, off, status, school] = row;
       const rid = uid('r');
       const submittedAt = new Date(Date.now() - off * 86400000 - (i % 9) * 3600000).toISOString();
       registrations[rid] = {
-        code:'BG-' + randomCode(6), studentName:name, grade, birthday:birth(age, bm, bd),
+        code:'BG-' + randomCode(6), studentName:name, grade, school, birthday:birth(age, bm, bd),
         ageYears:age, ageMonths:(i * 2) % 12, parentPhone:phone, contactApps:apps, wechatId:wx,
         isCurrentStudent:cur, currentCenter:center, currentSubjects:subs, interests, selections,
         remarks:i === 5 ? 'Sibling may join next year 弟弟明年或會入學' : '',
@@ -1546,6 +1515,158 @@ async function createDemoEvent() {
 }
 
 // ============================================
+// CHECK-IN CONSOLE
+// ============================================
+let ciLastId = null;
+let ciLog = [];
+let ciScanner = null;
+let ciCamActive = false;
+
+function ciPushLog(icon, text) {
+  ciLog.unshift({ icon, text, time:new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit', second:'2-digit' }) });
+  ciLog = ciLog.slice(0, 30);
+}
+function ciNorm(s) { return String(s || '').toUpperCase().replace(/\s+/g, ''); }
+
+function ciLookup(raw) {
+  const q = ciNorm(raw);
+  if (!q) return;
+  const bare = q.replace(/^BG-?/, '');
+  let entry = Object.entries(regs).find(([, r]) => ciNorm(r.code) === q);
+  if (!entry) entry = Object.entries(regs).find(([, r]) => ciNorm(r.code) === 'BG-' + bare);
+  if (!entry) entry = Object.entries(regs).find(([, r]) => ciNorm(r.code).replace(/^BG-?/, '') === bare);
+  const inp = $('checkinInput');
+  if (!entry) {
+    ciLastId = null;
+    ciPushLog('❌', `QR not recognised 無法識別: ${q}`);
+    renderCheckin();
+    showToast('❌ This QR is not a registration for this event 此 QR 不屬於本活動', 'error');
+  } else {
+    ciLastId = entry[0];
+    ciPushLog('🔎', `${entry[1].studentName || ''} · ${entry[1].grade || ''}`);
+    renderCheckin();
+  }
+  if (inp) { inp.value = ''; inp.focus(); }
+}
+
+async function ciToggle(id) {
+  const r = regs[id]; if (!r) return;
+  const to = r.status === 'attended' ? 'registered' : 'attended';
+  const attendedAt = to === 'attended' ? new Date().toISOString() : null;
+  r.status = to; r.attendedAt = attendedAt;
+  ciPushLog(to === 'attended' ? '✅' : '↩', `${r.studentName || ''} · ${r.grade || ''}`);
+  renderAll();
+  try { await update(ref(db, `boothEvents/${currentEventId}/registrations/${id}`), { status:to, attendedAt }); }
+  catch (err) { showToast(`Error: ${err.message}`, 'error'); }
+}
+
+function renderCheckin() {
+  if (creatingNew) return;
+  renderCheckinResult();
+  renderCheckinSlots();
+  renderCheckinLog();
+}
+
+function renderCheckinResult() {
+  const wrap = $('checkinResult'); if (!wrap) return;
+  if (!ciLastId || !regs[ciLastId]) {
+        wrap.innerHTML = '<div class="ci-empty">🎟️ Ready — scan a QR to check in. 準備就緒 — 掃描 QR 即可報到。</div>';
+    return;
+  }
+  const r = regs[ciLastId];
+  const attended = r.status === 'attended';
+  const today = localDateStr();
+  const chips = (r.selections || []).map(s => {
+    const g = games[s.gameId];
+    const isToday = (s.date || '') === today;
+    return `<span class="game-chip ${isToday ? 'today' : ''}" style="--gc:${g?.color || PALETTE[0]}">${g?.emoji || '🎮'} ${escapeHtml(s.gameName || g?.name || '')} · ${escapeHtml(slotFullLabel(s))}</span>`;
+  }).join('');
+  const apps = [r.contactApps?.wechat ? '💬 WeChat' : '', r.contactApps?.whatsapp ? '📱 WhatsApp' : ''].filter(Boolean).join(' · ');
+  wrap.innerHTML =
+    `<div class="ci-card ${attended ? 'attended' : ''}">` +
+      `<div class="ci-head"><div class="ci-name">${escapeHtml(r.studentName || '')} <span class="grade-chip band-${gradeBand(r.grade)}">${escapeHtml(r.grade || '')}</span></div>` +
+      `<span class="status-badge st-${attended ? 'attended' : 'registered'}">${attended ? '✅ Attended 已報到' : '📝 Registered 已報名'}</span></div>` +
+            `<div class="ci-meta"><span>${escapeHtml(r.parentPhone || '')}</span><span>${escapeHtml(apps)}</span>${r.school ? `<span>🏫 ${escapeHtml(r.school)}</span>` : ''}${r.ageYears != null ? `<span>${r.ageYears}y</span>` : ''}</div>` +
+      `<div class="ci-games">${chips || '—'}</div>` +
+      `<div class="ci-actions"><button class="btn ${attended ? 'secondary' : 'primary'} big" data-ci-toggle="${escapeHtml(ciLastId)}">${attended ? '↩ Undo check-in 取消報到' : '✓ Check in 報到'}</button></div>` +
+    `</div>`;
+}
+
+function renderCheckinSlots() {
+  const wrap = $('checkinSlots'); const totals = $('checkinTotals');
+  const all = Object.values(regs);
+  const arrivedTotal = all.filter(r => r.status === 'attended').length;
+  if (totals) totals.textContent = `${arrivedTotal} arrived 已報到 · ${all.length} registered 已報名 · ${all.length - arrivedTotal} remaining 未到`;
+  const entries = Object.entries(games);
+  if (!entries.length) { wrap.innerHTML = '<p class="hint">No games yet. 尚未新增遊戲。</p>'; return; }
+  const today = localDateStr();
+  wrap.innerHTML = entries.map(([gid, g]) => {
+    const slots = Object.entries(g.slots || {}).sort((a, b) =>
+      String(a[1].date || '').localeCompare(String(b[1].date || '')) || String(a[1].start).localeCompare(String(b[1].start)));
+    const rows = slots.map(([sid, s]) => {
+      const sel = all.filter(r => (r.selections || []).some(x => x.gameId === gid && x.slotId === sid));
+      const booked = sel.length;
+      const arrived = sel.filter(r => r.status === 'attended').length;
+      const pct = booked ? Math.round(arrived / booked * 100) : 0;
+      return `<div class="ci-slot-row ${(s.date || '') === today ? 'today' : ''}"><span class="occ-time">${escapeHtml(fmtDateShort(s.date))} · ${escapeHtml(slotLabel(s))}</span><div class="occ-bar"><div class="occ-fill" style="--oc:${g.color || PALETTE[0]};width:${pct}%"></div></div><span class="occ-num">${arrived} / ${booked}</span></div>`;
+    }).join('');
+    return `<div class="occ-game"><div class="occ-game-head"><span>${g.emoji || '🎮'}</span><span>${escapeHtml(g.name || '')} ${escapeHtml(g.nameCn || '')}</span></div>${rows || '<p class="hint">No slots.</p>'}</div>`;
+  }).join('');
+}
+
+function renderCheckinLog() {
+  const wrap = $('checkinLog'); if (!wrap) return;
+  if (!ciLog.length) { wrap.innerHTML = '<p class="hint">No activity yet this session. 本次尚未有紀錄。</p>'; return; }
+  wrap.innerHTML = ciLog.slice(0, 8).map(e =>
+    `<div class="ci-log-row"><span>${e.icon}</span><span>${escapeHtml(e.text)}</span><span class="t">${escapeHtml(e.time)}</span></div>`).join('');
+}
+
+async function ciStartCamera() {
+  if (typeof Html5Qrcode === 'undefined') return showToast('Scanner library missing — check the html5-qrcode script tag', 'error');
+  $('ciCameraModal').classList.remove('hidden');
+  try {
+    if (!ciScanner) {
+      const opts = {};
+      if (typeof Html5QrcodeSupportedFormats !== 'undefined') {
+        opts.formatsToSupport = [Html5QrcodeSupportedFormats.QR_CODE, Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39];
+      }
+      ciScanner = new Html5Qrcode('ciCameraReader', opts);
+    }
+    await ciScanner.start(
+      { facingMode:'environment' },
+      { fps:15, qrbox:(vw, vh) => { const s = Math.floor(Math.min(vw * 0.8, 320)); return { width:s, height:s }; } },
+      (txt) => { ciStopCamera(); ciLookup(txt); },
+      () => {}
+    );
+    ciCamActive = true;
+  } catch (err) {
+    showToast(`Camera error: ${err.message || err}`, 'error');
+    $('ciCameraModal').classList.add('hidden');
+  }
+}
+
+async function ciStopCamera() {
+  $('ciCameraModal').classList.add('hidden');
+  if (ciScanner && ciCamActive) { try { await ciScanner.stop(); } catch {} ciCamActive = false; }
+}
+
+(function bindCheckin() {
+  const sec = document.getElementById('tab-checkin');
+  if (!sec || sec.dataset.bound) return;
+  sec.dataset.bound = '1';
+  const inp = document.getElementById('checkinInput');
+  inp?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); ciLookup(inp.value); } });
+  document.getElementById('checkinLookupBtn')?.addEventListener('click', () => ciLookup(inp?.value));
+  document.getElementById('checkinCameraBtn')?.addEventListener('click', ciStartCamera);
+  document.getElementById('ciCameraClose')?.addEventListener('click', ciStopCamera);
+  document.querySelector('[data-tab="checkin"]')?.addEventListener('click', () => setTimeout(() => inp?.focus(), 60));
+  sec.addEventListener('click', e => {
+    const btn = e.target.closest('[data-ci-toggle]');
+    if (btn) ciToggle(btn.dataset.ciToggle);
+  });
+})();
+
+// ============================================
 // TOAST
 // ============================================
 let toastTimer = null;
@@ -1563,4 +1684,9 @@ function showToast(msg, type = 'success', action = null) {
   toastTimer = setTimeout(() => toast.classList.add('hidden'), action ? 6500 : 3200);
 }
 
-window.addEventListener('beforeunload', () => { unsubs.forEach(fn => fn()); });
+window.addEventListener('beforeunload', () => {
+  unsubs.forEach(fn => fn());
+  if (autoReconcileTimer) clearTimeout(autoReconcileTimer);
+  if (ciScanner && ciCamActive) ciScanner.stop().catch(() => {});
+  
+});

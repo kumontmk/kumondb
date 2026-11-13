@@ -231,3 +231,44 @@ em { color:var(--coral); font-style:normal; font-weight:800; }
   background:#eef4fb; border:1px solid #d5e3f3; border-radius:8px;
   padding:.3rem .6rem; margin:.45rem 0 .1rem;
 }
+
+/* ============================================
+   iOS-SAFE DATE FIELDS (same approach as timecard.css)
+   Keeps the birthday picker inside the card on iPhone
+   while clipping the rendered date text, not the field.
+   ============================================ */
+#wizForm, .step-panel, .field { min-width: 0; max-width: 100%; }
+
+.field input[type="date"],
+#fBirth {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+  display: block;
+  font-size: 16px;              /* prevents iOS focus zoom */
+  padding: .7rem .6rem;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Clip long word-based dates INSIDE the field, leave room for the icon */
+input[type="date"]::-webkit-datetime-edit {
+  display: inline-block;
+  max-width: calc(100% - 1.6em);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+input[type="date"]::-webkit-calendar-picker-indicator {
+  margin-left: .35rem;
+  flex-shrink: 0;
+}

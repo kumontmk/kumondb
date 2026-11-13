@@ -8,29 +8,39 @@
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="booth-register.css">
 <script defer src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<script>
+  window.addEventListener('error', function (e) {
+    var l = document.getElementById('screenLoading');
+    if (l && !l.classList.contains('hidden')) {
+      l.innerHTML =
+        '<div style="max-width:520px;text-align:center;padding:2rem;color:#b91c1c;font-weight:700;">' +
+        'Failed to load the registration page. 無法載入報名頁面。<br><br>' +
+        '<span style="font-weight:400;color:#6b7280;font-size:.85rem;">' +
+        (e.message || 'Check that booth-shared.js exists and the page is served over http(s), not file://.') +
+        '</span></div>';
+    }
+  }, true);
+</script>
 <script type="module" src="booth-register.js"></script>
 </head>
 <body>
 
 <div class="bg-deco" aria-hidden="true"><span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span><span class="grain"></span></div>
 
-<!-- LOADING -->
 <div id="screenLoading" class="screen state-screen">
   <div class="spinner"></div>
   <p>Loading registration 載入中…</p>
 </div>
 
-<!-- INVALID -->
 <div id="screenInvalid" class="screen state-screen hidden">
   <div class="state-card">
     <div class="state-emoji">🎫</div>
     <h2>Link not available 連結無效</h2>
     <p id="invalidReason"></p>
-    <p class="state-hint">Please contact your Kumon center for help. 請聯絡公文式教室查詢。</p>
-  </div>
+    <p class="state-hint">Show this QR at check-in. 報到時請出示此 QR。</p>
+    </div>
 </div>
 
-<!-- OPENS LATER -->
 <div id="screenBefore" class="screen state-screen hidden">
   <div class="state-card">
     <div class="state-emoji">⏳</div>
@@ -40,7 +50,6 @@
   </div>
 </div>
 
-<!-- CLOSED / PAUSED -->
 <div id="screenClosed" class="screen state-screen hidden">
   <div class="state-card">
     <div class="state-emoji">🌙</div>
@@ -50,12 +59,10 @@
   </div>
 </div>
 
-<!-- HEADER -->
 <header id="pubHeader" class="pub-header hidden">
   <div class="pub-brand"><span class="pub-logo">🎪</span><div><strong>Kumon Booth Games</strong><small id="hdrTitle"></small></div></div>
 </header>
 
-<!-- MAIN WIZARD -->
 <main id="screenMain" class="screen hidden">
   <section id="hero" class="hero">
     <img id="heroImg" class="hero-img hidden" alt="">
@@ -90,6 +97,11 @@
         <div class="field">
           <label>Grade 年級 <em>*</em></label>
           <div id="gradeGrid" class="grade-groups"></div>
+        </div>
+
+        <div class="field">
+          <label for="fSchool">School 學校 <span class="f-hint-inline">(optional 選填)</span></label>
+          <input id="fSchool" type="text" autocomplete="organization" placeholder="e.g. Pui Ching Middle School 培正中學">
         </div>
 
         <div class="field">
@@ -175,18 +187,15 @@
   <footer class="pub-footer">Powered by Kumon DB · 公文式</footer>
 </main>
 
-<!-- SUCCESS -->
 <div id="screenSuccess" class="screen state-screen hidden">
   <div class="success-card">
     <canvas id="confettiCanvas" class="confetti" aria-hidden="true"></canvas>
     <div class="state-emoji">🎉</div>
     <h2>You're registered! 報名成功！</h2>
-    <div class="reg-code-wrap"><span class="rc-label">Registration code 報名編號</span><div id="regCode" class="reg-code"></div></div>
     <div id="successQr" class="success-qr"></div>
     <div id="successSummary" class="success-summary"></div>
     <p class="state-hint">Show this code at check-in. 報到時請出示此編號。</p>
     <div class="success-actions">
-      <button type="button" id="copyCodeBtn" class="btn-secondary">📋 Copy code 複製編號</button>
       <button type="button" id="againBtn" class="btn-primary">👧 Register another child 登記另一位小朋友</button>
     </div>
   </div>

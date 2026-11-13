@@ -10,6 +10,7 @@
 <script defer src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script type="module" src="booth-games.js"></script>
 </head>
 <body>
@@ -23,7 +24,7 @@
   <nav>
     <a href="centers.html">← Centers</a>
   </nav>
-  <h2>🎪 Booth Games Registration</h2>
+  <h1>🎪 Booth Games Registration</h1>
 </header>
 
 <main id="mainContent" class="dashboard hidden">
@@ -54,6 +55,7 @@
     <button class="tab-btn" data-tab="regs">📋 Registrations</button>
     <button class="tab-btn" data-tab="builder">🛠️ Form &amp; Games</button>
     <button class="tab-btn" data-tab="share">🔗 Share &amp; QR</button>
+    <button class="tab-btn" data-tab="checkin">🎟️ Check-in</button>
   </nav>
 
   <!-- ================= DASHBOARD ================= -->
@@ -102,7 +104,7 @@
   <section id="tab-regs" class="tab-content">
     <div class="card">
       <div class="regs-toolbar">
-        <input id="regSearch" type="search" placeholder="🔎 Search name, phone, center, code… 搜尋">
+        <input id="regSearch" type="search" placeholder="🔎 Search name, school, phone, center… 搜尋">
         <select id="regGameFilter"><option value="">All games 全部遊戲</option></select>
         <select id="regBandFilter">
           <option value="">All grades 全部年級</option>
@@ -171,21 +173,20 @@
 
     <div class="card">
       <h3>🎫 Event details 活動資料</h3>
-        <div class="form-grid settings-grid">
-            <div class="field"><label>Event title (English) 活動名稱</label><input id="bTitle" type="text" placeholder="e.g. Kumon Open Day — Booth Games"></div>
-            <div class="field"><label>Event title (Chinese) 中文名稱</label><input id="bTitleCn" type="text" placeholder="例：公文式開放日 · 攤位遊戲"></div>
-            <div class="field span2"><label>Description 簡介 (shown on the public form)</label><textarea id="bDesc" rows="2" placeholder="Join us for games… 歡迎參加攤位遊戲日…"></textarea></div>
-            <div class="field"><label>Event start date 活動開始日期</label><input id="bEventStart" type="date"></div>
-            <div class="field"><label>Event end date 活動結束日期</label><input id="bEventEnd" type="date"></div>
-            <div class="field"><label>Event time text 活動時間</label><input id="bTimeText" type="text" placeholder="12:00 – 19:00"></div>
-            <div class="field"><label>Accepting registrations 接受報名</label>
-            <select id="bActive"><option value="true">Yes 是</option><option value="false">Paused 暫停</option></select>
-            </div>
-            <div class="field span2"><label>Venue (English) 地點（英文）</label><input id="bVenueEn" type="text" placeholder="The Venetian Macao, Cotai Exhibition Hall A, Booth E03 &amp; F04"></div>
-            <div class="field span2"><label>Venue (Chinese) 地點（中文）</label><input id="bVenueCn" type="text" placeholder="威尼斯人金光會展展館A 展位E03、F04"></div>
-            <div class="field"><label>Registration opens 報名開始</label><input id="bRegStart" type="date"></div>
-            <div class="field"><label>Registration closes 報名截止</label><input id="bRegEnd" type="date"></div>
+      <div class="form-grid settings-grid">
+        <div class="field"><label>Event title (English) 活動名稱</label><input id="bTitle" type="text" placeholder="e.g. Kumon Open Day — Booth Games"></div>
+        <div class="field"><label>Event title (Chinese) 中文名稱</label><input id="bTitleCn" type="text" placeholder="例：公文式開放日 · 攤位遊戲"></div>
+        <div class="field span2"><label>Description 簡介 (shown on the public form)</label><textarea id="bDesc" rows="2" placeholder="Join us for games… 歡迎參加攤位遊戲日…"></textarea></div>
+        <div class="field"><label>Event start date 活動開始日期</label><input id="bEventStart" type="date"></div>
+        <div class="field"><label>Event end date 活動結束日期</label><input id="bEventEnd" type="date"></div>
+        <div class="field"><label>Event time text 活動時間</label><input id="bTimeText" type="text" placeholder="12:00 – 19:00"></div>
+        <div class="field"><label>Accepting registrations 接受報名</label>
+          <select id="bActive"><option value="true">Yes 是</option><option value="false">Paused 暫停</option></select>
         </div>
+        <div class="field span2"><label>Venue (English) 地點（英文）</label><input id="bVenueEn" type="text" placeholder="The Venetian Macao, Cotai Exhibition Hall A, Booth E03 &amp; F04"></div>
+        <div class="field span2"><label>Venue (Chinese) 地點（中文）</label><input id="bVenueCn" type="text" placeholder="威尼斯人金光會展展館A 展位E03、F04"></div>
+        <div class="field"><label>Registration opens 報名開始</label><input id="bRegStart" type="date"></div>
+        <div class="field"><label>Registration closes 報名截止</label><input id="bRegEnd" type="date"></div>
       </div>
     </div>
 
@@ -205,7 +206,7 @@
         <h3>🎮 Games &amp; time slots 遊戲與時段</h3>
         <button id="addGameBtn" class="btn primary">＋ Add game</button>
       </div>
-      <p class="hint">Set a grade range per game (e.g. P1–P6). The public form locks games outside the child's grade. Each slot has its own capacity 每場次可設名額上限。</p>
+      <p class="hint">Set a grade range per game (e.g. P1–P6). The public form locks games outside the child's grade. Each slot has its own date and capacity 每場次可設日期及名額上限。</p>
       <div id="gamesList"></div>
     </div>
 
@@ -256,6 +257,32 @@
       </div>
     </div>
   </section>
+
+  <!-- ================= CHECK-IN (QR only) ================= -->
+  <section id="tab-checkin" class="tab-content">
+    <div class="card">
+      <h3>📷 Scan to check in 掃描報到</h3>
+      <p class="hint">Scan the QR on the participant's confirmation screen. A USB scanner also works — just scan, no clicking. 掃描參加者確認畫面上的 QR 即可報到；USB 掃描槍亦可直接掃描。</p>
+      <input id="checkinInput" class="ci-scan-catch" type="text" inputmode="none" autocomplete="off" spellcheck="false" tabindex="-1" aria-hidden="true">
+      <div class="ci-scan-actions">
+        <button id="checkinCameraBtn" class="btn primary big">📷 Scan QR 掃描二維碼</button>
+      </div>
+      <div id="checkinResult" class="checkin-result"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h3>✅ Arrivals by slot 各場次報到</h3>
+        <span id="checkinTotals" class="hint"></span>
+      </div>
+      <div id="checkinSlots"></div>
+    </div>
+
+    <div class="card">
+      <h3>🕒 Recent activity 最近紀錄</h3>
+      <div id="checkinLog" class="ci-log"></div>
+    </div>
+  </section>
 </main>
 
 <!-- ================= DETAIL DRAWER ================= -->
@@ -271,6 +298,14 @@
     <button id="drawerDeleteBtn" class="btn danger">🗑 Delete</button>
   </div>
 </aside>
+
+<div id="ciCameraModal" class="modal hidden">
+  <div class="modal-box">
+    <h3>📷 Scan registration QR 掃描報名 QR</h3>
+    <div id="ciCameraReader"></div>
+    <div class="modal-actions"><button id="ciCameraClose" class="btn secondary">✖ Close 關閉</button></div>
+  </div>
+</div>
 
 <div id="toast" class="toast hidden"><span id="toastMsg"></span><button id="toastAction" class="toast-action hidden"></button></div>
 

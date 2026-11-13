@@ -21,21 +21,22 @@ export const gradeInRange = (g, min, max) => {
 export const rangeLabel = (min, max) => min === max ? gradeLabel(min) : `${gradeLabel(min)} – ${gradeLabel(max)}`;
 
 export const INTERESTS = [
-  { id:'math',    cn:'數學', en:'Math' },
-  { id:'erp',     cn:'英文（ERP）', en:'English (ERP) · English Reading Programme' },
-  { id:'efl',     cn:'英文（EFL）', en:'English (EFL) · English as a Foreign Language' },
-  { id:'chinese', cn:'中文', en:'Chinese' },
-  { id:'kindies', cn:'幼兒學習啟蒙班', en:'Kumon Kindies Programme' },
-  { id:'connect', cn:'Kumon Connect 公文式平板學習體驗', en:'Kumon Connect · Tablet Study Experience' },
-  { id:'none',    cn:'沒有，我的孩子目前是公文式學生', en:'None. My child is a current Kumon student', exclusive:true },
-  { id:'noneNow', cn:'暫時沒有', en:'None at the moment', exclusive:true }
+  { id:'math',      cn:'數學', en:'Math' },
+  { id:'erp',       cn:'英文（ERP）', en:'English (ERP) · English Reading Programme' },
+  { id:'efl',       cn:'英文（EFL）', en:'English (EFL) · English as a Foreign Language' },
+  { id:'chinese',   cn:'中文', en:'Chinese' },
+  { id:'kindies',   cn:'幼兒學習啟蒙班', en:'Kumon Kindies Programme' },
+  { id:'connect',   cn:'Kumon Connect 公文式平板學習體驗', en:'Kumon Connect · Tablet Study Experience' },
+  { id:'intensive', cn:'中/英/數加強班（單科精補）', en:'Chinese / English / Math Intensive Classes (Specialized Subject Tutoring)' },
+  { id:'none',      cn:'沒有，我的孩子目前是公文式學生', en:'None. My child is a current Kumon student', exclusive:true },
+  { id:'noneNow',   cn:'暫時沒有', en:'None at the moment', exclusive:true }
 ];
 export const interestLabel = id => {
   const o = INTERESTS.find(x => x.id === id);
   return o ? `${o.cn} / ${o.en}` : String(id || '');
 };
 
-export const GAME_EMOJIS = ['🎯','','🧩','','🎪','','🎳','','🎣','','🧠','','🎈','','🤹','🥽','️',''];
+export const GAME_EMOJIS = ['🎯','🎲','🧩','🎨','🎪','🏀','🎳','🪀','🎣','🥁','🧠','🔬','🎈','🤹','🥽','🧮','🎁','🎊'];
 
 export const PALETTE = ['#2f6fb2','#e5484d','#f2b100','#12a594','#d6409f','#7c5cd6','#f97316','#0ea5e9'];
 
@@ -119,7 +120,6 @@ export function daysBetween(dateStr) {
 }
 
 // ---------- event dates & venue (multi-day + bilingual) ----------
-// Legacy records (single eventDate / single venue) are normalised on load.
 export function normalizeEventConfig(cfg) {
   const c = { ...(cfg || {}) };
   if (!c.eventStart && c.eventDate) c.eventStart = c.eventDate;

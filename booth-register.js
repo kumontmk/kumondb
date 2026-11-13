@@ -30,16 +30,51 @@ let confettiRaf = null;
 let toastTimer = null;
 
 const answers = {
-  studentName:'', grade:'', birthday:'', parentPhone:'',
+  studentName:'', grade:'', school:'', birthday:'', parentPhone:'',
   apps:{ wechat:false, whatsapp:false }, wechatId:'',
   current:null, currentCenter:'', currentSubjects:'',
   interests:new Set(), selections:{}, remarks:''
 };
 
+// ---------- startup diagnostics ----------
+const REQUIRED_IDS = [
+  'screenLoading','screenInvalid','invalidReason','screenBefore','beforeInfo',
+  'screenClosed','closedTitle','closedInfo','pubHeader','hdrTitle','screenMain',
+  'hero','heroImg','evTitle','evTitleCn','evDesc','evMeta','evDeadline',
+  'fName','gradeGrid','fSchool','fBirth','agePill','fPhone','appWeChat','appWhatsApp',
+  'wechatIdWrap','fWeChatId','curYes','curNo','currentDetails','fCenter',
+  'fCurSubjects','interestList','gradeReminder','gamesWrap','overlapWarn',
+  'selSummary','reviewWrap','fRemarks','submitNote','backBtn','nextBtn',
+  'submitBtn','wizForm','screenSuccess','confettiCanvas','successQr',
+      'successSummary','againBtn','toast','toastMsg'
+];
+function fatal(msg) {
+  const reason = $('invalidReason');
+  if (reason) reason.textContent = msg;
+  $('pubHeader')?.classList.add('hidden');
+  ['screenLoading','screenBefore','screenClosed','screenMain','screenSuccess']
+    .forEach(id => $(id)?.classList.add('hidden'));
+  $('screenInvalid')?.classList.remove('hidden');
+}
+window.addEventListener('error', e => {
+  const l = $('screenLoading');
+  if (l && !l.classList.contains('hidden')) fatal(`Page error 頁面錯誤: ${e.message || 'unknown'}`);
+});
+window.addEventListener('unhandledrejection', e => {
+  const l = $('screenLoading');
+  if (l && !l.classList.contains('hidden')) fatal(`Page error 頁面錯誤: ${e.reason?.message || e.reason || 'unknown'}`);
+});
+const missingIds = REQUIRED_IDS.filter(id => !$(id));
+if (missingIds.length) {
+  fatal(`This page's HTML is out of date. Missing element(s): ${missingIds.join(', ')}. 請更新 booth-register.html。`);
+  throw new Error('booth-register.html missing IDs: ' + missingIds.join(', '));
+}
+
 // ============================================
 // INIT
 // ============================================
-init();
+init().catch(err => fatal(`Init failed 初始化失敗: ${err.message || err}`));
+
 async function init() {
   if (!shortCode && !directEvent) return showInvalid('Missing ?f= code in the link. 連結缺少報名代碼。');
   try { await signInAnonymously(auth); }
@@ -171,19 +206,18 @@ function renderHero() {
 // STATIC UI
 // ============================================
 function buildStaticUI() {
-  // Grade chips grouped by band
   const grid = $('gradeGrid');
   grid.innerHTML = '';
   [['K','Kindergarten 幼兒'], ['P','Primary 小學'], ['F','Secondary 中學']].forEach(([band, label]) => {
     const row = document.createElement('div');
     row.className = 'band-row';
-    row.innerHTML = `<span class="band-label">${label}</span>`;
+    row.innerHTML = '<span class="band-label">' + label + '</span>';
     GRADES.filter(g => g[0] === band).forEach(g => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'grade-chip-btn';
       b.dataset.grade = g;
-      b.innerHTML = `<span class="g">${g}</span><span class="gc">${GRADE_CN[g]}</span>`;
+      b.innerHTML = '<span class="g">' + g + '</span><span class="gc">' + GRADE_CN[g] + '</span>';
       b.addEventListener('click', () => {
         answers.grade = g;
         grid.querySelectorAll('.grade-chip-btn').forEach(x => x.classList.toggle('selected', x.dataset.grade === g));
@@ -199,12 +233,13 @@ function buildStaticUI() {
 
   $('fBirth').max = localDateStr();
   $('fName').addEventListener('input', e => { answers.studentName = e.target.value; clearInvalid(e.target); });
+  $('fSchool').addEventListener('input', e => { answers.school = e.target.value; clearInvalid(e.target); });
   $('fBirth').addEventListener('input', e => {
     answers.birthday = e.target.value;
     clearInvalid(e.target);
     const pill = $('agePill');
     const a = calcAge(answers.birthday);
-    if (a) { pill.textContent = `🎂 ${ageText(answers.birthday)}`; pill.classList.add('has-age'); }
+    if (a) { pill.textContent = '🎂 ' + ageText(answers.birthday); pill.classList.add('has-age'); }
     else { pill.textContent = 'Age will be calculated automatically 年齡將自動計算'; pill.classList.remove('has-age'); }
   });
   $('fPhone').addEventListener('input', e => { answers.parentPhone = e.target.value; clearInvalid(e.target); });
@@ -231,8 +266,7 @@ function buildStaticUI() {
   $('curYes').addEventListener('click', () => setCurrent('yes'));
   $('curNo').addEventListener('click', () => setCurrent('no'));
 
-  // Interest cards — both "None" options are exclusive:
-  // picking one clears all subjects and the other "None"; picking a subject clears both.
+  // Interest cards — both "None" options are exclusive.
   const list = $('interestList');
   const exclusiveIds = INTERESTS.filter(o => o.exclusive).map(o => o.id);
   list.innerHTML = '';
@@ -264,10 +298,6 @@ function buildStaticUI() {
     b.addEventListener('click', () => showStep(Number(b.dataset.goto))));
 
   $('againBtn').addEventListener('click', registerAnother);
-  $('copyCodeBtn').addEventListener('click', async () => {
-    await copyText($('regCode').textContent);
-    showToast('📋 Code copied 已複製編號', 'success');
-  });
 }
 
 function clearInvalid(el) { el.classList.remove('invalid'); }
@@ -351,12 +381,14 @@ function selectedSlotsList() {
   }).filter(Boolean);
 }
 
-
-// ============================================================
-// HTML-building functions — rewritten with plain string
-// concatenation (no nested template literals) so they are
-// robust to copy/paste. Replace the 5 originals with these.
-// ============================================================
+function findOverlaps() {
+  const list = selectedSlotsList();
+  const out = [];
+  for (let i = 0; i < list.length; i++)
+    for (let j = i + 1; j < list.length; j++)
+      if (slotsOverlap(list[i].s, list[j].s)) out.push([list[i], list[j]]);
+  return out;
+}
 
 function renderGames() {
   const wrap = $('gamesWrap');
@@ -387,7 +419,6 @@ function renderGames() {
       if (!slots.length) {
         inner = '<p class="f-hint">No time slots yet. 尚未新增時段。</p>';
       } else {
-        // Group tickets under their own day, since each day runs different slots.
         const byDate = {};
         slots.forEach(function (se) {
           const d = se[1].date || '';
@@ -485,7 +516,9 @@ function renderOverlapWarn() {
   el.innerHTML = html;
 }
 
-
+// ============================================
+// REVIEW
+// ============================================
 function renderReview() {
   const a = calcAge(answers.birthday);
   const apps = [answers.apps.wechat ? '💬 WeChat' : '', answers.apps.whatsapp ? '📱 WhatsApp' : ''].filter(Boolean).join(' · ');
@@ -506,6 +539,7 @@ function renderReview() {
   html += '<div class="rv-section"><div class="rv-head"><h4>🧒 Child 小朋友</h4><button type="button" class="rv-edit" data-goto="1">Edit 修改</button></div>';
   html += rv('Name 姓名', escapeHtml(answers.studentName));
   html += rv('Grade 年級', escapeHtml(gradeLabel(answers.grade)));
+  html += rv('School 學校', escapeHtml(answers.school));
   html += rv('Birthday 生日', answers.birthday ? escapeHtml(fmtDate(answers.birthday, false)) : '');
   html += rv('Age 年齡', a ? (a.years + 'y ' + a.months + 'm · ' + a.years + '歲' + a.months + '個月') : '');
   html += rv('Phone 電話', escapeHtml(answers.parentPhone));
@@ -538,40 +572,6 @@ function renderReview() {
   $('submitNote').textContent = note;
 }
 
-
-function showSuccess(reg) {
-  $('pubHeader').classList.add('hidden');
-  $('regCode').textContent = reg.code;
-  const qrWrap = $('successQr');
-  qrWrap.innerHTML = '';
-  const c = renderQrCanvas(reg.code, 160);
-  if (c) qrWrap.appendChild(c);
-
-  let html = '';
-  html += '<div class="ss-row">🧒 ' + escapeHtml(reg.studentName) + ' · ' + escapeHtml(gradeLabel(reg.grade)) + '</div>';
-  reg.selections.forEach(function (s) {
-    const emoji = (games[s.gameId] || {}).emoji || '🎟';
-    html += '<div class="ss-row">' + emoji + ' ' + escapeHtml(s.gameName) + ' · ' + escapeHtml(slotFullLabel(s)) + '</div>';
-  });
-  html += '<div class="ss-row">📅 ' + escapeHtml(eventRangeLabel(config)) + (config.timeText ? ' · ' + escapeHtml(config.timeText) : '') + '</div>';
-  if (config.venueEn) html += '<div class="ss-row">📍 ' + escapeHtml(config.venueEn) + '</div>';
-  if (config.venueCn) html += '<div class="ss-row">📍 ' + escapeHtml(config.venueCn) + '</div>';
-  $('successSummary').innerHTML = html;
-
-  showScreen('screenSuccess');
-  burstConfetti();
-  showToast('🎉 Registration submitted! 報名成功！', 'success');
-}
-
-function findOverlaps() {
-  const list = selectedSlotsList();
-  const out = [];
-  for (let i = 0; i < list.length; i++)
-    for (let j = i + 1; j < list.length; j++)
-      if (slotsOverlap(list[i].s, list[j].s)) out.push([list[i], list[j]]);
-  return out;
-}
-
 // ============================================
 // SUBMIT — capacity-safe transactions + rollback
 // ============================================
@@ -580,7 +580,7 @@ async function bumpCount(gid, sid, delta, cap) {
     ref(db, `boothEvents/${eventId}/counts/${gid}/${sid}`),
     cur => {
       const n = Number(cur) || 0;
-      if (delta > 0 && cap && n >= cap) return; // abort — slot is full
+      if (delta > 0 && cap && n >= cap) return;
       return Math.max(0, n + delta);
     },
     { applyLocally:false }
@@ -633,6 +633,7 @@ async function submitRegistration() {
       code:'BG-' + randomCode(6),
       studentName:answers.studentName.trim(),
       grade:answers.grade,
+      school:answers.school.trim(),
       birthday:answers.birthday,
       ageYears:a.years,
       ageMonths:a.months,
@@ -665,11 +666,38 @@ async function submitRegistration() {
     btn.textContent = '🎉 Submit registration 提交報名';
   }
 }
+
+// ============================================
+// SUCCESS
+// ============================================
+function showSuccess(reg) {
+  $('pubHeader').classList.add('hidden');
+  const qrWrap = $('successQr');
+  qrWrap.innerHTML = '';
+  const c = renderQrCanvas(reg.code, 160);
+  if (c) qrWrap.appendChild(c);
+
+  let html = '';
+  html += '<div class="ss-row">🧒 ' + escapeHtml(reg.studentName) + ' · ' + escapeHtml(gradeLabel(reg.grade)) + '</div>';
+  if (reg.school) html += '<div class="ss-row">🏫 ' + escapeHtml(reg.school) + '</div>';
+  reg.selections.forEach(function (s) {
+    const emoji = (games[s.gameId] || {}).emoji || '🎟';
+    html += '<div class="ss-row">' + emoji + ' ' + escapeHtml(s.gameName) + ' · ' + escapeHtml(slotFullLabel(s)) + '</div>';
+  });
+  html += '<div class="ss-row">📅 ' + escapeHtml(eventRangeLabel(config)) + (config.timeText ? ' · ' + escapeHtml(config.timeText) : '') + '</div>';
+  if (config.venueEn) html += '<div class="ss-row">📍 ' + escapeHtml(config.venueEn) + '</div>';
+  if (config.venueCn) html += '<div class="ss-row">📍 ' + escapeHtml(config.venueCn) + '</div>';
+  $('successSummary').innerHTML = html;
+
+  showScreen('screenSuccess');
+  burstConfetti();
+  showToast('🎉 Registration submitted! 報名成功！', 'success');
+}
+
 function registerAnother() {
-  // Keep parent/contact details for siblings; reset the child-specific answers
-  answers.studentName = ''; answers.grade = ''; answers.birthday = '';
+  answers.studentName = ''; answers.grade = ''; answers.school = ''; answers.birthday = '';
   answers.interests = new Set(); answers.selections = {}; answers.remarks = '';
-  $('fName').value = ''; $('fBirth').value = ''; $('fRemarks').value = '';
+  $('fName').value = ''; $('fSchool').value = ''; $('fBirth').value = ''; $('fRemarks').value = '';
   $('agePill').textContent = 'Age will be calculated automatically 年齡將自動計算';
   $('agePill').classList.remove('has-age');
   document.querySelectorAll('.grade-chip-btn').forEach(x => x.classList.remove('selected'));
