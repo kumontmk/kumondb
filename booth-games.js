@@ -1575,37 +1575,57 @@ function renderCheckin() {
 function renderCheckinResult() {
   const wrap = $('checkinResult'); if (!wrap) return;
   if (!ciLastId || !regs[ciLastId]) {
-        wrap.innerHTML = '<div class="ci-empty">🎟️ Ready — scan a QR to check in. 準備就緒 — 掃描 QR 即可報到。</div>';
+    wrap.innerHTML = '<div class="ci-empty">🎟️ Ready — scan a QR to check in. 準備就緒 — 掃描 QR 即可報到。</div>';
     return;
   }
   const r = regs[ciLastId];
   const attended = r.status === 'attended';
   const today = localDateStr();
-  const chips = (r.selections || []).map(s => {
+
+  const gameRows = (r.selections || []).map(s => {
     const g = games[s.gameId];
+    const c = (g && g.color) || PALETTE[0];
     const isToday = (s.date || '') === today;
-    return `<span class="game-chip ${isToday ? 'today' : ''}" style="--gc:${g?.color || PALETTE[0]}">${g?.emoji || '🎮'} ${escapeHtml(s.gameName || g?.name || '')} · ${escapeHtml(slotFullLabel(s))}</span>`;
+    const bg = isToday ? '#fff8e6' : '#f4f8fd';
+    const bd = isToday ? '#fde68a' : '#dbe5f2';
+    return '<div class="ci-game-row' + (isToday ? ' today' : '') + '" style="display:flex;align-items:flex-start;gap:.55rem;min-width:0;max-width:100%;box-sizing:border-box;padding:.5rem .65rem;border-radius:10px;background:' + bg + ';border:1px solid ' + bd + ';border-left:4px solid ' + c + ';">'
+      + '<span style="flex:0 0 auto;font-size:1.05rem;line-height:1.35;">' + ((g && g.emoji) || '🎮') + '</span>'
+      + '<span style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:.1rem;">'
+      + '<span style="font-weight:800;color:#16233b;font-size:.9rem;line-height:1.35;white-space:normal;overflow-wrap:anywhere;word-break:break-word;">' + escapeHtml(s.gameName || (g && (g.name || g.nameCn)) || '') + '</span>'
+      + '<span style="font-weight:700;color:#5b6b84;font-size:.78rem;line-height:1.35;white-space:normal;overflow-wrap:anywhere;word-break:break-word;">' + escapeHtml(slotFullLabel(s)) + (isToday ? ' · Today 今天' : '') + '</span>'
+      + '</span></div>';
   }).join('');
+
+  const metaBits = [];
+  if (r.parentPhone) metaBits.push('<span style="min-width:0;overflow-wrap:anywhere;">📞 ' + escapeHtml(r.parentPhone) + '</span>');
   const apps = [r.contactApps?.wechat ? '💬 WeChat' : '', r.contactApps?.whatsapp ? '📱 WhatsApp' : ''].filter(Boolean).join(' · ');
+  if (apps) metaBits.push('<span style="min-width:0;overflow-wrap:anywhere;">' + escapeHtml(apps) + '</span>');
+  if (r.school) metaBits.push('<span style="min-width:0;overflow-wrap:anywhere;">🏫 ' + escapeHtml(r.school) + '</span>');
+  if (r.ageYears != null) metaBits.push('<span style="white-space:nowrap;">🎂 ' + r.ageYears + 'y</span>');
+
   wrap.innerHTML =
-    `<div class="ci-card ${attended ? 'attended' : ''}">` +
-      `<div class="ci-head"><div class="ci-name">${escapeHtml(r.studentName || '')} <span class="grade-chip band-${gradeBand(r.grade)}">${escapeHtml(r.grade || '')}</span></div>` +
-      `<span class="status-badge st-${attended ? 'attended' : 'registered'}">${attended ? '✅ Attended 已報到' : '📝 Registered 已報名'}</span></div>` +
-            `<div class="ci-meta"><span>${escapeHtml(r.parentPhone || '')}</span><span>${escapeHtml(apps)}</span>${r.school ? `<span>🏫 ${escapeHtml(r.school)}</span>` : ''}${r.ageYears != null ? `<span>${r.ageYears}y</span>` : ''}</div>` +
-      `<div class="ci-games">${chips || '—'}</div>` +
-      `<div class="ci-actions"><button class="btn ${attended ? 'secondary' : 'primary'} big" data-ci-toggle="${escapeHtml(ciLastId)}">${attended ? '↩ Undo check-in 取消報到' : '✓ Check in 報到'}</button></div>` +
-    `</div>`;
+    '<div class="ci-card ' + (attended ? 'attended' : '') + '" style="min-width:0;max-width:100%;overflow:hidden;box-sizing:border-box;">'
+    + '<div class="ci-head" style="min-width:0;max-width:100%;">'
+    + '<div class="ci-name" style="min-width:0;overflow-wrap:anywhere;word-break:break-word;">' + escapeHtml(r.studentName || '')
+    + ' <span class="grade-chip band-' + gradeBand(r.grade) + '">' + escapeHtml(r.grade || '') + '</span></div>'
+    + '<span class="status-badge st-' + (attended ? 'attended' : 'registered') + '">' + (attended ? '✅ Attended 已報到' : '📝 Registered 已報名') + '</span>'
+    + '</div>'
+    + '<div class="ci-meta" style="display:flex;flex-wrap:wrap;gap:.35rem .8rem;min-width:0;max-width:100%;">' + metaBits.join('') + '</div>'
+    + '<div class="ci-games" style="display:flex;flex-direction:column;gap:.4rem;min-width:0;max-width:100%;margin:.6rem 0 .8rem;">' + (gameRows || '<span class="hint">—</span>') + '</div>'
+    + '<div class="ci-actions"><button class="btn ' + (attended ? 'secondary' : 'primary') + ' big" data-ci-toggle="' + escapeHtml(ciLastId) + '">' + (attended ? '↩ Undo check-in 取消報到' : '✓ Check in 報到') + '</button></div>'
+    + '</div>';
 }
 
 function renderCheckinSlots() {
   const wrap = $('checkinSlots'); const totals = $('checkinTotals');
   const all = Object.values(regs);
   const arrivedTotal = all.filter(r => r.status === 'attended').length;
-  if (totals) totals.textContent = `${arrivedTotal} arrived 已報到 · ${all.length} registered 已報名 · ${all.length - arrivedTotal} remaining 未到`;
+  if (totals) totals.textContent = arrivedTotal + ' arrived 已報到 · ' + all.length + ' registered 已報名 · ' + (all.length - arrivedTotal) + ' remaining 未到';
   const entries = Object.entries(games);
   if (!entries.length) { wrap.innerHTML = '<p class="hint">No games yet. 尚未新增遊戲。</p>'; return; }
   const today = localDateStr();
   wrap.innerHTML = entries.map(([gid, g]) => {
+    const c = g.color || PALETTE[0];
     const slots = Object.entries(g.slots || {}).sort((a, b) =>
       String(a[1].date || '').localeCompare(String(b[1].date || '')) || String(a[1].start).localeCompare(String(b[1].start)));
     const rows = slots.map(([sid, s]) => {
@@ -1613,9 +1633,19 @@ function renderCheckinSlots() {
       const booked = sel.length;
       const arrived = sel.filter(r => r.status === 'attended').length;
       const pct = booked ? Math.round(arrived / booked * 100) : 0;
-      return `<div class="ci-slot-row ${(s.date || '') === today ? 'today' : ''}"><span class="occ-time">${escapeHtml(fmtDateShort(s.date))} · ${escapeHtml(slotLabel(s))}</span><div class="occ-bar"><div class="occ-fill" style="--oc:${g.color || PALETTE[0]};width:${pct}%"></div></div><span class="occ-num">${arrived} / ${booked}</span></div>`;
+      const isToday = (s.date || '') === today;
+      return '<div class="ci-slot-row' + (isToday ? ' today' : '') + '" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.3rem .6rem;align-items:center;min-width:0;max-width:100%;box-sizing:border-box;padding:.5rem .6rem;border-radius:9px;margin-bottom:.35rem;background:' + (isToday ? '#fff8e6' : '#f6f9fd') + ';border:1px solid ' + (isToday ? '#fde68a' : '#e8eff8') + ';">'
+        + '<span style="min-width:0;font-weight:800;color:#245a94;font-size:.82rem;overflow-wrap:anywhere;">' + escapeHtml(fmtDateShort(s.date)) + ' · ' + escapeHtml(slotLabel(s)) + '</span>'
+        + '<span style="white-space:nowrap;font-weight:800;color:#5b6b84;font-size:.82rem;">' + arrived + ' / ' + booked + '</span>'
+        + '<div style="grid-column:1/-1;height:8px;background:#e6edf6;border-radius:999px;overflow:hidden;">'
+        + '<div style="height:100%;width:' + pct + '%;background:' + c + ';border-radius:999px;transition:width .4s ease;"></div>'
+        + '</div></div>';
     }).join('');
-    return `<div class="occ-game"><div class="occ-game-head"><span>${g.emoji || '🎮'}</span><span>${escapeHtml(g.name || '')} ${escapeHtml(g.nameCn || '')}</span></div>${rows || '<p class="hint">No slots.</p>'}</div>`;
+    return '<div class="occ-game" style="min-width:0;max-width:100%;margin-bottom:1rem;">'
+      + '<div style="display:flex;align-items:center;gap:.5rem;min-width:0;max-width:100%;margin-bottom:.4rem;">'
+      + '<span style="flex:0 0 auto;font-size:1.15rem;">' + (g.emoji || '🎮') + '</span>'
+      + '<span style="min-width:0;font-weight:800;color:#16233b;overflow-wrap:anywhere;word-break:break-word;">' + escapeHtml(g.name || '') + ' ' + escapeHtml(g.nameCn || '') + '</span>'
+      + '</div>' + (rows || '<p class="hint">No slots.</p>') + '</div>';
   }).join('');
 }
 
