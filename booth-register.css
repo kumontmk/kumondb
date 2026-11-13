@@ -272,3 +272,15 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   margin-left: .35rem;
   flex-shrink: 0;
 }
+
+/* ---- larger registration QR ---- */
+.success-qr { display:flex; justify-content:center; margin:.9rem 0; }
+.success-qr canvas {
+  width:min(300px, 78vw);
+  height:auto;
+  border-radius:12px;
+  background:#fff;
+  padding:10px;
+  border:1px solid #e8e2d6;
+  box-shadow:0 4px 18px rgba(22,35,59,.12);
+}

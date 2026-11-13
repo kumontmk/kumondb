@@ -1528,25 +1528,30 @@ function ciPushLog(icon, text) {
 }
 function ciNorm(s) { return String(s || '').toUpperCase().replace(/\s+/g, ''); }
 
-function ciLookup(raw) {
+let ciLastDecode = { text:'', at:0 };
+
+function ciLookup(raw, opts = {}) {
   const q = ciNorm(raw);
-  if (!q) return;
+  if (!q) return false;
   const bare = q.replace(/^BG-?/, '');
   let entry = Object.entries(regs).find(([, r]) => ciNorm(r.code) === q);
   if (!entry) entry = Object.entries(regs).find(([, r]) => ciNorm(r.code) === 'BG-' + bare);
   if (!entry) entry = Object.entries(regs).find(([, r]) => ciNorm(r.code).replace(/^BG-?/, '') === bare);
   const inp = $('checkinInput');
   if (!entry) {
-    ciLastId = null;
-    ciPushLog('❌', `QR not recognised 無法識別: ${q}`);
-    renderCheckin();
-    showToast('❌ This QR is not a registration for this event 此 QR 不屬於本活動', 'error');
-  } else {
-    ciLastId = entry[0];
-    ciPushLog('🔎', `${entry[1].studentName || ''} · ${entry[1].grade || ''}`);
-    renderCheckin();
+    if (!opts.fromCamera) {
+      ciLastId = null;
+      ciPushLog('❌', `QR not recognised 無法識別: ${q}`);
+      renderCheckin();
+      showToast('❌ This QR is not a registration for this event 此 QR 不屬於本活動', 'error');
+    }
+    return false;
   }
+  ciLastId = entry[0];
+  ciPushLog('🔎', `${entry[1].studentName || ''} · ${entry[1].grade || ''}`);
+  renderCheckin();
   if (inp) { inp.value = ''; inp.focus(); }
+  return true;
 }
 
 async function ciToggle(id) {
@@ -1624,18 +1629,32 @@ function renderCheckinLog() {
 async function ciStartCamera() {
   if (typeof Html5Qrcode === 'undefined') return showToast('Scanner library missing — check the html5-qrcode script tag', 'error');
   $('ciCameraModal').classList.remove('hidden');
+  ciLastDecode = { text:'', at:0 };
   try {
     if (!ciScanner) {
-      const opts = {};
+      const opts = { verbose:false };
       if (typeof Html5QrcodeSupportedFormats !== 'undefined') {
-        opts.formatsToSupport = [Html5QrcodeSupportedFormats.QR_CODE, Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39];
+        opts.formatsToSupport = [Html5QrcodeSupportedFormats.QR_CODE];
       }
+      opts.experimentalFeatures = { useBarCodeDetectorIfSupported:true };
       ciScanner = new Html5Qrcode('ciCameraReader', opts);
     }
     await ciScanner.start(
       { facingMode:'environment' },
-      { fps:15, qrbox:(vw, vh) => { const s = Math.floor(Math.min(vw * 0.8, 320)); return { width:s, height:s }; } },
-      (txt) => { ciStopCamera(); ciLookup(txt); },
+      {
+        fps:15,
+        aspectRatio:1.0,
+        qrbox:(vw, vh) => { const s = Math.floor(Math.min(vw, vh) * 0.75); return { width:s, height:s }; }
+      },
+      (decodedText) => {
+        const now = Date.now();
+        if (decodedText === ciLastDecode.text && now - ciLastDecode.at < 1000) return;
+        ciLastDecode = { text:decodedText, at:now };
+        if (ciLookup(decodedText, { fromCamera:true })) {
+          ciStopCamera();
+          showToast('✅ Participant found 已找到參加者', 'success');
+        }
+      },
       () => {}
     );
     ciCamActive = true;

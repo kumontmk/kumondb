@@ -674,7 +674,7 @@ function showSuccess(reg) {
   $('pubHeader').classList.add('hidden');
   const qrWrap = $('successQr');
   qrWrap.innerHTML = '';
-  const c = renderQrCanvas(reg.code, 160);
+    const c = renderQrCanvas(reg.code, 320);
   if (c) qrWrap.appendChild(c);
 
   let html = '';
