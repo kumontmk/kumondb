@@ -849,18 +849,19 @@ function exportExcel(ids) {
 // ============================================
 function defaultDraft() {
   const today = localDateStr();
-  const end = localDateStr(new Date(Date.now() + 14 * 86400000));
+  const regEnd = localDateStr(new Date(Date.now() + 14 * 86400000));
+  const eventDay = localDateStr(new Date(Date.now() + 21 * 86400000));
   return {
     dirty:false,
     config:{
       title:'', titleCn:'', description:'',
-      eventStart:today, eventEnd:today, timeText:'',
+      eventStart:eventDay, eventEnd:eventDay, timeText:'',
       venueEn:'', venueCn:'',
-      regStart:today, regEnd:end, isActive:true,
+      regStart:today, regEnd:regEnd, isActive:true,
       bannerPreset:'fiesta', bannerDataUrl:null
     },
     games:{ [uid('g')]:{ name:'', nameCn:'', emoji:'🎯', minGrade:'K0', maxGrade:'F6', color:PALETTE[0],
-      slots:{ [uid('s')]:{ date:today, start:'14:00', end:'14:20', capacity:10 } } } }
+      slots:{ [uid('s')]:{ date:eventDay, start:'14:00', end:'14:20', capacity:10 } } } }
   };
 }
 
@@ -1005,7 +1006,7 @@ function renderGamesEditor(d) {
       const date = (last && last.date) || d.config.eventStart || localDateStr();
       const start = (last && last.date === date && last.end) ? last.end : '14:00';
       g.slots = g.slots || {};
-      g.slots[uid('s')] = { date, start, end:addMinutes(start, 20), capacity:(last && last.capacity) || 10 };
+      g.slots[uid('s')] = { date, start, end:addMinutes(start, 60), capacity:(last && last.capacity) || 10 };
       dirty(); renderGamesEditor(d);
     });
 

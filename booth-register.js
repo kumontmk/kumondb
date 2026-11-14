@@ -28,6 +28,7 @@ let step = 1;
 let submitting = false;
 let confettiRaf = null;
 let toastTimer = null;
+let gameDates = {};
 
 const answers = {
   studentName:'', grade:'', school:'', birthday:'', parentPhone:'',
@@ -190,6 +191,9 @@ function renderHero() {
   const range = eventRangeLabel(config);
   if (range) chips.push('📅 ' + range);
   if (config.timeText) chips.push('⏰ ' + config.timeText);
+  if (config.regStart || config.regEnd) {
+    chips.push('📝 Reg 報名: ' + (config.regStart ? fmtDate(config.regStart, false) : '…') + ' → ' + (config.regEnd ? fmtDate(config.regEnd, false) : '…'));
+  }
   let meta = chips.map(c => '<span class="meta-chip">' + escapeHtml(c) + '</span>').join('');
   if (config.venueEn || config.venueCn) {
     meta += '<div class="hero-venue">' +
@@ -403,6 +407,7 @@ function renderGames() {
     const card = document.createElement('div');
     card.className = 'game-card' + (eligible ? '' : ' locked') + (answers.selections[gid] ? ' has-selection' : '');
     card.style.setProperty('--gc', g.color || PALETTE[0]);
+    card.dataset.gid = gid;
 
     let body = '';
     if (!eligible) {
@@ -415,18 +420,45 @@ function renderGames() {
         return String(a[1].date || '').localeCompare(String(b[1].date || '')) ||
                String(a[1].start).localeCompare(String(b[1].start));
       });
-      let inner = '';
+
       if (!slots.length) {
-        inner = '<p class="f-hint">No time slots yet. 尚未新增時段。</p>';
+        body = '<div class="game-slots"><p class="f-hint">No time slots yet. 尚未新增時段。</p></div>';
       } else {
         const byDate = {};
         slots.forEach(function (se) {
           const d = se[1].date || '';
           (byDate[d] = byDate[d] || []).push(se);
         });
-        Object.keys(byDate).sort().forEach(function (date) {
-          inner += '<div class="slot-date-head">📅 ' + escapeHtml(date ? fmtDate(date) : 'Date TBD 日期待定') + '</div>';
-          byDate[date].forEach(function (se) {
+        const dates = Object.keys(byDate).sort();
+
+        const selSid = answers.selections[gid];
+        const selDate = (selSid && g.slots && g.slots[selSid]) ? (g.slots[selSid].date || '') : null;
+
+        let activeDate = (gid in gameDates) ? gameDates[gid] : null;
+        if (activeDate === null || !byDate[activeDate]) {
+          if (selDate !== null) activeDate = selDate;
+          else if (dates.length === 1) activeDate = dates[0];
+          else activeDate = null;
+        }
+        if (activeDate !== null) gameDates[gid] = activeDate; else delete gameDates[gid];
+
+        let datesHtml = '<div class="game-dates" role="tablist" aria-label="Choose a date 選擇日期">';
+        dates.forEach(function (d) {
+          const isSel = d === activeDate;
+          const isBooked = selDate === d;
+          datesHtml += '<button type="button" class="date-chip' + (isSel ? ' selected' : '') + '" data-date="' + escapeHtml(d) + '" role="tab" aria-selected="' + (isSel ? 'true' : 'false') + '">'
+            + '<span class="dc-cal">📅</span><span>' + escapeHtml(d ? fmtDate(d) : 'Date TBD 日期待定') + '</span>'
+            + (isBooked ? '<span class="dc-check" title="Selected 已選">✓</span>' : '')
+            + '</button>';
+        });
+        datesHtml += '</div>';
+
+        let inner = '';
+        if (activeDate === null) {
+          inner = '<div class="pick-date-hint">👆 Choose a date above to see its time slots. 請先選擇上方日期，再選擇時段。</div>';
+        } else {
+          inner = '<div class="slot-date-head">📅 ' + escapeHtml(activeDate ? fmtDate(activeDate) : 'Date TBD 日期待定') + '</div>';
+          byDate[activeDate].forEach(function (se) {
             const sid = se[0];
             const s = se[1];
             const cap = Number(s.capacity) || 0;
@@ -451,9 +483,9 @@ function renderGames() {
               + '<span class="s-radio">' + tick + '</span>'
               + '</button>';
           });
-        });
+        }
+        body = datesHtml + '<div class="game-slots" role="tabpanel">' + inner + '</div>';
       }
-      body = '<div class="game-slots">' + inner + '</div>';
     }
 
     card.innerHTML =
@@ -462,6 +494,13 @@ function renderGames() {
       + '<span class="game-range">' + escapeHtml(rangeLabel(g.minGrade, g.maxGrade)) + '</span></div>'
       + body;
     wrap.appendChild(card);
+
+    card.querySelectorAll('.date-chip').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        gameDates[gid] = btn.dataset.date;
+        renderGames();
+      });
+    });
   });
 
   if (!Object.keys(games).length) {

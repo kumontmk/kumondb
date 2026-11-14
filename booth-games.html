@@ -177,16 +177,32 @@
         <div class="field"><label>Event title (English) 活動名稱</label><input id="bTitle" type="text" placeholder="e.g. Kumon Open Day — Booth Games"></div>
         <div class="field"><label>Event title (Chinese) 中文名稱</label><input id="bTitleCn" type="text" placeholder="例：公文式開放日 · 攤位遊戲"></div>
         <div class="field span2"><label>Description 簡介 (shown on the public form)</label><textarea id="bDesc" rows="2" placeholder="Join us for games… 歡迎參加攤位遊戲日…"></textarea></div>
-        <div class="field"><label>Event start date 活動開始日期</label><input id="bEventStart" type="date"></div>
-        <div class="field"><label>Event end date 活動結束日期</label><input id="bEventEnd" type="date"></div>
-        <div class="field"><label>Event time text 活動時間</label><input id="bTimeText" type="text" placeholder="12:00 – 19:00"></div>
-        <div class="field"><label>Accepting registrations 接受報名</label>
-          <select id="bActive"><option value="true">Yes 是</option><option value="false">Paused 暫停</option></select>
+      </div>
+
+      <div class="date-group">
+        <div class="date-group-title">📅 Event schedule 活動日期</div>
+        <div class="form-grid settings-grid">
+          <div class="field"><label>Event start date 活動開始日期</label><input id="bEventStart" type="date"></div>
+          <div class="field"><label>Event end date 活動結束日期</label><input id="bEventEnd" type="date"></div>
+          <div class="field"><label>Event time text 活動時間</label><input id="bTimeText" type="text" placeholder="12:00 – 19:00"></div>
         </div>
+      </div>
+
+      <div class="date-group">
+        <div class="date-group-title">📝 Registration window 報名日期</div>
+        <div class="form-grid settings-grid">
+          <div class="field"><label>Registration opens 報名開始</label><input id="bRegStart" type="date"></div>
+          <div class="field"><label>Registration closes 報名截止</label><input id="bRegEnd" type="date"></div>
+          <div class="field"><label>Accepting registrations 接受報名</label>
+            <select id="bActive"><option value="true">Yes 是</option><option value="false">Paused 暫停</option></select>
+          </div>
+        </div>
+        <p class="hint">These dates are independent of the event dates — parents can register before the event begins. 報名日期與活動日期獨立，家長可於活動開始前報名。</p>
+      </div>
+
+      <div class="form-grid settings-grid">
         <div class="field span2"><label>Venue (English) 地點（英文）</label><input id="bVenueEn" type="text" placeholder="The Venetian Macao, Cotai Exhibition Hall A, Booth E03 &amp; F04"></div>
         <div class="field span2"><label>Venue (Chinese) 地點（中文）</label><input id="bVenueCn" type="text" placeholder="威尼斯人金光會展展館A 展位E03、F04"></div>
-        <div class="field"><label>Registration opens 報名開始</label><input id="bRegStart" type="date"></div>
-        <div class="field"><label>Registration closes 報名截止</label><input id="bRegEnd" type="date"></div>
       </div>
     </div>
 

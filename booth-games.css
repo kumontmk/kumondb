@@ -430,3 +430,21 @@ header h1 {
 @media (max-width:768px) {
   .ci-slot-row { grid-template-columns:150px 1fr 90px; }
 }
+
+/* ---- separate event vs registration date groups ---- */
+.date-group {
+  border:1.5px solid var(--line);
+  border-radius:12px;
+  padding:.9rem 1rem;
+  margin:0 0 1rem;
+  background:#fbfdff;
+}
+.date-group-title {
+  font-family:var(--display);
+  font-weight:800;
+  color:var(--blue-deep);
+  font-size:.9rem;
+  margin-bottom:.7rem;
+}
+.date-group .form-grid { margin-bottom:0; }
+.date-group .hint { margin:.6rem 0 0; }

@@ -284,3 +284,58 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   border:1px solid #e8e2d6;
   box-shadow:0 4px 18px rgba(22,35,59,.12);
 }
+
+/* ============================================
+   STEP 3 — choose a date, then its timeslots
+   ============================================ */
+.game-dates {
+  display:flex;
+  flex-wrap:wrap;
+  gap:.45rem;
+  padding:0 .8rem .7rem;
+}
+.date-chip {
+  display:inline-flex;
+  align-items:center;
+  gap:.4rem;
+  border:2px solid #eadfcc;
+  background:#fff;
+  border-radius:999px;
+  padding:.42rem .85rem;
+  cursor:pointer;
+  font-family:var(--display);
+  font-weight:800;
+  font-size:.82rem;
+  color:var(--navy);
+  white-space:nowrap;
+  transition:all .15s;
+}
+.date-chip .dc-cal { font-size:.9rem; line-height:1; }
+.date-chip:hover { border-color:var(--gc,#2f6fb2); transform:translateY(-1px); }
+.date-chip.selected {
+  border-color:var(--gc,#2f6fb2);
+  background:#eef4fb;
+  background:color-mix(in srgb, var(--gc,#2f6fb2) 10%, white);
+  color:color-mix(in srgb, var(--gc,#2f6fb2) 85%, black);
+  box-shadow:0 3px 10px color-mix(in srgb, var(--gc,#2f6fb2) 22%, transparent);
+}
+.date-chip .dc-check {
+  width:18px; height:18px; border-radius:50%;
+  background:var(--gc,#2f6fb2); color:#fff;
+  display:inline-flex; align-items:center; justify-content:center;
+  font-size:.68rem; font-weight:900; flex:0 0 auto;
+}
+.pick-date-hint {
+  font-size:.82rem;
+  font-weight:700;
+  color:var(--muted);
+  background:#fbf7ef;
+  border:1.5px dashed #e5d9c2;
+  border-radius:10px;
+  padding:.7rem .85rem;
+  text-align:center;
+}
+@media (max-width:560px) {
+  .game-dates { gap:.4rem; padding:0 .7rem .6rem; }
+  .date-chip { font-size:.78rem; padding:.4rem .7rem; }
+}
