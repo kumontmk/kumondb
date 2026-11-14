@@ -339,3 +339,21 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   .game-dates { gap:.4rem; padding:0 .7rem .6rem; }
   .date-chip { font-size:.78rem; padding:.4rem .7rem; }
 }
+
+/* ---- birthday: three-select picker (iOS-safe) ---- */
+.bday-picker { display:grid; grid-template-columns:1fr 1.4fr 1.2fr; gap:.5rem; }
+.bday-picker select {
+  width:100%; padding:.7rem 1.8rem .7rem .6rem;
+  border:2px solid #eadfcc; border-radius:12px;
+  font-size:16px; background:#fffdf9; color:var(--ink); font-family:inherit;
+  appearance:none; -webkit-appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right .6rem center; background-size:.8rem;
+  transition:border-color .2s, box-shadow .2s;
+}
+.bday-picker select:focus { outline:none; border-color:var(--blue); box-shadow:0 0 0 4px rgba(47,111,178,.14); background-color:#fff; }
+.bday-picker.invalid select { border-color:var(--coral); box-shadow:0 0 0 4px rgba(229,72,77,.12); }
+@media (max-width:560px) {
+  .bday-picker { grid-template-columns:1fr 1.3fr 1.1fr; gap:.4rem; }
+  .bday-picker select { padding:.65rem 1.5rem .65rem .4rem; }
+}

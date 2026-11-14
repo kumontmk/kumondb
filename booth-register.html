@@ -105,8 +105,13 @@
         </div>
 
         <div class="field">
-          <label for="fBirth">Birthday 出生日期 <em>*</em></label>
-          <input id="fBirth" type="date">
+          <label for="fBirthDay">Birthday 出生日期 <em>*</em></label>
+          <div class="bday-picker" id="bdayPicker">
+            <select id="fBirthDay" aria-label="Day 日"></select>
+            <select id="fBirthMonth" aria-label="Month 月"></select>
+            <select id="fBirthYear" aria-label="Year 年"></select>
+          </div>
+          <input type="hidden" id="fBirth">
           <div id="agePill" class="age-pill" aria-live="polite">Age will be calculated automatically 年齡將自動計算</div>
         </div>
 

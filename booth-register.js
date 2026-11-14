@@ -42,8 +42,8 @@ const REQUIRED_IDS = [
   'screenLoading','screenInvalid','invalidReason','screenBefore','beforeInfo',
   'screenClosed','closedTitle','closedInfo','pubHeader','hdrTitle','screenMain',
   'hero','heroImg','evTitle','evTitleCn','evDesc','evMeta','evDeadline',
-  'fName','gradeGrid','fSchool','fBirth','agePill','fPhone','appWeChat','appWhatsApp',
-  'wechatIdWrap','fWeChatId','curYes','curNo','currentDetails','fCenter',
+  'fName','gradeGrid','fSchool','fBirth','bdayPicker','fBirthDay','fBirthMonth','fBirthYear','agePill','fPhone','appWeChat','appWhatsApp',
+    'wechatIdWrap','fWeChatId','curYes','curNo','currentDetails','fCenter',
   'fCurSubjects','interestList','gradeReminder','gamesWrap','overlapWarn',
   'selSummary','reviewWrap','fRemarks','submitNote','backBtn','nextBtn',
   'submitBtn','wizForm','screenSuccess','confettiCanvas','successQr',
@@ -235,17 +235,18 @@ function buildStaticUI() {
     grid.appendChild(row);
   });
 
-  $('fBirth').max = localDateStr();
-  $('fName').addEventListener('input', e => { answers.studentName = e.target.value; clearInvalid(e.target); });
-  $('fSchool').addEventListener('input', e => { answers.school = e.target.value; clearInvalid(e.target); });
+  initBirthdayPicker();
   $('fBirth').addEventListener('input', e => {
     answers.birthday = e.target.value;
-    clearInvalid(e.target);
+    $('bdayPicker').classList.remove('invalid');
     const pill = $('agePill');
     const a = calcAge(answers.birthday);
     if (a) { pill.textContent = '🎂 ' + ageText(answers.birthday); pill.classList.add('has-age'); }
     else { pill.textContent = 'Age will be calculated automatically 年齡將自動計算'; pill.classList.remove('has-age'); }
   });
+  $('fName').addEventListener('input', e => { answers.studentName = e.target.value; clearInvalid(e.target); });
+  $('fSchool').addEventListener('input', e => { answers.school = e.target.value; clearInvalid(e.target); });
+
   $('fPhone').addEventListener('input', e => { answers.parentPhone = e.target.value; clearInvalid(e.target); });
   $('fWeChatId').addEventListener('input', e => { answers.wechatId = e.target.value; });
   $('fCenter').addEventListener('input', e => { answers.currentCenter = e.target.value; clearInvalid(e.target); });
@@ -312,6 +313,49 @@ function markInvalid(el, msg) {
   setTimeout(() => el.focus({ preventScroll:true }), 300);
 }
 
+function initBirthdayPicker() {
+  const day = $('fBirthDay'), month = $('fBirthMonth'), year = $('fBirthYear');
+  const maxYear = new Date().getFullYear();
+  const minYear = maxYear - 25;
+  day.innerHTML = '<option value="">Day 日</option>' + Array.from({ length:31 }, (_, i) => '<option value="' + (i+1) + '">' + (i+1) + '</option>').join('');
+  const months = ['Jan 1月','Feb 2月','Mar 3月','Apr 4月','May 5月','Jun 6月','Jul 7月','Aug 8月','Sep 9月','Oct 10月','Nov 11月','Dec 12月'];
+  month.innerHTML = '<option value="">Month 月</option>' + months.map((m, i) => '<option value="' + (i+1) + '">' + m + '</option>').join('');
+  let yOpts = '<option value="">Year 年</option>';
+  for (let y = maxYear; y >= minYear; y--) yOpts += '<option value="' + y + '">' + y + '</option>';
+  year.innerHTML = yOpts;
+  [day, month, year].forEach(sel => sel.addEventListener('change', () => { clampBirthdayDay(); syncBirthday(); }));
+}
+
+function clampBirthdayDay() {
+  const day = $('fBirthDay'), month = $('fBirthMonth'), year = $('fBirthYear');
+  const m = parseInt(month.value, 10), y = parseInt(year.value, 10);
+  const daysInMonth = (m && y) ? new Date(y, m, 0).getDate() : 31;
+  const cur = parseInt(day.value, 10) || 0;
+  let html = '<option value="">Day 日</option>';
+  for (let d = 1; d <= daysInMonth; d++) html += '<option value="' + d + '">' + d + '</option>';
+  day.innerHTML = html;
+  if (cur) day.value = String(Math.min(cur, daysInMonth));
+}
+
+function syncBirthday() {
+  const d = parseInt($('fBirthDay').value, 10);
+  const m = parseInt($('fBirthMonth').value, 10);
+  const y = parseInt($('fBirthYear').value, 10);
+  const hidden = $('fBirth');
+  hidden.value = (d && m && y) ? y + '-' + String(m).padStart(2,'0') + '-' + String(d).padStart(2,'0') : '';
+  hidden.dispatchEvent(new Event('input', { bubbles:true }));
+}
+
+function resetBirthdayPicker() {
+  $('fBirthDay').value = '';
+  $('fBirthMonth').value = '';
+  $('fBirthYear').value = '';
+  clampBirthdayDay();
+  $('bdayPicker').classList.remove('invalid');
+  $('fBirth').value = '';
+  $('fBirth').dispatchEvent(new Event('input', { bubbles:true }));
+}
+
 // ============================================
 // STEP NAVIGATION
 // ============================================
@@ -340,7 +384,12 @@ function validateStep(n) {
     if (!answers.studentName.trim()) { markInvalid($('fName'), 'Please enter the student name 請填寫學生姓名'); return false; }
     if (!answers.grade) { showToast('Please choose the grade 請選擇年級', 'error'); $('gradeGrid').scrollIntoView({ behavior:'smooth', block:'center' }); return false; }
     const a = calcAge(answers.birthday);
-    if (!a || a.years > 25) { markInvalid($('fBirth'), 'Please enter a valid birthday 請填寫有效出生日期'); return false; }
+    if (!a || a.years > 25) {
+      $('bdayPicker').classList.add('invalid');
+      showToast('Please enter a valid birthday 請填寫有效出生日期', 'error');
+      $('bdayPicker').scrollIntoView({ behavior:'smooth', block:'center' });
+      return false;
+    }
     if (!validPhone(answers.parentPhone)) { markInvalid($('fPhone'), 'Please enter a valid phone number 請填寫有效電話號碼'); return false; }
     if (!answers.apps.wechat && !answers.apps.whatsapp) { showToast('Choose at least one contact app 請選擇至少一種聯絡方式', 'error'); return false; }
     return true;
@@ -736,7 +785,7 @@ function showSuccess(reg) {
 function registerAnother() {
   answers.studentName = ''; answers.grade = ''; answers.school = ''; answers.birthday = '';
   answers.interests = new Set(); answers.selections = {}; answers.remarks = '';
-  $('fName').value = ''; $('fSchool').value = ''; $('fBirth').value = ''; $('fRemarks').value = '';
+  $('fName').value = ''; $('fSchool').value = ''; resetBirthdayPicker(); $('fRemarks').value = '';
   $('agePill').textContent = 'Age will be calculated automatically 年齡將自動計算';
   $('agePill').classList.remove('has-age');
   document.querySelectorAll('.grade-chip-btn').forEach(x => x.classList.remove('selected'));
