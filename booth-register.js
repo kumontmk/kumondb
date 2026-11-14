@@ -683,6 +683,19 @@ async function rollback(done) {
   }
 }
 
+async function claimSeq() {
+  const res = await runTransaction(
+    ref(db, `boothEvents/${eventId}/seq`),
+    cur => {
+      const n = Number(cur) || 0;
+      if (n >= 999) return;
+      return n + 1;
+    },
+    { applyLocally:false }
+  );
+  return res.committed ? Number(res.snapshot.val()) : null;
+}
+
 async function submitRegistration() {
   if (submitting) return;
   if (!validateStep(1)) { showStep(1); return; }
@@ -716,8 +729,16 @@ async function submitRegistration() {
       done.push({ gid, sid });
     }
 
+    const seq = await claimSeq();
+    if (!seq) {
+      await rollback(done);
+      showToast('This event has reached its 999-registration limit. 此活動已達 999 個報名上限。', 'error');
+      return;
+    }
+
     const a = calcAge(answers.birthday) || { years:0, months:0 };
     const reg = {
+      seq,
       code:'BG-' + randomCode(6),
       studentName:answers.studentName.trim(),
       grade:answers.grade,

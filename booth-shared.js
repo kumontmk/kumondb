@@ -22,8 +22,7 @@ export const rangeLabel = (min, max) => min === max ? gradeLabel(min) : `${grade
 
 export const INTERESTS = [
   { id:'math',      cn:'數學', en:'Math' },
-  { id:'erp',       cn:'英文（ERP）', en:'English (ERP) · English Reading Programme' },
-  { id:'efl',       cn:'英文（EFL）', en:'English (EFL) · English as a Foreign Language' },
+  { id:'english',   cn:'英文（ERP/EFL）', en:'English (ERP). English Reading Programme / English (EFL). English as a Foreign Language' },
   { id:'chinese',   cn:'中文', en:'Chinese' },
   { id:'kindies',   cn:'幼兒學習啟蒙班', en:'Kumon Kindies Programme' },
   { id:'connect',   cn:'Kumon Connect 公文式平板學習體驗', en:'Kumon Connect · Tablet Study Experience' },
@@ -31,8 +30,23 @@ export const INTERESTS = [
   { id:'none',      cn:'沒有，我的孩子目前是公文式學生', en:'None. My child is a current Kumon student', exclusive:true },
   { id:'noneNow',   cn:'暫時沒有', en:'None at the moment', exclusive:true }
 ];
+
+// Registrations saved before ERP and EFL were merged still carry the old ids.
+// These aliases fold them into the single English option everywhere.
+export const INTEREST_ALIASES = { erp:'english', efl:'english' };
+
+export function normalizeInterests(ids) {
+  const out = [];
+  (Array.isArray(ids) ? ids : []).forEach(id => {
+    const key = INTEREST_ALIASES[id] || id;
+    if (key && !out.includes(key)) out.push(key);
+  });
+  return out;
+}
+
 export const interestLabel = id => {
-  const o = INTERESTS.find(x => x.id === id);
+  const key = INTEREST_ALIASES[id] || id;
+  const o = INTERESTS.find(x => x.id === key);
   return o ? `${o.cn} / ${o.en}` : String(id || '');
 };
 

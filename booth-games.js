@@ -8,8 +8,8 @@ import { ref, get, update, remove, onValue, runTransaction } from "https://www.g
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
   GRADES, GRADE_CN, gradeIdx, gradeBand, gradeLabel, gradeInRange, rangeLabel,
-  INTERESTS, interestLabel, GAME_EMOJIS, PALETTE, BANNERS, bannerCss, bannerStops,
-  escapeHtml, randomCode, uid, localDateStr, calcAge, fmtDate, fmtDateShort, slotLabel, slotFullLabel,
+  INTERESTS, interestLabel, normalizeInterests, GAME_EMOJIS, PALETTE, BANNERS, bannerCss, bannerStops,
+    escapeHtml, randomCode, uid, localDateStr, calcAge, fmtDate, fmtDateShort, slotLabel, slotFullLabel,
   windowState, timeAgo, slugify, copyText, downloadDataUrl, loadImg,
   renderQrCanvas, wrapLines, rr,
   normalizeEventConfig, normalizeGames, eventRangeLabel, venueLines
@@ -91,6 +91,7 @@ function subscribeEvent(id) {
 
   autoReconcileTimer = setTimeout(() => {
     autoReconcileTimer = null;
+    ensureSeqNumbers({ silent:true });
     reconcileCounts({ silent:true });
   }, 2500);
 }
@@ -373,7 +374,7 @@ function renderCharts(list) {
   makeChart('chInterests', {
     type:'bar',
     data:{ labels:INTERESTS.map(o => o.cn),
-      datasets:[{ data:INTERESTS.map(o => list.filter(r => (r.interests || []).includes(o.id)).length), backgroundColor:INTERESTS.map((_, i) => PALETTE[i % PALETTE.length]), borderRadius:5 }] },
+      datasets:[{ data:INTERESTS.map(o => list.filter(r => normalizeInterests(r.interests).includes(o.id)).length), backgroundColor:INTERESTS.map((_, i) => PALETTE[i % PALETTE.length]), borderRadius:5 }] },  
     options:{ ...baseOpts, indexAxis:'y', scales:{ x:{ ...axis, beginAtZero:true, ticks:{ ...axis.ticks, precision:0 } }, y:axis } }
   });
 
@@ -429,7 +430,7 @@ function filteredRegs() {
     if (cf && (r.isCurrentStudent || 'no') !== cf) return false;
     if (sf && (r.status || 'registered') !== sf) return false;
     if (q) {
-      const hay = [r.studentName, r.school, r.parentPhone, r.currentCenter, r.code, r.wechatId].filter(Boolean).join(' ').toLowerCase();
+      const hay = [regIdLabel(r.seq), r.studentName, r.school, r.parentPhone, r.currentCenter, r.code, r.wechatId].filter(Boolean).join(' ').toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -437,6 +438,7 @@ function filteredRegs() {
   const cmp = {
     newest:(a, b) => String(b[1].submittedAt || '').localeCompare(String(a[1].submittedAt || '')),
     oldest:(a, b) => String(a[1].submittedAt || '').localeCompare(String(b[1].submittedAt || '')),
+    id:(a, b) => (Number(a[1].seq) || 0) - (Number(b[1].seq) || 0),
     name:(a, b) => String(a[1].studentName || '').localeCompare(String(b[1].studentName || ''), 'zh-Hant'),
     grade:(a, b) => gradeIdx(a[1].grade) - gradeIdx(b[1].grade),
     age:(a, b) => (Number(a[1].ageYears) || 0) - (Number(b[1].ageYears) || 0)
@@ -477,7 +479,7 @@ function renderRegs() {
     if (selected.has(id)) tr.classList.add('row-selected');
     tr.innerHTML =
       `<td class="col-check"><input type="checkbox" class="row-check" data-id="${escapeHtml(id)}" ${selected.has(id) ? 'checked' : ''}></td>` +
-      `<td class="row-num">${i + 1}</td>` +
+      `<td class="row-num" style="width:56px;font-family:'Courier New',monospace;font-weight:800;color:#245a94;">${escapeHtml(regIdLabel(r.seq))}</td>` +
       `<td><div class="cell-name">${escapeHtml(r.studentName || '')}</div><span class="grade-chip band-${gradeBand(r.grade)}">${escapeHtml(r.grade || '')}</span> <span class="cell-sub">${r.ageYears != null ? r.ageYears + 'y' : ''}</span>${schoolLine}</td>` +
       `<td><div>${escapeHtml(r.parentPhone || '')}</div>${apps}</td>` +
       `<td>${kumon}</td>` +
@@ -539,6 +541,61 @@ async function markAttended(ids) {
   selected.clear(); renderAll();
   try { await update(ref(db), updates); showToast(`✅ ${ids.length} marked attended 已標記出席`, 'success'); }
   catch (err) { showToast(`Error: ${err.message}`, 'error'); }
+}
+
+// ============================================
+// REGISTRATION ID NUMBERS (001–999, never reused)
+// ============================================
+function regIdLabel(seq) {
+  const n = Number(seq);
+  return (n >= 1 && n <= 999) ? String(n).padStart(3, '0') : '—';
+}
+
+let seqRunning = false;
+
+async function ensureSeqNumbers({ silent = true } = {}) {
+  if (!currentEventId || creatingNew || seqRunning) return;
+  seqRunning = true;
+  const eid = currentEventId;
+  try {
+    const [regsSnap, seqSnap] = await Promise.all([
+      get(ref(db, `boothEvents/${eid}/registrations`)),
+      get(ref(db, `boothEvents/${eid}/seq`))
+    ]);
+    const all = regsSnap.val() || {};
+    let highest = Number(seqSnap.val()) || 0;
+    Object.values(all).forEach(r => { highest = Math.max(highest, Number(r.seq) || 0); });
+
+    const missing = Object.entries(all)
+      .filter(([, r]) => !Number(r.seq))
+      .sort((a, b) => String(a[1].submittedAt || '').localeCompare(String(b[1].submittedAt || '')));
+
+    let n = highest;
+    const updates = {};
+    for (const [rid] of missing) {
+      if (n >= 999) break;
+      n += 1;
+      updates[`boothEvents/${eid}/registrations/${rid}/seq`] = n;
+    }
+    if (Object.keys(updates).length) await update(ref(db), updates);
+
+    if (n > (Number(seqSnap.val()) || 0)) {
+      await runTransaction(ref(db, `boothEvents/${eid}/seq`),
+        cur => Math.max(Number(cur) || 0, n), { applyLocally:false });
+    }
+
+    if (eid === currentEventId && Object.keys(updates).length) {
+      Object.entries(updates).forEach(([path, val]) => {
+        const m = path.match(/registrations\/([^/]+)\/seq$/);
+        if (m && regs[m[1]]) regs[m[1]].seq = val;
+      });
+      renderAll();
+    }
+    if (!silent) showToast(`🔢 ID numbers up to date 編號已更新`, 'success');
+  } catch (err) {
+    if (!silent) showToast(`Error: ${err.message}`, 'error');
+    else console.error('ID backfill failed:', err);
+  } finally { seqRunning = false; }
 }
 
 // ============================================
@@ -760,7 +817,7 @@ function fillDrawer(id) {
   const status = r.status || 'registered';
   $('drawerTitle').innerHTML = `${escapeHtml(r.studentName || '')} <span class="status-badge st-${status}" style="margin-left:.4rem">${status === 'attended' ? '✅ Attended' : '📝 Registered'}</span>`;
   const apps = [r.contactApps?.wechat ? '💬 WeChat' : '', r.contactApps?.whatsapp ? '📱 WhatsApp' : ''].filter(Boolean).join(' · ');
-  const interests = (r.interests || []).map(i => `<span class="interest-chip">${escapeHtml(interestLabel(i))}</span>`).join('');
+  const interests = normalizeInterests(r.interests).map(i => `<span class="interest-chip">${escapeHtml(interestLabel(i))}</span>`).join('');
   const selHtml = (r.selections || []).map(s => {
     const g = games[s.gameId];
     return `<span class="game-chip" style="--gc:${g?.color || PALETTE[0]}">${g?.emoji || '🎮'} ${escapeHtml(s.gameName || g?.name || '')} · ${escapeHtml(slotFullLabel(s))}</span>`;
@@ -784,6 +841,7 @@ function fillDrawer(id) {
     `</div>` +
     `<div class="dw-section"><h4>🎪 Games 遊戲</h4><div class="dw-chips">${selHtml || '—'}</div></div>` +
     `<div class="dw-section"><h4>🗂 Record 紀錄</h4>` +
+      dwRow('ID 編號', '<strong>' + escapeHtml(regIdLabel(r.seq)) + '</strong>') +
       dwRow('Submitted 提交', r.submittedAt ? new Date(r.submittedAt).toLocaleString('en-GB') : '') +
       dwRow('Remarks 備註', escapeHtml(r.remarks || '')) +
     `</div>`;
@@ -800,6 +858,7 @@ function exportExcel(ids) {
   if (!list.length) return showToast('No registrations to export 沒有可匯出的報名', 'error');
   const wb = XLSX.utils.book_new();
   const rows = list.map(r => ({
+    'ID 編號': regIdLabel(r.seq),
     'Code 編號': r.code || '',
     'Student 學生': r.studentName || '',
     'Grade 年級': r.grade || '',
@@ -813,14 +872,14 @@ function exportExcel(ids) {
     'Current Student 現讀': r.isCurrentStudent === 'yes' ? 'Yes' : 'No',
     'Center 教室': r.currentCenter || '',
     'Current Subjects 科目': r.currentSubjects || '',
-    'Interested 興趣': (r.interests || []).map(interestLabel).join('; '),
+    'Interested 興趣': normalizeInterests(r.interests).map(interestLabel).join('; '),
     'Games & Slots 遊戲場次': (r.selections || []).map(s => `${s.gameName || games[s.gameId]?.name || ''} ${slotFullLabel(s)}`).join('; '),
     'Status 狀態': r.status || 'registered',
     'Submitted 提交': r.submittedAt || '',
     'Remarks 備註': r.remarks || ''
   }));
   const ws = XLSX.utils.json_to_sheet(rows);
-  ws['!cols'] = [{ wch:12 },{ wch:20 },{ wch:8 },{ wch:26 },{ wch:12 },{ wch:6 },{ wch:15 },{ wch:8 },{ wch:10 },{ wch:16 },{ wch:12 },{ wch:22 },{ wch:20 },{ wch:50 },{ wch:60 },{ wch:11 },{ wch:22 },{ wch:30 }];
+  ws['!cols'] = [{ wch:8 },{ wch:12 },{ wch:20 },{ wch:8 },{ wch:26 },{ wch:12 },{ wch:6 },{ wch:15 },{ wch:8 },{ wch:10 },{ wch:16 },{ wch:12 },{ wch:22 },{ wch:20 },{ wch:50 },{ wch:60 },{ wch:11 },{ wch:22 },{ wch:30 }];
   XLSX.utils.book_append_sheet(wb, ws, 'Registrations');
 
   Object.entries(games).forEach(([gid, g]) => {
@@ -828,14 +887,14 @@ function exportExcel(ids) {
     list.forEach(r => (r.selections || []).filter(s => s.gameId === gid).forEach(s => roster.push({
       'Date 日期': s.date || '',
       'Slot 場次': slotLabel(s),
-      'Code 編號': r.code || '', 'Student 學生': r.studentName || '', 'Grade 年級': r.grade || '',
+      'ID 編號': regIdLabel(r.seq), 'Code 編號': r.code || '', 'Student 學生': r.studentName || '', 'Grade 年級': r.grade || '',
       'School 學校': r.school || '', 'Age 年齡': r.ageYears ?? '', 'Phone 電話': r.parentPhone || '',
       'Current 現讀': r.isCurrentStudent === 'yes' ? 'Yes' : 'No', 'Status 狀態': r.status || 'registered'
     })));
     if (!roster.length) return;
     roster.sort((a, b) => String(a['Date 日期']).localeCompare(String(b['Date 日期'])) || String(a['Slot 場次']).localeCompare(String(b['Slot 場次'])) || String(a['Student 學生']).localeCompare(String(b['Student 學生']), 'zh-Hant'));
     const ws2 = XLSX.utils.json_to_sheet(roster);
-    ws2['!cols'] = [{ wch:12 },{ wch:14 },{ wch:12 },{ wch:20 },{ wch:8 },{ wch:26 },{ wch:6 },{ wch:15 },{ wch:10 },{ wch:11 }];
+    ws2['!cols'] = [{ wch:12 },{ wch:14 },{ wch:8 },{ wch:12 },{ wch:20 },{ wch:8 },{ wch:26 },{ wch:6 },{ wch:15 },{ wch:10 },{ wch:11 }];
     const name = `${g.name || g.nameCn || 'Game'}`.replace(/[\\/?*\[\]:]/g, ' ').slice(0, 31);
     XLSX.utils.book_append_sheet(wb, ws2, name);
   });
@@ -1333,7 +1392,7 @@ async function downloadPoster() {
     const headerH = Math.max(280, naturalH);
     const topPad = 40 + (headerH - naturalH) / 2;
 
-    const cardY = headerH + 52, cardH = 560;
+    const cardY = headerH + 52, cardH = 520;
     const urlY = cardY + cardH + 46;
     const hintY = urlY + 48;
     const winY = hintY + 42;
@@ -1379,9 +1438,6 @@ async function downloadPoster() {
     ctx.font = '900 26px ' + FONT;
     ctx.fillText('SCAN ME · 掃描報名', W / 2, cardY + 48);
     ctx.drawImage(qr, W / 2 - 200, cardY + 76, 400, 400);
-    ctx.font = '800 30px "Courier New",monospace';
-    ctx.fillStyle = '#2f6fb2';
-    ctx.fillText(config.shortCode, W / 2, cardY + 532);
 
     const u = url.replace(/^https?:\/\//, '');
     let uSize = 17;
@@ -1466,11 +1522,11 @@ async function createDemoEvent() {
     const seed = [
       ['陳大文 Chan Tai Man','P2',7,1,14,'66123401',{wechat:true,whatsapp:true},'wx_taiman','yes','Kumon Champs 卓思','Math 數學',['none'],[S(gid.toss,'toss',0),S(gid.math,'math',0)],0,'attended','Pui Ching Middle School 培正中學'],
       ['黃美琪 Wong Mei Kei','K2',4,3,2,'66123402',{wechat:true,whatsapp:false},'wx_meikei','yes','Kumon Mei Keng 美景','Chinese 中文',['none'],[S(gid.toss,'toss',0),S(gid.art,'art',0)],0,'registered','Kwong Tai Kindergarten 廣大幼稚園'],
-      ['李卓恆 Lei Cheok Hang','F1',12,5,21,'66123403',{wechat:false,whatsapp:true},'','no','','',['math','erp'],[S(gid.sci,'sci',0)],1,'registered','Salesian School 慈幼中學'],
+      ['李卓恆 Lei Cheok Hang','F1',12,5,21,'66123403',{wechat:false,whatsapp:true},'','no','','',['math','english'],[S(gid.sci,'sci',0)],1,'registered','Salesian School 慈幼中學'],
       ['張嘉偉 Cheong Ka Wai','P5',10,2,8,'66123404',{wechat:true,whatsapp:true},'','yes','Kumon Tap Siac 塔石','Math, English',['none'],[S(gid.math,'math',0),S(gid.sci,'sci',0)],1,'registered','St. Joseph Diocesan College 聖若瑟教區中學'],
       ['林月美 Lam Ut Mei','K1',3,6,11,'66123405',{wechat:true,whatsapp:false},'wx_utmei','no','','',['kindies','connect'],[S(gid.art,'art',0)],2,'registered','Holy Rosary Kindergarten 聖玫瑰幼稚園'],
       ['何承南 Ho Seng Nam','P3',8,4,19,'66123406',{wechat:false,whatsapp:true},'','yes','Kumon Pac Tat 北立','Math 數學',['none'],[S(gid.toss,'toss',1),S(gid.math,'math',1),S(gid.sci,'sci',1)],2,'attended','Chan Sui Ki Perpetual Help College 陳瑞祺永援中學'],
-      ['梁慧珊 Leong Wai San','P6',11,1,25,'66123407',{wechat:true,whatsapp:true},'wx_waisan','no','','',['math','efl'],[S(gid.math,'math',1),S(gid.sci,'sci',0)],3,'registered','Sacred Heart Canossian School 嘉諾撒聖心中學'],
+      ['梁慧珊 Leong Wai San','P6',11,1,25,'66123407',{wechat:true,whatsapp:true},'wx_waisan','no','','',['math','english'],[S(gid.math,'math',1),S(gid.sci,'sci',0)],3,'registered','Sacred Heart Canossian School 嘉諾撒聖心中學'],
       ['吳子豪 Ng Chi Hou','P1',6,3,30,'66123408',{wechat:true,whatsapp:false},'','yes','Kumon Champs 卓思','English 英文',['none'],[S(gid.toss,'toss',1),S(gid.math,'math',0)],3,'registered','Pui Ching Middle School 培正中學'],
       ['陳浩韻 Chan Hou Wan','K3',5,5,6,'66123409',{wechat:false,whatsapp:true},'','yes','Kumon Mei Keng 美景','Math 數學',['none'],[S(gid.toss,'toss',2),S(gid.art,'art',1)],4,'attended','Kwong Tai Kindergarten 廣大幼稚園'],
       ['楊美燕 Iong Mei Ieng','F3',14,2,17,'66123410',{wechat:true,whatsapp:true},'wx_meiien','no','','',['math','chinese'],[S(gid.sci,'sci',1)],4,'registered','Our Lady of Fatima Girls School 化地瑪聖母女子學校'],
@@ -1598,6 +1654,7 @@ function renderCheckinResult() {
   }).join('');
 
   const metaBits = [];
+  metaBits.push('<span style="white-space:nowrap;font-weight:900;color:#245a94;">ID ' + escapeHtml(regIdLabel(r.seq)) + '</span>');
   if (r.parentPhone) metaBits.push('<span style="min-width:0;overflow-wrap:anywhere;">📞 ' + escapeHtml(r.parentPhone) + '</span>');
   const apps = [r.contactApps?.wechat ? '💬 WeChat' : '', r.contactApps?.whatsapp ? '📱 WhatsApp' : ''].filter(Boolean).join(' · ');
   if (apps) metaBits.push('<span style="min-width:0;overflow-wrap:anywhere;">' + escapeHtml(apps) + '</span>');

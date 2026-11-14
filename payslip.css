@@ -17,11 +17,8 @@
   --warn: #d97706;
   --info: #2563eb;
 }
-
 * { box-sizing: border-box; margin: 0; padding: 0; }
-
 html { scrollbar-color: var(--steel) #e3eef6; scrollbar-width: thin; }
-
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   color: var(--text);
@@ -33,7 +30,6 @@ body {
     linear-gradient(180deg, #f2f9fd 0%, #e8f3fa 100%);
   background-attachment: fixed;
 }
-
 ::selection { background: rgba(135, 206, 235, .55); }
 
 /* Scrollbars in the page's own palette */
@@ -48,42 +44,47 @@ body {
 
 .hidden { display: none !important; }
 
-/* ---------- Header ---------- */
+/* ---------- Header (same navbar as leave.css) ---------- */
 header {
-  background: linear-gradient(120deg, var(--sky) 0%, var(--steel) 68%, var(--deep) 100%);
-  color: #fff;
-  padding: .9rem 2rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: .5rem;
-  position: sticky;
-  top: 0;
-  z-index: 1000;
-  box-shadow: 0 3px 14px rgba(22, 50, 74, .22);
+background: var(--sky);
+color: #fff;
+padding: 1rem 2rem;
+display: flex;
+justify-content: space-between;
+align-items: center;
+flex-wrap: wrap;
+gap: 0.5rem;
+position: sticky;
+top: 0;
+z-index: 1000;
+box-shadow: none;
 }
 header nav { display: flex; gap: 1rem; align-items: center; }
-header button {
-  color: #fff;
-  background: rgba(255, 255, 255, .2);
-  padding: .5rem 1rem;
-  border-radius: var(--radius);
-  border: 1px solid rgba(255, 255, 255, .25);
-  cursor: pointer;
-  font-size: .95rem;
-  font-weight: 600;
+header a, header button {
+color: #fff;
+text-decoration: none;
+background: rgba(255, 255, 255, 0.2);
+padding: 0.5rem 1rem;
+border-radius: 8px;
+border: none;
+cursor: pointer;
+font-size: 0.95rem;
+font-weight: 500;
+box-shadow: none;
+transform: none;
+transition: background 0.15s;
 }
-header button:hover { background: rgba(255, 255, 255, .32); }
-.page-title { font-size: 1.35rem; font-weight: 700; color: #fff; text-shadow: 0 1px 3px rgba(22, 50, 74, .3); }
-.header-badge {
-  font-size: .78rem;
-  font-weight: 600;
-  letter-spacing: .04em;
-  background: rgba(255, 255, 255, .2);
-  border: 1px solid rgba(255, 255, 255, .25);
-  padding: .3rem .8rem;
-  border-radius: 999px;
+header a:hover, header button:hover {
+background: rgba(255, 255, 255, 0.3);
+filter: none;
+transform: none;
+box-shadow: none;
+}
+.page-title { font-size: 1.40rem; font-weight: 600; color: #fff; text-shadow: none; }
+@media (max-width: 768px) {
+header { padding: 0.75rem 1rem; }
+.page-title { font-size: 1rem; }
+header a, header button { padding: 0.4rem 0.75rem; font-size: 0.85rem; }
 }
 
 /* ---------- Buttons ---------- */
@@ -202,6 +203,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .form-group textarea { resize: vertical; }
 .btn-row { display: flex; gap: .5rem; flex-wrap: wrap; }
 .btn-row button { flex: 1; min-width: 90px; }
+#savePayslipBtn { margin-top: .6rem; }
 
 /* ---------- Pay period ---------- */
 .period-range { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; }
@@ -241,6 +243,68 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .save-status[data-state="idle"] { color: var(--text-light); }
 .save-status[data-state="dirty"] { color: var(--warn); }
 .save-status[data-state="saved"] { color: var(--success); }
+
+/* ---------- Export size choosers (A4 / A5) ---------- */
+.export-block { margin-bottom: .6rem; }
+.export-block .big { margin-bottom: 0; }
+.export-toggle { position: relative; display: flex; align-items: center; justify-content: center; gap: .5rem; }
+.export-toggle .chev {
+  position: absolute;
+  right: .9rem;
+  font-size: .8em;
+  opacity: .85;
+  transition: transform .25s ease;
+}
+.export-toggle[aria-expanded="true"] .chev { transform: rotate(180deg); }
+.size-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .5rem;
+  max-height: 0;
+  margin-top: 0;
+  opacity: 0;
+  visibility: hidden;
+  overflow: hidden;
+  transition: max-height .3s ease, opacity .25s ease, margin-top .3s ease, visibility .3s;
+}
+.size-row.open { max-height: 120px; margin-top: .5rem; opacity: 1; visibility: visible; }
+.size-btn {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .55rem .7rem;
+  text-align: left;
+  background: linear-gradient(180deg, #fbfdff, #f0f7fc);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.size-btn:hover { border-color: var(--steel); box-shadow: 0 2px 8px rgba(70, 130, 180, .2); filter: none; }
+.size-ghost {
+  position: relative;
+  flex: none;
+  background: #fff;
+  border: 1.5px solid var(--steel);
+  border-radius: 2px;
+  box-shadow: 1px 2px 4px rgba(22, 50, 74, .15);
+}
+.size-ghost.a4 { width: 20px; height: 28px; }
+.size-ghost.a5 { width: 14px; height: 20px; }
+.size-ghost::before {
+  content: '';
+  position: absolute;
+  top: -1.5px;
+  right: -1.5px;
+  width: 7px;
+  height: 7px;
+  background: var(--bg);
+  border-left: 1.5px solid var(--steel);
+  border-bottom: 1.5px solid var(--steel);
+  border-bottom-left-radius: 2px;
+}
+.size-ghost.a5::before { width: 5px; height: 5px; }
+.size-meta { display: flex; flex-direction: column; line-height: 1.25; }
+.size-name { font-weight: 700; font-size: .9rem; color: var(--deep); }
+.size-dim { font-size: .68rem; color: var(--text-light); font-variant-numeric: tabular-nums; }
 
 /* ---------- Preview pane ---------- */
 .preview-pane { position: sticky; top: 76px; animation: fadeUp .5s .1s ease both; }
@@ -322,13 +386,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .preview-pane { position: static; }
 }
 @media (max-width: 640px) {
-  header { padding: .8rem 1rem; }
-  .page-title { font-size: 1.1rem; }
-  .header-badge { display: none; }
-  .workspace { padding: .6rem; }
-  .card { padding: .85rem; }
-  .toasts { left: 1rem; right: 1rem; }
-  .toast { min-width: 0; max-width: none; width: 100%; }
+.workspace { padding: .6rem; }
+.card { padding: .85rem; }
+.toasts { left: 1rem; right: 1rem; }
+.toast { min-width: 0; max-width: none; width: 100%; }
 }
 
 /* ---------- Print (Ctrl+P on this page) ---------- */

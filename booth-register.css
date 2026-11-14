@@ -357,3 +357,8 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   .bday-picker { grid-template-columns:1fr 1.3fr 1.1fr; gap:.4rem; }
   .bday-picker select { padding:.65rem 1.5rem .65rem .4rem; }
 }
+
+/* ---- combined English option: long description wraps inside the card ---- */
+.interest-card > span:last-child { min-width:0; }
+.interest-card .i-cn,
+.interest-card .i-en { overflow-wrap:anywhere; word-break:break-word; }

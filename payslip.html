@@ -4,34 +4,31 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Pay Slip Generator - Kumon DB</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💵</text></svg>">
 <link rel="stylesheet" href="payslip.css">
 </head>
 <body>
-
+  
 <header>
-  <nav>
-    <button id="backToDashboard" type="button">← Centers</button>
-  </nav>
-  <div class="page-title">💵 Pay Slip Generator</div>
-  <div class="header-badge">Kumon DB · Payroll</div>
+    <nav>
+        <button id="backToDashboard">← Centers</button>
+    </nav>
+    <div class="page-title">💵 Pay Slip Generator</div>
 </header>
 
-<!-- Access gate -->
-<div id="accessDenied" class="access-denied">
+<section id="accessDenied" class="access-denied">
   <div class="access-denied-content">
     <h2>🔐 Access Restricted</h2>
     <p>Checking your access…</p>
     <a class="btn-link" href="centers.html">← Back to Centers</a>
   </div>
-</div>
+</section>
 
 <main id="mainContent" class="hidden">
   <div class="workspace">
 
-    <!-- ============ CONTROLS ============ -->
-    <section class="controls">
+    <div class="controls">
 
+      <!-- Employee & Period -->
       <div class="card">
         <h2>👤 Employee &amp; Period</h2>
         <div class="form-group">
@@ -42,38 +39,39 @@
         </div>
         <div class="form-group">
           <label for="payMonth">Remuneration Month *</label>
-          <input type="month" id="payMonth">
+          <input type="month" id="payMonth" required>
         </div>
         <div class="form-group">
           <label>Pay Period (editable)</label>
           <div class="period-range">
             <div>
-              <label for="periodFrom" class="sub-label">From</label>
-              <input type="date" id="periodFrom" title="First day of the pay period">
+              <label class="sub-label" for="periodFrom">From</label>
+              <input type="date" id="periodFrom">
             </div>
             <div>
-              <label for="periodTo" class="sub-label">To</label>
-              <input type="date" id="periodTo" title="Last day of the pay period">
+              <label class="sub-label" for="periodTo">To</label>
+              <input type="date" id="periodTo">
             </div>
           </div>
           <div class="period-foot">
             <span id="periodWarning" class="period-warning hidden">⚠ “From” is after “To”.</span>
-            <button id="periodResetBtn" type="button" class="secondary small" title="Reset dates to the full selected month">↺ Full month</button>
+            <button type="button" id="periodResetBtn" class="secondary small">↺ Full month</button>
           </div>
-          <div class="hint">Defaults to the full selected month — adjust for mid-month starters, leavers or custom pay periods.</div>
+          <p class="hint">Defaults to the full selected month — adjust for mid-month starters, leavers or custom pay periods.</p>
         </div>
       </div>
 
+      <!-- Employer -->
       <div class="card">
         <h2>🏢 Employer's Information</h2>
         <div class="form-group">
           <label for="employerName">Name</label>
-          <input type="text" id="employerName" list="employerList" placeholder="Select or type a center" autocomplete="off">
+          <input type="text" id="employerName" list="employerList" placeholder="Select or type employer name">
           <datalist id="employerList"></datalist>
         </div>
         <div class="form-group">
           <label for="employerContact">Contact No.</label>
-          <input type="text" id="employerContact" placeholder="e.g. 28519919" autocomplete="off">
+          <input type="tel" id="employerContact" placeholder="e.g. 28519919">
         </div>
         <div class="form-group">
           <label for="employerAddress">Office Address</label>
@@ -81,39 +79,43 @@
         </div>
       </div>
 
+      <!-- Employee info -->
       <div class="card">
         <h2>🪪 Employee's Information</h2>
         <div class="form-group">
           <label for="workerName">Name</label>
-          <input type="text" id="workerName" placeholder="Employee full name" autocomplete="off">
+          <input type="text" id="workerName" placeholder="Employee name">
         </div>
         <div class="form-group">
           <label for="workerPosition">Position</label>
-          <input type="text" id="workerPosition" value="Teacher Assistant" autocomplete="off">
+          <input type="text" id="workerPosition" placeholder="e.g. Teacher Assistant">
         </div>
         <div class="form-group">
           <label for="ssfNo">Social Security Fund Beneficiary No.</label>
-          <input type="text" id="ssfNo" placeholder="Auto-filled when available" autocomplete="off" spellcheck="false">
+          <input type="text" id="ssfNo" placeholder="SSF beneficiary no.">
         </div>
         <div class="form-group">
           <label for="taxpayerNo">Taxpayer No.</label>
-          <input type="text" id="taxpayerNo" placeholder="Auto-filled when available" autocomplete="off" spellcheck="false">
+          <input type="text" id="taxpayerNo" placeholder="Taxpayer no.">
         </div>
-        <div class="hint">Position and numbers auto-fill from the employee record when available; you can always edit them.</div>
+        <p class="hint">Position and numbers auto-fill from the employee record when available; you can always edit them.</p>
       </div>
 
+      <!-- Remuneration -->
       <div class="card">
         <h2>💰 Remuneration</h2>
         <div id="remRows" class="rows"></div>
-        <button id="addRemBtn" type="button" class="secondary small">+ Add Item</button>
+        <button type="button" id="addRemBtn" class="secondary small">+ Add Item</button>
       </div>
 
+      <!-- Deductions -->
       <div class="card">
         <h2>✂️ Deductions</h2>
         <div id="dedRows" class="rows"></div>
-        <button id="addDedBtn" type="button" class="secondary small">+ Add Deduction</button>
+        <button type="button" id="addDedBtn" class="secondary small">+ Add Deduction</button>
       </div>
 
+      <!-- Totals -->
       <div class="card totals-card">
         <h2>🧮 Totals (MOP$)</h2>
         <div class="total-line"><span>Gross / Total Remunerations</span><strong id="totalRem">0</strong></div>
@@ -121,6 +123,7 @@
         <div class="total-line net"><span>Net Income</span><strong id="netTotal">0</strong></div>
       </div>
 
+      <!-- Saved payslips -->
       <div class="card">
         <h2>🗂 Saved Payslips <span id="savedCount" class="count-pill">0</span></h2>
         <div class="form-group">
@@ -129,40 +132,74 @@
           </select>
         </div>
         <div class="btn-row">
-          <button id="loadSavedBtn" type="button" class="secondary">📂 Load</button>
-          <button id="deleteSavedBtn" type="button" class="danger">🗑 Delete</button>
-          <button id="savePayslipBtn" type="button" class="primary">💾 Save</button>
+          <button type="button" id="loadSavedBtn" class="secondary">📂 Load</button>
+          <button type="button" id="deleteSavedBtn" class="danger">🗑 Delete</button>
         </div>
+        <button type="button" id="savePayslipBtn" class="primary big">💾 Save</button>
         <div id="saveStatus" class="save-status" data-state="idle">Not saved yet</div>
-        <div class="hint">Tip: Ctrl / ⌘ + S saves instantly. Saving again for the same employee + month asks before overwriting.</div>
+        <p class="hint">Tip: Ctrl / ⌘ + S saves instantly. Saving again for the same employee + month asks before overwriting.</p>
       </div>
 
+      <!-- Export & Print -->
       <div class="card">
         <h2>📤 Export &amp; Print</h2>
-        <button id="exportWordBtn" type="button" class="primary big">⬇ Export Word (A4)</button>
-        <button id="batchExportBtn" type="button" class="secondary big" title="One Word file with a payslip for every employee">⬇ Batch: All Employees (1 file)</button>
-        <div class="btn-row">
-          <button id="printBtn" type="button" class="secondary">🖨 Print / PDF</button>
-          <button id="resetBtn" type="button" class="danger">♻ Reset</button>
+
+        <div class="export-block">
+          <button type="button" id="exportWordBtn" class="primary big export-toggle"
+                  aria-expanded="false" aria-controls="wordSizeRow">
+            <span>⬇ Export Word</span><span class="chev" aria-hidden="true">▾</span>
+          </button>
+          <div id="wordSizeRow" class="size-row" role="group" aria-label="Word paper size" aria-hidden="true">
+            <button type="button" class="size-btn" data-size="a4" aria-label="Export Word as A4">
+              <span class="size-ghost a4" aria-hidden="true"></span>
+              <span class="size-meta"><span class="size-name">A4</span><span class="size-dim">210 × 297 mm</span></span>
+            </button>
+            <button type="button" class="size-btn" data-size="a5" aria-label="Export Word as A5">
+              <span class="size-ghost a5" aria-hidden="true"></span>
+              <span class="size-meta"><span class="size-name">A5</span><span class="size-dim">148 × 210 mm</span></span>
+            </button>
+          </div>
         </div>
+
+        <button type="button" id="batchExportBtn" class="secondary big">⬇ Batch: All Employees (A4, 1 file)</button>
+
+        <div class="export-block">
+          <button type="button" id="printBtn" class="secondary big export-toggle"
+                  aria-expanded="false" aria-controls="printSizeRow">
+            <span>🖨 Print / PDF</span><span class="chev" aria-hidden="true">▾</span>
+          </button>
+          <div id="printSizeRow" class="size-row" role="group" aria-label="Print paper size" aria-hidden="true">
+            <button type="button" class="size-btn" data-size="a4" aria-label="Print or save PDF as A4">
+              <span class="size-ghost a4" aria-hidden="true"></span>
+              <span class="size-meta"><span class="size-name">A4</span><span class="size-dim">210 × 297 mm</span></span>
+            </button>
+            <button type="button" class="size-btn" data-size="a5" aria-label="Print or save PDF as A5">
+              <span class="size-ghost a5" aria-hidden="true"></span>
+              <span class="size-meta"><span class="size-name">A5</span><span class="size-dim">148 × 210 mm</span></span>
+            </button>
+          </div>
+        </div>
+
+        <button type="button" id="resetBtn" class="secondary big">♻ Reset</button>
+        <p class="hint">Word and Print / PDF offer A4 (full page) or A5 (half page) — the slip layout scales to fit. In the print dialog, choose “Save as PDF” for a PDF file.</p>
       </div>
 
-    </section>
+    </div>
 
-    <!-- ============ LIVE PREVIEW ============ -->
-    <section class="preview-pane">
+    <!-- Preview -->
+    <div class="preview-pane">
       <div class="preview-header">📄 Live Preview — A4</div>
       <div class="paper-wrap">
         <div class="paper">
           <div id="payslipPreview"></div>
         </div>
       </div>
-    </section>
+    </div>
 
   </div>
 </main>
 
-<div id="toasts" class="toasts" aria-live="polite"></div>
+<div id="toasts" class="toasts"></div>
 
 <script type="module" src="payslip.js"></script>
 </body>

@@ -4,6 +4,7 @@
 // Social Security Fund Beneficiary No. / Taxpayer No.
 // Amount columns shown as Amount(MOP$)
 // Pay period From/To editable per employee (defaults to full month)
+// Export Word & Print/PDF: choose A4 or A5 per action
 // =====================================================
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -47,7 +48,6 @@ const pick = (...vals) => {
   for (const v of vals) { const s = String(v ?? '').trim(); if (s) return s; }
   return '';
 };
-
 function getEmpPositions(emp) {
   if (!emp) return [];
   if (Array.isArray(emp.positions)) return emp.positions.filter(Boolean);
@@ -80,7 +80,6 @@ function toast(msg, type = 'info', action = null, ms = 4500) {
   requestAnimationFrame(() => el.classList.add('show'));
   timer = setTimeout(dismiss, ms);
 }
-
 function setSaveStatus(state, text) {
   const el = $('saveStatus');
   if (!el) return;
@@ -123,7 +122,6 @@ $('backToDashboard').addEventListener('click', () => window.location.href = 'cen
 
 /* ============ DATE / MONEY HELPERS ============ */
 const pad2 = (n) => String(n).padStart(2, '0');
-
 function periodFromMonth(monthStr) {
   if (!monthStr) return { from: '', to: '', fromRaw: '', toRaw: '', monthName: '' };
   const [y, m] = monthStr.split('-').map(Number);
@@ -228,28 +226,33 @@ function collectState() {
 }
 
 /* ============ PAYSLIP HTML (preview, Word & print) ============ */
-function buildPayslipHTML(s) {
+// paper: 'a4' (default) or 'a5' — A5 scales fonts, padding and
+// underline widths down so the official layout fits a half page.
+function buildPayslipHTML(s, paper = 'a4') {
+  const A5 = String(paper).toLowerCase() === 'a5';
   const emp = s.employer || {}, w = s.worker || {}, p = s.period || {};
-  const B = 'border:1px solid #000;padding:6px 10px;font-size:13pt;';
+  const fs = A5 ? '10pt' : '13pt';
+  const pad = A5 ? '3px 7px' : '6px 10px';
+  const gap = A5 ? '10px' : '16px';
+  const ulScale = A5 ? 0.66 : 1;
+  const B = `border:1px solid #000;padding:${pad};font-size:${fs};`;
   const G = B + 'font-weight:bold;background:#DFDFDF;text-align:center;vertical-align:middle;';
   const H = B + 'font-weight:bold;text-align:center;';
-  const ul = (v, min = 110) => `<span style="display:inline-block;min-width:${min}px;border-bottom:1px solid #000;text-align:center;padding:0 8px;">${esc(v)}</span>`;
-  const T = '<table cellspacing="0" style="width:100%;border-collapse:collapse;font-family:\'Times New Roman\',Times,serif;margin-bottom:16px;">';
-
+  const ul = (v, min = 110) => `<span style="display:inline-block;min-width:${Math.round(min * ulScale)}px;border-bottom:1px solid #000;text-align:center;padding:0 ${A5 ? 5 : 8}px;">${esc(v)}</span>`;
+  const T = `<table cellspacing="0" style="width:100%;border-collapse:collapse;font-family:'Times New Roman',Times,serif;margin-bottom:${gap};">`;
   const rem = [...(s.remuneration || [])]; while (rem.length < 3) rem.push({ label: '', amount: '' });
   const ded = [...(s.deductions || [])];   while (ded.length < 3) ded.push({ label: '', amount: '' });
   const remTotal = sumRows(rem), dedTotal = sumRows(ded);
   const net = remTotal - dedTotal;
-
   const lineHtml = (r, i) => {
     const has = r.label || String(r.amount ?? '') !== '';
     return `<tr><td style="${B}">${has ? `(${i + 1}) ${esc(r.label)}` : ''}</td><td style="${B}width:26%;">${formatMoney(r.amount)}</td></tr>`;
   };
   const remHtml = rem.map(lineHtml).join('');
   const dedHtml = ded.map(lineHtml).join('');
-
+  const totalStyle = `text-align:center;font-family:'Times New Roman',serif;font-size:${fs};font-weight:bold;margin:${A5 ? '-4px 0 10px' : '-6px 0 16px'};`;
   return `
-<h2 style="text-align:center;font-family:'Times New Roman',Times,serif;font-size:17pt;font-weight:bold;letter-spacing:1px;margin:0 0 20px;">PAY SLIP</h2>
+<h2 style="text-align:center;font-family:'Times New Roman',Times,serif;font-size:${A5 ? '14pt' : '17pt'};font-weight:bold;letter-spacing:1px;margin:0 0 ${A5 ? '12px' : '20px'};">PAY SLIP</h2>
 ${T}
 <tr>
 <td rowspan="2" style="${G}width:23%;">Employer's Information</td>
@@ -266,32 +269,36 @@ ${T}
 <tr><td colspan="2" style="${B}">Taxpayer No.: ${ul(w.taxpayerNo, 220)}</td></tr>
 <tr>
 <td style="${G}">Period Corresponding to Remuneration Received</td>
-<td colspan="2" style="${B}height:58px;">From ${ul(p.from, 100)} (Day/Month/Year) to ${ul(p.to, 100)} (Day/Month/Year)</td>
+<td colspan="2" style="${B}height:${A5 ? '40px' : '58px'};">From ${ul(p.from, 100)} (Day/Month/Year) to ${ul(p.to, 100)} (Day/Month/Year)</td>
 </tr>
 </table>
 ${T}
 <tr><td rowspan="${rem.length + 1}" style="${G}width:23%;">Remuneration</td><td style="${H}">Item</td><td style="${H}width:26%;">Amount(MOP$)</td></tr>
 ${remHtml}
 </table>
-<div style="text-align:center;font-family:'Times New Roman',serif;font-size:13pt;font-weight:bold;margin:-6px 0 16px;">Total Remunerations: ${formatMoney(remTotal) || '0'}</div>
+<div style="${totalStyle}">Total Remunerations: ${formatMoney(remTotal) || '0'}</div>
 ${T}
 <tr><td rowspan="${ded.length + 1}" style="${G}width:23%;">Deduction</td><td style="${H}">Item</td><td style="${H}width:26%;">Amount(MOP$)</td></tr>
 ${dedHtml}
 </table>
-<div style="text-align:center;font-family:'Times New Roman',serif;font-size:13pt;font-weight:bold;margin:-6px 0 16px;">Total Deductions: ${formatMoney(dedTotal) || '0'}</div>
+<div style="${totalStyle}">Total Deductions: ${formatMoney(dedTotal) || '0'}</div>
 ${T}
 <tr><td style="${H}background:#A6A6A6;width:33%;">Gross Income</td><td style="${H}background:#A6A6A6;width:34%;">Total Deductions</td><td style="${H}background:#A6A6A6;">Net Income</td></tr>
 <tr><td style="${B}">${formatMoney(remTotal) || '0'}</td><td style="${B}">${formatMoney(dedTotal) || '0'}</td><td style="${B}">${formatMoney(net) || '0'}</td></tr>
 </table>`;
 }
 
-/* ============ WORD EXPORT (A4) ============ */
-function wordDocHTML(bodyInner, title) {
+/* ============ WORD EXPORT (A4 / A5) ============ */
+function wordDocHTML(bodyInner, title, paper = 'a4') {
+  const A5 = String(paper).toLowerCase() === 'a5';
+  // A4: 210×297mm = 595.3×841.9pt · A5: 148×210mm = 419.55×595.3pt
+  const pageSize = A5 ? '419.55pt 595.3pt' : '595.3pt 841.9pt';
+  const margin = A5 ? '1.1cm' : '1.8cm';
   return `<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
 <head><meta charset="utf-8"><title>${esc(title)}</title>
 <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
 <style>
-@page WordSection1 { size:595.3pt 841.9pt; margin:1.8cm 1.8cm 1.8cm 1.8cm; mso-page-orientation:portrait; }
+@page WordSection1 { size:${pageSize}; margin:${margin} ${margin} ${margin} ${margin}; mso-page-orientation:portrait; }
 div.WordSection1 { page:WordSection1; }
 body { font-family:"Times New Roman",Times,serif; }
 table { border-collapse:collapse; }
@@ -327,7 +334,7 @@ function stateForEmployee(empId, month) {
       name: e.englishName || '',
       position: getEmpPositions(e)[0] || DEFAULT_POSITION,
       ssfNo: pick(c.ssfNo, c.ssfBeneficiaryNo, c.socialSecurityNo, c.socialSecurityFundNo,
-                  e.ssfNo, e.ssfBeneficiaryNo, e.socialSecurityNo, e.socialSecurityFundNo),
+        e.ssfNo, e.ssfBeneficiaryNo, e.socialSecurityNo, e.socialSecurityFundNo),
       taxpayerNo: pick(c.taxpayerNo, c.taxNo, c.taxId, e.taxpayerNo, e.taxNo, e.taxId)
     },
     period,
@@ -376,7 +383,7 @@ function renderPreview() {
   $('totalRem').textContent = formatMoney(sumRows(s.remuneration)) || '0';
   $('totalDed').textContent = formatMoney(sumRows(s.deductions)) || '0';
   $('netTotal').textContent = formatMoney(sumRows(s.remuneration) - sumRows(s.deductions)) || '0';
-  $('payslipPreview').innerHTML = buildPayslipHTML(s);
+  $('payslipPreview').innerHTML = buildPayslipHTML(s, 'a4');
 }
 
 /* ============ DEFAULTS / RESET ============ */
@@ -487,16 +494,36 @@ async function deleteSaved() {
   } catch (err) { toast('Delete failed: ' + err.message, 'danger'); }
 }
 
+/* ============ PAPER-SIZE CHOOSERS (A4 / A5) ============ */
+function toggleSizeRow(which, force) {
+  const rows = { word: $('wordSizeRow'), print: $('printSizeRow') };
+  const btns = { word: $('exportWordBtn'), print: $('printBtn') };
+  if (!rows[which]) return;
+  const open = force !== undefined ? force : !rows[which].classList.contains('open');
+  Object.keys(rows).forEach(k => {
+    const want = (k === which) ? open : false; // one chooser open at a time
+    rows[k].classList.toggle('open', want);
+    rows[k].setAttribute('aria-hidden', String(!want));
+    btns[k].setAttribute('aria-expanded', String(want));
+    rows[k].querySelectorAll('button').forEach(b => { b.tabIndex = want ? 0 : -1; });
+  });
+}
+function closeSizeRows() { toggleSizeRow('word', false); }
+
 /* ============ EXPORT ACTIONS ============ */
-function exportWord() {
+function exportWord(paper = 'a4') {
+  const label = String(paper).toUpperCase();
   const month = val('payMonth');
-  if (!month) { toast('Please select the remuneration month first.', 'warn'); return; }
-  if (!validatePeriod()) { toast('Pay period “From” is after “To”. Please fix the dates.', 'warn'); return; }
+  if (!month) { toast('Please select the remuneration month first.', 'warn'); return false; }
+  if (!validatePeriod()) { toast('Pay period “From” is after “To”. Please fix the dates.', 'warn'); return false; }
   rememberWage();
   const s = collectState();
-  downloadDoc(wordDocHTML(buildPayslipHTML(s), 'Pay Slip'),
-    `Payslip_${sanitizeFile(s.worker.name) || 'Employee'}_${month}.doc`);
-  toast('Word file downloaded.', 'success');
+  downloadDoc(
+    wordDocHTML(buildPayslipHTML(s, paper), 'Pay Slip', paper),
+    `Payslip_${sanitizeFile(s.worker.name) || 'Employee'}_${month}_${label}.doc`
+  );
+  toast(`Word file downloaded (${label}).`, 'success');
+  return true;
 }
 function batchExport() {
   const month = val('payMonth');
@@ -504,25 +531,29 @@ function batchExport() {
   const list = Object.entries(employees)
     .sort((a, b) => (a[1].englishName || '').localeCompare(b[1].englishName || ''));
   if (!list.length) { toast('No employees found in the database.', 'warn'); return; }
-  const parts = list.map(([id]) => buildPayslipHTML(stateForEmployee(id, month)));
+  const parts = list.map(([id]) => buildPayslipHTML(stateForEmployee(id, month), 'a4'));
   const joined = parts.join('<p style="page-break-after:always;margin:0;"></p>');
-  downloadDoc(wordDocHTML(joined, `Payslips ${month}`), `Payslips_All_Employees_${month}.doc`);
-  toast(`Batch exported: ${list.length} payslips in one file.`, 'success');
+  downloadDoc(wordDocHTML(joined, `Payslips ${month}`, 'a4'), `Payslips_All_Employees_${month}_A4.doc`);
+  toast(`Batch exported: ${list.length} payslips in one A4 file.`, 'success');
 }
-function printPayslip() {
-  if (!validatePeriod()) { toast('Pay period “From” is after “To”. Please fix the dates.', 'warn'); return; }
+function printPayslip(paper = 'a4') {
+  const A5 = String(paper).toLowerCase() === 'a5';
+  const label = A5 ? 'A5' : 'A4';
+  if (!validatePeriod()) { toast('Pay period “From” is after “To”. Please fix the dates.', 'warn'); return false; }
   const s = collectState();
   const w = window.open('', '_blank');
-  if (!w) { toast('Pop-up blocked. Allow pop-ups to print.', 'warn'); return; }
-  w.document.write(`<html><head><meta charset="utf-8"><title>Pay Slip</title><style>@page{size:A4;margin:15mm;}body{font-family:'Times New Roman',Times,serif;}</style></head><body>${buildPayslipHTML(s)}</body></html>`);
+  if (!w) { toast('Pop-up blocked. Allow pop-ups to print.', 'warn'); return false; }
+  const pageCss = A5 ? '@page{size:A5;margin:10mm;}' : '@page{size:A4;margin:15mm;}';
+  w.document.write(`<html><head><meta charset="utf-8"><title>Pay Slip (${label})</title><style>${pageCss}html,body{margin:0;padding:0;}body{font-family:'Times New Roman',Times,serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;}</style></head><body>${buildPayslipHTML(s, paper)}</body></html>`);
   w.document.close();
   setTimeout(() => { w.focus(); w.print(); }, 300);
+  toast(`Print dialog opened (${label}). Choose “Save as PDF” for a PDF file.`, 'info');
+  return true;
 }
 
 /* ============ INIT ============ */
 function initApp() {
   if (initialized) return; initialized = true;
-
   $('employerList').innerHTML = Object.keys(EMPLOYER_CENTERS).map(n => `<option value="${esc(n)}">`).join('');
   defaultMonth(); // sets month + full-month pay period
   defaultRemRows();
@@ -540,7 +571,6 @@ function initApp() {
       entries.map(([id, e]) => `<option value="${esc(id)}">${esc(e.englishName || id)}</option>`).join('');
     if (prev && employees[prev]) sel.value = prev;
   }, (err) => console.error('employees listener:', err));
-
   onValue(ref(db, 'payslips'), (snap) => { payslips = snap.val() || {}; renderSavedSelect(); },
     (err) => console.error('payslips listener:', err));
 
@@ -560,9 +590,24 @@ function initApp() {
   });
   $('mainContent').addEventListener('input', () => { renderPreview(); markDirty(); });
 
-  $('exportWordBtn').addEventListener('click', exportWord);
+  // Export Word: main button reveals A4 / A5 choices underneath
+  $('exportWordBtn').addEventListener('click', () => toggleSizeRow('word'));
+  $('wordSizeRow').addEventListener('click', (e) => {
+    const b = e.target.closest('.size-btn');
+    if (!b) return;
+    if (exportWord(b.dataset.size)) toggleSizeRow('word', false);
+  });
+
+  // Print / PDF: same A4 / A5 choices
+  $('printBtn').addEventListener('click', () => toggleSizeRow('print'));
+  $('printSizeRow').addEventListener('click', (e) => {
+    const b = e.target.closest('.size-btn');
+    if (!b) return;
+    if (printPayslip(b.dataset.size)) toggleSizeRow('print', false);
+  });
+  closeSizeRows(); // normalize initial closed state (aria + tabindex)
+
   $('batchExportBtn').addEventListener('click', batchExport);
-  $('printBtn').addEventListener('click', printPayslip);
   $('resetBtn').addEventListener('click', () => {
     if (hasContent() && !confirm('Reset the form? Unsaved changes will be lost.')) return;
     resetForm();
@@ -571,11 +616,11 @@ function initApp() {
   $('savePayslipBtn').addEventListener('click', savePayslip);
   $('loadSavedBtn').addEventListener('click', loadSaved);
   $('deleteSavedBtn').addEventListener('click', deleteSaved);
-
   document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
       e.preventDefault();
       if (initialized) savePayslip();
     }
+    if (e.key === 'Escape') closeSizeRows();
   });
 }
