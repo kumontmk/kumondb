@@ -73,6 +73,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 1. Ensure user is authenticated
   const isAuth = requireAuth();
   if (!isAuth) return;
+  initCalendarShell(); // 🗓️ Reserve calendar space + skeleton immediately (prevents layout shift)
 
   // 2. Populate User Info in Header
   const storedUser = sessionStorage.getItem('kumonUser');
@@ -686,6 +687,7 @@ function renderDualCalendar() {
     // Pass the actual 'today' date so the grid knows which day to highlight as "today"
     renderMonthGrid(currentYear, currentMonth, 'calendarCurrent', today);
     renderMonthGrid(nextYear, nextMonth, 'calendarNext', today);
+    onCalendarRendered(); // 🗓️ Update stats, clear skeleton state, animate transition
 
     autoShrinkHolidayNames();
 }
@@ -5608,4 +5610,470 @@ function setupLogFollowUpModalListeners() {
   document.getElementById('fuSaveBtn')?.addEventListener('click', saveFuModal);
   
   setupFuStudentSearch();
+}
+// ============================================
+// 🗓️ CALENDAR ENHANCEMENTS (additive layer)
+// - Skeleton loading with reserved height (zero layout shift)
+// - Live stats bar for the two viewed months + Today chip
+// - Month/year picker on the month titles
+// - Keyboard (← → T R) and swipe navigation
+// - Direction-aware month transitions
+// NOTE: Only ADDS behavior. Existing IDs, handlers, data maps,
+// and rendering logic are untouched.
+// ============================================
+
+let calShellReady = false;
+let calPickerOpen = false;
+let calPickerYear = null;
+let calPickerEls = null;
+let calPickerAnchor = null;
+let calEnhLastView = null;
+
+function calEnhT(key, fallback, vars) {
+  try {
+    const out = t(key, vars);
+    return (out && out !== key) ? out : fallback;
+  } catch { return fallback; }
+}
+
+function calMonthNames() {
+  const m = t('dashboard.months', { returnObjects: true });
+  return (Array.isArray(m) && m.length === 12) ? m :
+    ['January','February','March','April','May','June','July','August','September','October','November','December'];
+}
+
+function calTodayLocalISO() {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+}
+
+function calEnhViewedMonths() {
+  return [
+    { y: viewYear, m: viewMonth },
+    viewMonth === 11 ? { y: viewYear + 1, m: 0 } : { y: viewYear, m: viewMonth + 1 }
+  ];
+}
+
+function calEnhDateInView(dateStr) {
+  if (!dateStr) return false;
+  return calEnhViewedMonths().some(({ y, m }) =>
+    dateStr.startsWith(`${y}-${String(m + 1).padStart(2, '0')}-`)
+  );
+}
+
+function calEnhModalOpen() {
+  return !!document.querySelector('.modal-overlay:not(.hidden)');
+}
+
+// --------------------------------------------
+// Skeleton shell (runs before any data fetch)
+// --------------------------------------------
+function buildCalendarSkeleton(container) {
+  container.innerHTML = '';
+  ['sun','mon','tue','wed','thu','fri','sat'].forEach(k => {
+    const h = document.createElement('div');
+    h.className = 'calendar-day-header';
+    h.textContent = calEnhT('dashboard.days.' + k, k);
+    container.appendChild(h);
+  });
+  for (let i = 0; i < 42; i++) {
+    const c = document.createElement('div');
+    c.className = 'cal-skeleton-cell';
+    container.appendChild(c);
+  }
+}
+
+function initCalendarShell() {
+  if (calShellReady) return;
+  const section = document.querySelector('.calendar-section');
+  const cur = document.getElementById('calendarCurrent');
+  const next = document.getElementById('calendarNext');
+  if (!section || !cur || !next) return;
+  calShellReady = true;
+
+  section.classList.add('is-loading');
+  section.setAttribute('aria-busy', 'true');
+
+  // Show real month titles immediately
+  const names = calMonthNames();
+  const nm = viewMonth === 11 ? 0 : viewMonth + 1;
+  const ny = viewMonth === 11 ? viewYear + 1 : viewYear;
+  const curTitle = document.getElementById('currentMonthTitle');
+  const nextTitle = document.getElementById('nextMonthTitle');
+  if (curTitle) curTitle.textContent = `${names[viewMonth]} ${viewYear}`;
+  if (nextTitle) nextTitle.textContent = `${names[nm]} ${ny}`;
+
+  buildCalendarSkeleton(cur);
+  buildCalendarSkeleton(next);
+
+  // Stats bar (skeleton chips reserve its height too)
+  const wrapper = section.querySelector('.calendar-wrapper');
+  if (wrapper && !document.getElementById('calStatsBar')) {
+    wrapper.insertAdjacentElement('beforebegin', buildCalendarStatsBar());
+  }
+
+  enhanceCalendarMonthTitles();
+  enhanceCalendarNavHints();
+  bindCalendarKeyboard();
+  bindCalendarSwipe();
+
+  // Safety net: if data never arrives, still show a real (empty) calendar
+  setTimeout(() => {
+    if (section.classList.contains('is-loading')) {
+      try { renderDualCalendar(); } catch (e) { console.warn('Calendar fallback render:', e); }
+    }
+  }, 15000);
+
+  // No center selected → nothing will load; render empty calendar now
+  if (!centerId) {
+    try { renderDualCalendar(); } catch (e) {}
+  }
+}
+
+// --------------------------------------------
+// Live stats bar
+// --------------------------------------------
+const CAL_STAT_DEFS = [
+  { key: 'po', color: '#1565c0', label: ['dashboard.calendarStats.po', 'PO'],
+    tip: ['dashboard.calendarStats.poTip', 'Parent orientations in the two months shown'] },
+  { key: 'dt', color: '#e65100', label: ['dashboard.calendarStats.dt', 'DT'],
+    tip: ['dashboard.calendarStats.dtTip', 'Diagnostic tests in the two months shown'] },
+  { key: 'ch', color: '#2e7d32', label: ['dashboard.calendarStats.centerHoliday', 'Center hol.'],
+    tip: ['dashboard.calendarStats.centerHolidayTip', 'Center holidays in the two months shown'] },
+  { key: 'ph', color: '#c62828', label: ['dashboard.calendarStats.publicHoliday', 'Public hol.'],
+    tip: ['dashboard.calendarStats.publicHolidayTip', 'Public holidays in the two months shown'] },
+  { key: 'ot', color: '#f472b6', label: ['dashboard.calendarStats.other', 'Other'],
+    tip: ['dashboard.calendarStats.otherTip', 'Other events in the two months shown'] }
+];
+
+function buildCalendarStatsBar() {
+  const bar = document.createElement('div');
+  bar.className = 'cal-stats-bar';
+  bar.id = 'calStatsBar';
+  bar.setAttribute('aria-live', 'polite');
+  CAL_STAT_DEFS.forEach(def => {
+    const chip = document.createElement('div');
+    chip.className = 'cal-stat-chip is-skeleton';
+    chip.dataset.stat = def.key;
+    chip.innerHTML = '<span class="cal-stat-skel"></span>';
+    bar.appendChild(chip);
+  });
+  const today = document.createElement('button');
+  today.type = 'button';
+  today.className = 'cal-stat-chip cal-today-chip is-skeleton';
+  today.id = 'calTodayChip';
+  today.innerHTML = '<span class="cal-stat-skel"></span>';
+  today.addEventListener('click', () => document.getElementById('calTodayBtn')?.click());
+  bar.appendChild(today);
+  return bar;
+}
+
+function computeCalendarStats() {
+  let po = 0, dt = 0, ch = 0, ph = 0, ot = 0;
+  Object.entries(poDataMap).forEach(([d, list]) => {
+    if (calEnhDateInView(d)) po += (list || []).length;
+  });
+  Object.entries(dtDataMap).forEach(([d, list]) => {
+    if (calEnhDateInView(d)) dt += (list || []).length;
+  });
+  Object.entries(calendarEventsMap).forEach(([d, ev]) => {
+    if (!calEnhDateInView(d) || !ev) return;
+    if (ev.type === 'center') ch++;
+    if (ev.type === 'public') ph++;
+    ot += getOtherEventsFromCalendarEvent(ev).length;
+  });
+  return { po, dt, ch, ph, ot };
+}
+
+function updateCalendarStats() {
+  const bar = document.getElementById('calStatsBar');
+  if (!bar) return;
+  const stats = computeCalendarStats();
+
+  CAL_STAT_DEFS.forEach(def => {
+    const chip = bar.querySelector(`[data-stat="${def.key}"]`);
+    if (!chip) return;
+    if (chip.classList.contains('is-skeleton')) {
+      chip.classList.remove('is-skeleton');
+      chip.innerHTML = '';
+      const dot = document.createElement('span');
+      dot.className = 'cal-stat-dot';
+      dot.style.background = def.color;
+      const count = document.createElement('span');
+      count.className = 'cal-stat-count';
+      const lbl = document.createElement('span');
+      lbl.className = 'cal-stat-label';
+      chip.append(dot, count, lbl);
+    }
+    const countEl = chip.querySelector('.cal-stat-count');
+    const val = String(stats[def.key]);
+    if (countEl.textContent !== val) {
+      countEl.textContent = val;
+      countEl.classList.remove('cal-bump');
+      void countEl.offsetWidth;
+      countEl.classList.add('cal-bump');
+    }
+    chip.querySelector('.cal-stat-label').textContent = calEnhT(def.label[0], def.label[1]);
+    chip.title = calEnhT(def.tip[0], def.tip[1]);
+  });
+
+  const todayChip = document.getElementById('calTodayChip');
+  if (todayChip) {
+    const iso = calTodayLocalISO();
+    const poToday = (poDataMap[iso] || []).length;
+    const dtToday = (dtDataMap[iso] || []).length;
+    const ev = calendarEventsMap[iso];
+    const others = getOtherEventsFromCalendarEvent(ev);
+    if (todayChip.classList.contains('is-skeleton')) {
+      todayChip.classList.remove('is-skeleton');
+      todayChip.innerHTML = '';
+      const icon = document.createElement('span');
+      icon.textContent = '🗓️';
+      const lbl = document.createElement('span');
+      lbl.className = 'cal-today-label';
+      const counts = document.createElement('span');
+      counts.className = 'cal-stat-count cal-today-counts';
+      todayChip.append(icon, lbl, counts);
+    }
+    const poLbl = calEnhT('dashboard.calendarStats.po', 'PO');
+    const dtLbl = calEnhT('dashboard.calendarStats.dt', 'DT');
+    todayChip.querySelector('.cal-today-label').textContent =
+      calEnhT('dashboard.calendarStats.today', 'Today');
+    todayChip.querySelector('.cal-today-counts').textContent =
+      `${poToday} ${poLbl} · ${dtToday} ${dtLbl}`;
+    const tips = [new Date().toLocaleDateString(dateLocale(), { weekday: 'long', month: 'long', day: 'numeric' })];
+    if (ev?.name && (ev.type === 'center' || ev.type === 'public')) tips.push(ev.name);
+    if (others.length) tips.push(others.map(o => o.name).join(', '));
+    todayChip.title = tips.join(' · ');
+  }
+}
+
+// --------------------------------------------
+// Month titles → picker, nav hints
+// --------------------------------------------
+function enhanceCalendarMonthTitles() {
+  ['currentMonthTitle', 'nextMonthTitle'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el || el.dataset.calPickerBound) return;
+    el.dataset.calPickerBound = '1';
+    el.classList.add('cal-month-title-btn');
+    el.setAttribute('role', 'button');
+    el.setAttribute('tabindex', '0');
+    el.setAttribute('aria-haspopup', 'dialog');
+    el.title = calEnhT('dashboard.calendarPicker.openTip', 'Jump to month');
+    el.addEventListener('click', () => openCalendarPicker(el));
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openCalendarPicker(el);
+      }
+    });
+  });
+}
+
+function enhanceCalendarNavHints() {
+  const set = (id, key, fb) => {
+    const el = document.getElementById(id);
+    if (el && !el.title) el.title = calEnhT(key, fb);
+  };
+  set('calPrevBtn', 'dashboard.calendarNav.prevTip', 'Previous month (←)');
+  set('calNextBtn', 'dashboard.calendarNav.nextTip', 'Next month (→)');
+  set('calTodayBtn', 'dashboard.calendarNav.todayTip', 'Back to current month (T)');
+  set('calReportsBtn', 'dashboard.calendarNav.reportTip', 'DT & PO report (R)');
+}
+
+// --------------------------------------------
+// Keyboard & swipe (reuse existing buttons — identical behavior)
+// --------------------------------------------
+function bindCalendarKeyboard() {
+  document.addEventListener('keydown', (e) => {
+    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (calPickerOpen || calEnhModalOpen()) return;
+    const tag = (e.target?.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target?.isContentEditable) return;
+    const fabMenu = document.getElementById('fabMenu');
+    if (fabMenu && !fabMenu.classList.contains('hidden')) return;
+    const click = (id) => {
+      const b = document.getElementById(id);
+      if (b) { e.preventDefault(); b.click(); }
+    };
+    if (e.key === 'ArrowLeft') click('calPrevBtn');
+    else if (e.key === 'ArrowRight') click('calNextBtn');
+    else if (e.key === 't' || e.key === 'T') click('calTodayBtn');
+    else if (e.key === 'r' || e.key === 'R') click('calReportsBtn');
+  });
+}
+
+function bindCalendarSwipe() {
+  const wrapper = document.querySelector('.calendar-wrapper');
+  if (!wrapper || wrapper.dataset.calSwipeBound) return;
+  wrapper.dataset.calSwipeBound = '1';
+  let sx = 0, sy = 0, st = 0;
+  wrapper.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) { st = 0; return; }
+    sx = e.touches[0].clientX;
+    sy = e.touches[0].clientY;
+    st = Date.now();
+  }, { passive: true });
+  wrapper.addEventListener('touchend', (e) => {
+    if (!st) return;
+    const dx = e.changedTouches[0].clientX - sx;
+    const dy = e.changedTouches[0].clientY - sy;
+    const dt = Date.now() - st;
+    st = 0;
+    if (dt > 600 || Math.abs(dx) < 60 || Math.abs(dy) > 50) return;
+    if (calEnhModalOpen() || calPickerOpen) return;
+    document.getElementById(dx < 0 ? 'calNextBtn' : 'calPrevBtn')?.click();
+  }, { passive: true });
+}
+
+// --------------------------------------------
+// Month / year picker popover
+// --------------------------------------------
+function buildCalendarPicker() {
+  if (calPickerEls) return calPickerEls;
+  const scrim = document.createElement('div');
+  scrim.className = 'cal-picker-scrim';
+  scrim.style.display = 'none';
+
+  const pop = document.createElement('div');
+  pop.className = 'cal-month-picker';
+  pop.id = 'calMonthPicker';
+  pop.setAttribute('role', 'dialog');
+  pop.setAttribute('aria-modal', 'true');
+  pop.style.display = 'none';
+
+  const head = document.createElement('div');
+  head.className = 'cal-picker-head';
+  const prev = document.createElement('button');
+  prev.type = 'button'; prev.className = 'cal-picker-step'; prev.textContent = '‹';
+  prev.setAttribute('aria-label', 'Previous year');
+  const year = document.createElement('span');
+  year.className = 'cal-picker-year';
+  const next = document.createElement('button');
+  next.type = 'button'; next.className = 'cal-picker-step'; next.textContent = '›';
+  next.setAttribute('aria-label', 'Next year');
+  head.append(prev, year, next);
+
+  const grid = document.createElement('div');
+  grid.className = 'cal-picker-grid';
+  const monthBtns = [];
+  for (let i = 0; i < 12; i++) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'cal-picker-month';
+    b.dataset.month = i;
+    b.addEventListener('click', () => {
+      viewYear = calPickerYear;
+      viewMonth = i;
+      closeCalendarPicker();
+      renderDualCalendar();
+    });
+    monthBtns.push(b);
+    grid.appendChild(b);
+  }
+
+  const todayBtn = document.createElement('button');
+  todayBtn.type = 'button';
+  todayBtn.className = 'cal-picker-today';
+  todayBtn.addEventListener('click', () => {
+    closeCalendarPicker();
+    document.getElementById('calTodayBtn')?.click();
+  });
+
+  prev.addEventListener('click', () => { calPickerYear = Math.max(2000, calPickerYear - 1); syncCalendarPicker(); });
+  next.addEventListener('click', () => { calPickerYear = Math.min(2100, calPickerYear + 1); syncCalendarPicker(); });
+  scrim.addEventListener('click', closeCalendarPicker);
+
+  pop.append(head, grid, todayBtn);
+  document.body.append(scrim, pop);
+  calPickerEls = { scrim, pop, year, monthBtns, todayBtn };
+  return calPickerEls;
+}
+
+function syncCalendarPicker() {
+  if (!calPickerEls) return;
+  const { pop, year, monthBtns, todayBtn } = calPickerEls;
+  year.textContent = calPickerYear;
+  pop.setAttribute('aria-label', calEnhT('dashboard.calendarPicker.title', 'Jump to month'));
+  const names = calMonthNames();
+  const now = new Date();
+  monthBtns.forEach((b, i) => {
+    b.textContent = names[i];
+    b.classList.toggle('is-active', calPickerYear === viewYear && i === viewMonth);
+    b.classList.toggle('is-today', calPickerYear === now.getFullYear() && i === now.getMonth());
+  });
+  todayBtn.textContent = calEnhT('dashboard.calendarPicker.today', '🗓️ Back to today');
+}
+
+function openCalendarPicker(anchor) {
+  if (calPickerOpen) closeCalendarPicker();
+  const els = buildCalendarPicker();
+  calPickerAnchor = anchor;
+  calPickerYear = viewYear;
+  syncCalendarPicker();
+  els.scrim.style.display = 'block';
+  els.pop.style.display = 'block';
+  calPickerOpen = true;
+
+  const r = anchor.getBoundingClientRect();
+  const w = Math.min(288, window.innerWidth - 16);
+  const h = els.pop.offsetHeight || 320;
+  const left = Math.max(8, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 8));
+  let top = r.bottom + 8;
+  if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 8);
+  els.pop.style.left = `${left}px`;
+  els.pop.style.top = `${top}px`;
+  els.monthBtns[viewMonth]?.focus({ preventScroll: true });
+
+  document.addEventListener('keydown', calPickerKeyHandler, true);
+  window.addEventListener('resize', closeCalendarPicker);
+  window.addEventListener('scroll', closeCalendarPicker, { capture: true, passive: true });
+}
+
+function calPickerKeyHandler(e) {
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    e.stopPropagation();
+    closeCalendarPicker();
+  }
+}
+
+function closeCalendarPicker() {
+  if (!calPickerEls || !calPickerOpen) return;
+  calPickerOpen = false;
+  calPickerEls.scrim.style.display = 'none';
+  calPickerEls.pop.style.display = 'none';
+  document.removeEventListener('keydown', calPickerKeyHandler, true);
+  window.removeEventListener('resize', closeCalendarPicker);
+  window.removeEventListener('scroll', closeCalendarPicker, { capture: true });
+  calPickerAnchor?.focus({ preventScroll: true });
+  calPickerAnchor = null;
+}
+
+// --------------------------------------------
+// Hook: runs after every existing renderDualCalendar()
+// --------------------------------------------
+function onCalendarRendered() {
+  const section = document.querySelector('.calendar-section');
+  if (section) {
+    section.classList.remove('is-loading');
+    section.setAttribute('aria-busy', 'false');
+  }
+  updateCalendarStats();
+  if (calPickerOpen) syncCalendarPicker();
+
+  const cur = viewYear * 12 + viewMonth;
+  let cls = 'cal-anim-fade';
+  if (calEnhLastView !== null && cur !== calEnhLastView) {
+    cls = cur > calEnhLastView ? 'cal-anim-next' : 'cal-anim-prev';
+  }
+  calEnhLastView = cur;
+  ['calendarCurrent', 'calendarNext'].forEach(id => {
+    const g = document.getElementById(id);
+    if (!g) return;
+    g.classList.remove('cal-anim-fade', 'cal-anim-next', 'cal-anim-prev');
+    void g.offsetWidth;
+    g.classList.add(cls);
+  });
 }
