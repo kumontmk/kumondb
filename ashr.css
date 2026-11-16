@@ -429,3 +429,8 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   font-variant-numeric: tabular-nums;
 }
 .data-table td.row-num { color: var(--text-light); font-weight: 600; }
+
+/* 👧👦 Per-student RSVP breakdown (mixed attending / declined families) */
+.ps-breakdown { margin-top: 0.3rem; font-size: 0.75rem; line-height: 1.5; }
+.ps-breakdown .ps-yes { color: var(--green); font-weight: 600; }
+.ps-breakdown .ps-no { color: var(--red); font-weight: 600; }

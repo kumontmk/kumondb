@@ -63,6 +63,56 @@
       </div>
     </div>
 
+  <style>
+    #studentAttendanceCard{background:#fff;border:1px solid #e3eef7;border-radius:16px;padding:1.25rem 1.4rem;margin-bottom:1rem;box-shadow:0 4px 18px rgba(70,130,180,.12);}
+    #studentAttendanceCard h2{color:#4682B4;font-size:1.05rem;margin:0 0 .35rem;}
+    #studentAttendanceCard .sa-hint{font-size:.83rem;color:#64748b;margin:0 0 .9rem;line-height:1.5;}
+    .sa-row{border:1.5px solid #dbe4ee;border-radius:14px;padding:.8rem .95rem;margin-bottom:.6rem;background:#f8fafc;transition:border-color .2s,background .2s;}
+    .sa-row.attending{border-color:#86efac;background:#f0fdf4;}
+    .sa-row.declined{border-color:#fecaca;background:#fef2f2;}
+    .sa-main{display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap;}
+    .sa-id{min-width:0;}
+    .sa-name{font-weight:700;font-size:1rem;color:#1e293b;line-height:1.3;}
+    .sa-sub{font-size:.75rem;color:#64748b;margin-top:.1rem;}
+    .sa-seg{display:inline-flex;gap:3px;padding:3px;background:#eef2f7;border:1.5px solid #dbe4ee;border-radius:999px;flex:0 0 auto;}
+    .sa-opt{border:none;background:transparent;padding:.45rem .85rem;border-radius:999px;font-weight:600;font-size:.83rem;color:#475569;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s,box-shadow .15s,transform .1s;}
+    .sa-opt:hover{background:#fff;color:#1e293b;}
+    .sa-opt:active{transform:scale(.96);}
+    .sa-opt:focus-visible{outline:2px solid #4682B4;outline-offset:2px;}
+    .sa-opt.on-yes{background:#15803d;color:#fff;box-shadow:0 1px 5px rgba(21,128,61,.35);}
+    .sa-opt.on-yes:hover{background:#166534;color:#fff;}
+    .sa-opt.on-no{background:#b91c1c;color:#fff;box-shadow:0 1px 5px rgba(185,28,28,.35);}
+    .sa-opt.on-no:hover{background:#991b1b;color:#fff;}
+    .sa-summary{margin-top:.75rem;font-size:.83rem;font-weight:600;padding:.5rem .75rem;border-radius:10px;line-height:1.45;}
+    .sa-summary.pending{background:#fef3c7;color:#92400e;}
+    .sa-summary.ok{background:#dcfce7;color:#15803d;}
+    .sa-summary.sad{background:#fee2e2;color:#b91c1c;}
+    .sa-chips{display:flex;flex-wrap:wrap;gap:.4rem;margin:0 0 .65rem;}
+    .sa-chip{border:1.5px solid #dbe4ee;background:#fff;color:#475569;border-radius:999px;padding:.4rem .75rem;font-size:.82rem;font-weight:600;cursor:pointer;transition:background .15s,color .15s,border-color .15s,box-shadow .15s,transform .1s;}
+    .sa-chip:hover{border-color:#4682B4;color:#4682B4;background:#f0f8ff;}
+    .sa-chip:active{transform:scale(.96);}
+    .sa-chip:focus-visible{outline:2px solid #4682B4;outline-offset:2px;}
+    .sa-chip.on{background:#4682B4;border-color:#4682B4;color:#fff;box-shadow:0 1px 5px rgba(70,130,180,.3);}
+    .sa-chip.on:hover{background:#3a6f94;border-color:#3a6f94;color:#fff;}
+    .sa-count{margin-top:.3rem;font-size:.72rem;color:#94a3b8;text-align:right;font-variant-numeric:tabular-nums;}
+    .sa-conf-list{list-style:none;margin:.4rem 0 .7rem;padding:0;}
+    .sa-conf-list li{padding:.4rem .6rem;border-radius:8px;margin-bottom:.3rem;font-size:.9rem;line-height:1.45;}
+    .sa-conf-list li.attending{background:#f0fdf4;color:#166534;}
+    .sa-conf-list li.declined{background:#fef2f2;color:#991b1b;}
+    @media (max-width:520px){
+      .sa-main{flex-direction:column;align-items:stretch;}
+      .sa-seg{display:flex;}
+      .sa-opt{flex:1;text-align:center;}
+    }
+  </style>
+
+<section id="studentAttendanceCard" class="hidden">
+  <h2 id="studentAttendanceTitle">👧👦 Who's attending?</h2>
+  <p class="sa-hint" id="studentAttendanceHint"></p>
+  <div id="studentAttendanceList"></div>
+  <p class="sa-summary pending" id="studentAttendanceSummary"></p>
+</section>
+
     <!-- 💬 Optional decline reason (shown only when "can't attend" is selected) -->
     <div class="invite-card hidden" id="reasonCard">
       <h2 data-i18n="inv.reasonTitle">💬 May we ask why? (optional)</h2>

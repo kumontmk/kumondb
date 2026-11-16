@@ -175,11 +175,16 @@ function familyTimeText(fam) {
     (families[fid].memberHonoreeIds || []).some(mid => fam.members.some(m => m.honoreeKey === mid))
   );
   const rsvp = famId ? families[famId]?.rsvp : null;
-  if (rsvp?.status === 'attending' && rsvp.sameTimeslot && rsvp.sharedSlotId) {
-    const slot = timeslots[rsvp.sharedSlotId];
-    return slot ? `${slot.start} – ${slot.end}` : rsvp.sharedSlotId;
-  }
-  return '—';
+  if (!rsvp || rsvp.status !== 'attending') return '—';
+  const att = new Set(attendingIds(families[famId]));
+  const slotIds = new Set();
+  if (rsvp.sameTimeslot && rsvp.sharedSlotId) slotIds.add(rsvp.sharedSlotId);
+  else Object.entries(rsvp.perStudentSlots || {}).forEach(([k, sid]) => { if (att.has(k) && sid) slotIds.add(sid); });
+  const times = [...slotIds]
+    .map(sid => timeslots[sid]).filter(Boolean)
+    .sort((a, b) => (a.start || '').localeCompare(b.start || ''))
+    .map(s => `${s.start} – ${s.end}`);
+  return times.length ? times.join(' / ') : '—';
 }
 
 // ============================================
@@ -247,6 +252,17 @@ function countUniqueFromIds(memberIds) {
   (memberIds || []).forEach(mid => { const h = honorees[mid]; seen.add(studentUid(h) || mid); });
   return seen.size;
 }
+
+function rsvpKeyStatus(rsvp, key) {
+  if (!rsvp || !rsvp.status) return 'pending';
+  return (rsvp.perStudentStatus || {})[key] || rsvp.status;
+}
+function attendingIds(fam) {
+  const rsvp = fam?.rsvp;
+  if (!rsvp || rsvp.status !== 'attending') return [];
+  return (fam.memberHonoreeIds || []).filter(k => honorees[k] && rsvpKeyStatus(rsvp, k) === 'attending');
+}
+
 function siblingHonoreeKeys(h, key) {
   const uid = studentUid(h);
   if (!uid) return [key];
@@ -1903,9 +1919,16 @@ function getAttendingFamilies() {
     return famRec?.rsvp?.status === 'attending';
   });
 }
+
 async function exportAttendingCards() {
   if (cardsExporting) return;
-  const fams = getAttendingFamilies();
+  const fams = getAttendingFamilies().map(fam => {
+    const portalEntry = Object.entries(portalsCache).find(([_, p]) => p.familyKey === fam.key);
+    const famRec = portalEntry ? families[portalEntry[1].familyId] : null;
+    const att = new Set(attendingIds(famRec));
+    const members = fam.members.filter(m => att.has(m.honoreeKey));
+    return { ...fam, members: members.length ? members : fam.members };
+  });
   if (!fams.length) return showToast(t('toast.noAttending', 'No attending families to export'), 'error');
   cardsExporting = true;
   const useZip = typeof JSZip !== 'undefined';
@@ -2103,7 +2126,8 @@ function computeSlotCounts() {
   Object.values(families).forEach(fam => {
     const rsvp = fam.rsvp;
     if (!rsvp || rsvp.status !== 'attending') return;
-    const memberIds = fam.memberHonoreeIds || [];
+    const memberIds = attendingIds(fam);
+    if (!memberIds.length) return;
     const guestCount = countGuests(rsvp.guests);
     const seatCount = countUniqueFromIds(memberIds) || memberIds.length;
     if (rsvp.sameTimeslot && rsvp.sharedSlotId) {
@@ -2151,7 +2175,9 @@ function buildRsvpRows() {
   });
   Object.entries(families).forEach(([famId, famRec]) => {
     if (matchedFamIds.has(famId)) return;
-    const members = (famRec.memberHonoreeIds || []).map(mid => honorees[mid]).filter(Boolean);
+    const members = (famRec.memberHonoreeIds || [])
+      .map(mid => honorees[mid] ? { honoreeKey: mid, ...honorees[mid] } : null)
+      .filter(Boolean);
     if (!members.length && !famRec.rsvp) return;
     rows.push({ famId, members, rsvp: famRec.rsvp || null, hasLink: false, linkDisabled: false });
   });
@@ -2166,17 +2192,17 @@ function renderRSVPs() {
   let attending = 0, declined = 0, pending = 0, totalGuests = 0;
   const rows = buildRsvpRows();
   rows.forEach(row => {
-    const status = row.rsvp?.status || 'pending';
-    const students = countUniqueStudents(row.members) || row.rsvp?.memberHonoreeIds?.length || 1;
-    if (status === 'attending') { attending += students; totalGuests += countGuests(row.rsvp.guests); }
-    else if (status === 'declined') declined += students;
-    else pending += students;
+    const rsvp = row.rsvp;
+    const ids = (row.members || []).map(m => m.honoreeKey).filter(Boolean);
+    if (!rsvp || !rsvp.status) { pending += countUniqueStudents(row.members) || 1; return; }
+    const ps = rsvp.perStudentStatus || {};
+    const attIds = ids.filter(k => (ps[k] || rsvp.status) === 'attending');
+    const decIds = ids.filter(k => (ps[k] || rsvp.status) === 'declined');
+    attending += countUniqueFromIds(attIds);
+    declined += countUniqueFromIds(decIds);
+    if (rsvp.status === 'attending') totalGuests += countGuests(rsvp.guests);
   });
-  $('rsvpStats').innerHTML = `
-    <div class="stat-card"><div class="stat-value">${attending}</div><div class="stat-label">${t('stat.attending', 'Attending (students)')}</div></div>
-    <div class="stat-card"><div class="stat-value">${declined}</div><div class="stat-label">${t('stat.declined', 'Declined (students)')}</div></div>
-    <div class="stat-card"><div class="stat-value">${pending}</div><div class="stat-label">${t('stat.pending', 'No Response (students)')}</div></div>
-    <div class="stat-card"><div class="stat-value">${totalGuests}</div><div class="stat-label">${t('stat.guests', 'Total Guests')}</div></div>`;
+  $('rsvpStats').innerHTML = `<div class="stat-card"><div class="stat-value">${attending}</div><div class="stat-label">${t('stat.attending', 'Attending (students)')}</div></div> <div class="stat-card"><div class="stat-value">${declined}</div><div class="stat-label">${t('stat.declined', 'Declined (students)')}</div></div> <div class="stat-card"><div class="stat-value">${pending}</div><div class="stat-label">${t('stat.pending', 'No Response (students)')}</div></div> <div class="stat-card"><div class="stat-value">${totalGuests}</div><div class="stat-label">${t('stat.guests', 'Total Guests')}</div></div>`;
   let rowNum = 0;
   rows.forEach(row => {
     const rsvp = row.rsvp || {};
@@ -2189,37 +2215,67 @@ function renderRSVPs() {
     rowNum++;
     const disp = groupMembersForDisplay(members);
     const memberNames = disp.map(m => m.nameCn || m.nameEn).join(', ') || row.famId;
+    const ps = rsvp.perStudentStatus || null;
+    const pr = rsvp.perStudentReasons || {};
+    const ids = members.map(m => m.honoreeKey).filter(Boolean);
+    const attCount = countUniqueFromIds(ids.filter(k => rsvpKeyStatus(rsvp, k) === 'attending'));
+    let breakdown = '';
+    if (ps && disp.length > 1) {
+      breakdown = '<div class="ps-breakdown">' + disp.map(m => {
+        const st = rsvpKeyStatus(rsvp, m.honoreeKey);
+        return `<div class="${st === 'attending' ? 'ps-yes' : 'ps-no'}">${st === 'attending' ? '✅' : '❌'} ${escapeHtml(m.nameCn || m.nameEn || '')}</div>`;
+      }).join('') + '</div>';
+    }
     let slotDisplay = '—';
     if (status === 'attending') {
       if (rsvp.sameTimeslot && rsvp.sharedSlotId) {
         const slot = timeslots[rsvp.sharedSlotId];
         slotDisplay = slot ? `${slot.start}–${slot.end}` : rsvp.sharedSlotId;
       } else if (rsvp.perStudentSlots) {
-        slotDisplay = Object.values(rsvp.perStudentSlots).map(sid => timeslots[sid] ? timeslots[sid].start : sid).join(', ');
+        if (ps) {
+          const seen = new Set();
+          const parts = [];
+          disp.forEach(m => {
+            const sid = rsvp.perStudentSlots[m.honoreeKey];
+            if (!sid || rsvpKeyStatus(rsvp, m.honoreeKey) !== 'attending') return;
+            const uid = studentUid(m) || m.honoreeKey;
+            if (seen.has(uid)) return;
+            seen.add(uid);
+            const slot = timeslots[sid];
+            parts.push(`${m.nameCn || m.nameEn}: ${slot ? slot.start : sid}`);
+          });
+          slotDisplay = parts.join('; ') || '—';
+        } else {
+          slotDisplay = Object.values(rsvp.perStudentSlots).map(sid => timeslots[sid] ? timeslots[sid].start : sid).join(', ');
+        }
       }
     }
+    let reasonDisplay = '—';
+    if (ps) {
+      const parts = [];
+      disp.forEach(m => {
+        if (rsvpKeyStatus(rsvp, m.honoreeKey) !== 'declined') return;
+        const reason = pr[m.honoreeKey] || (rsvp.status === 'declined' ? rsvp.reason : '') || '';
+        if (reason) parts.push(`${m.nameCn || m.nameEn}: ${reason}`);
+      });
+      if (parts.length) reasonDisplay = parts.join('; ');
+      else if (rsvp.status === 'declined' && rsvp.reason) reasonDisplay = rsvp.reason;
+    } else if (rsvp.status === 'declined' && rsvp.reason) {
+      reasonDisplay = rsvp.reason;
+    }
     const statusClass = status === 'attending' ? 'st-attending' : status === 'declined' ? 'st-declined' : 'st-pending';
-    const studentCount = disp.length || row.rsvp?.memberHonoreeIds?.length || 1;
+    const studentCount = ps ? `${attCount}/${disp.length}` : (disp.length || row.rsvp?.memberHonoreeIds?.length || 1);
     const actionsHtml = row.rsvp
       ? `<button class="btn-small danger" data-reset-rsvp="${escapeHtml(row.famId)}">🔄 ${t('rsvp.reset', 'Reset')}</button>`
       : '';
     const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td class="row-num">${rowNum}</td>
-      <td>${escapeHtml(memberNames)}</td>
-      <td>${studentCount}</td>
-      <td><span class="status-badge ${statusClass}">${t('st.' + status, status)}</span></td>
-      <td>${rsvp.status === 'declined' && rsvp.reason ? escapeHtml(rsvp.reason) : '—'}</td>
-      <td>${escapeHtml(slotDisplay)}</td>
-      <td>${countGuests(rsvp.guests)}</td>
-      <td>${rsvp.submittedAt ? new Date(rsvp.submittedAt).toLocaleDateString() : '—'}</td>
-      <td>${actionsHtml}</td>`;
+    tr.innerHTML = `<td class="row-num">${rowNum}</td> <td>${escapeHtml(memberNames)}</td> <td>${studentCount}</td> <td><span class="status-badge ${statusClass}">${t('st.' + status, status)}</span>${breakdown}</td> <td>${escapeHtml(reasonDisplay)}</td> <td>${escapeHtml(slotDisplay)}</td> <td>${countGuests(rsvp.guests)}</td> <td>${rsvp.submittedAt ? new Date(rsvp.submittedAt).toLocaleDateString() : '—'}</td> <td>${actionsHtml}</td>`;
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll('[data-reset-rsvp]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const famId = btn.dataset.resetRsvp;
-      if (!confirm(t('rsvp.resetConfirm', 'Reset this family\'s RSVP? They will need to fill out the form again using their link.'))) return;
+      if (!confirm(t('rsvp.resetConfirm', "Reset this family's RSVP? They will need to fill out the form again using their link."))) return;
       try {
         await remove(ref(db, `ashrEvents/${currentEventId}/families/${famId}/rsvp`));
         showToast(t('toast.rsvpReset', '✅ RSVP reset. The link is now fresh for the parents.'), 'success');
@@ -2253,16 +2309,24 @@ function exportRSVPs() {
   buildRsvpRows().forEach(row => {
     const rsvp = row.rsvp || {};
     groupMembersForDisplay(row.members).forEach(m => {
+      const st = rsvp.status ? rsvpKeyStatus(rsvp, m.honoreeKey) : 'pending';
+      let slotText = '';
+      if (st === 'attending') {
+        const sid = (rsvp.sameTimeslot && rsvp.sharedSlotId) ? rsvp.sharedSlotId : (rsvp.perStudentSlots || {})[m.honoreeKey];
+        const slot = sid ? timeslots[sid] : null;
+        slotText = slot ? `${slot.start}–${slot.end}` : (sid || '');
+      }
       rows.push({
         'Student': m.nameCn || m.nameEn,
         'Pinyin': m.nameEn || '',
         'Center': m.centerName || '',
         'Awards': (m.awards || []).map(a => `${a.subject} ${a.stars}★`).join('; '),
         'Completions': (m.completions || []).map(c => `${c.subject || c.subjectCanon} Completer`).join('; '),
-        'RSVP Status': rsvp.status || 'pending',
-        'Guests': countGuests(rsvp.guests),
+        'RSVP Status': st,
+        'Timeslot': slotText,
+        'Guests': st === 'attending' ? countGuests(rsvp.guests) : 0,
         'Submitted': rsvp.submittedAt || '',
-        'Decline Reason': rsvp.status === 'declined' ? (rsvp.reason || '') : ''
+        'Decline Reason': st === 'declined' ? ((rsvp.perStudentReasons || {})[m.honoreeKey] || rsvp.reason || '') : ''
       });
     });
   });
@@ -2311,11 +2375,11 @@ async function handleScanValue(value, groupKeys = null) {
     const entry = Object.entries(honorees).find(([key, hh]) => {
       const bv = hh.barcodeValue || `ASHR${currentEventId}_${key}`;
       return bv === value || key === value || hh.studentId === value ||
-             String(hh.studentNumber || '') === value || shortScanCode(bv) === value;
+        String(hh.studentNumber || '') === value || shortScanCode(bv) === value;
     });
     if (!entry) {
       result.className = 'error';
-      result.textContent = `${t('toast.unknownCode', '❌ Unknown barcode')}: ${escapeHtml(value)}`;
+      result.textContent = `${t('toast.unknownCode', '❌ Unknown barcode')}: ${value}`;
       return;
     }
     const [key, hh] = entry; h = hh; keys = siblingHonoreeKeys(hh, key);
@@ -2325,22 +2389,29 @@ async function handleScanValue(value, groupKeys = null) {
   const rsvp = famId ? families[famId]?.rsvp : null;
   if (!rsvp || rsvp.status !== 'attending') {
     result.className = 'error';
-    result.textContent = `⚠️ ${escapeHtml(h.nameCn || h.nameEn)} ${t('toast.notConfirmed', 'has not confirmed attendance.')}`;
+    result.textContent = `⚠️ ${h.nameCn || h.nameEn} ${t('toast.notConfirmed', 'has not confirmed attendance.')}`;
     return;
   }
+  const activeKeys = keys.filter(k => rsvpKeyStatus(rsvp, k) !== 'declined');
+  if (!activeKeys.length) {
+    result.className = 'error';
+    result.textContent = `❌ ${h.nameCn || h.nameEn} ${t('toast.studentDeclined', 'has declined attendance for this event.')}`;
+    return;
+  }
+  keys = activeKeys;
   try {
     const anyChecked = keys.some(k => checkins[k]);
     if (anyChecked) {
       for (const k of keys) if (checkins[k]) await remove(ref(db, `ashrEvents/${currentEventId}/checkins/${k}`));
       result.className = 'success';
-      result.textContent = `↩️ ${escapeHtml(h.nameCn || h.nameEn)} ${t('toast.checkedOut', 'checked OUT.')}`;
+      result.textContent = `↩️ ${h.nameCn || h.nameEn} ${t('toast.checkedOut', 'checked OUT.')}`;
     } else {
       for (const k of keys) await set(ref(db, `ashrEvents/${currentEventId}/checkins/${k}`), {
         checkedInAt: new Date().toISOString(),
         checkedInBy: auth.currentUser?.email || ''
       });
       result.className = 'success';
-      result.textContent = `✅ ${escapeHtml(h.nameCn || h.nameEn)} ${t('toast.checkedIn', 'checked in!')}`;
+      result.textContent = `✅ ${h.nameCn || h.nameEn} ${t('toast.checkedIn', 'checked in!')}`;
     }
   } catch (err) { showToast(`${t('toast.err', 'Error')}: ${err.message}`, 'error'); }
 }
@@ -2353,7 +2424,7 @@ function getConfirmedAttendeesBySlot() {
     Object.values(families).forEach(fam => {
       const rsvp = fam.rsvp;
       if (!rsvp || rsvp.status !== 'attending') return;
-      const memberIds = fam.memberHonoreeIds || [];
+      const memberIds = attendingIds(fam);
       const slotForUid = {};
       if (rsvp.sameTimeslot && rsvp.sharedSlotId) {
         memberIds.forEach(mid => { const uid = studentUid(honorees[mid]) || mid; if (!slotForUid[uid]) slotForUid[uid] = rsvp.sharedSlotId; });
