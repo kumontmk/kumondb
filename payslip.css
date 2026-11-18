@@ -401,3 +401,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .paper-wrap { overflow: visible; padding: 0; }
   .paper { width: auto; min-height: 0; padding: 0; box-shadow: none; border-radius: 0; }
 }
+
+/* ---------- Auto leave rows (paid AL/SL · unpaid) ---------- */
+.row-line.leave-paid { grid-template-columns: 1fr 140px 32px; }
+.row-line.leave-paid .r-label { background: #f0fdf4; border-color: #bbf7d0; color: #166534; font-weight: 600; cursor: default; }
+.row-line.leave-paid .r-amount-text { background: #f0fdf4; border-color: #bbf7d0; color: #166534; font-size: .72rem; font-style: italic; padding: .45rem .4rem; cursor: default; }
+.row-line.leave-unpaid .r-label { background: #fff7ed; border-color: #fed7aa; color: #9a3412; font-weight: 600; cursor: default; }
+.row-line.leave-unpaid .r-amount { background: #fffbeb; border-color: #fcd34d; }
+.leave-hint { border-top: 1px dashed var(--border); padding-top: .5rem; }

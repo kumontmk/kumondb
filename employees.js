@@ -31,10 +31,10 @@ const EMPLOYER_CENTERS = {
     chinese: "澳門氹仔柯維納馬路美景花園美德閣地下AU座",
     english: "NA TAIPA, ESTRADA GOVERNADOR ALBANO DE OLIVEIRA N° 24, MEI KENG FA UN RÉS-DO-CHÃO AU"
   },
-  "Centro de Educação Long Kei": {
-    chinese: "",
-    english: ""
-  }, // ⚠️ address not provided yet — send it and I'll add it
+   "Centro de Educação Long Kei ": {
+    chinese:  "澳門下環鵝眉街2A-2B鵝眉大廈地下L2座",
+    english:  ""
+    },
   "Centro de Educação Kei Hok Fong": {
     chinese: "澳門氹仔柯維納馬路20號美景花園地下AO座",
     english: "Estrada Governador Albano de Oliveira, n.º20, Mei Keng Fa Un, r/c, AO, Taipa"
@@ -295,6 +295,8 @@ function populateContractFields(e) {
   setVal('empIdentityDocType', c.identityDocType || '');
   setVal('empIdentityDocNo', c.identityDocNo || '');
   setVal('empIdentityDocIssueDate', c.identityDocIssueDate || '');
+  setVal('empSsfNo', c.ssfNo || '');
+  setVal('empTaxpayerNo', c.taxpayerNo || '');
   setVal('empContractStartDate', c.contractStartDate || '');
   setVal('empContractType', c.contractType || '');
   setVal('empContractExpirationDate', c.contractExpirationDate || '');
@@ -307,9 +309,9 @@ function populateContractFields(e) {
 
 function resetContractFields() {
   ['empResidencyStatus','empEmployerName','empEmployerContactNo','empEmployerAddress',
-   'empIdentityDocType','empIdentityDocNo','empIdentityDocIssueDate','empContractStartDate',
-   'empContractType','empContractExpirationDate','empEmergencyContactName',
-   'empEmergencyContactNumber','empWorkerAddress'].forEach(id => setVal(id, ''));
+  'empIdentityDocType','empIdentityDocNo','empIdentityDocIssueDate','empSsfNo','empTaxpayerNo',
+  'empContractStartDate','empContractType','empContractExpirationDate','empEmergencyContactName',
+  'empEmergencyContactNumber','empWorkerAddress'].forEach(id => setVal(id, ''));
   toggleResidencyFields();
   updateContractExpiryBadge();
 }
@@ -1693,6 +1695,8 @@ function renderTable(filter = '') {
       identityDocType: document.getElementById('empIdentityDocType')?.value || '',
       identityDocNo: document.getElementById('empIdentityDocNo')?.value.trim() || '',
       identityDocIssueDate: document.getElementById('empIdentityDocIssueDate')?.value || '',
+      ssfNo: document.getElementById('empSsfNo')?.value.trim() || '',
+      taxpayerNo: document.getElementById('empTaxpayerNo')?.value.trim() || '',
       contractStartDate: residencyStatus === 'Non-Resident' ? (document.getElementById('empContractStartDate')?.value || '') : '',
       contractType: residencyStatus === 'Non-Resident' ? (document.getElementById('empContractType')?.value || '') : '',
       contractExpirationDate: residencyStatus === 'Non-Resident' ? (document.getElementById('empContractExpirationDate')?.value || '') : '',

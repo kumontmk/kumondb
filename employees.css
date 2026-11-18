@@ -1984,3 +1984,20 @@ tr.disabled-row td:first-child {
     font-size: 0.78rem !important;
   }
 }
+
+/* ============================================
+🧲 Align inputs across a row even when a label
+wraps to two lines (e.g. Social Security Fund
+Beneficiary No.) — Details tab only
+============================================ */
+#tab-details .form-grid > div > input,
+#tab-details .form-grid > div > select,
+#tab-details .form-grid > div > textarea {
+  margin-top: auto;
+}
+
+/* Nicer two-line breaks: "Social Security Fund /
+Beneficiary No." instead of a lone "No." dangling */
+#tab-details .form-grid label {
+  text-wrap: balance;
+}

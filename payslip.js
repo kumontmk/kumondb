@@ -25,7 +25,7 @@ const EMPLOYER_CENTERS = {
   "Centro de Educação Kumon Taipa Pac Tat":         { contact: "28823866", english: "Rua De Viseu N˚ 120, Fast Garden, r/c, M, Taipa" },
   "Centro de Educação Kumon Tap Siac":              { contact: "28823866", english: "Rua Afonso de Albuquerque, No. 22B RC-ARC Edif. Choi Lai" },
   "Centro de Educação Kumon Taipa Mei Keng":        { contact: "28831773", english: "NA TAIPA, ESTRADA GOVERNADOR ALBANO DE OLIVEIRA N° 24, MEI KENG FA UN RÉ-DO-CHÃO AU" },
-  "Centro de Educação Long Kei":                    { contact: "",         english: "" },
+  "Centro de Educação Long Kei":                   { contact: "66829094", english: "澳門下環鵝眉街2A-2B鵝眉大廈地下L2座" },
   "Centro de Educação Kei Hok Fong":                { contact: "",         english: "Estrada Governador Albano de Oliveira, n.º20, Mei Keng Fa Un, r/c, AO, Taipa" },
   "Centro de Educação Oi Hok Fong 2 (EL Taipa)":    { contact: "",         english: "Avenida De Guimaraes 47, Mei Keng Fa Un, Res-Do-Chao R, Taipa, Macau" },
   "Centro de Educação Delight Learning (EL Macau)": { contact: "",         english: "Macau, Rua Do Padre Antonio Roliz Nos 14B-14C, Kei Cheong Res-Do-Chao A" },
@@ -34,6 +34,7 @@ const EMPLOYER_CENTERS = {
 
 let employees = {};
 let payslips = {};
+let leaves = {};
 let initialized = false;
 let pendingSavedKey = null;
 
@@ -170,32 +171,42 @@ function formatMoney(n) {
     : num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-/* ============ FORM ROW BUILDERS ============ */
 function remRowEl(r = {}) {
   const div = document.createElement('div');
-  div.className = 'row-line' + (r.basic ? ' basic' : '');
+  const isPaidLeave = r.leaveKind === 'paid';
+  div.className = 'row-line' + (r.basic ? ' basic' : '') + (isPaidLeave ? ' leave-paid' : '');
+  if (r.leaveId) { div.dataset.leaveId = r.leaveId; div.dataset.leaveKind = r.leaveKind; }
+  const amountInput = isPaidLeave
+    ? `<input type="text" class="r-amount r-amount-text" value="${esc(r.amount ?? '')}" readonly title="${esc(r.amount ?? '')}">`
+    : `<input type="number" class="r-amount" value="${esc(r.amount ?? '')}" min="0" step="any" placeholder="MOP$">`;
   div.innerHTML =
-    `<input type="text" class="r-label" value="${esc(r.label || '')}" placeholder="Item (e.g. Overtime, Allowance)" ${r.basic ? 'readonly' : ''}>` +
-    `<input type="number" class="r-amount" value="${esc(r.amount ?? '')}" min="0" step="any" placeholder="MOP$">` +
-    `<button type="button" class="del-row danger" ${r.basic ? 'style="visibility:hidden"' : ''}>✕</button>`;
+    `<input type="text" class="r-label" value="${esc(r.label || '')}" placeholder="Item (e.g. Overtime, Allowance)" ${r.basic || r.leaveId ? 'readonly' : ''}>` +
+    amountInput +
+    `<button type="button" class="del-row danger" ${r.basic || r.leaveId ? 'style="visibility:hidden"' : ''}>✕</button>`;
   return div;
 }
 function dedRowEl(r = {}) {
   const div = document.createElement('div');
-  div.className = 'row-line';
+  const isLeave = r.leaveKind === 'unpaid';
+  div.className = 'row-line' + (isLeave ? ' leave-unpaid' : '');
+  if (r.leaveId) { div.dataset.leaveId = r.leaveId; div.dataset.leaveKind = r.leaveKind; }
   div.innerHTML =
-    `<input type="text" class="r-label" value="${esc(r.label || '')}" placeholder="Deduction (e.g. Social Security, Absence)">` +
+    `<input type="text" class="r-label" value="${esc(r.label || '')}" placeholder="Deduction (e.g. Social Security, Absence)" ${isLeave ? 'readonly' : ''}>` +
     `<input type="number" class="r-amount" value="${esc(r.amount ?? '')}" min="0" step="any" placeholder="MOP$">` +
-    `<button type="button" class="del-row danger">✕</button>`;
+    `<button type="button" class="del-row danger" ${isLeave ? 'style="visibility:hidden"' : ''}>✕</button>`;
   return div;
 }
+
 function collectRows(containerId) {
   return [...$(containerId).querySelectorAll('.row-line')].map(div => ({
     basic: div.classList.contains('basic'),
+    leaveId: div.dataset.leaveId || '',
+    leaveKind: div.dataset.leaveKind || '',
     label: div.querySelector('.r-label').value.trim(),
     amount: div.querySelector('.r-amount').value
   }));
 }
+
 function sumRows(rows) {
   return rows.reduce((t, r) => t + (parseFloat(r.amount) || 0), 0);
 }
@@ -245,8 +256,12 @@ function buildPayslipHTML(s, paper = 'a4') {
   const remTotal = sumRows(rem), dedTotal = sumRows(ded);
   const net = remTotal - dedTotal;
   const lineHtml = (r, i) => {
-    const has = r.label || String(r.amount ?? '') !== '';
-    return `<tr><td style="${B}">${has ? `(${i + 1}) ${esc(r.label)}` : ''}</td><td style="${B}width:26%;">${formatMoney(r.amount)}</td></tr>`;
+    const amtStr = String(r.amount ?? '').trim();
+    const has = r.label || amtStr !== '';
+    const amtHtml = amtStr === '' ? '' : (isNaN(Number(amtStr))
+      ? `<span style="font-size:${A5 ? '8.5pt' : '11pt'};font-style:italic;">${esc(amtStr)}</span>`
+      : formatMoney(amtStr));
+    return `<tr><td style="${B}">${has ? `(${i + 1}) ${esc(r.label)}` : ''}</td><td style="${B}width:26%;">${amtHtml}</td></tr>`;
   };
   const remHtml = rem.map(lineHtml).join('');
   const dedHtml = ded.map(lineHtml).join('');
@@ -319,11 +334,97 @@ function wageFor(empId) {
   const e = employees[empId] || {};
   return e.basicSalary ?? localStorage.getItem(`payslip_wage_${empId}`) ?? localStorage.getItem('payslip_wage_last') ?? '';
 }
+
+/* ============ AUTO LEAVE ROWS (paid AL/SL · unpaid) ============ */
+const LEAVE_NAMES = { annual: 'Annual Leave', sick: 'Sick Leave', unpaid: 'Unpaid Leave', pt: 'Time Off', extra: 'Extra Leave' };
+const PAID_LEAVE_NOTE = 'Included in basic wage';
+const isoOf = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+function leavesInPeriod(empId, fromISO, toISO) {
+  if (!empId || !fromISO || !toISO || fromISO > toISO) return [];
+  return Object.entries(leaves || {}).map(([id, l]) => ({ id, ...(l || {}) }))
+    .filter(l => l.empId === empId && l.status === 'approved' && l.dateFrom && l.dateTo && l.dateFrom <= toISO && l.dateTo >= fromISO)
+    .sort((a, b) => String(a.dateFrom).localeCompare(String(b.dateFrom)) || String(a.timeFrom || '').localeCompare(String(b.timeFrom || '')));
+}
+
+function leaveItemLabel(l, fromISO, toISO) {
+  const name = LEAVE_NAMES[l.type] || l.typeLabel || 'Leave';
+  const paidTag = l.type === 'unpaid' ? '' : ' (paid)';
+  const f = l.dateFrom < fromISO ? fromISO : l.dateFrom;
+  const t = l.dateTo > toISO ? toISO : l.dateTo;
+  if (l.durationType === 'hours') {
+    const times = (l.timeFrom && l.timeTo) ? ` ${l.timeFrom}–${l.timeTo}` : '';
+    const hrs = Number(l.amount) > 0 ? ` (${l.amount} hr${Number(l.amount) === 1 ? '' : 's'})` : '';
+    return `${name}${paidTag}: ${dmy(f)}${times}${hrs}`;
+  }
+  const excluded = new Set(String(l.restDaysExcluded || '').split(',').map(s => s.trim()).filter(Boolean));
+  let days = 0;
+  const d = new Date(f + 'T00:00:00'), end = new Date(t + 'T00:00:00');
+  while (d <= end) { if (!excluded.has(isoOf(d))) days++; d.setDate(d.getDate() + 1); }
+  const range = f === t ? dmy(f) : `${dmy(f)} – ${dmy(t)}`;
+  return `${name}${paidTag}: ${range} (${days} day${days === 1 ? '' : 's'})`;
+}
+
+function autoLeaveSignature() {
+  const grab = (box, kind) => [...$(box).querySelectorAll(`.row-line[data-leave-kind="${kind}"]`)]
+    .map(d => [d.dataset.leaveId, d.querySelector('.r-label').value]);
+  return JSON.stringify([grab('remRows', 'paid'), grab('dedRows', 'unpaid')]);
+}
+
+function clearAutoLeaveRows() {
+  ['remRows', 'dedRows'].forEach(id => $(id).querySelectorAll('.row-line[data-leave-id]').forEach(d => d.remove()));
+}
+
+function syncLeaveRows() {
+  const empId = $('empSelect')?.value || '';
+  const emp = employees[empId];
+  const fromISO = $('periodFrom').value, toISO = $('periodTo').value;
+  const fullTime = !!emp && !String(emp.terms || '').toLowerCase().includes('part');
+  const list = leavesInPeriod(empId, fromISO, toISO);
+  const paidRows = (fullTime ? list.filter(l => l.type === 'annual' || l.type === 'sick') : [])
+    .map(l => ({ leaveId: l.id, leaveKind: 'paid', label: leaveItemLabel(l, fromISO, toISO), amount: PAID_LEAVE_NOTE }));
+  const unpaidRows = list.filter(l => l.type === 'unpaid')
+    .map(l => ({ leaveId: l.id, leaveKind: 'unpaid', label: leaveItemLabel(l, fromISO, toISO), amount: '' }));
+  const wantSig = JSON.stringify([paidRows.map(r => [r.leaveId, r.label]), unpaidRows.map(r => [r.leaveId, r.label])]);
+  if (wantSig === autoLeaveSignature()) return false; // nothing changed — keep focus & typed amounts
+  const prevAmounts = {};
+  $('dedRows').querySelectorAll('.row-line[data-leave-kind="unpaid"]').forEach(d => { prevAmounts[d.dataset.leaveId] = d.querySelector('.r-amount').value; });
+  clearAutoLeaveRows();
+  const remBox = $('remRows');
+  let anchor = remBox.querySelector('.row-line.basic');
+  paidRows.forEach(r => { const el = remRowEl(r); if (anchor) { anchor.after(el); anchor = el; } else remBox.prepend(el); });
+  const dedBox = $('dedRows');
+  unpaidRows.slice().reverse().forEach(r => dedBox.prepend(dedRowEl({ ...r, amount: prevAmounts[r.leaveId] ?? '' })));
+  renderPreview();
+  return true;
+}
+
+function injectLeaveHints() {
+  const remCard = $('remRows')?.closest('.card');
+  if (remCard && !remCard.querySelector('.leave-hint')) {
+    const p = document.createElement('p'); p.className = 'hint leave-hint';
+    p.textContent = 'Approved Annual / Sick Leave inside the pay period is listed automatically for full-time employees — the amount is included in the basic wage.';
+    remCard.appendChild(p);
+  }
+  const dedCard = $('dedRows')?.closest('.card');
+  if (dedCard && !dedCard.querySelector('.leave-hint')) {
+    const p = document.createElement('p'); p.className = 'hint leave-hint';
+    p.textContent = 'Approved Unpaid Leave inside the pay period is listed automatically — type the deduction amount (MOP$).';
+    dedCard.appendChild(p);
+  }
+}
+
 function stateForEmployee(empId, month) {
   const e = employees[empId] || {};
   const c = e.contract || {};
   const center = EMPLOYER_CENTERS[(c.employerName || '').trim()] || {};
   const period = periodFromMonth(month);
+  const fullTime = !String(e.terms || '').toLowerCase().includes('part');
+  const lv = leavesInPeriod(empId, period.fromRaw, period.toRaw);
+  const paidLeaveRows = (fullTime ? lv.filter(l => l.type === 'annual' || l.type === 'sick') : [])
+    .map(l => ({ leaveId: l.id, leaveKind: 'paid', label: leaveItemLabel(l, period.fromRaw, period.toRaw), amount: PAID_LEAVE_NOTE }));
+  const unpaidLeaveRows = lv.filter(l => l.type === 'unpaid')
+    .map(l => ({ leaveId: l.id, leaveKind: 'unpaid', label: leaveItemLabel(l, period.fromRaw, period.toRaw), amount: '' }));
   return {
     employer: {
       name: (c.employerName || '').trim(),
@@ -339,12 +440,17 @@ function stateForEmployee(empId, month) {
     },
     period,
     remuneration: [
-      { basic: true, label: `Basic Wage: ${period.monthName}`, amount: wageFor(empId) },
+      { basic: true, label: 'Basic Wage', amount: wageFor(empId) },
+      ...paidLeaveRows,
       { label: '', amount: '' }, { label: '', amount: '' }
     ],
-    deductions: [ { label: '', amount: '' }, { label: '', amount: '' }, { label: '', amount: '' } ]
+    deductions: [
+      ...unpaidLeaveRows,
+      { label: '', amount: '' }, { label: '', amount: '' }, { label: '', amount: '' }
+    ]
   };
 }
+
 function applyStateToForm(s, month) {
   if (month) $('payMonth').value = month;
   $('employerName').value = s.employer?.name || '';
@@ -375,8 +481,9 @@ function fillFromEmployee(empId) {
 /* ============ LIVE PREVIEW ============ */
 function updateBasicLabel() {
   const basic = $('remRows').querySelector('.row-line.basic .r-label');
-  if (basic) basic.value = `Basic Wage: ${periodFromMonth(val('payMonth')).monthName}`;
+  if (basic) basic.value = 'Basic Wage';
 }
+
 function renderPreview() {
   validatePeriod();
   const s = collectState();
@@ -408,7 +515,9 @@ function hasContent() {
   const mp = periodFromMonth(val('payMonth'));
   if ($('periodFrom').value !== mp.fromRaw || $('periodTo').value !== mp.toRaw) return true;
   return [...collectRows('remRows'), ...collectRows('dedRows')]
-    .some(r => String(r.amount).trim() !== '' || (!r.basic && r.label));
+    .some(r => r.leaveId
+      ? (r.leaveKind === 'unpaid' && String(r.amount).trim() !== '')
+      : (String(r.amount).trim() !== '' || (!r.basic && r.label)));
 }
 function resetForm() {
   $('empSelect').value = '';
@@ -560,6 +669,7 @@ function initApp() {
   defaultDedRows();
   renderPreview();
   setSaveStatus('idle', 'Not saved yet');
+  injectLeaveHints();
 
   // Live data
   onValue(ref(db, 'employees'), (snap) => {
@@ -570,14 +680,22 @@ function initApp() {
     sel.innerHTML = '<option value="">— Manual entry —</option>' +
       entries.map(([id, e]) => `<option value="${esc(id)}">${esc(e.englishName || id)}</option>`).join('');
     if (prev && employees[prev]) sel.value = prev;
+    syncLeaveRows();
   }, (err) => console.error('employees listener:', err));
   onValue(ref(db, 'payslips'), (snap) => { payslips = snap.val() || {}; renderSavedSelect(); },
     (err) => console.error('payslips listener:', err));
+  onValue(ref(db, 'leaves'), (snap) => { leaves = snap.val() || {}; if (syncLeaveRows()) markDirty(); },
+    (err) => console.error('leaves listener:', err));
 
   // Listeners
-  $('empSelect').addEventListener('change', (e) => { if (e.target.value) { fillFromEmployee(e.target.value); markDirty(); } });
-  $('payMonth').addEventListener('change', () => { syncPeriodToMonth(); updateBasicLabel(); renderPreview(); markDirty(); });
-  $('periodResetBtn').addEventListener('click', () => { syncPeriodToMonth(); renderPreview(); markDirty(); });
+  $('empSelect').addEventListener('change', (e) => {
+    if (e.target.value) { fillFromEmployee(e.target.value); }
+    else { clearAutoLeaveRows(); renderPreview(); }
+    markDirty();
+  });
+  $('payMonth').addEventListener('change', () => { syncPeriodToMonth(); updateBasicLabel(); syncLeaveRows(); renderPreview(); markDirty(); });
+  $('periodResetBtn').addEventListener('click', () => { syncPeriodToMonth(); syncLeaveRows(); renderPreview(); markDirty(); });
+  ['periodFrom', 'periodTo'].forEach(id => $(id).addEventListener('change', () => { if (syncLeaveRows()) markDirty(); }));
   $('employerName').addEventListener('change', (e) => {
     const c = EMPLOYER_CENTERS[e.target.value.trim()];
     if (c) { $('employerContact').value = c.contact; $('employerAddress').value = c.english; renderPreview(); }
