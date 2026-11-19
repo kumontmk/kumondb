@@ -400,32 +400,41 @@ function maybeRepairAfterDeletions() {
   if (!honoreesLoaded || repairRunning) return;
   const updates = {};
   Object.entries(portalsCache).forEach(([token, p]) => {
-    const orig = p.members || [];
-    if (!orig.length) return;
-    const valid = orig.filter(k => honorees[k]);
-    if (valid.length === orig.length) return;
-    const base = `publicAshrLinks/${currentEventId}/${token}`;
-    if (valid.length) {
-      updates[`${base}/members`] = valid;
-      updates[`${base}/familyKey`] = valid.slice().sort().join('|');
-    } else {
-      updates[`${base}/active`] = false;
-      updates[`${base}/disabledReason`] = 'honoree-deleted';
-    }
+  const orig = p.members || [];
+  if (!orig.length) return;
+  const valid = orig.filter(k => honorees[k]);
+  if (valid.length === orig.length) return;
+  const base = `publicAshrLinks/${currentEventId}/${token}`;
+  if (valid.length) {
+  updates[`${base}/members`] = valid;
+  updates[`${base}/familyKey`] = valid.slice().sort().join('|');
+  } else {
+  updates[`${base}/active`] = false;
+  updates[`${base}/disabledReason`] = 'honoree-deleted';
+  }
   });
   Object.entries(families).forEach(([fid, f]) => {
-    const ids = f.memberHonoreeIds || [];
-    if (!ids.length) return;
-    const kept = ids.filter(k => honorees[k]);
-    if (kept.length !== ids.length) {
-      updates[`ashrEvents/${currentEventId}/families/${fid}/memberHonoreeIds`] = kept;
-    }
+  if (f.mergedInto) return; // keep merge history intact
+  const ids = f.memberHonoreeIds || [];
+  const kept = ids.filter(k => honorees[k]);
+  if (!kept.length) {
+  // 🧟 Orphan RSVP: every honoured student it referenced is gone.
+  // Names can never resolve again — remove the shell so it stops
+  // appearing as "fam_XXXXXXXX" and inflating guest totals.
+  if (ids.length || f.rsvp) {
+  updates[`ashrEvents/${currentEventId}/families/${fid}`] = null;
+  }
+  return;
+  }
+  if (kept.length !== ids.length) {
+  updates[`ashrEvents/${currentEventId}/families/${fid}/memberHonoreeIds`] = kept;
+  }
   });
   if (!Object.keys(updates).length) return;
   repairRunning = true;
   update(ref(db), updates)
-    .catch(err => console.error('Portal repair failed:', err))
-    .finally(() => { repairRunning = false; });
+  .catch(err => console.error('Portal repair failed:', err))
+  .finally(() => { repairRunning = false; });
 }
 
 function setupTabs() {
