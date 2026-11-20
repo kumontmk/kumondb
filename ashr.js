@@ -376,7 +376,7 @@ function subscribeToEvent(eventId) {
     { path: `${base}/settings`, handler: (snap) => { eventSettings = snap.val() || {}; renderControlPanel(); updateEventStatus(); } },
     { path: `${base}/timeslots`, handler: (snap) => { timeslots = snap.val() || {}; renderTimeslots(); renderSlotCapacity(); renderCheckinSlots(); } },
     { path: `${base}/honorees`, handler: (snap) => { honorees = snap.val() || {}; honoreesLoaded = true; renderHonorees(); renderLinks(); renderRSVPs(); renderCheckinSlots(); maybeRepairAfterDeletions(); } },
-    { path: `${base}/families`, handler: (snap) => { families = snap.val() || {}; renderLinks(); renderRSVPs(); renderSlotCapacity(); renderCheckinSlots(); } },
+    { path: `${base}/families`, handler: (snap) => { families = snap.val() || {}; renderLinks(); renderRSVPs(); renderSlotCapacity(); renderCheckinSlots(); maybeRepairAfterDeletions(); } },
     { path: `${base}/checkins`, handler: (snap) => { checkins = snap.val() || {}; renderCheckinSlots(); } },
     { path: `${base}/unmatched`, handler: (snap) => { unmatchedDb = snap.val() || {}; renderUnmatched(); } },
     { path: `publicAshrLinks/${currentEventId}`, handler: (snap) => { portalsCache = {}; if (snap.exists()) snap.forEach(c => { portalsCache[c.key] = c.val(); }); renderLinks(); renderRSVPs(); maybeRepairAfterDeletions(); } },
@@ -394,47 +394,75 @@ function subscribeToEvent(eventId) {
 //   reference the dead key. This trims dead members, rewrites the
 //   portal familyKey so it keeps matching its family (RSVP kept),
 //   and DISABLES portals whose last honoured student disappeared.
-//   Runs automatically whenever honorees/links change; idempotent.
+//   👯 Also retires SUPERSEDED family records: once siblings are
+//   combined and the NEW family has responded, the old per-student
+//   records (and their still-active links) are retired so the same
+//   student never shows twice in reports / exports / capacity.
+//   Runs automatically whenever honorees/links/families change; idempotent.
 // ============================================
 function maybeRepairAfterDeletions() {
   if (!honoreesLoaded || repairRunning) return;
   const updates = {};
   Object.entries(portalsCache).forEach(([token, p]) => {
-  const orig = p.members || [];
-  if (!orig.length) return;
-  const valid = orig.filter(k => honorees[k]);
-  if (valid.length === orig.length) return;
-  const base = `publicAshrLinks/${currentEventId}/${token}`;
-  if (valid.length) {
-  updates[`${base}/members`] = valid;
-  updates[`${base}/familyKey`] = valid.slice().sort().join('|');
-  } else {
-  updates[`${base}/active`] = false;
-  updates[`${base}/disabledReason`] = 'honoree-deleted';
-  }
+    const orig = p.members || [];
+    if (!orig.length) return;
+    const valid = orig.filter(k => honorees[k]);
+    if (valid.length === orig.length) return;
+    const base = `publicAshrLinks/${currentEventId}/${token}`;
+    if (valid.length) {
+      updates[`${base}/members`] = valid;
+      updates[`${base}/familyKey`] = valid.slice().sort().join('|');
+    } else {
+      updates[`${base}/active`] = false;
+      updates[`${base}/disabledReason`] = 'honoree-deleted';
+    }
   });
+  // 👯 Map every student whose CURRENT family already responded
+  const groups = buildAshrFamilies();
+  const groupKeys = new Set(groups.map(g => g.key));
+  const coveredByResponded = new Map(); // uid -> covering familyId
+  groups.forEach(g => {
+    const pe = Object.entries(portalsCache).find(([_, p]) => p.familyKey === g.key);
+    if (!pe) return;
+    const fid = pe[1].familyId;
+    if (!families[fid]?.rsvp) return; // only retire AFTER the new family responded
+    g.members.forEach(m => coveredByResponded.set(studentUid(m) || m.honoreeKey, fid));
+  });
+  const now = new Date().toISOString();
   Object.entries(families).forEach(([fid, f]) => {
-  if (f.mergedInto) return; // keep merge history intact
-  const ids = f.memberHonoreeIds || [];
-  const kept = ids.filter(k => honorees[k]);
-  if (!kept.length) {
-  // 🧟 Orphan RSVP: every honoured student it referenced is gone.
-  // Names can never resolve again — remove the shell so it stops
-  // appearing as "fam_XXXXXXXX" and inflating guest totals.
-  if (ids.length || f.rsvp) {
-  updates[`ashrEvents/${currentEventId}/families/${fid}`] = null;
-  }
-  return;
-  }
-  if (kept.length !== ids.length) {
-  updates[`ashrEvents/${currentEventId}/families/${fid}/memberHonoreeIds`] = kept;
-  }
+    if (f.mergedInto || f.supersededBy) return; // keep audit trails intact
+    const ids = f.memberHonoreeIds || [];
+    const kept = ids.filter(k => honorees[k]);
+    const fBase = `ashrEvents/${currentEventId}/families/${fid}`;
+    if (!kept.length) {
+      // 🧟 Orphan RSVP: every honoured student it referenced is gone.
+      // Names can never resolve again — remove the shell so it stops
+      // appearing as "fam_XXXXXXXX" and inflating guest totals.
+      if (ids.length || f.rsvp) updates[fBase] = null;
+      return;
+    }
+    if (kept.length !== ids.length) updates[`${fBase}/memberHonoreeIds`] = kept;
+    // 👯 Superseded? Link no longer matches any current family AND
+    //    every remaining member is covered by a responded family.
+    const ownPortals = Object.entries(portalsCache).filter(([_, p]) => p.familyId === fid);
+    if (ownPortals.some(([_, p]) => groupKeys.has(p.familyKey))) return; // still current
+    const covers = kept.map(k => coveredByResponded.get(studentUid(honorees[k]) || k));
+    if (covers.some(c => !c || c === fid)) return; // not fully superseded — keep
+    updates[`${fBase}/rsvp`] = null;
+    updates[`${fBase}/memberHonoreeIds`] = null;
+    updates[`${fBase}/supersededBy`] = covers[0];
+    updates[`${fBase}/supersededAt`] = now;
+    ownPortals.forEach(([token, p]) => {
+      if (p.active === false) return;
+      updates[`publicAshrLinks/${currentEventId}/${token}/active`] = false;
+      updates[`publicAshrLinks/${currentEventId}/${token}/disabledReason`] = 'family-superseded';
+    });
   });
   if (!Object.keys(updates).length) return;
   repairRunning = true;
   update(ref(db), updates)
-  .catch(err => console.error('Portal repair failed:', err))
-  .finally(() => { repairRunning = false; });
+    .catch(err => console.error('Portal repair failed:', err))
+    .finally(() => { repairRunning = false; });
 }
 
 function setupTabs() {
@@ -2167,6 +2195,7 @@ function computeSlotCounts() {
 function buildRsvpRows() {
   const rows = [];
   const matchedFamIds = new Set();
+  const coveredUids = new Set();
   buildAshrFamilies().forEach(fam => {
     const portalEntry = Object.entries(portalsCache).find(([_, p]) => p.familyKey === fam.key);
     const portal = portalEntry ? portalEntry[1] : null;
@@ -2174,20 +2203,30 @@ function buildRsvpRows() {
     const famRec = famId ? families[famId] : null;
     if (famId) matchedFamIds.add(famId);
     if (!portal && !famRec) return;
+    const rsvp = famRec?.rsvp || null;
+    // 👯 Students whose CURRENT family already responded are covered —
+    // old pre-merge records must not surface them a second time.
+    if (rsvp) fam.members.forEach(m => coveredUids.add(studentUid(m) || m.honoreeKey));
     rows.push({
       famId: famId || fam.key,
       members: fam.members,
-      rsvp: famRec?.rsvp || null,
+      rsvp,
       hasLink: !!portal,
       linkDisabled: portal?.active === false
     });
   });
-  Object.entries(families).forEach(([famId, famRec]) => {
-    if (matchedFamIds.has(famId)) return;
+  // 👯 Unmatched legacy records: newest response first, and never show
+  // a student already covered by a responded family (or an earlier row).
+  const unmatched = Object.entries(families)
+    .filter(([famId, famRec]) => !matchedFamIds.has(famId) && !famRec.mergedInto && !famRec.supersededBy)
+    .sort((a, b) => String(b[1].rsvp?.submittedAt || '').localeCompare(String(a[1].rsvp?.submittedAt || '')));
+  unmatched.forEach(([famId, famRec]) => {
     const members = (famRec.memberHonoreeIds || [])
       .map(mid => honorees[mid] ? { honoreeKey: mid, ...honorees[mid] } : null)
-      .filter(Boolean);
-    if (!members.length && !famRec.rsvp) return;
+      .filter(Boolean)
+      .filter(m => !coveredUids.has(studentUid(m) || m.honoreeKey));
+    if (!members.length) return;
+    if (famRec.rsvp) members.forEach(m => coveredUids.add(studentUid(m) || m.honoreeKey));
     rows.push({ famId, members, rsvp: famRec.rsvp || null, hasLink: false, linkDisabled: false });
   });
   return rows;
@@ -2313,11 +2352,74 @@ function renderSlotCapacity() {
   });
 }
 
+// ============================================
+// 🏫 SCHOOL GRADE & CURRENT LEVEL (from centers DB)
+// ============================================
+function dbStudentFor(m) {
+  const num = String(m.studentNumber || '').trim();
+  const sid = String(m.studentId || '').trim();
+  const cid = m.centerId || '';
+  return allStudentsFlat.find(s => cid && s.centerId === cid && sid && String(s.id || '') === sid)
+    || allStudentsFlat.find(s => cid && s.centerId === cid && num && String(s.studentNumber || '').trim() === num)
+    || allStudentsFlat.find(s => num && String(s.studentNumber || '').trim() === num)
+    || null;
+}
+function schoolGradeText(s) {
+  if (!s) return '';
+  const v = s.schoolGrade ?? s.schoolgrade ?? s.school_grade ?? s.grade ?? s.schoolYear ?? s.schoolClass ?? '';
+  return String(v ?? '').trim();
+}
+function currentLevelText(s) {
+  if (!s) return '';
+  const flat = s.currentLevel ?? s.level ?? '';
+  if (typeof flat === 'string' && flat.trim()) return flat.trim();
+  const parts = [];
+  const seen = new Set();
+  const add = (label, val) => {
+    let v = val;
+    if (v && typeof v === 'object') v = v.currentLevel ?? v.level ?? v.current ?? v.materialLevel ?? '';
+    const txt = String(v ?? '').trim();
+    if (!txt) return;
+    const key = String(label).toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    parts.push(label ? `${label} ${txt}` : txt);
+  };
+  const objSrc = (flat && typeof flat === 'object') ? flat : (s.currentLevels || s.levels || s.subjectLevels || null);
+  const norm = {};
+  Object.entries(objSrc || {}).forEach(([k, v]) => { norm[String(k).toLowerCase()] = v; });
+  if (Array.isArray(s.subjects)) {
+    s.subjects.forEach(x => add(String(x?.subject || x?.name || '').trim(), x));
+  } else if (s.subjects && typeof s.subjects === 'object') {
+    Object.entries(s.subjects).forEach(([k, v]) => {
+      const key = String(k).toLowerCase();
+      if (norm[key] === undefined) norm[key] = v;
+    });
+  }
+  add('Math', norm.math ?? norm.maths ?? s.mathLevel ?? s.currentMathLevel ?? s.mathCurrentLevel);
+  add('English', norm.english ?? norm.erp ?? norm.efl ?? s.englishLevel ?? s.erpLevel ?? s.eflLevel ?? s.currentEnglishLevel);
+  add('Chinese', norm.chinese ?? s.chineseLevel ?? s.currentChineseLevel);
+  if (!parts.length) Object.entries(norm).forEach(([k, v]) => add(k.charAt(0).toUpperCase() + k.slice(1), v));
+  return parts.join('; ');
+}
+
 function exportRSVPs() {
   const rows = [];
-  buildRsvpRows().forEach(row => {
+  const seenUids = new Set();
+  // 👯 One row per student: responded families first (newest submission
+  //    wins), pending families last — stale duplicates can never export.
+  const ordered = buildRsvpRows().slice().sort((a, b) => {
+    const ra = a.rsvp?.status ? 1 : 0;
+    const rb = b.rsvp?.status ? 1 : 0;
+    if (ra !== rb) return rb - ra;
+    return String(b.rsvp?.submittedAt || '').localeCompare(String(a.rsvp?.submittedAt || ''));
+  });
+  ordered.forEach(row => {
     const rsvp = row.rsvp || {};
     groupMembersForDisplay(row.members).forEach(m => {
+      const uid = studentUid(m) || m.honoreeKey;
+      if (seenUids.has(uid)) return;
+      seenUids.add(uid);
       const st = rsvp.status ? rsvpKeyStatus(rsvp, m.honoreeKey) : 'pending';
       let slotText = '';
       if (st === 'attending') {
@@ -2325,10 +2427,13 @@ function exportRSVPs() {
         const slot = sid ? timeslots[sid] : null;
         slotText = slot ? `${slot.start}–${slot.end}` : (sid || '');
       }
+      const dbStudent = dbStudentFor(m);
       rows.push({
         'Student': m.nameCn || m.nameEn,
         'Pinyin': m.nameEn || '',
         'Center': m.centerName || '',
+        'School Grade': schoolGradeText(dbStudent),
+        'Current Level': currentLevelText(dbStudent),
         'Awards': (m.awards || []).map(a => `${a.subject} ${a.stars}★`).join('; '),
         'Completions': (m.completions || []).map(c => `${c.subject || c.subjectCanon} Completer`).join('; '),
         'RSVP Status': st,
