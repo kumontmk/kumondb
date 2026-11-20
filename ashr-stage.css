@@ -352,3 +352,26 @@ All sizes scale from:
 .st-award.tier-completer .st-subj {
   letter-spacing: .02em;
 }
+
+/* ============================================
+   🏫 SCHOOL GRADE & CURRENT LEVEL META LINE
+   ============================================ */
+.st-meta {
+  font-size: min(calc(var(--sw) * .016), calc(var(--sh) * .029));
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: #fde68a;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, .55);
+}
+.st-meta:empty {
+  display: none;
+}
+.stage.awards-many .st-meta {
+  font-size: min(calc(var(--sw) * .014), calc(var(--sh) * .025));
+}
+.stage.awards-max .st-meta {
+  font-size: min(calc(var(--sw) * .012), calc(var(--sh) * .022));
+}
+.stage.anim-in .st-meta {
+  animation: stRise 0.7s ease .3s both;
+}

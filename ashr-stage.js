@@ -1,43 +1,31 @@
 // ashr-stage.js — shared selectable aspect stage renderer
 // Used by ashr-display.html (audience screen) and ashr-present.html (live preview)
-
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;'
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[c]));
 }
-
 export function medalFor(tier) {
   return tier === 'Gold' ? '🥇' : tier === 'Silver' ? '🥈' : tier === 'Bronze' ? '🥉' : '';
 }
-
 export const starsFor = n => '★'.repeat(Math.max(0, Math.min(5, Number(n) || 0)));
 
 // ✅ Same short-code algorithm as ashr.js so printed barcodes match
 export function shortScanCode(value) {
   let h = 5381;
   const v = String(value || '');
-
   for (let i = 0; i < v.length; i++) {
     h = ((h << 5) + h + v.charCodeAt(i)) >>> 0;
   }
-
   return 'K' + h.toString(36).toUpperCase().padStart(7, '0');
 }
 
 // ✅ Exact match: long barcode, short code, honoree key, studentId, student number
 export function matchScan(honorees, value, eventId) {
   const v = String(value ?? '').trim();
-
   if (!v) return null;
-
   for (const [key, h] of Object.entries(honorees || {})) {
     const bv = h.barcodeValue || `ASHR${eventId}_${key}`;
-
     if (
       bv === v ||
       shortScanCode(bv) === v ||
@@ -48,7 +36,6 @@ export function matchScan(honorees, value, eventId) {
       return { key, ...h };
     }
   }
-
   return null;
 }
 
@@ -56,16 +43,13 @@ export function matchScan(honorees, value, eventId) {
 export function searchHonorees(honorees, q, limit = 10) {
   const s = String(q || '').trim().toLowerCase();
   if (!s) return [];
-
   const score = h => {
     const names = [
       (h.nameCn || '').toLowerCase(),
       (h.nameEn || '').toLowerCase()
     ];
-
     return names.some(n => n.startsWith(s)) ? 0 : 1;
   };
-
   return Object.entries(honorees || {})
     .map(([key, h]) => ({ key, ...h }))
     .filter(h => {
@@ -75,17 +59,14 @@ export function searchHonorees(honorees, q, limit = 10) {
         h.studentNumber,
         h.centerName
       ];
-
       (h.awards || []).forEach(a => {
         parts.push(a.subject);
       });
-
       (h.completions || []).forEach(c => {
         parts.push(c.subject);
         parts.push(c.subjectCanon);
         parts.push(c.subjectOriginal);
       });
-
       return parts
         .filter(Boolean)
         .join(' ')
@@ -100,38 +81,28 @@ export function searchHonorees(honorees, q, limit = 10) {
 }
 
 /* ============================================
-🎉 CONFETTI (dependency-free canvas engine)
-============================================ */
-
+   🎉 CONFETTI (dependency-free canvas engine)
+   ============================================ */
 export function burstConfetti(canvas, { count = 120 } = {}) {
   if (!canvas) return;
-
   const ctx = canvas.getContext('2d');
-
   if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
     canvas.width = canvas.clientWidth;
     canvas.height = canvas.clientHeight;
   }
-
   const W = canvas.width;
   const H = canvas.height;
-
   if (!W || !H) return;
-
   const colors = ['#FFD700', '#fde047', '#87CEEB', '#4682B4', '#ffffff', '#fb923c'];
   const parts = canvas._parts = canvas._parts || [];
-
   const cannons = [
     { x: W * 0.05, y: H * 0.99, ang: -Math.PI / 3.1 },
     { x: W * 0.95, y: H * 0.99, ang: -Math.PI + Math.PI / 3.1 }
   ];
-
   for (let i = 0; i < count; i++) {
     const c = cannons[i % cannons.length];
-
     const speed = H * (0.013 + Math.random() * 0.016);
     const spread = (Math.random() - 0.5) * 0.6;
-
     parts.push({
       x: c.x,
       y: c.y,
@@ -147,32 +118,25 @@ export function burstConfetti(canvas, { count = 120 } = {}) {
       decay: 0.006 + Math.random() * 0.006
     });
   }
-
   if (canvas._raf) return; // loop already running — new particles just join it
-
   const step = () => {
     ctx.clearRect(0, 0, W, H);
-
     for (let i = parts.length - 1; i >= 0; i--) {
       const p = parts[i];
-
       p.vy += p.g;
       p.x += p.vx;
       p.y += p.vy;
       p.rot += p.vr;
       p.life -= p.decay;
-
       if (p.life <= 0 || p.y > H + 40) {
         parts.splice(i, 1);
         continue;
       }
-
       ctx.save();
       ctx.translate(p.x, p.y);
       ctx.rotate(p.rot);
       ctx.globalAlpha = Math.max(0, p.life);
       ctx.fillStyle = p.color;
-
       if (p.shape === 'circle') {
         ctx.beginPath();
         ctx.arc(0, 0, p.size / 2, 0, 7);
@@ -180,10 +144,8 @@ export function burstConfetti(canvas, { count = 120 } = {}) {
       } else {
         ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.62);
       }
-
       ctx.restore();
     }
-
     if (parts.length) {
       canvas._raf = requestAnimationFrame(step);
     } else {
@@ -191,57 +153,44 @@ export function burstConfetti(canvas, { count = 120 } = {}) {
       ctx.clearRect(0, 0, W, H);
     }
   };
-
   canvas._raf = requestAnimationFrame(step);
 }
 
 /* ============================================
-🔊 SOUND (WebAudio fanfare, no audio files)
-Display must call unlockAudio() once via a click.
-============================================ */
-
+   🔊 SOUND (WebAudio fanfare, no audio files)
+   Display must call unlockAudio() once via a click.
+   ============================================ */
 let audioCtx = null;
-
 export function unlockAudio() {
   try {
     audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-
     if (audioCtx.state === 'suspended') {
       audioCtx.resume();
     }
-
     return audioCtx.state === 'running';
   } catch (e) {
     return false;
   }
 }
-
 export function playFanfare(tier) {
   if (!audioCtx || audioCtx.state !== 'running') return;
-
   const base = [523.25, 659.25, 783.99];
-
   const notes =
     tier === 'Gold' || tier === 'Completer'
       ? [...base, 1046.5, 1318.51]
       : tier === 'Silver'
         ? [...base, 1046.5]
         : base;
-
   const t0 = audioCtx.currentTime + 0.03;
-
   notes.forEach((f, i) => {
     const o = audioCtx.createOscillator();
     const g = audioCtx.createGain();
-
     o.type = 'triangle';
     o.frequency.value = f;
-
     const st = t0 + i * 0.1;
     g.gain.setValueAtTime(0.0001, st);
     g.gain.exponentialRampToValueAtTime(0.13, st + 0.02);
     g.gain.exponentialRampToValueAtTime(0.0001, st + 0.55);
-
     o.connect(g).connect(audioCtx.destination);
     o.start(st);
     o.stop(st + 0.6);
@@ -249,48 +198,25 @@ export function playFanfare(tier) {
 }
 
 /* ============================================
-🖼 STAGE CONTROLLER
-============================================ */
-
+   🖼 STAGE CONTROLLER
+   ============================================ */
 export function mountStage(host, opts = {}) {
-  host.innerHTML = `
-    <div class="stage${opts.mini ? ' stage-mini' : ''}" data-aspect="16:9">
-      <div class="stage-backdrop"></div>
-      <div class="stage-scrim"></div>
-      <div class="stage-content">
-        <div class="st-block">
-          <div class="st-name-cn"></div>
-          <div class="st-name-en"></div>
-          <div class="st-awards"></div>
-        </div>
-      </div>
-      <canvas class="stage-confetti"></canvas>
-      <div class="stage-black"></div>
-    </div>
-  `;
-
+  host.innerHTML = `<div class="stage${opts.mini ? ' stage-mini' : ''}" data-aspect="16:9"> <div class="stage-backdrop"></div> <div class="stage-scrim"></div> <div class="stage-content"> <div class="st-block"> <div class="st-name-cn"></div> <div class="st-name-en"></div> <div class="st-meta"></div> <div class="st-awards"></div> </div> </div> <canvas class="stage-confetti"></canvas> <div class="stage-black"></div> </div>`;
   const root = host.querySelector('.stage');
   const ctrl = new StageController(root, opts);
-
   const fit = () => {
     root.style.setProperty('--sw', root.clientWidth + 'px');
     root.style.setProperty('--sh', root.clientHeight + 'px');
   };
-
   ctrl._fit = fit;
-
   if (window.ResizeObserver) {
     new ResizeObserver(fit).observe(root);
   }
-
   window.addEventListener('resize', fit);
-
   fit();
   requestAnimationFrame(fit);
-
   return ctrl;
 }
-
 class StageController {
   constructor(root, opts) {
     this.root = root;
@@ -298,99 +224,80 @@ class StageController {
     this.seq = null;
     this.aspect = '16:9';
   }
-
   setAspect(aspect) {
     this._applyAspect(aspect);
   }
-
   _applyAspect(aspect) {
     if (!aspect) return;
-
     const allowed = ['4:3', '16:9', '16:10', '21:9', '32:9'];
     const value = allowed.includes(aspect) ? aspect : '16:9';
-
     if (this.root.dataset.aspect === value) return;
-
     this.aspect = value;
     this.root.dataset.aspect = value;
-
     // Re-measure after aspect-ratio change
     if (typeof this._fit === 'function') {
       requestAnimationFrame(() => this._fit());
     }
   }
-
   apply(state = {}) {
-  this._applyAspect(state.aspect);
-
-  const mode =
-    (state.mode === 'student' && state.student) ? 'student'
-    : state.mode === 'blank' ? 'blank'
-    : 'backdrop';
-
-  this.root.classList.toggle('is-blank', mode === 'blank');
-  this.root.classList.toggle('has-student', mode === 'student');
-
-  const content = this.root.querySelector('.stage-content');
-
-  if (mode !== 'student') {
-    content.classList.add('is-hidden');
-    this.seq = null;
-    return;
-  }
-
-  const isNew = state.seq !== this.seq;
-  this._fill(state);
-  content.classList.remove('is-hidden');
-
-  if (isNew) {
-    this.seq = state.seq;
-
-    this.root.classList.remove('anim-in');
-    void this.root.offsetWidth; // restart CSS animations
-    this.root.classList.add('anim-in');
-
-    const student = state.student || {};
-    const awards = student.awards || [];
-    const completions = student.completions || [];
-
-    if (state.effects !== false) {
-      const gold = awards.some(a => a.tier === 'Gold');
-      const completer = completions.length > 0;
-
-      burstConfetti(
-        this.root.querySelector('.stage-confetti'),
-        {
-          count: this.opts.mini
-            ? 40
-            : gold
-              ? 170
-              : completer
-                ? 140
-                : 110
-        }
-      );
+    this._applyAspect(state.aspect);
+    const mode =
+      (state.mode === 'student' && state.student) ? 'student'
+      : state.mode === 'blank' ? 'blank'
+      : 'backdrop';
+    this.root.classList.toggle('is-blank', mode === 'blank');
+    this.root.classList.toggle('has-student', mode === 'student');
+    const content = this.root.querySelector('.stage-content');
+    if (mode !== 'student') {
+      content.classList.add('is-hidden');
+      this.seq = null;
+      return;
     }
-
-    if (state.sound && !this.opts.silent) {
-      playFanfare(
-        student.tier ||
-        (completions.length ? 'Completer' : 'Bronze')
-      );
+    const isNew = state.seq !== this.seq;
+    this._fill(state);
+    content.classList.remove('is-hidden');
+    if (isNew) {
+      this.seq = state.seq;
+      this.root.classList.remove('anim-in');
+      void this.root.offsetWidth; // restart CSS animations
+      this.root.classList.add('anim-in');
+      const student = state.student || {};
+      const awards = student.awards || [];
+      const completions = student.completions || [];
+      if (state.effects !== false) {
+        const gold = awards.some(a => a.tier === 'Gold');
+        const completer = completions.length > 0;
+        burstConfetti(
+          this.root.querySelector('.stage-confetti'),
+          {
+            count: this.opts.mini
+              ? 40
+              : gold
+                ? 170
+                : completer
+                  ? 140
+                  : 110
+          }
+        );
+      }
+      if (state.sound && !this.opts.silent) {
+        playFanfare(
+          student.tier ||
+          (completions.length ? 'Completer' : 'Bronze')
+        );
+      }
     }
   }
-}
-
   _fill(state) {
     const s = state.student || {};
     const q = sel => this.root.querySelector(sel);
-
     q('.st-name-cn').textContent = s.nameCn || s.nameEn || '';
     q('.st-name-en').textContent = (s.nameCn && s.nameEn) ? s.nameEn : '';
-
+    // 🏫 Grade + current level of the awarded/completed subject(s).
+    // Hidden automatically when both are empty (CSS :empty).
+    q('.st-meta').textContent = [s.schoolGrade, s.currentLevel].filter(Boolean).join('  ·  ');
     const awards = s.awards || [];
     const completions = s.completions || [];
-
     // 🎓 Completers render FIRST, then ASHR awards
     const badges = [
       ...completions.map(c => {
@@ -412,11 +319,9 @@ class StageController {
         `
       }))
     ];
-
     // Compact modes so the stack fits different aspect ratios
     this.root.classList.toggle('awards-many', badges.length >= 4);
     this.root.classList.toggle('awards-max', badges.length >= 7);
-
     q('.st-awards').innerHTML = badges.map((b, i) => `
       <div class="st-award tier-${b.kind}" style="animation-delay:${(0.3 + i * 0.16).toFixed(2)}s">
         ${b.html}

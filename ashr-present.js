@@ -1,5 +1,4 @@
 // ashr-present.js — ASHR Stage Presenter (realtime controller)
-
 import { auth, db } from './auth.js';
 import { ref, get, set, update, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -10,49 +9,35 @@ const t = (key, fallback) => {
   const v = tCore(key);
   return (v && v !== key) ? v : fallback;
 };
-
 await i18nReady.catch(() => {});
 
 // ============================================
 // STATE
 // ============================================
-
 const DEFAULT_ASPECT = '21:9';
 const ASPECT_OPTIONS = ['4:3', '16:9', '16:10', '21:9', '32:9'];
-
 let currentEventId = localStorage.getItem('ashr_eventId') || '2026';
-
 let eventSettings = {},
-    honorees = {},
-    checkins = {},
-    presState = null;
-
+  honorees = {},
+  checkins = {},
+  presState = null;
 let honoreesLoaded = false;
 let queue = [],
-    queueIndex = 0,
-    recent = [];
-
+  queueIndex = 0,
+  recent = [];
 let effectsOn = localStorage.getItem(`ashr_fx_${currentEventId}`) !== '0';
 let soundOn = localStorage.getItem(`ashr_sound_${currentEventId}`) === '1';
-
 let aspectRatio = localStorage.getItem(`ashr_aspect_${currentEventId}`) || DEFAULT_ASPECT;
-
 let stage = null,
-    html5QrCode = null;
-
+  html5QrCode = null;
 let unsubs = [],
-    syncingToggles = false;
+  syncingToggles = false;
+let allStudentsFlat = [];   // 🏫 centers DB (grade / current level lookup)
 
 const $ = id => document.getElementById(id);
-
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#39;'
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
 }[c]));
-
 const aspectKey = () => `ashr_aspect_${currentEventId}`;
 
 function eventDisplayName() {
@@ -61,35 +46,133 @@ function eventDisplayName() {
 }
 
 // ============================================
+// 🏫 SCHOOL GRADE & CURRENT LEVEL (from centers DB)
+//   Same lookup as the RSVP Excel export. The stage shows ONLY the
+//   level of the subject(s) the student is awarded for / completed.
+// ============================================
+async function loadAllCenters() {
+  try {
+    const snap = await get(ref(db, 'centers'));
+    allStudentsFlat = [];
+    if (snap.exists()) {
+      snap.forEach(c => {
+        const v = c.val() || {};
+        const centerId = c.key;
+        const centerName = v.name || centerId;
+        Object.entries(v.students || {}).forEach(([sid, s]) => {
+          allStudentsFlat.push({ id: sid, centerId, centerName, ...s });
+        });
+      });
+    }
+  } catch (err) { console.error('Failed to load centers:', err); }
+}
+function dbStudentFor(h) {
+  const num = String(h.studentNumber || '').trim();
+  const sid = String(h.studentId || '').trim();
+  const cid = h.centerId || '';
+  return allStudentsFlat.find(s => cid && s.centerId === cid && sid && String(s.id || '') === sid)
+    || allStudentsFlat.find(s => cid && s.centerId === cid && num && String(s.studentNumber || '').trim() === num)
+    || allStudentsFlat.find(s => num && String(s.studentNumber || '').trim() === num)
+    || null;
+}
+// 🎓 Level code only — drop the trailing worksheet number (H50 → H, AII170 → AII)
+function levelLettersOnly(v) {
+const s = String(v ?? '').trim();
+if (!s) return '';
+const stripped = s.replace(/[\s\-–]*\d+\s*$/, '').trim();
+return stripped || s; // if it was only digits, keep original rather than show nothing
+}
+
+// 🏫 Grade: DB stores K1–K3 and 1–12 → display K1–K3, P1–P6, F1–F6
+function normalizeSchoolGrade(v) {
+const raw = String(v ?? '').trim();
+if (!raw) return '';
+const s = raw.toUpperCase().replace(/\s+/g, '');
+if (/^K[1-3]$/.test(s) || /^P[1-6]$/.test(s) || /^F[1-6]$/.test(s)) return s;
+const m = s.match(/^(\d{1,2})(?:\.0+)?$/);
+if (m) {
+const n = Number(m[1]);
+if (n >= 1 && n <= 6) return 'P' + n;
+if (n >= 7 && n <= 12) return 'F' + (n - 6);
+}
+return raw; // unknown format — show as stored
+}
+function schoolGradeText(s) {
+if (!s) return '';
+const v = s.schoolGrade ?? s.schoolgrade ?? s.school_grade ?? s.grade ?? s.schoolYear ?? s.schoolClass ?? '';
+return normalizeSchoolGrade(v);
+}
+function canonSubject(subject) {
+  const s = String(subject || '').toLowerCase();
+  if (s.includes('math')) return 'math';
+  if (s.includes('chinese')) return 'chinese';
+  if (s.includes('erp') || s.includes('efl') || s.includes('english')) return 'english';
+  return '';
+}
+function subjectLevelMap(s) {
+  const out = {};
+  if (!s) return out;
+  const put = (key, val) => {
+    if (!key || out[key]) return;
+    let v = val;
+    if (v && typeof v === 'object') v = v.currentLevel ?? v.level ?? v.current ?? v.materialLevel ?? '';
+    const txt = String(v ?? '').trim();
+    if (txt) out[key] = txt;
+  };
+  const flat = s.currentLevel ?? s.level ?? '';
+  const objSrc = (flat && typeof flat === 'object') ? flat : (s.currentLevels || s.levels || s.subjectLevels || null);
+  const norm = {};
+  Object.entries(objSrc || {}).forEach(([k, v]) => { norm[String(k).toLowerCase()] = v; });
+  if (Array.isArray(s.subjects)) {
+    s.subjects.forEach(x => put(canonSubject(x?.subject || x?.name), x));
+  } else if (s.subjects && typeof s.subjects === 'object') {
+    Object.entries(s.subjects).forEach(([k, v]) => {
+      const lk = String(k).toLowerCase();
+      if (norm[lk] === undefined) norm[lk] = v;
+    });
+  }
+  put('math', norm.math ?? norm.maths ?? s.mathLevel ?? s.currentMathLevel ?? s.mathCurrentLevel);
+  put('english', norm.english ?? norm.erp ?? norm.efl ?? s.englishLevel ?? s.erpLevel ?? s.eflLevel ?? s.currentEnglishLevel);
+  put('chinese', norm.chinese ?? s.chineseLevel ?? s.currentChineseLevel);
+  Object.entries(norm).forEach(([k, v]) => put(canonSubject(k), v));
+  return out;
+}
+function stageLevelText(h, s) {
+const map = subjectLevelMap(s);
+const wanted = new Set();
+(h.awards || []).forEach(a => { const k = canonSubject(a.subject); if (k) wanted.add(k); });
+(h.completions || []).forEach(c => {
+const k = canonSubject(c.subject || c.subjectCanon || c.subjectOriginal);
+if (k) wanted.add(k);
+});
+const labels = { math: 'Math', english: 'English', chinese: 'Chinese' };
+return ['math', 'english', 'chinese']
+.filter(k => wanted.has(k) && map[k])
+.map(k => `${labels[k]} ${levelLettersOnly(map[k])}`)
+.join('  ·  ');
+}
+
+// ============================================
 // INIT
 // ============================================
-
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
     window.location.href = 'index.html';
     return;
   }
-
   applyI18n();
-
   stage = mountStage($('previewHost'), { mini: true, silent: true });
-
   loadPrefs();
   loadQueueStorage();
   loadRecentStorage();
-
   stage.setAspect?.(aspectRatio);
-
   $('fxToggle').checked = effectsOn;
   $('soundToggle').checked = soundOn;
-
+  await loadAllCenters();
   await setupEventSelect();
-
   setupControls();
   setupCamera();
-
   subscribe(currentEventId);
-
   $('page-loader').classList.add('hidden');
   $('mainContent').style.display = 'block';
   $('presScan').focus();
@@ -98,46 +181,36 @@ onAuthStateChanged(auth, async (user) => {
 // ============================================
 // REALTIME
 // ============================================
-
 function subscribe(eventId) {
   unsubs.forEach(fn => fn());
   unsubs = [];
-
   const on = (path, cb) => {
     const u = onValue(ref(db, path), cb, err => console.error(`Listener error on ${path}:`, err));
     unsubs.push(() => u());
   };
-
   on(`ashrEvents/${eventId}/settings`, s => {
     eventSettings = s.val() || {};
   });
-
   on(`ashrEvents/${eventId}/honorees`, s => {
     honorees = s.val() || {};
     honoreesLoaded = true;
     renderQueue();
     renderRecent();
   });
-
   on(`ashrEvents/${eventId}/checkins`, s => {
     checkins = s.val() || {};
   });
-
   on(`ashrEvents/${eventId}/presentation`, s => {
     presState = s.val() || null;
-
     stage.apply(presState || {
       mode: 'backdrop',
       aspect: aspectRatio
     });
-
     updateNowBar();
     syncToggles();
   });
-
   on('.info/connected', s => $('connDot').classList.toggle('on', s.val() === true));
 }
-
 function presRef() {
   return ref(db, `ashrEvents/${currentEventId}/presentation`);
 }
@@ -145,32 +218,30 @@ function presRef() {
 // ============================================
 // SEND ACTIONS
 // ============================================
-
 async function showStudent(key) {
   const h = honorees[key];
   if (!h) {
     feedback(`❌ ${t('pres.gone', 'Student no longer in honoree list')}`, 'error');
     return;
   }
-
   const awards = h.awards || [];
   const completions = h.completions || [];
-
   const hasAward = awards.length > 0;
   const hasComp = completions.length > 0;
-
   const presentationType =
     hasAward && hasComp ? 'both'
     : hasComp ? 'completer'
     : 'award';
-
   const tier =
     awards.some(a => a.tier === 'Gold') ? 'Gold'
     : awards.some(a => a.tier === 'Silver') ? 'Silver'
     : hasAward ? 'Bronze'
     : hasComp ? 'Completer'
     : 'Bronze';
-
+  // 🏫 Grade + level of the awarded/completed subject(s) only
+  const dbStudent = dbStudentFor(h);
+  const schoolGrade = schoolGradeText(dbStudent);
+  const currentLevel = stageLevelText(h, dbStudent);
   try {
     await set(presRef(), {
       mode: 'student',
@@ -183,6 +254,8 @@ async function showStudent(key) {
         nameEn: h.nameEn || '',
         centerName: h.centerName || '',
         studentNumber: h.studentNumber || '',
+        schoolGrade,
+        currentLevel,
         presentationType,
         tier,
         awards: awards.map(a => ({
@@ -202,14 +275,12 @@ async function showStudent(key) {
       updatedAt: new Date().toISOString(),
       updatedBy: auth.currentUser?.email || ''
     });
-
     pushRecent(key);
     feedback(`✅ ${t('pres.showing', 'Now showing')}: ${h.nameCn || h.nameEn}`, 'success');
   } catch (err) {
     feedback(`${t('toast.err', 'Error')}: ${err.message}`, 'error');
   }
 }
-
 async function sendMode(mode) {
   try {
     await set(presRef(), {
@@ -224,7 +295,6 @@ async function sendMode(mode) {
       updatedAt: new Date().toISOString(),
       updatedBy: auth.currentUser?.email || ''
     });
-
     feedback(
       mode === 'blank'
         ? '⬛ ' + t('pres.blank', 'Screen blanked')
@@ -239,76 +309,59 @@ async function sendMode(mode) {
 // ============================================
 // SCAN / SEARCH PIPELINE
 // ============================================
-
 function processInput(raw) {
   const v = String(raw || '').trim();
-
   if (!v) return;
-
   if (!honoreesLoaded) {
     feedback('⏳ ' + t('pres.loading', 'Still loading honorees…'), 'info');
     return;
   }
-
   const exact = matchScan(honorees, v, currentEventId);
-
   if (exact) {
     hideDrop();
     $('presScan').value = '';
     showStudent(exact.key);
     return;
   }
-
   const results = searchHonorees(honorees, v, 10);
-
   if (results.length === 1) {
     hideDrop();
     $('presScan').value = '';
     showStudent(results[0].key);
     return;
   }
-
   if (results.length > 1) {
     renderSearchDrop(v);
     feedback(`🔎 ${results.length} ${t('pres.matches', 'matches — pick one from the list')}`, 'info');
     return;
   }
-
   feedback(
     `❌ "${esc(v)}" ${t('pres.notFound', 'not found. Check the spelling, or use 🧹 Clear to show the backdrop only.')}`,
     'error'
   );
 }
-
 function renderSearchDrop(q) {
   const drop = $('searchDrop');
   const results = searchHonorees(honorees, q, 10);
   drop.innerHTML = '';
-
   if (!results.length) {
     drop.classList.add('hidden');
     return;
   }
-
   results.forEach(r => {
     const div = document.createElement('div');
     div.className = 'result-item pres-result';
-
     const awardBadges = (r.awards || []).map(a =>
       `<span class="mini-award tier-${String(a.tier || 'bronze').toLowerCase()}">${medalFor(a.tier)} ${esc(a.subject)} ${'★'.repeat(a.stars || 0)}</span>`
     ).join('');
-
     const completerBadges = (r.completions || []).map(c => {
       const subject = c.subject || c.subjectCanon || c.subjectOriginal || '';
       return `<span class="mini-award tier-completer">🎓 ${esc(subject)} Completer</span>`;
     }).join('');
-
     const medals = awardBadges + completerBadges;
-
     const arrived = checkins[r.key]
       ? `<span class="arrived">✓ ${t('pres.here', 'checked in')}</span>`
       : '';
-
     div.innerHTML = `
       <div class="ri-main">
         <strong>${esc(r.nameCn || r.nameEn || '')}</strong>
@@ -320,30 +373,24 @@ function renderSearchDrop(q) {
       <button class="btn-small primary ri-show">▶ ${t('pres.show', 'Show')}</button>
       <button class="btn-small secondary ri-queue">＋ ${t('pres.queue', 'Queue')}</button>
     `;
-
     div.querySelector('.ri-show').onclick = e => {
       e.stopPropagation();
       hideDrop();
       showStudent(r.key);
     };
-
     div.querySelector('.ri-queue').onclick = e => {
       e.stopPropagation();
       addToQueue(r.key);
     };
-
     div.onclick = () => {
       hideDrop();
       $('presScan').value = '';
       showStudent(r.key);
     };
-
     drop.appendChild(div);
   });
-
   drop.classList.remove('hidden');
 }
-
 function hideDrop() {
   $('searchDrop').classList.add('hidden');
 }
@@ -351,11 +398,9 @@ function hideDrop() {
 // ============================================
 // QUEUE (localStorage per event)
 // ============================================
-
 function qKey() {
   return `ashr_pq_${currentEventId}`;
 }
-
 function loadQueueStorage() {
   try {
     const d = JSON.parse(localStorage.getItem(qKey()) || '{}');
@@ -366,57 +411,43 @@ function loadQueueStorage() {
     queueIndex = 0;
   }
 }
-
 function saveQueue() {
   localStorage.setItem(qKey(), JSON.stringify({ items: queue, index: queueIndex }));
 }
-
 function addToQueue(key) {
   const at = queue.indexOf(key);
-
   if (at >= 0) {
     feedback(`ℹ️ ${t('pres.alreadyQ', 'Already in queue at position')} ${at + 1}`, 'info');
     return;
   }
-
   queue.push(key);
   saveQueue();
   renderQueue();
-
   const h = honorees[key];
-
   feedback(`➕ ${t('pres.queued', 'Queued')}: ${h ? (h.nameCn || h.nameEn) : key}`, 'success');
 }
-
 function renderQueue() {
   const list = $('queueList');
   list.innerHTML = '';
-
   if (!queue.length) {
     list.innerHTML = `<p class="hint">${t('pres.qEmpty', 'Queue is empty — add honorees via the ＋ Queue button in search results to plan the ceremony order.')}</p>`;
   }
-
   queue.forEach((key, i) => {
     const h = honorees[key];
     const li = document.createElement('li');
-
     li.className =
       'q-item' +
       (i < queueIndex ? ' q-done' : '') +
       (i === queueIndex ? ' q-next' : '');
-
     let detailText = '';
     if (h) {
       const parts = [];
       const awardCount = (h.awards || []).length;
       const compCount = (h.completions || []).length;
-
       if (awardCount) parts.push(`${awardCount} award(s)`);
       if (compCount) parts.push(`${compCount} completion(s)`);
-
       detailText = `${h.centerName || ''}${parts.length ? ' · ' + parts.join(' · ') : ''}`;
     }
-
     li.innerHTML = `
       <span class="q-num">${i + 1}</span>
       <div class="q-info">
@@ -428,74 +459,57 @@ function renderQueue() {
       <button class="btn-small secondary q-down" title="Move down">↓</button>
       <button class="btn-small danger q-del" title="Remove">✕</button>
     `;
-
     li.querySelector('.q-show').onclick = () => {
       queueIndex = i + 1;
       saveQueue();
       renderQueue();
       showStudent(key);
     };
-
     li.querySelector('.q-up').onclick = () => moveQueue(i, -1);
     li.querySelector('.q-down').onclick = () => moveQueue(i, 1);
-
     li.querySelector('.q-del').onclick = () => {
       queue.splice(i, 1);
       if (i < queueIndex) queueIndex--;
       saveQueue();
       renderQueue();
     };
-
     list.appendChild(li);
   });
-
   $('queueProgress').textContent = queue.length
     ? `${Math.min(queueIndex, queue.length)} / ${queue.length} ${t('pres.shown', 'shown')}`
     : '';
 }
-
 function moveQueue(i, dir) {
   const j = i + dir;
-
   if (j < 0 || j >= queue.length) return;
-
   const nextKey = queue[queueIndex];
-
   [queue[i], queue[j]] = [queue[j], queue[i]];
-
   queueIndex = nextKey === undefined
     ? queue.length
     : Math.max(0, queue.indexOf(nextKey));
-
   saveQueue();
   renderQueue();
 }
-
 function showNext() {
   if (!queue.length) {
     feedback(`ℹ️ ${t('pres.qEmptyShort', 'Queue is empty')}`, 'info');
     return;
   }
-
   if (queueIndex >= queue.length) {
     feedback(`🏁 ${t('pres.qDone', 'Queue finished — use ↺ Reset to replay')}`, 'info');
     return;
   }
-
   const key = queue[queueIndex];
-
   queueIndex++;
   saveQueue();
   renderQueue();
   showStudent(key);
 }
-
 function showPrev() {
   if (queueIndex <= 0) {
     feedback(`🏁 ${t('pres.qStart', 'Already at the start')}`, 'info');
     return;
   }
-
   queueIndex--;
   saveQueue();
   renderQueue();
@@ -505,11 +519,9 @@ function showPrev() {
 // ============================================
 // RECENT (localStorage per event)
 // ============================================
-
 function rKey() {
   return `ashr_recent_${currentEventId}`;
 }
-
 function loadRecentStorage() {
   try {
     recent = JSON.parse(localStorage.getItem(rKey()) || '[]');
@@ -517,31 +529,24 @@ function loadRecentStorage() {
     recent = [];
   }
 }
-
 function pushRecent(key) {
   recent = [key, ...recent.filter(k => k !== key)].slice(0, 10);
   localStorage.setItem(rKey(), JSON.stringify(recent));
   renderRecent();
 }
-
 function renderRecent() {
   const wrap = $('recentChips');
   wrap.innerHTML = '';
-
   if (!recent.length) {
     wrap.innerHTML = `<p class="hint">${t('pres.noRecent', 'Nothing shown yet.')}</p>`;
     return;
   }
-
   recent.forEach(key => {
     const h = honorees[key];
-
     const b = document.createElement('button');
     b.className = 'recent-chip';
     b.textContent = h ? (h.nameCn || h.nameEn) : key;
-
     b.onclick = () => showStudent(key);
-
     wrap.appendChild(b);
   });
 }
@@ -549,10 +554,8 @@ function renderRecent() {
 // ============================================
 // UI HELPERS
 // ============================================
-
 function updateNowBar() {
   const n = $('nowName');
-
   if (!presState || presState.mode === 'backdrop') {
     n.textContent = '🖼 ' + t('pres.backdropOnly', 'Backdrop only');
     n.className = 'now-name m-backdrop';
@@ -564,102 +567,73 @@ function updateNowBar() {
     n.textContent = `${s.nameCn || s.nameEn || ''} — ${s.centerName || ''}`;
     n.className = 'now-name m-student';
   }
-
   $('nowTime').textContent = presState?.updatedAt
     ? new Date(presState.updatedAt).toLocaleTimeString()
     : '';
 }
-
 function syncToggles() {
   if (!presState) return;
-
   syncingToggles = true;
-
   if (typeof presState.effects === 'boolean') {
     effectsOn = presState.effects;
     $('fxToggle').checked = effectsOn;
   }
-
   if (typeof presState.sound === 'boolean') {
     soundOn = presState.sound;
     $('soundToggle').checked = soundOn;
   }
-
   if (presState.aspect && ASPECT_OPTIONS.includes(presState.aspect)) {
     aspectRatio = presState.aspect;
     localStorage.setItem(aspectKey(), aspectRatio);
-
     const aspectSelect = $('aspectSelect');
     if (aspectSelect) aspectSelect.value = aspectRatio;
   }
-
   syncingToggles = false;
 }
-
 let fbTimer = null;
-
 function feedback(html, type = 'info') {
   const el = $('presFeedback');
-
   el.innerHTML = html;
   el.className = `scan-feedback ${type}`;
-
   clearTimeout(fbTimer);
-
   fbTimer = setTimeout(() => {
     el.innerHTML = '';
   }, 4500);
 }
-
 let toastTimer = null;
-
 function showToast(msg, type = 'success') {
   const toast = $('toast');
-
   toast.textContent = msg;
   toast.className = `toast ${type}`;
-
   clearTimeout(toastTimer);
-
   toastTimer = setTimeout(() => toast.classList.add('hidden'), 3000);
 }
 
 // ============================================
 // CONTROLS WIRING
 // ============================================
-
 function setupControls() {
   const input = $('presScan');
-
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       e.preventDefault();
       processInput(input.value);
     }
-
     if (e.key === 'Escape') hideDrop();
   });
-
   input.addEventListener('input', () => renderSearchDrop(input.value));
-
   document.addEventListener('click', e => {
     if (!e.target.closest('#searchDrop') && e.target !== input) hideDrop();
   });
-
   $('nextBtn').onclick = showNext;
   $('prevBtn').onclick = showPrev;
-
   $('clearBtn').onclick = () => sendMode('backdrop');
   $('blankBtn').onclick = () => sendMode('blank');
-
   $('openDisplayBtn').onclick = () =>
     window.open(`ashr-display.html?e=${encodeURIComponent(currentEventId)}`, '_blank');
-
   $('fxToggle').addEventListener('change', async e => {
     effectsOn = e.target.checked;
-
     localStorage.setItem(`ashr_fx_${currentEventId}`, effectsOn ? '1' : '0');
-
     if (!syncingToggles) {
       try {
         await update(presRef(), { effects: effectsOn });
@@ -668,19 +642,15 @@ function setupControls() {
       }
     }
   });
-
   $('soundToggle').addEventListener('change', async e => {
     soundOn = e.target.checked;
-
     localStorage.setItem(`ashr_sound_${currentEventId}`, soundOn ? '1' : '0');
-
     if (soundOn) {
       showToast(
         t('pres.soundHint', 'Reminder: click “🔊 Tap once to enable sound” on the display screen once.'),
         'success'
       );
     }
-
     if (!syncingToggles) {
       try {
         await update(presRef(), { sound: soundOn });
@@ -689,18 +659,13 @@ function setupControls() {
       }
     }
   });
-
   const aspectSelect = $('aspectSelect');
-
   if (aspectSelect) {
     aspectSelect.addEventListener('change', async e => {
       aspectRatio = e.target.value;
-
       localStorage.setItem(aspectKey(), aspectRatio);
-
       // Update local preview immediately
       stage.setAspect?.(aspectRatio);
-
       // Sync to audience display
       try {
         await update(presRef(), { aspect: aspectRatio });
@@ -709,7 +674,6 @@ function setupControls() {
       }
     });
   }
-
   $('qAddShownBtn').onclick = () => {
     if (presState?.mode === 'student' && presState.honoreeKey) {
       addToQueue(presState.honoreeKey);
@@ -717,16 +681,13 @@ function setupControls() {
       feedback(`ℹ️ ${t('pres.noOne', 'No student is on screen right now')}`, 'info');
     }
   };
-
   $('qResetBtn').onclick = () => {
     queueIndex = 0;
     saveQueue();
     renderQueue();
   };
-
   $('qClearBtn').onclick = () => {
     if (!queue.length) return;
-
     if (confirm(t('pres.qClearConfirm', 'Clear the whole queue?'))) {
       queue = [];
       queueIndex = 0;
@@ -734,17 +695,14 @@ function setupControls() {
       renderQueue();
     }
   };
-
   $('recentClearBtn').onclick = () => {
     recent = [];
     localStorage.setItem(rKey(), '[]');
     renderRecent();
   };
-
   // Global shortcuts (when not typing in a field)
   document.addEventListener('keydown', e => {
     if (e.target.matches('input, textarea, select')) return;
-
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
       e.preventDefault();
       showNext();
@@ -757,7 +715,6 @@ function setupControls() {
       sendMode('blank');
     }
   });
-
   renderQueue();
   renderRecent();
 }
@@ -765,91 +722,67 @@ function setupControls() {
 // ============================================
 // EVENT SELECTOR (same pattern as ashr.js)
 // ============================================
-
 async function setupEventSelect() {
   const snap = await get(ref(db, 'ashrEvents'));
   const select = $('eventSelect');
-
   select.innerHTML = '';
-
   if (snap.exists()) {
     Object.keys(snap.val()).sort().reverse().forEach(eid => {
       const opt = document.createElement('option');
       opt.value = eid;
       opt.textContent = eid;
-
       if (eid === currentEventId) opt.selected = true;
-
       select.appendChild(opt);
     });
   }
-
   if (!select.options.length) {
     const opt = document.createElement('option');
     opt.value = currentEventId;
     opt.textContent = currentEventId;
     select.appendChild(opt);
   }
-
   select.onchange = e => switchEvent(e.target.value);
-
   $('newEventBtn').onclick = () => {
     const year = prompt('Enter event year/ID (e.g. 2027):');
-
     if (year && year.trim()) {
       switchEvent(year.trim(), true);
     }
   };
 }
-
 function switchEvent(id, isNew = false) {
   currentEventId = id;
-
   localStorage.setItem('ashr_eventId', id);
-
   if (isNew) {
     const sel = $('eventSelect');
-
     if (![...sel.options].some(o => o.value === id)) {
       const opt = document.createElement('option');
       opt.value = id;
       opt.textContent = id;
       sel.prepend(opt);
     }
-
     sel.value = id;
   }
-
   honoreesLoaded = false;
   presState = null;
-
   loadPrefs();
   loadQueueStorage();
   loadRecentStorage();
-
   $('fxToggle').checked = effectsOn;
   $('soundToggle').checked = soundOn;
-
   stage.setAspect?.(aspectRatio);
-
   subscribe(id);
-
   renderQueue();
   renderRecent();
   updateNowBar();
-
   stage.apply({
     mode: 'backdrop',
     aspect: aspectRatio
   });
 }
-
 function loadPrefs() {
   effectsOn = localStorage.getItem(`ashr_fx_${currentEventId}`) !== '0';
   soundOn = localStorage.getItem(`ashr_sound_${currentEventId}`) === '1';
-
   aspectRatio = localStorage.getItem(aspectKey()) || DEFAULT_ASPECT;
-
   const aspectSelect = $('aspectSelect');
   if (aspectSelect) aspectSelect.value = aspectRatio;
 }
@@ -857,30 +790,24 @@ function loadPrefs() {
 // ============================================
 // CAMERA SCANNER (same library/pattern as ashr.js)
 // ============================================
-
 function setupCamera() {
   $('camBtn').onclick = startCamera;
   $('closeCameraModal').onclick = stopCamera;
 }
-
 async function startCamera() {
   if (typeof Html5Qrcode === 'undefined') {
     showToast('Scanner library missing — check the html5-qrcode script tag', 'error');
     return;
   }
-
   $('cameraModal').classList.remove('hidden');
-
   if (html5QrCode && html5QrCode.isScanning) {
     try {
       await html5QrCode.stop();
     } catch (e) {}
   }
-
   try {
     if (!html5QrCode) {
       const opts = {};
-
       if (typeof Html5QrcodeSupportedFormats !== 'undefined') {
         opts.formatsToSupport = [
           Html5QrcodeSupportedFormats.CODE_128,
@@ -892,12 +819,9 @@ async function startCamera() {
           Html5QrcodeSupportedFormats.QR_CODE
         ];
       }
-
       html5QrCode = new Html5Qrcode('cameraReader', opts);
     }
-
     await new Promise(r => requestAnimationFrame(r));
-
     await html5QrCode.start(
       { facingMode: 'environment' },
       {
@@ -925,20 +849,16 @@ async function startCamera() {
     $('cameraModal').classList.add('hidden');
   }
 }
-
 async function stopCamera() {
   $('cameraModal').classList.add('hidden');
-
   if (html5QrCode) {
     try {
       if (html5QrCode.isScanning) await html5QrCode.stop();
     } catch (e) {}
   }
 }
-
 window.addEventListener('beforeunload', () => {
   unsubs.forEach(fn => fn());
-
   if (html5QrCode && html5QrCode.isScanning) {
     html5QrCode.stop().catch(() => {});
   }
