@@ -3,7 +3,8 @@ import './dashboard-i18n.js';
 import { i18nReady, t, currentLanguage } from './i18n-core.js';
 import { auth, requireAuth, logout, db, syncPendingRequests } from './auth.js';
 import { ref, get, update, remove, push, serverTimestamp, onValue, off, onChildAdded, onChildChanged, onChildRemoved } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-import { runGradeRollover, getAcademicYear, OVER_F6 } from './grade-rollover.js';
+import { OVER_F6 } from './grade-rollover.js';
+import { getAcademicYearSafe, runSafeGradeRollover } from './academic-year.js';
 
 // ============================================
 // GLOBAL STATE
@@ -116,7 +117,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 5. Load and display Center Name in Calendar
   await loadCenterName();
   await processResumeRequests();
-  await runGradeRollover(db); // Aug 15 only; self-guarded to once per day; errors caught inside
+  await runSafeGradeRollover(db, centerId); // one safe rollover; never bumps students added this school year
   await syncPendingRequests(centerId);
 
   // 6. Initialize PO Calendar and Hide Loader
@@ -2771,7 +2772,8 @@ async function saveQuickInquiry() {
     diagnosticTests: diagnosticTests,
     achievementTests: [],
     assignedTeachers: {},
-    lastGradeUpdateYear: getAcademicYear(), // enrolled at the grade typed, for this school year
+    createdAt: new Date().toISOString(),
+    lastGradeUpdateYear: getAcademicYearSafe(), // enrolled at the grade typed, for this school year
     updatedAt: new Date().toISOString()
   };
 

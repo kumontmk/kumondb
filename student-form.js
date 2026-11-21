@@ -2,7 +2,8 @@ import { auth, db, logout } from './auth.js';
 import { ref, push, set, get, remove, update } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { i18nReady, t } from './student-form-i18n.js';
-import { getAcademicYear, OVER_F6 } from './grade-rollover.js';
+import { OVER_F6 } from './grade-rollover.js';
+import { getAcademicYearSafe } from './academic-year.js';
 
 const REQUIRED_PERMISSION = 'editStudent';
 
@@ -2963,8 +2964,9 @@ function renderSchedule() {
         const studentData = { ...currentFormData, updatedAt: new Date().toISOString() };
             if (!isEdit) {
                 // New student is enrolled at the grade typed, for the current school year.
-                // This stamp makes the dashboard's Aug 15 rollover skip them until next year.
-                studentData.lastGradeUpdateYear = getAcademicYear();
+                // createdAt + this stamp make the rollover skip them until next Aug 15.
+                studentData.createdAt = new Date().toISOString();
+                studentData.lastGradeUpdateYear = getAcademicYearSafe();
             }
         if (isEdit) {
             const snap = await get(ref(db, `centers/${centerId}/students/${studentId}`));
@@ -2982,11 +2984,11 @@ function renderSchedule() {
                     return newSub;
                 });
                 if (existingData.poNote) studentData.poNote = existingData.poNote;
-
-                // Preserve the stamp so manual grade edits are never re-bumped.
-                // Legacy records without a stamp get stamped (grade assumed correct, no bump).
-                studentData.lastGradeUpdateYear = existingData.lastGradeUpdateYear || getAcademicYear();
-            }
+                    if (existingData.createdAt) studentData.createdAt = existingData.createdAt;
+                    // Preserve the stamp so manual grade edits are never re-bumped.
+                    // Legacy records without a stamp get stamped (grade assumed correct, no bump).
+                    studentData.lastGradeUpdateYear = Number(existingData.lastGradeUpdateYear) || getAcademicYearSafe();
+                }
         }
         try {
             showLoader();

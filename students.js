@@ -1,5 +1,6 @@
 import { auth, db, logout, syncPendingRequests } from './auth.js';
-import { ref, get, push, remove, update } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { ref, get, push, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getAcademicYearSafe } from './academic-year.js';
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { i18nReady, t } from './students-i18n.js';
 
@@ -228,7 +229,8 @@ async function initializePage(isAdmin = false) {
                         subjects,
                         overallStatus,
                         createdAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString()
+                        updatedAt: new Date().toISOString(),
+                        lastGradeUpdateYear: getAcademicYearSafe()
                     };
                     await push(studentsRef, studentData);
                     success++;
@@ -1136,39 +1138,6 @@ async function exportBySubject(subject) {
     // ==========================================
     // 🍂 BULK GRADE UPGRADE LOGIC (August 15th)
     // ==========================================
-    async function processGradeUpdates() {
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const isAug15OrLater = (now.getMonth() > 7) || (now.getMonth() === 7 && now.getDate() >= 15);
-        if (!isAug15OrLater) return;
-        const academicYear = currentYear;
-        const snapshot = await get(studentsRef);
-        if (!snapshot.exists()) return;
-        const GRADE_ORDER = ['K0', 'K1', 'K2', 'K3', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13'];
-        const getNextGrade = (grade) => {
-            const idx = GRADE_ORDER.indexOf(String(grade));
-            return (idx !== -1 && idx < GRADE_ORDER.length - 1) ? GRADE_ORDER[idx + 1] : grade;
-        };
-        const updates = {};
-        snapshot.forEach(child => {
-            const student = child.val();
-            const studentId = child.key;
-            if (!student.lastGradeUpdateYear || student.lastGradeUpdateYear < academicYear) {
-                const oldGrade = student.grade;
-                const newGrade = getNextGrade(oldGrade);
-                updates[`${studentId}/grade`] = newGrade;
-                updates[`${studentId}/lastGradeUpdateYear`] = academicYear;
-                updates[`${studentId}/updatedAt`] = new Date().toISOString();
-            }
-        });
-        if (Object.keys(updates).length > 0) {
-            await update(studentsRef, updates);
-            console.log(`🍂 Auto-updated grades for ${Object.keys(updates).length / 3} students.`);
-        }
-    }
-
-
     // Initial load
-    processGradeUpdates();
     loadStudents();
 }

@@ -1,4 +1,4 @@
-// centers.js — performance-optimized drop-in replacement
+// centers.js — gated-reveal, cache-accelerated drop-in replacement
 import { db, logout } from './auth.js';
 import {
   ref,
@@ -22,25 +22,32 @@ const centerGrid = document.getElementById('centerGrid');
 const centersLoader = document.getElementById('centersLoader');
 const userEmailEl = document.getElementById('userEmail');
 const pageLoader = document.getElementById('page-loader');
-
 const MASTER_ADMIN_EMAIL = 'kumonchamps@gmail.com';
 
 const PERF = {
-  // How many past days to scan for missing clock-outs.
-  // The old code scanned ALL history every load. Raise if needed.
   MISSING_CLOCKOUT_LOOKBACK_DAYS: 30,
   CACHE_TTL_MS: 10 * 60 * 1000,
   BACKGROUND_DELAY_MS: 250
 };
 
-// Open the database socket immediately so the DNS + TLS + WebSocket
-// handshake overlaps the auth check instead of waiting for the first read.
+// Reveal safety net: never leave the user stuck on the loader.
+const REVEAL_TIMEOUT_MS = 12000;
+// Identity (employee id + role + name) survives across sessions.
+const IDENTITY_TTL_MS = 24 * 60 * 60 * 1000;
+
+// i18n no longer blocks auth or database reads — only the final render.
+const i18nSettled = i18nReady.catch((err) => {
+  console.error('i18n failed, continuing anyway:', err);
+});
+
+// Open the database socket immediately so DNS + TLS + WebSocket handshake
+// overlaps the auth check instead of waiting for the first read.
 try {
   onValue(ref(db, '.info/serverTimeOffset'), () => {}, { onlyOnce: true });
 } catch (e) { /* non-fatal */ }
 
 /* =========================================
-SHARED READ CACHE (dedupes identical reads)
+   SHARED READ CACHE (dedupes identical reads)
 ========================================= */
 const onceCache = new Map();
 const queryCache = new Map();
@@ -76,7 +83,7 @@ function getQueryOnce(key, q) {
 }
 
 /* =========================================
-SESSION CACHE (instant paint on revisit)
+   SESSION CACHE (bulletin + legacy shape)
 ========================================= */
 function readCache(key) {
   try {
@@ -97,7 +104,29 @@ function writeCache(key, data) {
 }
 
 /* =========================================
-HELPERS
+   PERSISTENT IDENTITY CACHE
+   Skips the employee email lookup on revisit.
+========================================= */
+function readIdentityCache(uid) {
+  try {
+    const raw = localStorage.getItem(`kumonIdentity:${uid}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.ts || Date.now() - parsed.ts > IDENTITY_TTL_MS) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeIdentityCache(uid, data) {
+  try {
+    localStorage.setItem(`kumonIdentity:${uid}`, JSON.stringify({ ...data, ts: Date.now() }));
+  } catch { /* non-fatal */ }
+}
+
+/* =========================================
+   HELPERS
 ========================================= */
 function getStoredUserName() {
   try {
@@ -158,23 +187,23 @@ function recentDateKeys(days) {
 }
 
 /* =========================================
-GLOBAL STATE
+   GLOBAL STATE
 ========================================= */
 let currentEmployeeId = null;
 let isCurrentUserManager = false;
 let currentUserIsAdmin = false;
 let currentDisplayName = '';
 let activeUid = null;
+let pageRevealed = false;
+let startedForUid = null;
 
 /* =========================================
-IDENTITY — resolved ONCE, in parallel
+   IDENTITY — resolved ONCE, in parallel
 ========================================= */
 async function findEmployeeByEmail(rawEmail) {
   const normalized = normalizeText(rawEmail);
   const variants = [...new Set([String(rawEmail || ''), normalized])].filter(Boolean);
 
-  // Indexed lookup first (requires ".indexOn": ["email"] on employees).
-  // Without the index Firebase still works, it just filters client-side.
   for (const v of variants) {
     try {
       const res = await getQueryOnce(
@@ -190,7 +219,6 @@ async function findEmployeeByEmail(rawEmail) {
     }
   }
 
-  // Fallback preserves old behavior for emails stored with odd casing/spacing.
   try {
     const all = await getOnce('employees');
     if (all) {
@@ -205,13 +233,14 @@ async function findEmployeeByEmail(rawEmail) {
   return null;
 }
 
-async function resolveIdentity(user, userData, empPromise) {
+async function resolveIdentity(user, userData, empPromise, preferredEmpId) {
   const email = String(user.email || '').toLowerCase();
   const isAdmin = email === MASTER_ADMIN_EMAIL;
 
-  let employeeId = user.uid;
+  let employeeId = preferredEmpId || user.uid;
   let empRecord = await empPromise;
 
+  // Only hit the email index when the direct/cached read found nothing.
   if (!empRecord && email) {
     const found = await findEmployeeByEmail(user.email);
     if (found) {
@@ -239,19 +268,31 @@ async function resolveIdentity(user, userData, empPromise) {
 }
 
 /* =========================================
-CENTERS GRID — live listener + cached paint
+   CENTERS GRID — snapshot gate + live updates
 ========================================= */
 let centersSubscribed = false;
 let centersResolved = false;
 let centersFirstResolve;
 const centersReady = new Promise((resolve) => { centersFirstResolve = resolve; });
 
+let centersSnapshotSettled = false;
+let centersSnapshotResolve;
+const centersSnapshotReady = new Promise((resolve) => { centersSnapshotResolve = resolve; });
+let centersLoadError = false;
+
 const centersState = {
   snapshot: null,
   permissions: null,
   isAdmin: false
 };
+
 let accessibleCenters = [];
+
+function settleCentersSnapshot() {
+  if (centersSnapshotSettled) return;
+  centersSnapshotSettled = true;
+  centersSnapshotResolve();
+}
 
 function renderCenterCards(list) {
   centerGrid.innerHTML = '';
@@ -259,11 +300,7 @@ function renderCenterCards(list) {
     const card = document.createElement('div');
     card.className = 'center-card';
     card.style.cursor = 'pointer';
-    card.innerHTML = `
-      <div class="card-icon">🏢</div>
-      <h3>${escapeHtml(name)}</h3>
-      <p>${escapeHtml(t('centers.cardDescription'))}</p>
-    `;
+    card.innerHTML = `<div class="card-icon">🏢</div> <h3>${escapeHtml(name)}</h3> <p>${escapeHtml(t('centers.cardDescription'))}</p>`;
     card.addEventListener('click', () => {
       sessionStorage.setItem('selectedCenter', id);
       sessionStorage.setItem('selectedCenterName', name);
@@ -285,7 +322,6 @@ function saveCentersCache() {
 
 function renderCentersGrid() {
   if (!centersState.snapshot || !centersState.permissions) return;
-
   const list = [];
   Object.entries(centersState.snapshot).forEach(([centerId, centerData]) => {
     if (centerData?.isDisabled === true) return;
@@ -293,19 +329,12 @@ function renderCentersGrid() {
       list.push({ id: centerId, name: centerData?.name || centerId });
     }
   });
-
   accessibleCenters = list;
 
   if (list.length) {
     renderCenterCards(list);
   } else {
-    centerGrid.innerHTML = `
-      <div class="center-card" style="cursor: default; border-left: 4px solid #dc3545; grid-column: 1 / -1;">
-        <div class="card-icon">🚫</div>
-        <h3>${escapeHtml(t('centers.noAccessTitle'))}</h3>
-        <p>${escapeHtml(t('centers.noAccessBody'))}</p>
-      </div>
-    `;
+    centerGrid.innerHTML = `<div class="center-card" style="cursor: default; border-left: 4px solid #dc3545; grid-column: 1 / -1;"> <div class="card-icon">🚫</div> <h3>${escapeHtml(t('centers.noAccessTitle'))}</h3> <p>${escapeHtml(t('centers.noAccessBody'))}</p> </div>`;
   }
 
   centersLoader?.classList.add('hidden');
@@ -317,6 +346,15 @@ function renderCentersGrid() {
   }
 }
 
+function renderCentersError() {
+  centersLoader?.classList.add('hidden');
+  centerGrid.innerHTML = `<p style="text-align:center; color:#dc3545; grid-column: 1/-1;"> ${escapeHtml(t('centers.errorLoading'))} </p>`;
+  if (!centersResolved) {
+    centersResolved = true;
+    centersFirstResolve([]);
+  }
+}
+
 function subscribeCenters() {
   if (centersSubscribed) return;
   centersSubscribed = true;
@@ -324,47 +362,67 @@ function subscribeCenters() {
     ref(db, 'centers'),
     (snapshot) => {
       centersState.snapshot = snapshot.val() || {};
-      renderCentersGrid();
+      settleCentersSnapshot();
+      // Before reveal the main flow renders once; after reveal, live-update.
+      if (pageRevealed) renderCentersGrid();
     },
     (error) => {
       console.error('Error loading centers:', error);
-      centersLoader?.classList.add('hidden');
-      centerGrid.innerHTML = `
-        <p style="text-align:center; color:#dc3545; grid-column: 1/-1;">
-          ${escapeHtml(t('centers.errorLoading'))}
-        </p>
-      `;
-      if (!centersResolved) {
-        centersResolved = true;
-        centersFirstResolve([]);
-      }
+      centersLoadError = true;
+      settleCentersSnapshot();
+      if (pageRevealed) renderCentersError();
     }
   );
 }
 
-function paintFromCache(user) {
-  const c = readCache(`kumonCentersCache:${user.uid}`);
-  if (c) {
-    currentDisplayName = c.name || getStoredUserName() || user.email;
-    if (userEmailEl) {
-      userEmailEl.textContent = currentDisplayName;
-      userEmailEl.title = user.email || '';
+/* =========================================
+   REVEAL — loader lifts only when final
+========================================= */
+function revealPage() {
+  if (pageRevealed) return;
+  pageRevealed = true;
+  centersLoader?.classList.add('hidden');
+  pageLoader?.classList.add('hidden');
+}
+
+// Safety net: if auth/network stalls, never trap the user on the loader.
+setTimeout(() => {
+  if (pageRevealed) return;
+  console.warn('Centers reveal timeout — showing fallback.');
+  if (!centersResolved) {
+    if (centersState.snapshot && centersState.permissions && !centersLoadError) {
+      renderCentersGrid();
+    } else {
+      renderCentersError();
     }
-    isCurrentUserManager = !!c.isManager;
-    currentUserIsAdmin = !!c.isAdmin;
-    document.body.classList.toggle('is-manager-or-admin', !!c.isManager);
-    if (Array.isArray(c.centers) && c.centers.length) {
-      renderCenterCards(c.centers);
-      centersLoader?.classList.add('hidden');
-    }
-    pageLoader?.classList.add('hidden');
   }
+  revealPage();
+}, REVEAL_TIMEOUT_MS);
+
+/* =========================================
+   EARLY PAINT (behind the loader only)
+   Name + role + cached bulletin. No center
+   cards here — they render once, final.
+========================================= */
+function paintHeaderFromCache(user) {
+  const idc = readIdentityCache(user.uid);
+  const c = readCache(`kumonCentersCache:${user.uid}`);
+
+  const name = idc?.name || c?.name || getStoredUserName() || user.email;
+  if (userEmailEl) {
+    userEmailEl.textContent = name;
+    userEmailEl.title = user.email || '';
+  }
+
+  const mgr = idc ? !!idc.isManager : !!c?.isManager;
+  document.body.classList.toggle('is-manager-or-admin', mgr);
+
   const b = readCache('kumonBulletinCache');
   if (b?.items?.length) renderBulletinItems(b.items);
 }
 
 /* =========================================
-📢 BULLETIN + ANNOUNCEMENTS — ONE shared listener
+   📢 BULLETIN + ANNOUNCEMENTS — ONE shared listener
 ========================================= */
 let announcementsSubscribed = false;
 let bulletinAnnouncements = {};
@@ -441,23 +499,15 @@ function renderBulletinItems(items) {
 function renderBulletinSkeleton() {
   const grid = document.getElementById('bulletinPreviewGrid');
   if (!grid || grid.innerHTML.trim()) return;
-  grid.innerHTML = Array(3).fill(`
-    <div class="bulletin-card bulletin-skeleton">
-      <div class="sk-line sk-title"></div>
-      <div class="sk-line"></div>
-      <div class="sk-line sk-short"></div>
-    </div>
-  `).join('');
+  grid.innerHTML = Array(3).fill(`<div class="bulletin-card bulletin-skeleton"> <div class="sk-line sk-title"></div> <div class="sk-line"></div> <div class="sk-line sk-short"></div> </div>`).join('');
 }
 
 function renderBulletinPreview() {
   const grid = document.getElementById('bulletinPreviewGrid');
   if (!grid) return;
-
   const latest = Object.entries(bulletinAnnouncements || {})
     .sort((a, b) => timestampMs(b[1]?.createdAt) - timestampMs(a[1]?.createdAt))
     .slice(0, 3);
-
   const items = latest.map(([id, a]) => ({
     id,
     title: a?.title || '',
@@ -466,7 +516,6 @@ function renderBulletinPreview() {
     hashtags: a?.hashtags,
     excerpt: makeBulletinExcerpt(bulletinHtmlToPlainText(a?.html))
   }));
-
   renderBulletinItems(items);
   writeCache('kumonBulletinCache', { items });
 }
@@ -494,16 +543,13 @@ function subscribeAnnouncements() {
 }
 
 /* =========================================
-EMPLOYEE MISSING CLOCK-OUT CHECK
-Reads ONLY this user's last N days, not all history.
+   EMPLOYEE MISSING CLOCK-OUT CHECK
 ========================================= */
 async function checkMissingClockOuts() {
   const user = auth.currentUser;
   if (!user) return { hasMissing: false };
-
   try {
     const dates = recentDateKeys(PERF.MISSING_CLOCKOUT_LOOKBACK_DAYS);
-
     const [dayValues, myVerifs] = await Promise.all([
       Promise.all(
         dates.map((date) =>
@@ -527,10 +573,8 @@ async function checkMissingClockOuts() {
     dates.forEach((date, i) => {
       const empData = dayValues[i];
       if (!empData || !empData.logs) return;
-
       const rawLogs = Array.isArray(empData.logs) ? empData.logs : Object.values(empData.logs);
       const sortedLogs = [...rawLogs].sort((a, b) => String(a.time).localeCompare(String(b.time)));
-
       let currentIn = null;
       for (const log of sortedLogs) {
         if (log.type === 'in') {
@@ -576,13 +620,12 @@ async function checkMissingClockOuts() {
 }
 
 /* =========================================
-MISSING CLOCK-OUT MODAL
+   MISSING CLOCK-OUT MODAL
 ========================================= */
 function showMissingClockOutModal(records) {
   return new Promise((resolve) => {
     let modal = document.getElementById('missingClockOutModal');
     let finished = false;
-
     const finish = () => {
       if (finished) return;
       finished = true;
@@ -668,13 +711,11 @@ function showMissingClockOutModal(records) {
       submitBtn.parentNode.replaceChild(newSubmitBtn, submitBtn);
       newSubmitBtn.disabled = false;
       newSubmitBtn.textContent = t('missing.submitForReview');
-
       newSubmitBtn.addEventListener('click', async () => {
         const inputs = document.querySelectorAll('.missing-time-input');
         const recordsToSubmit = [];
         let hasError = false;
         let timeError = false;
-
         inputs.forEach((input) => {
           const time = input.value;
           const inTime = input.dataset.inTime;
@@ -696,17 +737,13 @@ function showMissingClockOutModal(records) {
             });
           }
         });
-
         if (hasError) { alert(t('missing.fillAllMissing')); return; }
         if (timeError) { alert(t('missing.outAfterIn')); return; }
 
         newSubmitBtn.disabled = true;
         newSubmitBtn.textContent = t('missing.submitting');
-
         try {
           const userName = getStoredUserName();
-
-          // ONE scoped read instead of one full-node read per record.
           const existingSnap = await get(
             query(
               ref(db, 'timecardVerifications'),
@@ -742,7 +779,6 @@ function showMissingClockOutModal(records) {
               await set(push(ref(db, 'timecardVerifications')), verificationData);
             }
           }
-
           alert(t('missing.submittedSuccess'));
           finish();
         } catch (err) {
@@ -758,8 +794,7 @@ function showMissingClockOutModal(records) {
 }
 
 /* =========================================
-MANAGER PENDING APPROVAL CHECK
-Downloads only status=pending, names per-id.
+   MANAGER PENDING APPROVAL CHECK
 ========================================= */
 async function checkPendingApprovals({ isAdmin = false, accessibleCenters = [], currentUser = null }) {
   try {
@@ -767,10 +802,8 @@ async function checkPendingApprovals({ isAdmin = false, accessibleCenters = [], 
       'verifs:pending',
       query(ref(db, 'timecardVerifications'), orderByChild('status'), equalTo('pending'))
     ).catch(() => null);
-
     if (!pendingMap) return;
 
-    // Resolve names with small per-employee reads instead of the full node.
     const uniqueEmpIds = [...new Set(Object.values(pendingMap).map((v) => v?.empId).filter(Boolean))];
     const employees = {};
     await Promise.all(
@@ -820,7 +853,7 @@ async function checkPendingApprovals({ isAdmin = false, accessibleCenters = [], 
 }
 
 /* =========================================
-MANAGER PENDING APPROVAL MODAL
+   MANAGER PENDING APPROVAL MODAL
 ========================================= */
 function showPendingApprovalsModal(records) {
   const existing = document.getElementById('pendingApprovalsModal');
@@ -843,11 +876,7 @@ function showPendingApprovalsModal(records) {
     const remaining = tbody.querySelectorAll('tr.pending-row').length;
     countEl.textContent = `${remaining} ${t('pending.approvalLabel')}`;
     if (remaining === 0) {
-      tbody.innerHTML = `
-        <tr class="pending-empty-row">
-          <td colspan="8">${escapeHtml(t('pending.noPending'))}</td>
-        </tr>
-      `;
+      tbody.innerHTML = `<tr class="pending-empty-row"> <td colspan="8">${escapeHtml(t('pending.noPending'))}</td> </tr>`;
       selectAll.checked = false;
       selectAll.indeterminate = false;
       selectAll.disabled = true;
@@ -876,21 +905,7 @@ function showPendingApprovalsModal(records) {
     tr.className = 'pending-row';
     tr.dataset.id = rec.id;
     const requested = formatRequestedTimestamp(rec.requestedAt || rec.resubmittedAt);
-    tr.innerHTML = `
-      <td><input type="checkbox" class="pending-select pending-checkbox" value="${escapeHtml(rec.id)}"></td>
-      <td>${escapeHtml(rec.displayName || t('common.unknown'))}</td>
-      <td>${escapeHtml(rec.date || '-')}</td>
-      <td>${escapeHtml(rec.center || '-')}</td>
-      <td>${escapeHtml(rec.inTime || '-')}</td>
-      <td><strong>${escapeHtml(rec.proposedOutTime || '-')}</strong></td>
-      <td>${escapeHtml(requested)}</td>
-      <td>
-        <div class="pending-row-actions">
-          <button class="primary btn-small pending-approve-btn" type="button">${escapeHtml(t('pending.approve'))}</button>
-          <button class="danger btn-small pending-deny-btn" type="button">${escapeHtml(t('pending.deny'))}</button>
-        </div>
-      </td>
-    `;
+    tr.innerHTML = `<td><input type="checkbox" class="pending-select pending-checkbox" value="${escapeHtml(rec.id)}"></td> <td>${escapeHtml(rec.displayName || t('common.unknown'))}</td> <td>${escapeHtml(rec.date || '-')}</td> <td>${escapeHtml(rec.center || '-')}</td> <td>${escapeHtml(rec.inTime || '-')}</td> <td><strong>${escapeHtml(rec.proposedOutTime || '-')}</strong></td> <td>${escapeHtml(requested)}</td> <td> <div class="pending-row-actions"> <button class="primary btn-small pending-approve-btn" type="button">${escapeHtml(t('pending.approve'))}</button> <button class="danger btn-small pending-deny-btn" type="button">${escapeHtml(t('pending.deny'))}</button> </div> </td>`;
     tbody.appendChild(tr);
   });
 
@@ -963,7 +978,7 @@ function showPendingApprovalsModal(records) {
 }
 
 /* =========================================
-APPROVE / DENY PENDING VERIFICATION
+   APPROVE / DENY PENDING VERIFICATION
 ========================================= */
 async function processPendingVerification(id, approve, ui) {
   const row = ui?.tbody
@@ -982,7 +997,6 @@ async function processPendingVerification(id, approve, ui) {
       if (ui?.updateCount) ui.updateCount();
       return;
     }
-
     const v = vSnap.val();
     if (String(v.status || '').toLowerCase() !== 'pending') {
       if (row) row.remove();
@@ -996,7 +1010,6 @@ async function processPendingVerification(id, approve, ui) {
         throw new Error('Missing required verification data.');
       }
       const location = v.center || 'Manual Fix';
-
       await update(ref(db, `timecardVerifications/${id}`), {
         status: 'confirmed',
         resolvedBy: auth.currentUser?.uid || '',
@@ -1007,14 +1020,12 @@ async function processPendingVerification(id, approve, ui) {
       const daySnap = await get(ref(db, `timecards/${v.date}/${v.empId}`));
       let logs = daySnap.val()?.logs || [];
       if (!Array.isArray(logs)) logs = Object.values(logs);
-
       const alreadyExists = logs.some(
         (log) =>
           log?.type === 'out' &&
           log?.time === proposedOutTime &&
           normalizeText(log?.location) === normalizeText(location)
       );
-
       if (!alreadyExists) {
         logs.push({ type: 'out', time: proposedOutTime, location });
         logs.sort((a, b) => String(a.time || '').localeCompare(String(b.time || '')));
@@ -1039,7 +1050,7 @@ async function processPendingVerification(id, approve, ui) {
 }
 
 /* =========================================
-🔔 UNIFIED NOTIFICATIONS
+   🔔 UNIFIED NOTIFICATIONS
 ========================================= */
 let unifiedNotifications = [];
 let unifiedLeavesCache = {};
@@ -1209,23 +1220,14 @@ function renderUnifiedNotifications() {
   const list = document.getElementById('leaveNotifList');
   if (!list) return;
   list.innerHTML = '';
-
   if (!unifiedNotifications.length) {
     list.innerHTML = `<div class="notif-empty">${escapeNotificationHtml(notifText('notifications.empty', 'No notifications'))}</div>`;
     return;
   }
-
   unifiedNotifications.forEach((notification) => {
     const item = document.createElement('div');
     item.className = `notif-item ${notification.isUnread ? 'unread' : ''} ${notification.category}`;
-    item.innerHTML = `
-      <div class="notif-icon">${notification.icon}</div>
-      <div class="notif-content">
-        <div class="notif-title">${escapeNotificationHtml(notification.title)}</div>
-        <div class="notif-desc">${escapeNotificationHtml(notification.desc)}</div>
-        <div class="notif-meta">${escapeNotificationHtml(notification.meta)}</div>
-      </div>
-    `;
+    item.innerHTML = `<div class="notif-icon">${notification.icon}</div> <div class="notif-content"> <div class="notif-title">${escapeNotificationHtml(notification.title)}</div> <div class="notif-desc">${escapeNotificationHtml(notification.desc)}</div> <div class="notif-meta">${escapeNotificationHtml(notification.meta)}</div> </div>`;
     item.addEventListener('click', () => handleNotificationClick(notification));
     list.appendChild(item);
   });
@@ -1241,13 +1243,11 @@ async function handleNotificationClick(notification) {
 async function markSingleNotificationRead(notificationId, notificationTime, category) {
   const key = safeNotificationKey(notificationId);
   if (notificationTime <= getNotificationReadAllAt(category)) return;
-
   unifiedNotificationState = {
     ...unifiedNotificationState,
     read: { ...(unifiedNotificationState?.read || {}), [key]: true }
   };
   processUnifiedNotifications();
-
   if (!unifiedCurrentUserUid) return;
   try {
     await update(ref(db, `users/${unifiedCurrentUserUid}/notificationState`), {
@@ -1263,7 +1263,6 @@ async function markAllNotificationsRead() {
   const updates = { readAllAt_leave: now, readAllAt_announcement: now };
   unifiedNotificationState = { ...unifiedNotificationState, ...updates };
   processUnifiedNotifications();
-
   if (!unifiedCurrentUserUid) return;
   try {
     await update(ref(db, `users/${unifiedCurrentUserUid}/notificationState`), updates);
@@ -1288,7 +1287,6 @@ async function clearAllNotifications() {
     read: {}
   };
   processUnifiedNotifications();
-
   if (!unifiedCurrentUserUid) return;
   try {
     await update(ref(db, `users/${unifiedCurrentUserUid}/notificationState`), updates);
@@ -1343,6 +1341,7 @@ function setupUnifiedNotifUI() {
     e.stopPropagation();
     dropdown.classList.toggle('hidden');
   });
+
   document.addEventListener('click', (e) => {
     if (!dropdown.contains(e.target) && !btn.contains(e.target)) {
       dropdown.classList.add('hidden');
@@ -1361,7 +1360,6 @@ function initUnifiedNotifications(user) {
   if (unifiedNotifSubscribed) return;
   unifiedNotifSubscribed = true;
 
-  // Employees only download their own leaves; managers keep the full view.
   const leavesSource = isCurrentUserManager
     ? ref(db, 'leaves')
     : query(ref(db, 'leaves'), orderByChild('empId'), equalTo(currentEmployeeId || user.uid));
@@ -1375,15 +1373,12 @@ function initUnifiedNotifications(user) {
     (error) => console.error('Error loading leaves for notifications:', error)
   );
 
-  // Announcements arrive through the shared listener in subscribeAnnouncements().
-
   onValue(
     ref(db, `users/${user.uid}/notificationState`),
     (snapshot) => {
       const existing = snapshot.val() || {};
       const now = Date.now();
       const updates = {};
-
       if (!snapshot.exists()) {
         const oldLeaveLastSeen = parseInt(localStorage.getItem('leaveNotifLastSeen') || '0', 10);
         updates.readAllAt_leave = oldLeaveLastSeen || now;
@@ -1397,7 +1392,6 @@ function initUnifiedNotifications(user) {
           updates.readAllAt_announcement = now;
         }
       }
-
       if (Object.keys(updates).length > 0) {
         unifiedNotificationState = { ...existing, ...updates };
         processUnifiedNotifications();
@@ -1414,7 +1408,7 @@ function initUnifiedNotifications(user) {
 }
 
 /* =========================================
-BACKGROUND WORK — runs after first paint
+   BACKGROUND WORK — runs after first paint
 ========================================= */
 function scheduleBackground(fn) {
   const run = () => setTimeout(fn, PERF.BACKGROUND_DELAY_MS);
@@ -1428,11 +1422,11 @@ function scheduleBackground(fn) {
 async function runBackgroundChecks(user, identity) {
   const missing = await checkMissingClockOuts();
   if (identity.isManager) {
-    const centers = await centersReady;
+    await centersReady;
     const openPendingApprovals = () =>
       checkPendingApprovals({
         isAdmin: identity.isAdmin,
-        accessibleCenters: centers,
+        accessibleCenters: accessibleCenters,
         currentUser: user
       });
     if (missing?.hasMissing && missing.onClose) {
@@ -1444,90 +1438,108 @@ async function runBackgroundChecks(user, identity) {
 }
 
 /* =========================================
-PAGE INIT — parallel, cached, non-blocking
+   PAGE INIT — reads start now, reveal is gated
 ========================================= */
+async function handleUser(user) {
+  activeUid = user.uid;
+
+  const idc = readIdentityCache(user.uid);
+  const empPathId = idc?.employeeId || user.uid;
+
+  // 1) Fire every independent read/listener in parallel — no waiting chain,
+  //    and no i18n gate in front of them.
+  const userP = getOnce(`users/${user.uid}`);
+  const empP = getOnce(`employees/${empPathId}`).catch(() => null);
+  subscribeCenters();
+  subscribeAnnouncements();
+
+  // 2) Paint name/role/bulletin behind the loader. Center cards are NOT
+  //    painted here — they render exactly once, with final permissions.
+  paintHeaderFromCache(user);
+
+  try {
+    const userData = await userP;
+    if (userData === null) {
+      console.error('User profile not found');
+      window.location.href = 'index.html';
+      return;
+    }
+
+    currentDisplayName =
+      userData?.name || userData?.englishName || getStoredUserName() || user.email;
+    if (userEmailEl) {
+      userEmailEl.textContent = currentDisplayName;
+      userEmailEl.title = user.email || '';
+    }
+
+    currentUserIsAdmin = String(user.email || '').toLowerCase() === MASTER_ADMIN_EMAIL;
+    centersState.isAdmin = currentUserIsAdmin;
+    centersState.permissions = userData.permissions?.centers || {};
+
+    // 3) Role + employee id (cached id skips the email lookup on revisit).
+    const identity = await resolveIdentity(user, userData, empP, idc?.employeeId);
+    currentEmployeeId = identity.employeeId;
+    isCurrentUserManager = identity.isManager;
+    currentUserIsAdmin = identity.isAdmin;
+    document.body.classList.toggle('is-manager-or-admin', identity.isManager);
+
+    writeIdentityCache(user.uid, {
+      name: currentDisplayName,
+      isManager: identity.isManager,
+      isAdmin: identity.isAdmin,
+      employeeId: identity.employeeId
+    });
+
+    // 4) Wait for the centers snapshot + translations, render the final
+    //    permitted list once, and only then lift the loader. No shift.
+    await Promise.all([centersSnapshotReady, i18nSettled]);
+    if (centersLoadError && !centersState.snapshot) {
+      renderCentersError();
+    } else {
+      renderCentersGrid();
+    }
+    revealPage();
+
+    // 5) Notifications + heavy checks stay off the critical path.
+    initUnifiedNotifications(user);
+    scheduleBackground(() => runBackgroundChecks(user, identity));
+  } catch (error) {
+    console.error('Error loading centers page:', error);
+    renderCentersError();
+    revealPage();
+  }
+}
+
 function startCentersPage() {
   document.querySelector('.language-switch')?.addEventListener('change', () => {
     setTimeout(() => {
       renderBulletinPreview();
       renderUnifiedNotifications();
+      if (pageRevealed) renderCentersGrid();
     }, 0);
   });
 
   renderBulletinSkeleton();
 
-  onAuthStateChanged(auth, async (user) => {
+  // Re-render translated strings once i18n finishes, whenever that happens.
+  i18nSettled.then(() => {
+    renderBulletinPreview();
+    renderUnifiedNotifications();
+  });
+
+  document.getElementById('logoutBtn')?.addEventListener('click', logout);
+
+  onAuthStateChanged(auth, (user) => {
     if (!user) {
       window.location.href = 'index.html';
       return;
     }
-    activeUid = user.uid;
-
-    // 1) Fire independent reads and listeners in parallel — no waiting chain.
-    const userP = getOnce(`users/${user.uid}`);
-    const empP = getOnce(`employees/${user.uid}`).catch(() => null);
-    subscribeCenters();
-    subscribeAnnouncements();
-
-    // 2) Instant paint from session cache while the network responds.
-    paintFromCache(user);
-
-    document.getElementById('logoutBtn')?.addEventListener('click', logout);
-
-    try {
-      const userData = await userP;
-      if (userData === null) {
-        console.error('User profile not found');
-        window.location.href = 'index.html';
-        return;
-      }
-
-      currentDisplayName =
-        userData?.name || userData?.englishName || getStoredUserName() || user.email;
-      if (userEmailEl) {
-        userEmailEl.textContent = currentDisplayName;
-        userEmailEl.title = user.email || '';
-      }
-
-      // 3) Grid access only needs the profile + email — render immediately.
-      currentUserIsAdmin = String(user.email || '').toLowerCase() === MASTER_ADMIN_EMAIL;
-      centersState.isAdmin = currentUserIsAdmin;
-      centersState.permissions = userData.permissions?.centers || {};
-      renderCentersGrid();
-      pageLoader?.classList.add('hidden');
-
-      // 4) Role + employee ID resolved once (reuses the parallel employee read).
-      const identity = await resolveIdentity(user, userData, empP);
-      currentEmployeeId = identity.employeeId;
-      isCurrentUserManager = identity.isManager;
-      currentUserIsAdmin = identity.isAdmin;
-      document.body.classList.toggle('is-manager-or-admin', identity.isManager);
-      saveCentersCache();
-
-      // 5) Notifications for everyone.
-      initUnifiedNotifications(user);
-
-      // 6) Heavy checks run after the page is already usable.
-      scheduleBackground(() => runBackgroundChecks(user, identity));
-    } catch (error) {
-      console.error('Error loading centers page:', error);
-      pageLoader?.classList.add('hidden');
-      centersLoader?.classList.add('hidden');
-      centerGrid.innerHTML = `
-        <p style="text-align:center; color:#dc3545; grid-column: 1/-1;">
-          ${escapeHtml(t('centers.errorLoading'))}
-        </p>
-      `;
-    }
+    // Token refreshes fire this again — only boot once per user.
+    if (startedForUid === user.uid) return;
+    startedForUid = user.uid;
+    handleUser(user);
   });
 }
 
-/* =========================================
-START PAGE AFTER I18N READY
-========================================= */
-i18nReady
-  .then(() => startCentersPage())
-  .catch((err) => {
-    console.error('i18n failed, starting centers page anyway:', err);
-    startCentersPage();
-  });
+// Start immediately — auth and database reads no longer wait for i18n.
+startCentersPage();
