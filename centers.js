@@ -1,4 +1,4 @@
-// centers.js — gated-reveal, cache-accelerated drop-in replacement
+// centers.js
 import { db, logout } from './auth.js';
 import {
   ref,
@@ -30,24 +30,19 @@ const PERF = {
   BACKGROUND_DELAY_MS: 250
 };
 
-// Reveal safety net: never leave the user stuck on the loader.
 const REVEAL_TIMEOUT_MS = 12000;
-// Identity (employee id + role + name) survives across sessions.
 const IDENTITY_TTL_MS = 24 * 60 * 60 * 1000;
 
-// i18n no longer blocks auth or database reads — only the final render.
 const i18nSettled = i18nReady.catch((err) => {
   console.error('i18n failed, continuing anyway:', err);
 });
 
-// Open the database socket immediately so DNS + TLS + WebSocket handshake
-// overlaps the auth check instead of waiting for the first read.
 try {
   onValue(ref(db, '.info/serverTimeOffset'), () => {}, { onlyOnce: true });
 } catch (e) { /* non-fatal */ }
 
 /* =========================================
-   SHARED READ CACHE (dedupes identical reads)
+   SHARED READ CACHE
 ========================================= */
 const onceCache = new Map();
 const queryCache = new Map();
@@ -83,7 +78,49 @@ function getQueryOnce(key, q) {
 }
 
 /* =========================================
-   SESSION CACHE (bulletin + legacy shape)
+   VERIFICATIONS — one reliable direct read.
+   No indexed queries here: they were returning
+   nothing silently, which hid approvals and
+   made submitted clock-outs reappear.
+========================================= */
+let allVerifsCache = null;
+let allVerifsPromise = null;
+const localSubmittedKeys = new Set();
+
+function invalidateVerifsCache() {
+  allVerifsCache = null;
+  allVerifsPromise = null;
+}
+
+async function loadAllVerifications() {
+  if (allVerifsCache) return allVerifsCache;
+  if (!allVerifsPromise) {
+    allVerifsPromise = get(ref(db, 'timecardVerifications'))
+      .then((s) => {
+        allVerifsCache = s.exists() ? s.val() : {};
+        return allVerifsCache;
+      })
+      .catch((err) => {
+        console.warn('Could not read timecardVerifications:', err);
+        allVerifsCache = {};
+        return allVerifsCache;
+      });
+  }
+  return allVerifsPromise;
+}
+
+function normTime(value) {
+  const s = String(value || '').trim();
+  const m = s.match(/^(\d{1,2}:\d{2})/);
+  return m ? m[1].padStart(5, '0') : s;
+}
+
+function verificationKey(date, inTime) {
+  return `${date}_${normTime(inTime)}`;
+}
+
+/* =========================================
+   SESSION CACHE
 ========================================= */
 function readCache(key) {
   try {
@@ -100,12 +137,11 @@ function readCache(key) {
 function writeCache(key, data) {
   try {
     sessionStorage.setItem(key, JSON.stringify({ ...data, ts: Date.now() }));
-  } catch { /* storage full/blocked — non-fatal */ }
+  } catch { /* non-fatal */ }
 }
 
 /* =========================================
    PERSISTENT IDENTITY CACHE
-   Skips the employee email lookup on revisit.
 ========================================= */
 function readIdentityCache(uid) {
   try {
@@ -128,6 +164,10 @@ function writeIdentityCache(uid, data) {
 /* =========================================
    HELPERS
 ========================================= */
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function getStoredUserName() {
   try {
     const storedUser = sessionStorage.getItem('kumonUser');
@@ -178,7 +218,7 @@ function timestampMs(value) {
 function recentDateKeys(days) {
   const keys = [];
   const d = new Date();
-  d.setDate(d.getDate() - 1); // start at yesterday, today is excluded
+  d.setDate(d.getDate() - 1);
   for (let i = 0; i < days; i++) {
     keys.push(d.toISOString().split('T')[0]);
     d.setDate(d.getDate() - 1);
@@ -198,7 +238,7 @@ let pageRevealed = false;
 let startedForUid = null;
 
 /* =========================================
-   IDENTITY — resolved ONCE, in parallel
+   IDENTITY
 ========================================= */
 async function findEmployeeByEmail(rawEmail) {
   const normalized = normalizeText(rawEmail);
@@ -236,11 +276,15 @@ async function findEmployeeByEmail(rawEmail) {
 async function resolveIdentity(user, userData, empPromise, preferredEmpId) {
   const email = String(user.email || '').toLowerCase();
   const isAdmin = email === MASTER_ADMIN_EMAIL;
+  const userEmailNorm = normalizeText(user.email);
 
   let employeeId = preferredEmpId || user.uid;
   let empRecord = await empPromise;
 
-  // Only hit the email index when the direct/cached read found nothing.
+  if (empRecord && empRecord.email && normalizeText(empRecord.email) !== userEmailNorm) {
+    empRecord = null;
+  }
+
   if (!empRecord && email) {
     const found = await findEmployeeByEmail(user.email);
     if (found) {
@@ -268,7 +312,7 @@ async function resolveIdentity(user, userData, empPromise, preferredEmpId) {
 }
 
 /* =========================================
-   CENTERS GRID — snapshot gate + live updates
+   CENTERS GRID
 ========================================= */
 let centersSubscribed = false;
 let centersResolved = false;
@@ -363,7 +407,6 @@ function subscribeCenters() {
     (snapshot) => {
       centersState.snapshot = snapshot.val() || {};
       settleCentersSnapshot();
-      // Before reveal the main flow renders once; after reveal, live-update.
       if (pageRevealed) renderCentersGrid();
     },
     (error) => {
@@ -376,7 +419,7 @@ function subscribeCenters() {
 }
 
 /* =========================================
-   REVEAL — loader lifts only when final
+   REVEAL
 ========================================= */
 function revealPage() {
   if (pageRevealed) return;
@@ -385,7 +428,6 @@ function revealPage() {
   pageLoader?.classList.add('hidden');
 }
 
-// Safety net: if auth/network stalls, never trap the user on the loader.
 setTimeout(() => {
   if (pageRevealed) return;
   console.warn('Centers reveal timeout — showing fallback.');
@@ -399,11 +441,6 @@ setTimeout(() => {
   revealPage();
 }, REVEAL_TIMEOUT_MS);
 
-/* =========================================
-   EARLY PAINT (behind the loader only)
-   Name + role + cached bulletin. No center
-   cards here — they render once, final.
-========================================= */
 function paintHeaderFromCache(user) {
   const idc = readIdentityCache(user.uid);
   const c = readCache(`kumonCentersCache:${user.uid}`);
@@ -422,7 +459,7 @@ function paintHeaderFromCache(user) {
 }
 
 /* =========================================
-   📢 BULLETIN + ANNOUNCEMENTS — ONE shared listener
+   📢 BULLETIN + ANNOUNCEMENTS
 ========================================= */
 let announcementsSubscribed = false;
 let bulletinAnnouncements = {};
@@ -544,29 +581,32 @@ function subscribeAnnouncements() {
 
 /* =========================================
    EMPLOYEE MISSING CLOCK-OUT CHECK
+   Excludes anything already pending/confirmed
+   for EITHER the login id or the employee id.
 ========================================= */
 async function checkMissingClockOuts() {
   const user = auth.currentUser;
   if (!user) return { hasMissing: false };
   try {
     const dates = recentDateKeys(PERF.MISSING_CLOCKOUT_LOOKBACK_DAYS);
-    const [dayValues, myVerifs] = await Promise.all([
+    const [dayValues, allVerifs] = await Promise.all([
       Promise.all(
         dates.map((date) =>
           getOnce(`timecards/${date}/${user.uid}`).catch(() => null)
         )
       ),
-      getQueryOnce(
-        `verifs:emp:${user.uid}`,
-        query(ref(db, 'timecardVerifications'), orderByChild('empId'), equalTo(user.uid))
-      ).catch(() => null)
+      loadAllVerifications()
     ]);
 
-    const excludedVerificationKeys = new Set();
-    Object.values(myVerifs || {}).forEach((v) => {
-      if (v && (v.status === 'confirmed' || v.status === 'pending')) {
-        excludedVerificationKeys.add(`${v.date}_${v.inTime}`);
-      }
+    const myIds = new Set([user.uid, currentEmployeeId].filter(Boolean).map(String));
+    const excludedVerificationKeys = new Set(localSubmittedKeys);
+
+    Object.values(allVerifs || {}).forEach((v) => {
+      if (!v) return;
+      const status = String(v.status || '').toLowerCase();
+      if (status !== 'pending' && status !== 'confirmed') return;
+      if (!myIds.has(String(v.empId || ''))) return;
+      excludedVerificationKeys.add(verificationKey(v.date, v.inTime));
     });
 
     const missingRecords = [];
@@ -579,7 +619,7 @@ async function checkMissingClockOuts() {
       for (const log of sortedLogs) {
         if (log.type === 'in') {
           if (currentIn) {
-            const recordKey = `${date}_${currentIn.time}`;
+            const recordKey = verificationKey(date, currentIn.time);
             if (!excludedVerificationKeys.has(recordKey)) {
               missingRecords.push({
                 date,
@@ -591,13 +631,11 @@ async function checkMissingClockOuts() {
           }
           currentIn = log;
         } else if (log.type === 'out') {
-          // PAIRING v2: any clock-out closes the open clock-in,
-          // even if recorded off-site or at a different center.
           if (currentIn) currentIn = null;
         }
       }
       if (currentIn) {
-        const recordKey = `${date}_${currentIn.time}`;
+        const recordKey = verificationKey(date, currentIn.time);
         if (!excludedVerificationKeys.has(recordKey)) {
           missingRecords.push({
             date,
@@ -722,7 +760,7 @@ function showMissingClockOutModal(records) {
           if (!time) {
             hasError = true;
             input.style.borderColor = '#dc3545';
-          } else if (time <= inTime) {
+          } else if (normTime(time) <= normTime(inTime)) {
             timeError = true;
             input.style.borderColor = '#dc3545';
           } else {
@@ -743,24 +781,20 @@ function showMissingClockOutModal(records) {
         newSubmitBtn.disabled = true;
         newSubmitBtn.textContent = t('missing.submitting');
         try {
-          const userName = getStoredUserName();
-          const existingSnap = await get(
-            query(
-              ref(db, 'timecardVerifications'),
-              orderByChild('empId'),
-              equalTo(auth.currentUser.uid)
-            )
-          ).catch(() => null);
+          const userName = currentDisplayName || getStoredUserName();
+          const allVerifs = await loadAllVerifications();
+          const myIds = new Set([auth.currentUser.uid, currentEmployeeId].filter(Boolean).map(String));
 
           const existingByKey = new Map();
-          if (existingSnap?.exists()) {
-            Object.entries(existingSnap.val()).forEach(([id, v]) => {
-              if (v?.date && v?.inTime) existingByKey.set(`${v.date}_${v.inTime}`, id);
-            });
-          }
+          Object.entries(allVerifs || {}).forEach(([id, v]) => {
+            if (v?.date && v?.inTime && myIds.has(String(v.empId || ''))) {
+              existingByKey.set(verificationKey(v.date, v.inTime), id);
+            }
+          });
 
           for (const rec of recordsToSubmit) {
-            const existingId = existingByKey.get(`${rec.date}_${rec.inTime}`) || null;
+            const key = verificationKey(rec.date, rec.inTime);
+            const existingId = existingByKey.get(key) || null;
             const verificationData = {
               empId: rec.empId,
               empName: userName,
@@ -778,7 +812,10 @@ function showMissingClockOutModal(records) {
             } else {
               await set(push(ref(db, 'timecardVerifications')), verificationData);
             }
+            localSubmittedKeys.add(key);
           }
+
+          invalidateVerifsCache();
           alert(t('missing.submittedSuccess'));
           finish();
         } catch (err) {
@@ -795,16 +832,18 @@ function showMissingClockOutModal(records) {
 
 /* =========================================
    MANAGER PENDING APPROVAL CHECK
+   Reads the records directly and accepts the
+   field variants used across the system.
 ========================================= */
 async function checkPendingApprovals({ isAdmin = false, accessibleCenters = [], currentUser = null }) {
   try {
-    const pendingMap = await getQueryOnce(
-      'verifs:pending',
-      query(ref(db, 'timecardVerifications'), orderByChild('status'), equalTo('pending'))
-    ).catch(() => null);
-    if (!pendingMap) return;
+    const allVerifs = await loadAllVerifications();
+    const pendingEntries = Object.entries(allVerifs || {}).filter(
+      ([, v]) => String(v?.status || '').toLowerCase() === 'pending'
+    );
+    if (!pendingEntries.length) return;
 
-    const uniqueEmpIds = [...new Set(Object.values(pendingMap).map((v) => v?.empId).filter(Boolean))];
+    const uniqueEmpIds = [...new Set(pendingEntries.map(([, v]) => v?.empId).filter(Boolean))];
     const employees = {};
     await Promise.all(
       uniqueEmpIds.map(async (id) => {
@@ -818,14 +857,15 @@ async function checkPendingApprovals({ isAdmin = false, accessibleCenters = [], 
     const accessibleCenterNames = new Set(accessibleCenters.map((c) => normalizeText(c.name)));
     const accessibleCenterIds = new Set(accessibleCenters.map((c) => c.id));
 
-    const pending = Object.entries(pendingMap)
+    const pending = pendingEntries
       .map(([id, v]) => {
         const emp = employees[v.empId] || {};
         const displayName = v.empName || emp.englishName || emp.name || v.empId || t('common.unknown');
-        return { id, ...v, displayName };
+        const proposedOutTime = v.proposedOutTime || v.proposedTime || v.proposedClockOut || '';
+        const missingType = String(v.missingType || 'out').toLowerCase().replace(/[\s_-]/g, '');
+        return { id, ...v, displayName, proposedOutTime, missingType };
       })
-      .filter((v) => String(v.status || '').toLowerCase() === 'pending')
-      .filter((v) => String(v.missingType || '').toLowerCase() === 'out' && v.proposedOutTime)
+      .filter((v) => ['out', 'clockout', 'timeout'].includes(v.missingType) && v.proposedOutTime)
       .filter((v) => {
         if (isAdmin) return true;
         if (currentUser && v.empId === currentUser.uid) return true;
@@ -834,7 +874,12 @@ async function checkPendingApprovals({ isAdmin = false, accessibleCenters = [], 
         const rawCenter = String(v.center || '');
         if (rawCenter && accessibleCenterIds.has(rawCenter)) return true;
         const centerName = normalizeText(rawCenter);
-        return centerName && accessibleCenterNames.has(centerName);
+        if (!centerName) return false;
+        if (accessibleCenterNames.has(centerName)) return true;
+        for (const n of accessibleCenterNames) {
+          if (n && (centerName.includes(n) || n.includes(centerName))) return true;
+        }
+        return false;
       })
       .sort((a, b) => {
         const dateA = String(a.date || '');
@@ -1005,7 +1050,7 @@ async function processPendingVerification(id, approve, ui) {
     }
 
     if (approve) {
-      const proposedOutTime = v.proposedOutTime;
+      const proposedOutTime = v.proposedOutTime || v.proposedTime || v.proposedClockOut;
       if (!v.date || !v.empId || !proposedOutTime) {
         throw new Error('Missing required verification data.');
       }
@@ -1023,7 +1068,7 @@ async function processPendingVerification(id, approve, ui) {
       const alreadyExists = logs.some(
         (log) =>
           log?.type === 'out' &&
-          log?.time === proposedOutTime &&
+          normTime(log?.time) === normTime(proposedOutTime) &&
           normalizeText(log?.location) === normalizeText(location)
       );
       if (!alreadyExists) {
@@ -1039,6 +1084,7 @@ async function processPendingVerification(id, approve, ui) {
       });
     }
 
+    invalidateVerifsCache();
     if (row) row.remove();
     if (ui?.updateCount) ui.updateCount();
   } catch (err) {
@@ -1079,7 +1125,6 @@ function escapeNotificationHtml(value) {
 }
 
 function safeNotificationKey(key) {
-  // Firebase keys cannot contain . # $ [ ] /
   return String(key || '').replace(/[.#$/[\]]/g, '_');
 }
 
@@ -1408,7 +1453,8 @@ function initUnifiedNotifications(user) {
 }
 
 /* =========================================
-   BACKGROUND WORK — runs after first paint
+   BACKGROUND WORK — original order restored:
+   own missing clock-outs first, then approvals.
 ========================================= */
 function scheduleBackground(fn) {
   const run = () => setTimeout(fn, PERF.BACKGROUND_DELAY_MS);
@@ -1422,7 +1468,7 @@ function scheduleBackground(fn) {
 async function runBackgroundChecks(user, identity) {
   const missing = await checkMissingClockOuts();
   if (identity.isManager) {
-    await centersReady;
+    await Promise.race([centersReady, sleep(5000)]);
     const openPendingApprovals = () =>
       checkPendingApprovals({
         isAdmin: identity.isAdmin,
@@ -1438,7 +1484,7 @@ async function runBackgroundChecks(user, identity) {
 }
 
 /* =========================================
-   PAGE INIT — reads start now, reveal is gated
+   PAGE INIT
 ========================================= */
 async function handleUser(user) {
   activeUid = user.uid;
@@ -1446,15 +1492,11 @@ async function handleUser(user) {
   const idc = readIdentityCache(user.uid);
   const empPathId = idc?.employeeId || user.uid;
 
-  // 1) Fire every independent read/listener in parallel — no waiting chain,
-  //    and no i18n gate in front of them.
   const userP = getOnce(`users/${user.uid}`);
   const empP = getOnce(`employees/${empPathId}`).catch(() => null);
   subscribeCenters();
   subscribeAnnouncements();
 
-  // 2) Paint name/role/bulletin behind the loader. Center cards are NOT
-  //    painted here — they render exactly once, with final permissions.
   paintHeaderFromCache(user);
 
   try {
@@ -1476,7 +1518,6 @@ async function handleUser(user) {
     centersState.isAdmin = currentUserIsAdmin;
     centersState.permissions = userData.permissions?.centers || {};
 
-    // 3) Role + employee id (cached id skips the email lookup on revisit).
     const identity = await resolveIdentity(user, userData, empP, idc?.employeeId);
     currentEmployeeId = identity.employeeId;
     isCurrentUserManager = identity.isManager;
@@ -1490,8 +1531,9 @@ async function handleUser(user) {
       employeeId: identity.employeeId
     });
 
-    // 4) Wait for the centers snapshot + translations, render the final
-    //    permitted list once, and only then lift the loader. No shift.
+    initUnifiedNotifications(user);
+    scheduleBackground(() => runBackgroundChecks(user, identity));
+
     await Promise.all([centersSnapshotReady, i18nSettled]);
     if (centersLoadError && !centersState.snapshot) {
       renderCentersError();
@@ -1499,10 +1541,6 @@ async function handleUser(user) {
       renderCentersGrid();
     }
     revealPage();
-
-    // 5) Notifications + heavy checks stay off the critical path.
-    initUnifiedNotifications(user);
-    scheduleBackground(() => runBackgroundChecks(user, identity));
   } catch (error) {
     console.error('Error loading centers page:', error);
     renderCentersError();
@@ -1521,7 +1559,6 @@ function startCentersPage() {
 
   renderBulletinSkeleton();
 
-  // Re-render translated strings once i18n finishes, whenever that happens.
   i18nSettled.then(() => {
     renderBulletinPreview();
     renderUnifiedNotifications();
@@ -1534,12 +1571,10 @@ function startCentersPage() {
       window.location.href = 'index.html';
       return;
     }
-    // Token refreshes fire this again — only boot once per user.
     if (startedForUid === user.uid) return;
     startedForUid = user.uid;
     handleUser(user);
   });
 }
 
-// Start immediately — auth and database reads no longer wait for i18n.
 startCentersPage();
