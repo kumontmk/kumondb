@@ -1284,7 +1284,8 @@ async function notifyLeaveEvent(leave, eventType) {
       to_email: uniqueTos.join(','), subject: subjects[eventType] || subjects.new, action: actionLabel,
       acted_by: eventType === 'new' ? (leave.appliedByName || '-') : (currentUser?.email || '-'),
       employee_name: leave.empName || '-', leave_type: leave.typeLabel || leave.type || '-',
-      dates: `${leave.dateFrom} → ${leave.dateTo}`,
+      dates: `${dateWithWeekday(leave.dateFrom)} → ${dateWithWeekday(leave.dateTo)}`,
+      applied_at: appliedStamp(leave.appliedAt),
       duration: leave.durationType === 'hours' ? `${leave.amount} hr(s) (${leave.timeFrom}–${leave.timeTo})` : `${leave.amount} day(s)`,
       reason: leave.reason || '-', applied_by: leave.appliedByName || '-'
     }, { publicKey: EMAILJS_PUBLIC_KEY });
@@ -2037,6 +2038,26 @@ async function cxRestoreSchedulesForDates(l, dates) {
     } catch (e) { console.warn('cx reliever restore failed:', e); }
   }
 }
+
+// ===== Leave email formatting helpers =====
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+// "2026-11-25" -> "2026-11-25 (Wednesday)"
+function dateWithWeekday(dateStr) {
+  const iso = String(dateStr).slice(0, 10);
+  const d = new Date(iso + 'T00:00:00'); // local midnight, avoids timezone off-by-one
+  if (isNaN(d.getTime())) return String(dateStr);
+  return iso + ' (' + WEEKDAY_NAMES[d.getDay()] + ')';
+}
+
+// Submission timestamp -> "2026-11-23 (Monday) 14:32"
+function appliedStamp(when) {
+  const d = when ? new Date(when) : new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const iso = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  return iso + ' (' + WEEKDAY_NAMES[d.getDay()] + ') ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
 function cxNotify(leave, req, eventType) {
   if (!EMAIL_NOTIFICATIONS_ENABLED || !emailjsConfigured()) return;
   try {
@@ -2045,7 +2066,8 @@ function cxNotify(leave, req, eventType) {
     const uniqueTos = [...tos]; if (!uniqueTos.length) return;
     const subjects = { new: `🚫 Cancellation REQUEST — ${leave.empName} (${leave.typeLabel || leave.type})`, approved: `✅ Leave cancellation APPROVED — ${leave.empName}`, rejected: `❌ Cancellation request REJECTED — ${leave.empName}`, withdrawn: `↩️ Cancellation request withdrawn — ${leave.empName}` };
     const actions = { new: 'Cancellation requested (PENDING)', approved: 'Cancellation APPROVED', rejected: 'Cancellation request REJECTED', withdrawn: 'Cancellation request WITHDRAWN' };
-    emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, { to_email: uniqueTos.join(','), subject: subjects[eventType] || subjects.new, action: actions[eventType] || eventType, acted_by: cxCurrentUserName(), employee_name: leave.empName || '-', leave_type: leave.typeLabel || leave.type || '-', dates: `${leave.dateFrom} → ${leave.dateTo}`, duration: cxScopeText(leave, req), reason: req.reason || leave.reason || '-', applied_by: req.requestedByName || '-' }, { publicKey: EMAILJS_PUBLIC_KEY }).catch(err => console.warn('CX notification failed:', err?.text || err));
+    emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, { to_email: uniqueTos.join(','), subject: subjects[eventType] || subjects.new, action: actions[eventType] || eventType, acted_by: cxCurrentUserName(), employee_name: leave.empName || '-', leave_type: leave.typeLabel || leave.type || '-', dates: `${dateWithWeekday(leave.dateFrom)} → ${dateWithWeekday(leave.dateTo)}`,
+    applied_at: appliedStamp(req.requestedAt || leave.appliedAt), duration: cxScopeText(leave, req), reason: req.reason || leave.reason || '-', applied_by: req.requestedByName || '-' }, { publicKey: EMAILJS_PUBLIC_KEY }).catch(err => console.warn('CX notification failed:', err?.text || err));
   } catch (err) { console.warn('CX notification failed:', err); }
 }
 function wireCxEvents() {
