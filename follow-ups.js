@@ -530,7 +530,7 @@ function initializePOReport() {
             ? 'All Centers'
             : (centers.find(c => c.id === scope)?.name || scope);
         setText('showingCount', `Showing ${currentView.length} of ${base.length} students · ${scopeLabel}`);
-        exportBtn.disabled = currentView.length === 0;
+        exportBtn.disabled = allRows.length === 0;
     }
 
     // ---------- rendering ----------
@@ -660,143 +660,227 @@ function initializePOReport() {
         tbody.innerHTML = html;
     }
 
-    // ---------- Excel export ----------
-    function exportRows() {
-        if (!currentView.length) return;
-        const showCenter = currentScope === 'all';
-        const off = showCenter ? 1 : 0;
-        const total = showCenter ? 13 : 12;
-        const scopeName = showCenter
-            ? 'All-Centers'
-            : (centers.find(c => c.id === currentScope)?.name || currentScope);
+// ---------- Excel export (options modal + multi-section workbook) ----------
+const EX_LISTS = [
+    { key: 'enrolledNoPo', cb: 'exSecEnrolled', label: 'ENROLLED - NO PO' },
+    { key: 'inquiryNoPo',  cb: 'exSecInquiry',  label: 'INQUIRY - NO PO' }
+];
 
-        const head1 = new Array(total).fill('');
-        head1[0] = '#';
-        if (showCenter) head1[1] = 'CENTER';
-        head1[off + 1] = 'INQUIRY DATE';
-        head1[off + 2] = 'NAME';
-        head1[off + 3] = 'PHONE NUMBER';
-        head1[off + 4] = 'SCHOOL';
-        head1[off + 5] = 'GRADE';
-        head1[off + 6] = 'SUBJECT';
-        head1[off + 10] = 'PO';
-
-        const head2 = new Array(total).fill('');
-        head2[off + 6] = 'M';
-        head2[off + 7] = 'R';
-        head2[off + 8] = 'L';
-        head2[off + 9] = 'C';
-        head2[off + 10] = 'Y/N';
-        head2[off + 11] = 'Comments';
-
-        const dataRows = currentView.map((r, i) => {
-            const row = new Array(total).fill('');
-            row[0] = i + 1;
-            if (showCenter) row[1] = r.centerName;
-            row[off + 1] = fmtDate(r.inquiryDate);
-            row[off + 2] = r.nameCn || r.namePinyin || 'Unknown';
-            row[off + 3] = r.phone;
-            row[off + 4] = r.school;
-            row[off + 5] = r.grade;
-            row[off + 6] = r.subjects.M ? 'Yes' : '';
-            row[off + 7] = r.subjects.R ? 'Yes' : '';
-            row[off + 8] = r.subjects.L ? 'Yes' : '';
-            row[off + 9] = r.subjects.C ? 'Yes' : '';
-            row[off + 10] = r.po === 'yes' ? 'YES' : 'NOT YET';
-            row[off + 11] = r.comments;
-            return row;
+function exSelectedCenters() {
+    return Array.from(document.querySelectorAll('#exCenterList .ex-center-cb:checked')).map(cb => cb.value);
+}
+function exSelectedLists() {
+    return EX_LISTS.filter(l => $(l.cb)?.checked);
+}
+function exBaseRows() {
+    const term = searchInput.value.trim().toLowerCase();
+    const subjSel = getSubjectSelection();
+    return allRows.filter(r =>
+        (!subjSel.length || subjSel.some(k => r.subjects[k])) &&
+        (!term || r.searchBlob.includes(term))
+    );
+}
+function exCollectSections() {
+    const sel = exSelectedCenters();
+    const lists = exSelectedLists();
+    const base = exBaseRows();
+    const secs = [];
+    centers.forEach(c => {
+        if (!sel.includes(c.id)) return;
+        lists.forEach(l => {
+            const rows = base.filter(r => r.centerId === c.id && statusMatch(r, l.key)).sort(cmp);
+            if (rows.length) secs.push({ title: `${getCenterAbbr(c.name)} ${l.label}`, rows });
         });
-
-        const dateStamp = new Date().toISOString().slice(0, 10);
-        const safeName = scopeName.replace(/[^\w\u4e00-\u9fff-]+/g, '-');
-        const flatHeader = head1.map((h, c) => head2[c] || h);
-
-        if (typeof window.XLSX === 'undefined') {
-            exportCsvFallback([flatHeader, ...dataRows], `PO_Report_${safeName}_${dateStamp}.csv`);
-            return;
-        }
-        try {
-            const XLSX = window.XLSX;
-            const ws = XLSX.utils.aoa_to_sheet([head1, head2, ...dataRows]);
-            // Merged two-row header, exactly like the paper sheet
-            const merges = [];
-            for (let c = 0; c <= off + 5; c++) merges.push({ s: { r: 0, c }, e: { r: 1, c } });
-            merges.push({ s: { r: 0, c: off + 6 }, e: { r: 0, c: off + 9 } });   // SUBJECT
-            merges.push({ s: { r: 0, c: off + 10 }, e: { r: 0, c: off + 11 } }); // PO
-            ws['!merges'] = merges;
-            ws['!cols'] = [
-                { wch: 5 },
-                ...(showCenter ? [{ wch: 16 }] : []),
-                { wch: 14 }, { wch: 20 }, { wch: 18 }, { wch: 14 }, { wch: 8 },
-                { wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 6 },
-                { wch: 12 }, { wch: 44 }
-            ];
-            ws['!rows'] = [{ hpt: 26 }, { hpt: 20 }, ...dataRows.map(() => ({ hpt: 26 }))];
-
-            const border = { style: 'thin', color: { rgb: '000000' } };
-            const allBorders = { top: border, bottom: border, left: border, right: border };
-            const headerStyle = {
-                fill: { fgColor: { rgb: 'FFE699' } },
-                font: { bold: true, sz: 11, color: { rgb: '000000' } },
-                alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
-                border: allBorders
-            };
-            const centerCols = new Set([0, off + 1, off + 5, off + 6, off + 7, off + 8, off + 9, off + 10]);
-            if (showCenter) centerCols.add(1);
-
-            const range = XLSX.utils.decode_range(ws['!ref']);
-            for (let R = range.s.r; R <= range.e.r; R++) {
-                for (let C = range.s.c; C <= range.e.c; C++) {
-                    const addr = XLSX.utils.encode_cell({ r: R, c: C });
-                    if (!ws[addr]) ws[addr] = { t: 's', v: '' };
-                    const cell = ws[addr];
-                    if (R < 2) { cell.s = headerStyle; continue; }
-                    const align = centerCols.has(C) ? 'center' : 'left';
-                    const style = {
-                        font: { sz: 11, color: { rgb: '000000' } },
-                        alignment: { horizontal: align, vertical: 'center', wrapText: true },
-                        border: allBorders
-                    };
-                    const val = String(cell.v ?? '');
-                    if (C >= off + 6 && C <= off + 9 && val === 'Yes') {
-                        style.fill = { fgColor: { rgb: 'C6EFCE' } };
-                        style.font = { sz: 11, bold: true, color: { rgb: '006100' } };
-                    }
-                    if (C === off + 10) {
-                        style.font = val === 'YES'
-                            ? { sz: 11, bold: true, color: { rgb: '006100' } }
-                            : { sz: 11, bold: true, color: { rgb: '9C0006' } };
-                    }
-                    cell.s = style;
-                }
-            }
-
-            const wb = XLSX.utils.book_new();
-            wb.Props = { Title: 'Parent Orientation Report', Author: 'Kumon DB' };
-            XLSX.utils.book_append_sheet(wb, ws, 'PO Report');
-            const filename = `PO_Report_${safeName}_${dateStamp}.xlsx`;
-            XLSX.writeFile(wb, filename, { compression: true });
-            showToast(`⬇ Exported ${currentView.length} students — ${filename}`);
-        } catch (err) {
-            console.error('Excel export error:', err);
-            exportCsvFallback([flatHeader, ...dataRows], `PO_Report_${safeName}_${dateStamp}.csv`);
-        }
+    });
+    return secs;
+}
+function updateExState() {
+    const secs = exCollectSections();
+    const students = secs.reduce((n, s) => n + s.rows.length, 0);
+    setText('exPreview', secs.length
+        ? `${secs.length} section${secs.length === 1 ? '' : 's'} · ${students} student${students === 1 ? '' : 's'}`
+        : 'No students match these options.');
+    const btn = $('exConfirm');
+    if (btn) btn.disabled = secs.length === 0;
+    const t = $('exCentersToggle');
+    const cbs = Array.from(document.querySelectorAll('#exCenterList .ex-center-cb'));
+    if (t) t.textContent = (cbs.length && cbs.every(cb => cb.checked)) ? 'Clear all' : 'Select all';
+}
+function openExModal() {
+    if (!allRows.length) { showToast('No data loaded yet — nothing to export.', 'err'); return; }
+    const scope = centerSelect.value || 'all';
+    const list = $('exCenterList');
+    if (list) {
+        list.innerHTML = centers.map(c => {
+            const checked = (scope === 'all' || scope === c.id) ? ' checked' : '';
+            return `<label class="ex-center-opt">
+                <input type="checkbox" class="ex-center-cb" value="${esc(c.id)}"${checked}>
+                <span>${esc(c.name)}</span>
+                <span class="ex-center-abbr">${esc(getCenterAbbr(c.name))}</span>
+            </label>`;
+        }).join('');
+        list.querySelectorAll('.ex-center-cb').forEach(cb => cb.addEventListener('change', updateExState));
     }
+    EX_LISTS.forEach(l => { const cb = $(l.cb); if (cb) cb.checked = true; });
+    updateExState();
+    $('exModal')?.classList.remove('hidden');
+}
+function closeExModal() { $('exModal')?.classList.add('hidden'); }
+function runExport() {
+    const sel = exSelectedCenters();
+    const secs = exCollectSections();
+    if (!secs.length) { showToast('Nothing to export with these options.', 'err'); return; }
+    closeExModal();
+    exportSections(secs, sel);
+}
 
-    function exportCsvFallback(rows, filename) {
-        const csvCell = (v) => {
-            const s = String(v ?? '');
-            return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+function exportSections(secs, selCenterIds) {
+    const TOTAL = 12;
+    const head1 = ['#', 'INQUIRY DATE', 'NAME', 'PHONE NUMBER', 'SCHOOL', 'GRADE', 'SUBJECT', '', '', '', 'PO', ''];
+    const head2 = ['', '', '', '', '', '', 'M', 'R', 'L', 'C', 'Y/N', 'Comments'];
+    const dataRow = (r, i) => [
+        i + 1,
+        fmtDate(r.inquiryDate),
+        r.nameCn || r.namePinyin || 'Unknown',
+        r.phone,
+        r.school,
+        r.grade,
+        r.subjects.M ? 'Yes' : '',
+        r.subjects.R ? 'Yes' : '',
+        r.subjects.L ? 'Yes' : '',
+        r.subjects.C ? 'Yes' : '',
+        r.po === 'yes' ? 'YES' : 'NOT YET',
+        r.comments
+    ];
+    const totalStudents = secs.reduce((n, s) => n + s.rows.length, 0);
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    const scopeName = selCenterIds.length === 1
+        ? (centers.find(c => c.id === selCenterIds[0])?.name || selCenterIds[0])
+        : `${selCenterIds.length}-Centers`;
+    const safeName = scopeName.replace(/[^\w\u4e00-\u9fff-]+/g, '-');
+
+    // CSV fallback content: title + flat header + rows per section, blank line between
+    const flatHeader = head1.map((h, c) => head2[c] || h);
+    const csvRows = [];
+    secs.forEach((sec, i) => {
+        if (i) csvRows.push(new Array(TOTAL).fill(''));
+        const t = new Array(TOTAL).fill(''); t[0] = sec.title;
+        csvRows.push(t, flatHeader.slice(), ...sec.rows.map(dataRow));
+    });
+
+    if (typeof window.XLSX === 'undefined') {
+        exportCsvFallback(csvRows, `PO_Report_${safeName}_${dateStamp}.csv`, totalStudents);
+        return;
+    }
+    try {
+        const XLSX = window.XLSX;
+        const aoa = [], merges = [], rowMeta = [];
+        secs.forEach((sec, i) => {
+            if (i) { aoa.push(new Array(TOTAL).fill('')); rowMeta.push('spacer'); }
+            const tr = aoa.length;
+            const title = new Array(TOTAL).fill(''); title[0] = sec.title;
+            aoa.push(title); rowMeta.push('title');
+            merges.push({ s: { r: tr, c: 0 }, e: { r: tr, c: TOTAL - 1 } });
+            const h = aoa.length;
+            aoa.push(head1.slice(), head2.slice()); rowMeta.push('header1', 'header2');
+            for (let c = 0; c <= 5; c++) merges.push({ s: { r: h, c }, e: { r: h + 1, c } });
+            merges.push({ s: { r: h, c: 6 }, e: { r: h, c: 9 } });    // SUBJECT
+            merges.push({ s: { r: h, c: 10 }, e: { r: h, c: 11 } }); // PO
+            sec.rows.forEach((r, n) => { aoa.push(dataRow(r, n)); rowMeta.push('data'); });
+        });
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
+        ws['!merges'] = merges;
+        ws['!cols'] = [
+            { wch: 5 }, { wch: 14 }, { wch: 20 }, { wch: 18 }, { wch: 14 }, { wch: 8 },
+            { wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 12 }, { wch: 44 }
+        ];
+        ws['!rows'] = rowMeta.map(t => ({
+            hpt: t === 'title' ? 24 : t === 'header1' ? 26 : t === 'header2' ? 20 : t === 'spacer' ? 12 : 26
+        }));
+        const border = { style: 'thin', color: { rgb: '000000' } };
+        const allBorders = { top: border, bottom: border, left: border, right: border };
+        const headerStyle = {
+            fill: { fgColor: { rgb: 'FFE699' } },
+            font: { bold: true, sz: 11, color: { rgb: '000000' } },
+            alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+            border: allBorders
         };
-        const csv = '\uFEFF' + rows.map(r => r.map(csvCell).join(',')).join('\r\n');
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = filename;
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-        showToast(`Excel library unavailable — exported CSV instead (${rows.length - 1} students).`);
+        const titleStyle = {
+            font: { bold: true, sz: 12, color: { rgb: '000000' } },
+            alignment: { horizontal: 'center', vertical: 'center' }
+        };
+        const centerCols = new Set([0, 1, 5, 6, 7, 8, 9, 10]);
+        const range = XLSX.utils.decode_range(ws['!ref']);
+        for (let R = range.s.r; R <= range.e.r; R++) {
+            const type = rowMeta[R];
+            if (type === 'spacer') continue;
+            for (let C = range.s.c; C <= range.e.c; C++) {
+                const addr = XLSX.utils.encode_cell({ r: R, c: C });
+                if (!ws[addr]) ws[addr] = { t: 's', v: '' };
+                const cell = ws[addr];
+                if (type === 'title') { cell.s = titleStyle; continue; }
+                if (type === 'header1' || type === 'header2') { cell.s = headerStyle; continue; }
+                const align = centerCols.has(C) ? 'center' : 'left';
+                const style = {
+                    font: { sz: 11, color: { rgb: '000000' } },
+                    alignment: { horizontal: align, vertical: 'center', wrapText: true },
+                    border: allBorders
+                };
+                const val = String(cell.v ?? '');
+                if (C >= 6 && C <= 9 && val === 'Yes') {
+                    style.fill = { fgColor: { rgb: 'C6EFCE' } };
+                    style.font = { sz: 11, bold: true, color: { rgb: '006100' } };
+                }
+                if (C === 10) {
+                    style.font = val === 'YES'
+                        ? { sz: 11, bold: true, color: { rgb: '006100' } }
+                        : { sz: 11, bold: true, color: { rgb: '9C0006' } };
+                }
+                cell.s = style;
+            }
+        }
+        const wb = XLSX.utils.book_new();
+        wb.Props = { Title: 'Parent Orientation Report', Author: 'Kumon DB' };
+        XLSX.utils.book_append_sheet(wb, ws, 'PO Report');
+        const filename = `PO_Report_${safeName}_${dateStamp}.xlsx`;
+        XLSX.writeFile(wb, filename, { compression: true });
+        showToast(`⬇ Exported ${totalStudents} students · ${secs.length} section${secs.length === 1 ? '' : 's'} — ${filename}`);
+    } catch (err) {
+        console.error('Excel export error:', err);
+        exportCsvFallback(csvRows, `PO_Report_${safeName}_${dateStamp}.csv`, totalStudents);
     }
+}
+
+function exportCsvFallback(rows, filename, count) {
+    const csvCell = (v) => {
+        const s = String(v ?? '');
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const csv = '\uFEFF' + rows.map(r => r.map(csvCell).join(',')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    showToast(`Excel library unavailable — exported CSV instead (${count} students).`);
+}
+
+// export modal events
+const exModalEl = $('exModal');
+if (exModalEl) exModalEl.addEventListener('click', (e) => { if (e.target === exModalEl) closeExModal(); });
+$('exCancel')?.addEventListener('click', closeExModal);
+$('exConfirm')?.addEventListener('click', runExport);
+$('exCentersToggle')?.addEventListener('click', () => {
+    const cbs = Array.from(document.querySelectorAll('#exCenterList .ex-center-cb'));
+    const all = cbs.length && cbs.every(cb => cb.checked);
+    cbs.forEach(cb => { cb.checked = !all; });
+    updateExState();
+});
+EX_LISTS.forEach(l => $(l.cb)?.addEventListener('change', updateExState));
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && exModalEl && !exModalEl.classList.contains('hidden')) closeExModal();
+});
 
     // ---------- events ----------
     loadStatus.addEventListener('click', () => {
@@ -808,7 +892,7 @@ function initializePOReport() {
         searchTimeout = setTimeout(buildView, 150);
     });
     document.querySelectorAll('.po-subj-cb').forEach(cb => cb.addEventListener('change', buildView));
-    exportBtn.addEventListener('click', exportRows);
+    exportBtn.addEventListener('click', openExModal);
 
     const saveBtnEl = $('poSaveBtn');
     if (saveBtnEl) saveBtnEl.addEventListener('click', saveEdits);

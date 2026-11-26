@@ -2160,24 +2160,42 @@ function countGuests(g) {
 function computeSlotCounts() {
   const counts = {};
   Object.keys(timeslots).forEach(sid => { counts[sid] = { students: 0, guests: 0 }; });
-  Object.values(families).forEach(fam => {
-    const rsvp = fam.rsvp;
-    if (!rsvp || rsvp.status !== 'attending') return;
-    const memberIds = attendingIds(fam);
-    if (!memberIds.length) return;
+
+  // 👯 Count from the SAME deduped rows as the RSVP table / Excel export:
+  //    one seat per unique student, responded families first (newest wins).
+  //    Legacy duplicate family records no longer inflate the capacity table.
+  const ordered = buildRsvpRows().slice().sort((a, b) => {
+    const ra = a.rsvp?.status ? 1 : 0;
+    const rb = b.rsvp?.status ? 1 : 0;
+    if (ra !== rb) return rb - ra;
+    return String(b.rsvp?.submittedAt || '').localeCompare(String(a.rsvp?.submittedAt || ''));
+  });
+
+  const seenUids = new Set();
+  ordered.forEach(row => {
+    const rsvp = row.rsvp || {};
+    const attending = [];
+    groupMembersForDisplay(row.members).forEach(m => {
+      const uid = studentUid(m) || m.honoreeKey;
+      if (seenUids.has(uid)) return;
+      seenUids.add(uid);
+      const st = rsvp.status ? rsvpKeyStatus(rsvp, m.honoreeKey) : 'pending';
+      if (st === 'attending') attending.push(m);
+    });
+    if (!attending.length) return;
+
     const guestCount = countGuests(rsvp.guests);
-    const seatCount = countUniqueFromIds(memberIds) || memberIds.length;
     if (rsvp.sameTimeslot && rsvp.sharedSlotId) {
       if (counts[rsvp.sharedSlotId]) {
-        counts[rsvp.sharedSlotId].students += seatCount;
+        counts[rsvp.sharedSlotId].students += attending.length;
         counts[rsvp.sharedSlotId].guests += guestCount;
       }
     } else if (rsvp.perStudentSlots) {
       const studentSlot = {};
-      memberIds.forEach(mid => {
-        const sid = rsvp.perStudentSlots[mid];
+      attending.forEach(m => {
+        const sid = rsvp.perStudentSlots[m.honoreeKey];
         if (!sid) return;
-        const uid = studentUid(honorees[mid]) || mid;
+        const uid = studentUid(m) || m.honoreeKey;
         if (!studentSlot[uid]) studentSlot[uid] = sid;
       });
       const seats = Object.keys(studentSlot).length || 1;

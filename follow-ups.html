@@ -162,6 +162,36 @@
   </div>
 </div>
 
+<!-- ⬇ Export options modal -->
+<div id="exModal" class="po-modal hidden" role="dialog" aria-modal="true" aria-labelledby="exModalTitle">
+    <div class="po-modal-card ex-modal-card">
+        <h3 id="exModalTitle">⬇ Export Excel</h3>
+        <p class="po-modal-name">Each selected list becomes a titled section in one sheet, like your PO paper report.</p>
+
+        <div class="po-modal-field">
+            <div class="ex-head-row">
+                <span class="po-modal-label">Centers</span>
+                <button type="button" id="exCentersToggle" class="ex-mini-btn">Select all</button>
+            </div>
+            <div id="exCenterList" class="ex-center-list"></div>
+        </div>
+
+        <div class="po-modal-field">
+            <span class="po-modal-label">Lists</span>
+            <label class="ex-list-opt"><input type="checkbox" id="exSecEnrolled" checked> Enrolled · No PO</label>
+            <label class="ex-list-opt"><input type="checkbox" id="exSecInquiry" checked> Inquiry (Not Enrolled) · No PO</label>
+        </div>
+
+        <p class="ex-preview" id="exPreview"></p>
+        <p class="ex-note">Current search and subject filters still apply. Unsaved edits are not included — press Save changes first if needed.</p>
+
+        <div class="po-modal-actions">
+            <button type="button" id="exCancel" class="btn po-discard-btn">Cancel</button>
+            <button type="button" id="exConfirm" class="btn po-save-btn">⬇ Export</button>
+        </div>
+    </div>
+</div>
+
 <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
 <script defer src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
