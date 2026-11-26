@@ -3486,27 +3486,71 @@ document.getElementById('saveScheduleDTBtn')?.addEventListener('click', () => {
         });
     }   
 
-    setupTeachersTab();
-    
-    Promise.all([
-        fetchTeachers(),
-        fetchCenters(),
-        fetchFamilyStudents()
-    ]).then(() => {
-        if (isEdit) {
-            loadStudentData();
-        } else {
-            addSubjectField();
-            renderTeachersTab();
-
-            pendingSiblingLinks = {};
-            originalSiblingLinks = {};
-            familySelectedSiblingId = '';
-            renderFamilyTab();
-
-            hideLoader();
-        }
-    });
+ setupTeachersTab();
+ function applyBoothDtHandoff() {
+     let h = null;
+     try { h = JSON.parse(sessionStorage.getItem('boothDtHandoff') || 'null'); sessionStorage.removeItem('boothDtHandoff'); } catch {}
+     if (!h || !h.student) return false;
+     if (h.ts && Date.now() - h.ts > 15 * 60000) return false;
+     const s = h.student;
+     const setV = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
+     const setSel = (id, v) => {
+         if (!v) return;
+         const sel = document.getElementById(id);
+         const oth = document.getElementById(id + 'Other');
+         if (!sel) return;
+         let found = false;
+         for (const o of sel.options) { if (o.value === v) { found = true; break; } }
+         if (found) { sel.value = v; oth?.classList.remove('visible'); }
+         else { sel.value = 'Other'; if (oth) { oth.value = v; oth.classList.add('visible'); oth.required = true; sel.required = false; } }
+     };
+     setV('nameCn', s.nameCn);
+     setV('namePinyin', s.namePinyin);
+     setSel('grade', s.grade);
+     setSel('school', s.school);
+     setV('birthday', s.birthday);
+     setV('phoneMom', s.phone);
+     setV('kcNo', s.kcNo);
+     updateAgeDisplay();
+     const po = document.getElementById('parentOrientation');
+     if (po) { po.value = 'No'; po.dispatchEvent(new Event('change')); }
+     const pr = document.getElementById('poReason');
+     if (pr) pr.value = 'Pending Inquiry (Booth DT)';
+     const dts = Array.isArray(h.diagnosticTests) ? h.diagnosticTests : [];
+     const subjNames = [...new Set(dts.map(d => d.subject).filter(Boolean))];
+     const rows = [];
+     let hasEng = false, hasChi = false;
+     subjNames.forEach(n => {
+         if (n === 'English ERP' || n === 'English EFL') { if (hasEng) return; hasEng = true; }
+         if (n.includes('Chinese')) { if (hasChi) return; hasChi = true; }
+         if (rows.length < 3) rows.push(n);
+     });
+     const today = h.date || new Date().toISOString().split('T')[0];
+     if (rows.length) rows.forEach(n => addSubjectField({ name:n, status:'inquiry', inquiryDate:(dts.find(d => d.subject === n)?.date) || today }));
+     else addSubjectField({ status:'inquiry', inquiryDate:today });
+     dts.forEach(d => addDTRow(d));
+     document.querySelector('.tab-btn[data-tab="dt-at"]')?.click();
+     showToast('📥 Booth DT loaded — complete nationality & save 已載入攤位 DT — 請補國籍並儲存', 'success', 6000);
+     return true;
+ }
+ Promise.all([
+     fetchTeachers(),
+     fetchCenters(),
+     fetchFamilyStudents()
+ ]).then(() => {
+     if (isEdit) {
+         loadStudentData();
+     } else {
+         const handed = applyBoothDtHandoff();
+         if (!handed) addSubjectField();
+         renderTeachersTab();
+         pendingSiblingLinks = {};
+         originalSiblingLinks = {};
+         familySelectedSiblingId = '';
+         renderFamilyTab();
+         hideLoader();
+     }
+ });
     
     document.getElementById('logoutBtn')?.addEventListener('click', logout);
 }

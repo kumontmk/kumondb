@@ -362,3 +362,27 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .interest-card > span:last-child { min-width:0; }
 .interest-card .i-cn,
 .interest-card .i-en { overflow-wrap:anywhere; word-break:break-word; }
+
+/* ============================================
+SUCCESS SCREEN — compact emoji + instruction on top
+============================================ */
+#screenSuccess .state-emoji,
+#screenSuccess .success-emoji-small {
+  font-size: 1.9rem;
+  line-height: 1.2;
+  margin-bottom: .2rem;
+}
+#screenSuccess .screenshot-top-hint {
+  display: inline-block;
+  background: var(--bg-amber);
+  border: 1.5px solid #fde68a;
+  color: var(--amber);
+  font-weight: 800;
+  font-size: .85rem;
+  line-height: 1.45;
+  padding: .5rem .9rem;
+  border-radius: 12px;
+  margin: .1rem auto .7rem;
+  max-width: 100%;
+}
+#screenSuccess .screenshot-top-hint::before { content: '📸 '; }

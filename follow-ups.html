@@ -1,161 +1,171 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-      <!-- Shows the logo in the browser tab -->
-  <link rel="icon" type="image/svg+xml" href="favicon.svg">
-
-  <!-- Optional: PNG fallback for older browsers -->
-  <link rel="icon" type="image/png" sizes="512x512" href="dblogo-maskable-512.png">
-
-  <!-- Optional: icon when saved to iOS home screen -->
-  <link rel="apple-touch-icon" href="dblogo-maskable-512.png">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Follow Ups - Kumon DB</title>
-    <link rel="stylesheet" href="follow-ups.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parent Orientation - Kumon DB</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📋</text></svg>">
+<link rel="stylesheet" href="follow-ups.css">
 </head>
 <body>
-    <header>
-        <nav>
-            <a href="dashboard.html">← Dashboard</a>
-            <button id="refreshBtn">🔄 Refresh</button>
-        </nav>
-                <h2>📋 Follow Ups</h2>
-    </header>
 
-    <div id="accessDenied" class="access-denied hidden">
-        <div class="access-denied-content">
-            <h2>🔐 Access Restricted</h2>
-            <p>You do not have permission to view Follow Ups.</p>
-            <button id="backToDashboardBtn" class="primary">← Back to Dashboard</button>
-        </div>
+<div id="page-loader" class="page-loader">
+  <div class="spinner"></div>
+  <p>Loading Parent Orientation…</p>
+</div>
+
+<header>
+  <nav>
+    <a href="dashboard.html">← Dashboard</a>
+  </nav>
+  <h1>📋 Parent Orientation</h1>
+</header>
+
+<main class="page">
+
+  <noscript>
+    <style>#page-loader{display:none}</style>
+    <div class="banner">This report needs JavaScript enabled.</div>
+  </noscript>
+
+  <div id="missingJs" class="banner hidden">
+    📄 follow-ups.js failed to load. Keep follow-ups.js and auth.js in the same folder
+    as this page, save, then refresh with Ctrl+Shift+R.
+    <a href="dashboard.html">← Back to Dashboard</a>
+  </div>
+
+  <section id="accessDenied" class="access-denied hidden">
+    <div class="ad-icon">🔐</div>
+    <h2>Access Restricted</h2>
+    <p>You do not have permission to view the Parent Orientation report.</p>
+    <a class="btn" href="dashboard.html">← Back to Dashboard</a>
+  </section>
+
+  <div id="mainContent" class="hidden">
+
+    <div class="toolbar po-toolbar">
+      <div class="field">
+        <label for="centerSelect">Center</label>
+        <select id="centerSelect">
+          <option value="all">🌐 All Centers</option>
+        </select>
+      </div>
+
+      <div class="po-search">
+        <label for="searchInput">Search</label>
+        <input id="searchInput" type="search" placeholder="Name, phone, school, grade, comment…" autocomplete="off">
+      </div>
+
+      <div class="po-subject-filter" role="group" aria-label="Filter by subject">
+        <label class="subj-chip math" title="Math"><input type="checkbox" class="po-subj-cb" data-subj="M">M · Math</label>
+        <label class="subj-chip erp" title="English ERP"><input type="checkbox" class="po-subj-cb" data-subj="R">R · ERP</label>
+        <label class="subj-chip efl" title="English EFL"><input type="checkbox" class="po-subj-cb" data-subj="L">L · EFL</label>
+        <label class="subj-chip chi" title="Chinese"><input type="checkbox" class="po-subj-cb" data-subj="C">C · Chinese</label>
+      </div>
+
+      <button id="exportBtn" class="btn po-export-btn" type="button" title="Download exactly the rows shown" disabled>⬇ Export Excel</button>
+      <span id="loadStatus" class="status-chip" role="status" title="Tap to retry when a load fails">⏳ Loading…</span>
     </div>
 
-    <div id="mainContent" class="po-container hidden">
-        <!-- ✅ TABS WITH COUNT BADGES -->
-        <div class="tabs">
-            <button class="tab-btn active" data-tab="po">
-                Pending Parent Orientation
-                <span class="tab-badge" id="poBadge">0</span>
-            </button>
-            <button class="tab-btn" data-tab="inquiry">
-                Inquiries
-                <span class="tab-badge" id="inquiryBadge">0</span>
-            </button>
-            <button class="tab-btn" data-tab="pause">
-                Pause Follow-Up
-                <span class="tab-badge" id="pauseBadge">0</span>
-            </button>
-        </div>
+    <section id="poSummary" class="balance-grid">
+      <div class="balance-card clickable bc-blue" data-filter="all" role="button" tabindex="0" aria-label="Show all students">
+        <div class="balance-label">Students</div>
+        <div class="balance-num" id="sumTotalNum">0</div>
+        <div class="balance-sub">in current scope</div>
+      </div>
+      <div class="balance-card clickable bc-green" data-filter="done" role="button" tabindex="0" aria-label="Show PO completed">
+        <div class="balance-label">PO Completed</div>
+        <div class="balance-num" id="sumDoneNum">0</div>
+        <div class="po-progress"><div class="po-progress-fill" id="sumDoneBar"></div></div>
+        <div class="balance-sub"><span id="sumDonePct">0%</span> oriented</div>
+      </div>
+      <div class="balance-card clickable bc-amber" data-filter="enrolledNoPo" role="button" tabindex="0" aria-label="Show enrolled students without PO">
+        <div class="balance-label">Enrolled · No PO</div>
+        <div class="balance-num" id="sumEnrolledNum">0</div>
+        <div class="balance-sub">enrolled, PO pending</div>
+      </div>
+      <div class="balance-card clickable bc-sky" data-filter="inquiryNoPo" role="button" tabindex="0" aria-label="Show inquiry-only students without PO">
+        <div class="balance-label">Not Enrolled · No PO</div>
+        <div class="balance-num" id="sumInquiryNum">0</div>
+        <div class="balance-sub">inquiry only, PO pending</div>
+      </div>
+    </section>
 
-        <!-- TAB 1: PENDING PO -->
-        <div id="tab-po" class="tab-content active">
-            <div class="controls">
-                <input type="text" id="searchInput" placeholder="🔍 Search by name, nickname, grade, subject...">
-            </div>
-            <div class="table-wrapper" style="position: relative;">
-                <table id="poTable">
-                    <thead>
-                        <tr>
-                            <th>Student Name</th>
-                            <th>Chinese Name</th>
-                            <th>Nickname</th>
-                            <th>Grade</th>
-                            <th>Subjects & Levels</th>
-                            <th>Enrol Date</th>
-                            <th>Reason / Notes</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="poTableBody">
-                        <tr><td colspan="8" class="empty-state">Loading students...</td></tr>
-                    </tbody>
-                </table>
-                <div id="noResults" class="empty-state">No students pending orientation.</div>
-                <div id="poLoader" class="loader-overlay hidden">
-                    <div class="spinner"></div>
-                    <p>Loading...</p>
-                </div>
-            </div>
+    <section class="po-section">
+      <div class="po-filter-row">
+        <div id="poStatusChips" class="tab-row po-status-chips">
+          <button class="tab-btn" type="button" data-filter="enrolledNoPo" aria-pressed="false">Enrolled · No PO <span class="po-chip-n" id="cntEnrolledNoPo">0</span></button>
+          <button class="tab-btn" type="button" data-filter="inquiryNoPo" aria-pressed="false">Not Enrolled · No PO <span class="po-chip-n" id="cntInquiryNoPo">0</span></button>
+          <button class="tab-btn" type="button" data-filter="done" aria-pressed="false">PO Done <span class="po-chip-n" id="cntDone">0</span></button>
         </div>
+        <span id="showingCount" class="po-showing"></span>
+      </div>
 
-        <!-- TAB 2: INQUIRIES -->
-        <div id="tab-inquiry" class="tab-content">
-            <div class="table-wrapper" style="position: relative;">
-                <table id="inquiryTable">
-                    <thead>
-                        <tr>
-                            <th>Student Name</th>
-                            <th>Chinese Name</th>
-                            <th>Nickname</th>
-                            <th>Grade</th>
-                            <th>Subjects & Levels</th>
-                            <th>Inquiry Date</th>
-                            <th>DT</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="inquiryTableBody">
-                        <tr><td colspan="8" class="empty-state">Loading inquiries...</td></tr>
-                    </tbody>
-                </table>
-                <div id="noInquiryResults" class="empty-state">No inquiries found.</div>
-                <div id="inquiryLoader" class="loader-overlay hidden">
-                    <div class="spinner"></div>
-                    <p>Loading...</p>
-                </div>
-            </div>
-        </div>
+      <div class="table-wrap po-table-wrap">
+        <table class="data-table po-table">
+          <thead id="poTableHead"></thead>
+          <tbody id="poTableBody">
+            <tr><td colspan="14">
+              <div class="empty-state">
+                <div class="empty-icon">⏳</div>
+                <div class="empty-title">Loading students from all centers…</div>
+              </div>
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
 
-        <!-- ✅ TAB 3: PAUSE FOLLOW-UP (NEW) -->
-        <div id="tab-pause" class="tab-content">
-            <div class="table-wrapper" style="position: relative;">
-                    <table id="pauseTable">
-                        <thead>
-                            <tr>
-                                <th>Student Name</th>
-                                <th>Chinese Name</th>
-                                <th>Nickname</th>
-                                <th>Grade</th>
-                                <th>Subject & Level</th>
-                                <th>Pause Duration</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="pauseTableBody">
-                            <tr><td colspan="7" class="empty-state">Loading pause follow-ups...</td></tr>
-                        </tbody>
-                    </table>
-                <div id="noPauseResults" class="empty-state">No pause follow-ups at this time.</div>
-                <div id="pauseLoader" class="loader-overlay hidden">
-                    <div class="spinner"></div>
-                    <p>Loading...</p>
-                </div>
-            </div>
+      <div id="poSaveBar" class="po-savebar hidden" role="status">
+        <span class="po-savebar-text" id="poSaveText">0 unsaved edits</span>
+        <div class="po-savebar-actions">
+          <button id="poDiscardBtn" type="button" class="btn po-discard-btn">Discard</button>
+          <button id="poSaveBtn" type="button" class="btn po-save-btn">💾 Save changes</button>
         </div>
+      </div>
+
+      <p class="po-legend sub">
+        M = Math · R = English ERP · L = English EFL · C = Chinese. “Yes” marks any non-dropped
+        subject (inquiry, current, pause or completer). “Not enrolled” = inquiry only, never
+        enrolled. Students with no subjects listed are not included. If no inquiry date is on
+        record, the Diagnostic Test (DT) date is shown instead, marked DT. Students who have
+        paused or dropped are labelled Paused or Dropped in Comments. Click a column header to
+        sort. Click any School, Grade, Inquiry Date or Comments cell to edit it in place; click
+        the YES / NOT YET badge to set the status and confirm the PO date in a small popup.
+        Press Save changes below the table to write everything to the database. ✏️ opens the
+        student form for students in your current center. Export downloads exactly what is
+        shown, with the same columns as your PO sheet.
+      </p>
+    </section>
+
+  </div>
+</main>
+
+<div id="poModal" class="po-modal hidden" role="dialog" aria-modal="true" aria-labelledby="poModalTitle">
+  <div class="po-modal-card">
+    <h3 id="poModalTitle">Parent Orientation</h3>
+    <p class="po-modal-name" id="poModalName"></p>
+    <div class="po-modal-field">
+      <span class="po-modal-label">Status</span>
+      <div class="po-modal-status" id="poModalStatus">
+        <button type="button" class="po-modal-opt" data-po="yes" aria-pressed="false">YES</button>
+        <button type="button" class="po-modal-opt" data-po="no" aria-pressed="false">NOT YET</button>
+      </div>
     </div>
-
-    <div id="confirmReturnModal" class="modal-overlay hidden">
-    <div class="modal-content">
-        <h3>Confirm Return Month</h3>
-         <p>Select the month the student will return:</p>
-            <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 1rem;">
-                <div>
-                    <label>Month</label>
-                    <select id="returnMonth"></select>
-                </div>
-                <div>
-                    <label>Year</label>
-                    <select id="returnYear"></select>
-                </div>
-            </div>
-            <div style="margin-top: 1.5rem; text-align: right; display: flex; gap: 0.5rem; justify-content: flex-end;">
-                <button id="cancelReturnBtn" class="secondary">Cancel</button>
-                <button id="saveReturnBtn" class="primary">Confirm Return</button>
-            </div>
-        </div>
+    <div class="po-modal-field">
+      <label class="po-modal-label" for="poModalDate">PO date</label>
+      <input type="date" id="poModalDate" class="po-inline-input">
     </div>
-    <script type="module" src="follow-ups.js"></script>
-    <script type="module" src="./activity-logger-init.js"></script>
+    <div class="po-modal-actions">
+      <button type="button" class="btn po-discard-btn" id="poModalCancel">Cancel</button>
+      <button type="button" class="btn po-save-btn" id="poModalConfirm">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+<script defer src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script type="module" src="follow-ups.js"
+  onerror="document.getElementById('missingJs').classList.remove('hidden');document.getElementById('page-loader').classList.add('hidden');"></script>
 </body>
 </html>

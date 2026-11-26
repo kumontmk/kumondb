@@ -7,12 +7,13 @@ import { auth, db } from './auth.js';
 import { ref, get, update, remove, onValue, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
-  GRADES, GRADE_CN, gradeIdx, gradeBand, gradeLabel, gradeInRange, rangeLabel,
-  INTERESTS, interestLabel, normalizeInterests, GAME_EMOJIS, PALETTE, BANNERS, bannerCss, bannerStops,
-    escapeHtml, randomCode, uid, localDateStr, calcAge, fmtDate, fmtDateShort, slotLabel, slotFullLabel,
-  windowState, timeAgo, slugify, copyText, downloadDataUrl, loadImg,
-  renderQrCanvas, wrapLines, rr,
-  normalizeEventConfig, normalizeGames, eventRangeLabel, venueLines
+GRADES, GRADE_CN, gradeIdx, gradeBand, gradeLabel, gradeInRange, rangeLabel,
+INTERESTS, interestLabel, normalizeInterests, GAME_EMOJIS, PALETTE, BANNERS, bannerCss, bannerStops,
+escapeHtml, randomCode, uid, localDateStr, calcAge, fmtDate, fmtDateShort, slotLabel, slotFullLabel,
+validPhone, normalizePhone, slotsOverlap,
+windowState, timeAgo, slugify, copyText, downloadDataUrl, loadImg,
+renderQrCanvas, wrapLines, rr,
+normalizeEventConfig, normalizeGames, eventRangeLabel, venueLines
 } from './booth-shared.js';
 
 const $ = id => document.getElementById(id);
@@ -152,6 +153,7 @@ function updateEventBar() {
 
 function renderAll() {
   updateEventBar();
+  refreshPickers();
   if (!currentEventId && !creatingNew) return;
   const t = activeTab();
   if (t === 'dashboard') renderDashboard();
@@ -271,7 +273,7 @@ function setupStatic() {
 
   $('drawerClose').addEventListener('click', closeDrawer);
   $('drawerScrim').addEventListener('click', closeDrawer);
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (closeTopModal()) return; closeDrawer(); } });
   $('drawerAttendBtn').addEventListener('click', () => {
     if (!drawerRegId) return;
     toggleAttend(drawerRegId);
@@ -805,6 +807,12 @@ function openDrawer(id) {
   $('regDrawer').classList.remove('hidden');
 }
 function closeDrawer() {
+  const rid = drawerRegId;
+  if (rid && regs[rid] && (resDirty.has(rid) || dtDirty.has(rid) || recDirty.has(rid))) {
+    if (!confirm('Discard unsaved game results / DTs / record notes? 放棄未儲存的成績／診斷測試／備註？')) return;
+    resDrop(rid); dtDrop(rid); recDrop(rid);
+  }
+  if (rid && !regs[rid]) { resDrop(rid); dtDrop(rid); recDrop(rid); }
   drawerRegId = null;
   $('drawerScrim').classList.add('hidden');
   $('regDrawer').classList.add('hidden');
@@ -818,35 +826,1170 @@ function fillDrawer(id) {
   $('drawerTitle').innerHTML = `${escapeHtml(r.studentName || '')} <span class="status-badge st-${status}" style="margin-left:.4rem">${status === 'attended' ? '✅ Attended' : '📝 Registered'}</span>`;
   const apps = [r.contactApps?.wechat ? '💬 WeChat' : '', r.contactApps?.whatsapp ? '📱 WhatsApp' : ''].filter(Boolean).join(' · ');
   const interests = normalizeInterests(r.interests).map(i => `<span class="interest-chip">${escapeHtml(interestLabel(i))}</span>`).join('');
-  const selHtml = (r.selections || []).map(s => {
+  const selHtml = (r.selections || []).map((s, i) => {
     const g = games[s.gameId];
-    return `<span class="game-chip" style="--gc:${g?.color || PALETTE[0]}">${g?.emoji || '🎮'} ${escapeHtml(s.gameName || g?.name || '')} · ${escapeHtml(slotFullLabel(s))}</span>`;
+    return `<span class="game-chip" style="--gc:${g?.color || PALETTE[0]}">${g?.emoji || '🎮'} ${escapeHtml(s.gameName || g?.name || '')} · ${escapeHtml(slotFullLabel(s))}<button type="button" class="chip-x" data-rm-game="${i}" title="Remove game 移除遊戲">✕</button></span>`;
   }).join('');
   $('drawerBody').innerHTML =
     `<div class="dw-section"><h4>🧒 Child 小朋友</h4>` +
-      dwRow('Grade 年級', `<span class="grade-chip band-${gradeBand(r.grade)}">${escapeHtml(gradeLabel(r.grade))}</span>`) +
-      dwRow('School 學校', escapeHtml(r.school || '')) +
-      dwRow('Birthday 生日', escapeHtml(r.birthday ? fmtDate(r.birthday, false) : '')) +
-      dwRow('Age 年齡', r.ageYears != null ? `${r.ageYears}y ${r.ageMonths ?? 0}m · ${r.ageYears}歲` : '') +
+    dwRow('Grade 年級', `<span class="grade-chip band-${gradeBand(r.grade)}">${escapeHtml(gradeLabel(r.grade))}</span>`) +
+    dwRow('School 學校', escapeHtml(r.school || '')) +
+    dwRow('Birthday 生日', escapeHtml(r.birthday ? fmtDate(r.birthday, false) : '')) +
+    dwRow('Age 年齡', r.ageYears != null ? `${r.ageYears}y ${r.ageMonths ?? 0}m · ${r.ageYears}歲` : '') +
     `</div>` +
     `<div class="dw-section"><h4>📞 Contact 聯絡</h4>` +
-      dwRow('Phone 電話', r.parentPhone ? `<a href="tel:${escapeHtml(r.parentPhone)}">${escapeHtml(r.parentPhone)}</a>` : '') +
-      dwRow('Apps 聯絡方式', escapeHtml(apps)) +
-      dwRow('WeChat ID', escapeHtml(r.wechatId || '')) +
+    dwRow('Phone 電話', r.parentPhone ? `<a href="tel:${escapeHtml(r.parentPhone)}">${escapeHtml(r.parentPhone)}</a>` : '') +
+    dwRow('Apps 聯絡方式', escapeHtml(apps)) +
+    dwRow('WeChat ID', escapeHtml(r.wechatId || '')) +
     `</div>` +
     `<div class="dw-section"><h4>📚 Kumon 公文式</h4>` +
-      dwRow('Current student', r.isCurrentStudent === 'yes' ? '✅ Yes 是' : '🌱 No 否') +
-      (r.isCurrentStudent === 'yes' ? dwRow('Center 教室', escapeHtml(r.currentCenter)) + dwRow('Subjects 科目', escapeHtml(r.currentSubjects)) : '') +
-      dwRow('Interested 興趣', `<div class="dw-chips">${interests || '—'}</div>`) +
+    dwRow('Current student', r.isCurrentStudent === 'yes' ? '✅ Yes 是' : '🌱 No 否') +
+    (r.isCurrentStudent === 'yes' ? dwRow('Center 教室', escapeHtml(r.currentCenter)) + dwRow('Subjects 科目', escapeHtml(r.currentSubjects)) : '') +
+    dwRow('Interested 興趣', `<div class="dw-chips">${interests || '—'}</div>`) +
     `</div>` +
-    `<div class="dw-section"><h4>🎪 Games 遊戲</h4><div class="dw-chips">${selHtml || '—'}</div></div>` +
+    `<div class="dw-section"><h4>🎪 Games 遊戲</h4><div class="dw-chips">${selHtml || '—'}</div><button type="button" class="btn ghost small dw-add-game" id="dwAddGameBtn">＋ Add game 新增遊戲</button></div>` +
+    resultsSectionHtml(r, id) +
+    dtSectionHtml(r, id) +
     `<div class="dw-section"><h4>🗂 Record 紀錄</h4>` +
-      dwRow('ID 編號', '<strong>' + escapeHtml(regIdLabel(r.seq)) + '</strong>') +
-      dwRow('Submitted 提交', r.submittedAt ? new Date(r.submittedAt).toLocaleString('en-GB') : '') +
-      dwRow('Remarks 備註', escapeHtml(r.remarks || '')) +
+    dwRow('ID 編號', '<strong>' + escapeHtml(regIdLabel(r.seq)) + '</strong>') +
+    dwRow('Submitted 提交', r.submittedAt ? new Date(r.submittedAt).toLocaleString('en-GB') : '') +
+    recSectionHtml(r, id) +
     `</div>`;
   $('drawerAttendBtn').textContent = status === 'attended' ? '↩ Undo check-in 取消報到' : '✓ Check in 報到';
+  bindDrawerGames(id);
+  bindResults(id);
+  bindDt(id);
+  bindRec(id);
 }
+
+// ============================================
+// GAME RESULTS 遊戲成績 (per registration, per game)
+// Stored at registrations/{rid}/results/{gid}
+// { set, time, timeSec, remarks, updatedAt, updatedBy }
+// ============================================
+const resEdits = {};          // rid -> { gid -> {set,time,remarks} } unsaved edits
+const resDirty = new Set();   // rids with unsaved edits
+const resTimers = {};         // 'rid|gid' -> { running, start, base }
+let resTickTimer = null;
+
+const resKey = (rid, gid) => rid + '|' + gid;
+
+function resDrop(rid) {
+  delete resEdits[rid];
+  resDirty.delete(rid);
+  Object.keys(resTimers).forEach(k => { if (k.startsWith(rid + '|')) delete resTimers[k]; });
+  resEnsureTick();
+}
+function resVals(rid, gid) {
+  const saved = (regs[rid]?.results || {})[gid] || {};
+  const ed = (resEdits[rid] || {})[gid] || {};
+  return {
+    set: ed.set ?? saved.set ?? '',
+    time: ed.time ?? saved.time ?? '',
+    remarks: ed.remarks ?? saved.remarks ?? ''
+  };
+}
+function resSetEdit(rid, gid, field, value) {
+  resEdits[rid] = resEdits[rid] || {};
+  resEdits[rid][gid] = resEdits[rid][gid] || { ...resVals(rid, gid) };
+  resEdits[rid][gid][field] = value;
+  resDirty.add(rid);
+  if (drawerRegId === rid) {
+    const chip = $('drawerBody').querySelector('[data-res-dirty]');
+    if (chip) chip.classList.remove('hidden');
+  }
+}
+// "83", "83.4" = seconds · "1:23", "1:23.4" = minutes:seconds
+function parseTimeSec(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return null;
+  if (/^\d{1,4}(\.\d{1,3})?$/.test(s)) return parseFloat(s);
+  const m = s.match(/^(\d{1,3}):([0-5]?\d(?:\.\d{1,3})?)$/);
+  if (m) return parseInt(m[1], 10) * 60 + parseFloat(m[2]);
+  return NaN;
+}
+function fmtTimeSec(sec) {
+  if (sec == null || isNaN(sec)) return '';
+  const m = Math.floor(sec / 60), s = sec - m * 60;
+  return m + ':' + s.toFixed(1).padStart(4, '0');
+}
+function resultsSectionHtml(r, rid) {
+  const seen = new Set();
+  const sels = [];
+  (r.selections || []).forEach(s => {
+    if (s && s.gameId && !seen.has(s.gameId)) { seen.add(s.gameId); sels.push(s); }
+  });
+  let html = `<div class="dw-section"><h4>🏁 Game results 遊戲成績</h4>`;
+  if (!sels.length) return html + `<p class="hint">No games selected 未選擇遊戲</p></div>`;
+  html += `<p class="hint res-hint">Record set, time & remarks per challenge — fastest time wins. 記錄每項挑戰的組別、時間及備註 — 最快時間勝出。</p>`;
+  sels.forEach(s => {
+    const gid = s.gameId, g = games[gid] || {};
+    const v = resVals(rid, gid);
+    const t = resTimers[resKey(rid, gid)];
+    const running = !!(t && t.running);
+    const saved = (r.results || {})[gid];
+    const meta = saved && saved.updatedAt
+      ? `✓ Recorded 已記錄 · ${escapeHtml(new Date(saved.updatedAt).toLocaleString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }))}${saved.timeSec != null ? ` · ${saved.timeSec}s` : ''}`
+      : '';
+    html +=
+      `<div class="res-game" style="--gc:${g.color || PALETTE[0]}">` +
+      `<div class="res-game-head"><span class="res-emoji">${g.emoji || '🎮'}</span>` +
+      `<div class="res-names"><div class="res-name">${escapeHtml(s.gameName || g.name || g.nameCn || '')}</div>` +
+      `<div class="res-slot">${escapeHtml(slotFullLabel(s))}</div></div>` +
+      `<button type="button" class="res-clear" data-res-clear="${escapeHtml(gid)}" title="Clear this game 清除此項">✕</button></div>` +
+      `<div class="res-grid">` +
+      `<label class="res-field"><span>Set 組</span>` +
+      `<input type="text" data-res="set" data-gid="${escapeHtml(gid)}" maxlength="20" placeholder="e.g. 1" value="${escapeHtml(v.set)}"></label>` +
+      `<div class="res-field"><span>Time 時間 <em class="res-sec" data-sec="${escapeHtml(gid)}"></em></span>` +
+      `<div class="res-time-row">` +
+      `<input type="text" data-res="time" data-gid="${escapeHtml(gid)}" inputmode="decimal" placeholder="1:23.4" class="${running ? 'timing' : ''}" ${running ? 'readonly' : ''} value="${escapeHtml(v.time)}">` +
+      `<button type="button" class="res-timer-btn${running ? ' stop' : ''}" data-timer="${escapeHtml(gid)}" title="${running ? 'Stop 停止' : 'Start stopwatch 開始計時'}">${running ? '⏹' : '▶'}</button>` +
+      `<button type="button" class="res-timer-btn ghost" data-timer-reset="${escapeHtml(gid)}" title="Reset 重設">↺</button>` +
+      `</div></div>` +
+      `<label class="res-field wide"><span>Remarks 備註</span>` +
+      `<input type="text" data-res="remarks" data-gid="${escapeHtml(gid)}" maxlength="200" placeholder="Optional 選填" value="${escapeHtml(v.remarks)}"></label>` +
+      `</div>` +
+      (meta ? `<div class="res-meta">${meta}</div>` : '') +
+      `</div>`;
+  });
+  const stamps = Object.values(r.results || {}).map(x => x && x.updatedAt).filter(Boolean).sort();
+  const statusTxt = stamps.length
+    ? `✓ ${escapeHtml(new Date(stamps[stamps.length - 1]).toLocaleString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }))}`
+    : 'Not recorded yet 尚未記錄';
+  html +=
+    `<div class="res-save-bar">` +
+    `<span class="res-status">${statusTxt}</span>` +
+    `<span class="draft-chip${resDirty.has(rid) ? '' : ' hidden'}" data-res-dirty>● Unsaved 未儲存</span>` +
+    `<button type="button" class="btn primary small" data-res-save>💾 Save results 儲存成績</button>` +
+    `</div></div>`;
+  return html;
+}
+function bindResults(rid) {
+  const body = $('drawerBody');
+  body.querySelectorAll('[data-res]').forEach(inp => {
+    inp.addEventListener('input', () => {
+      resSetEdit(rid, inp.dataset.gid, inp.dataset.res, inp.value);
+      inp.classList.remove('invalid');
+      if (inp.dataset.res === 'time') resUpdateSecHint(inp.dataset.gid);
+    });
+  });
+  body.querySelectorAll('[data-timer]').forEach(btn =>
+    btn.addEventListener('click', () => resTimerToggle(rid, btn.dataset.timer)));
+  body.querySelectorAll('[data-timer-reset]').forEach(btn =>
+    btn.addEventListener('click', () => resTimerReset(rid, btn.dataset.timerReset)));
+  body.querySelectorAll('[data-res-clear]').forEach(btn =>
+    btn.addEventListener('click', () => {
+      const gid = btn.dataset.resClear;
+      resTimers[resKey(rid, gid)] = { running:false, start:0, base:0 };
+      resEdits[rid] = resEdits[rid] || {};
+      resEdits[rid][gid] = { set:'', time:'', remarks:'' };
+      resDirty.add(rid);
+      resEnsureTick();
+      fillDrawer(rid);
+    }));
+  const save = body.querySelector('[data-res-save]');
+  if (save) save.addEventListener('click', saveResults);
+  body.querySelectorAll('[data-res="time"]').forEach(inp => resUpdateSecHint(inp.dataset.gid));
+}
+function resUpdateSecHint(gid) {
+  const body = $('drawerBody');
+  const inp = body.querySelector(`[data-res="time"][data-gid="${gid}"]`);
+  const hint = body.querySelector(`[data-sec="${gid}"]`);
+  if (!inp || !hint) return;
+  const v = parseTimeSec(inp.value);
+  hint.textContent = v == null ? '' : (isNaN(v) ? '⚠ format' : (Math.round(v * 10) / 10) + 's');
+  hint.classList.toggle('bad', isNaN(v));
+}
+function resTimerToggle(rid, gid) {
+  const k = resKey(rid, gid);
+  const t = resTimers[k] = resTimers[k] || { running:false, start:0, base:0 };
+  if (t.running) {
+    t.base += Date.now() - t.start;
+    t.running = false;
+    resSetEdit(rid, gid, 'time', fmtTimeSec(t.base / 1000));
+  } else {
+    t.running = true;
+    t.start = Date.now();
+  }
+  resEnsureTick();
+  if (drawerRegId === rid) fillDrawer(rid);
+}
+function resTimerReset(rid, gid) {
+  resTimers[resKey(rid, gid)] = { running:false, start:0, base:0 };
+  resSetEdit(rid, gid, 'time', '');
+  resEnsureTick();
+  if (drawerRegId === rid) fillDrawer(rid);
+}
+function resEnsureTick() {
+  const anyRunning = Object.values(resTimers).some(t => t.running);
+  if (anyRunning && !resTickTimer) resTickTimer = setInterval(resTick, 100);
+  if (!anyRunning && resTickTimer) { clearInterval(resTickTimer); resTickTimer = null; }
+}
+function resTick() {
+  Object.keys(resTimers).forEach(k => {
+    const [rid, gid] = k.split('|');
+    if (!regs[rid]) { delete resTimers[k]; delete resEdits[rid]; resDirty.delete(rid); return; }
+    const t = resTimers[k];
+    if (!t.running || drawerRegId !== rid) return;
+    const inp = $('drawerBody').querySelector(`[data-res="time"][data-gid="${gid}"]`);
+    if (inp) { inp.value = fmtTimeSec((t.base + Date.now() - t.start) / 1000); resUpdateSecHint(gid); }
+  });
+  resEnsureTick();
+}
+async function saveResults() {
+  const rid = drawerRegId;
+  if (!rid || !regs[rid]) return;
+  const r = regs[rid];
+  // Auto-stop any running stopwatch so its time is captured.
+  let stopped = false;
+  (r.selections || []).forEach(s => {
+    const t = resTimers[resKey(rid, s.gameId)];
+    if (t && t.running) {
+      t.base += Date.now() - t.start; t.running = false;
+      resSetEdit(rid, s.gameId, 'time', fmtTimeSec(t.base / 1000));
+      stopped = true;
+    }
+  });
+  resEnsureTick();
+  const seen = new Set(), updates = {}, nextLocal = { ...(r.results || {}) };
+  const now = new Date().toISOString();
+  const by = auth.currentUser?.email || '';
+  let badGid = null;
+  (r.selections || []).forEach(s => {
+    const gid = s.gameId;
+    if (!gid || seen.has(gid)) return;
+    seen.add(gid);
+    const v = resVals(rid, gid);
+    const set = String(v.set || '').trim();
+    const time = String(v.time || '').trim();
+    const remarks = String(v.remarks || '').trim();
+    const sec = time ? parseTimeSec(time) : null;
+    if (time && isNaN(sec)) { badGid = gid; return; }
+    const path = `boothEvents/${currentEventId}/registrations/${rid}/results/${gid}`;
+    if (!set && !time && !remarks) {
+      updates[path] = null;
+      delete nextLocal[gid];
+    } else {
+      const obj = { set, time, remarks, updatedAt:now, updatedBy:by };
+      if (sec != null && !isNaN(sec)) obj.timeSec = Math.round(sec * 1000) / 1000;
+      updates[path] = obj;
+      nextLocal[gid] = obj;
+    }
+  });
+  if (badGid) {
+    if (stopped) fillDrawer(rid);
+    const inp = $('drawerBody').querySelector(`[data-res="time"][data-gid="${badGid}"]`);
+    if (inp) { inp.classList.add('invalid'); inp.focus(); }
+    showToast('⚠ Invalid time — use seconds (83.4) or m:ss (1:23.4) 時間格式無效', 'error');
+    return;
+  }
+  if (!Object.keys(updates).length) { showToast('Nothing to save 沒有可儲存的成績', 'info'); return; }
+  const prev = r.results;
+  const prevEdits = resEdits[rid];
+  r.results = nextLocal;
+  delete resEdits[rid];
+  resDirty.delete(rid);
+  const btn = $('drawerBody').querySelector('[data-res-save]');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Saving…'; }
+  try {
+    await update(ref(db), updates);
+    showToast('🏁 Results saved 成績已儲存', 'success');
+    if (drawerRegId === rid) fillDrawer(rid);
+  } catch (err) {
+    r.results = prev;
+    if (prevEdits) resEdits[rid] = prevEdits;
+    resDirty.add(rid);
+    showToast(`Error: ${err.message}`, 'error');
+    if (drawerRegId === rid) fillDrawer(rid);
+  }
+}
+// ============================================
+// DIAGNOSTIC TESTS (DT) + TRANSFER TO STUDENT RECORD
+// ============================================
+const DT_SUBJECTS = ['Math', 'Chinese (Trad)', 'Chinese (Simp)', 'English ERP', 'English EFL'];
+const dtEdits = {};
+const dtDirty = new Set();
+const kcEdits = {};
+function dtDrop(rid) { delete dtEdits[rid]; delete kcEdits[rid]; dtDirty.delete(rid); }
+function kcVal(rid) { return kcEdits[rid] ?? regs[rid]?.kcNo ?? ''; }
+function kcSetEdit(rid, value) {
+  kcEdits[rid] = value;
+  dtDirty.add(rid);
+  if (drawerRegId === rid) $('drawerBody').querySelector('[data-dt-dirty]')?.classList.remove('hidden');
+}
+let bdt = { rid:null, centerId:'', match:null, students:[], busy:false };
+let bdtCentersCache = null;
+const bdtStudentsCache = {};
+
+function dtSectionHtml(r, rid) {
+  const ids = dtIds(rid);
+  let html = `<div class="dw-section"><h4>📝 Diagnostic tests 診斷測試 DT</h4>`;
+  html += `<p class="hint res-hint">Record booth DT results, then send them to the student record. 記錄攤位診斷測試成績，再傳送至學生紀錄。</p>`;
+  html += `<label class="res-field dt-kc-field"><span>KC No. 平板編號 <em class="rec-tag send">→ student form 傳送</em></span>` +
+    `<input type="text" data-dt-kc maxlength="30" placeholder="e.g. KC123456" value="${escapeHtml(kcVal(rid))}"></label>`;
+  ids.forEach(id => {
+    const saved = dtSaved(rid)[id];
+    if (saved && saved.transferredAt) {
+      html += `<div class="dt-sent"><span>✅ ${escapeHtml(saved.subject || '')} · ${escapeHtml(saved.date || '')} · ${escapeHtml(saved.test || '')} · ${escapeHtml(saved.score || '')} · ${escapeHtml(saved.time || '')}</span><em>Sent 已傳送${saved.transferredStudentName ? ' → ' + escapeHtml(saved.transferredStudentName) : ''}</em></div>`;
+      return;
+    }
+    const v = dtVals(rid, id);
+    const opts = '<option value="">Subject 科目…</option>' + DT_SUBJECTS.map(s => `<option value="${escapeHtml(s)}" ${s === v.subject ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('');
+    const f = (label, key, type, val, ph = '') =>
+      `<label class="res-field"><span>${label}</span><input type="${type}" data-dt="${key}" data-dtid="${escapeHtml(id)}" value="${escapeHtml(val)}" placeholder="${escapeHtml(ph)}"></label>`;
+    html += `<div class="dt-card">` +
+      `<div class="dt-card-head"><select data-dt="subject" data-dtid="${escapeHtml(id)}">${opts}</select><button type="button" class="res-clear" data-dt-del="${escapeHtml(id)}" title="Remove 移除">✕</button></div>` +
+      `<div class="dt-grid">` +
+      f('Date 日期', 'date', 'date', v.date) +
+      f('Timeslot 時段', 'DTtimeslot', 'time', v.DTtimeslot) +
+      f('Test / Level 測試', 'test', 'text', v.test, 'e.g. DT 3A') +
+      f('Score 分數', 'score', 'text', v.score, 'e.g. 85/100') +
+      f('Time 時間', 'time', 'text', v.time, '20/30') +
+      f('Suggested 建議', 'suggestedStart', 'text', v.suggestedStart, 'e.g. 3A') +
+      f('Actual 實際', 'actualStart', 'text', v.actualStart, 'e.g. 3A') +
+      `</div></div>`;
+  });
+  if (!ids.length) html += '<p class="hint">No DTs yet. 尚未記錄。</p>';
+  const pend = dtPending(rid).length;
+  html += `<div class="res-save-bar"><span class="res-status">${pend ? pend + ' ready to send 可傳送' : '—'}</span>` +
+    `<span class="draft-chip${dtDirty.has(rid) ? '' : ' hidden'}" data-dt-dirty>● Unsaved 未儲存</span>` +
+    `<button type="button" class="btn ghost small" data-dt-add>＋ Add DT 新增</button>` +
+    `<button type="button" class="btn primary small" data-dt-save>💾 Save DTs & KC 儲存</button></div>`;
+  html += `<button type="button" class="btn secondary small dt-send-btn" data-dt-send ${pend ? '' : 'disabled'}>📤 Send to student form 傳送至學生表單${pend ? ` (${pend})` : ''}</button>`;
+  html += '</div>';
+  return html;
+}
+function dtSaved(rid) { return regs[rid]?.diagnosticTests || {}; }
+function dtIds(rid) {
+  const ids = new Set(Object.keys(dtSaved(rid)));
+  const ed = dtEdits[rid] || {};
+  Object.keys(ed).forEach(id => { if (ed[id] === null) ids.delete(id); else ids.add(id); });
+  return [...ids];
+}
+function dtVals(rid, id) {
+  const s = dtSaved(rid)[id] || {};
+  const e = (dtEdits[rid] || {})[id] || {};
+  const pick = k => e[k] ?? s[k] ?? '';
+  return {
+    subject:pick('subject'), date:pick('date'), DTtimeslot:pick('DTtimeslot'),
+    test:pick('test'), score:pick('score'), time:pick('time'),
+    suggestedStart:pick('suggestedStart'), actualStart:pick('actualStart')
+  };
+}
+function dtSetEdit(rid, id, field, value) {
+  dtEdits[rid] = dtEdits[rid] || {};
+  dtEdits[rid][id] = dtEdits[rid][id] || { ...dtVals(rid, id) };
+  dtEdits[rid][id][field] = value;
+  dtDirty.add(rid);
+  if (drawerRegId === rid) $('drawerBody').querySelector('[data-dt-dirty]')?.classList.remove('hidden');
+}
+function dtPending(rid) {
+  return Object.entries(dtSaved(rid)).filter(([, d]) => d && !d.transferredAt).map(([id, d]) => ({ id, ...d }));
+}
+function boothGradeToForm(g) {
+  const s = String(g || '').toUpperCase();
+  if (/^K[0-3]$/.test(s)) return s;
+  const m = s.match(/^([PF])([1-6])$/);
+  if (m) return String((m[1] === 'P' ? 0 : 6) + Number(m[2]));
+  return s;
+}
+function splitBoothName(full) {
+  const s = String(full || '').trim();
+  const cn = (s.match(/[\u3400-\u9FFF\uF900-\uFAFF]+/g) || []).join('');
+  const py = s.replace(/[\u3400-\u9FFF\uF900-\uFAFF]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return { nameCn:cn, namePinyin:py };
+}
+function dtPhoneKey(p) { return String(p || '').replace(/\D/g, ''); }
+function dtPhoneMatch(a, b) {
+  const x = dtPhoneKey(a), y = dtPhoneKey(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  return x.length >= 8 && y.length >= 8 && x.slice(-8) === y.slice(-8);
+}
+function bindDt(rid) {
+  const body = $('drawerBody');
+  const kc = body.querySelector('[data-dt-kc]');
+  if (kc) kc.addEventListener('input', () => kcSetEdit(rid, kc.value));
+  body.querySelectorAll('[data-dt]').forEach(inp => inp.addEventListener('input', () => {
+    dtSetEdit(rid, inp.dataset.dtid, inp.dataset.dt, inp.value);
+    inp.classList.remove('invalid');
+  }));
+  body.querySelectorAll('[data-dt-del]').forEach(b => b.addEventListener('click', () => {
+    dtEdits[rid] = dtEdits[rid] || {};
+    dtEdits[rid][b.dataset.dtDel] = null;
+    dtDirty.add(rid);
+    fillDrawer(rid);
+  }));
+  body.querySelector('[data-dt-add]')?.addEventListener('click', () => {
+    const id = uid('dt');
+    dtEdits[rid] = dtEdits[rid] || {};
+    dtEdits[rid][id] = { subject:'', date:localDateStr(), DTtimeslot:'', test:'', score:'', time:'', suggestedStart:'', actualStart:'' };
+    dtDirty.add(rid);
+    fillDrawer(rid);
+  });
+  body.querySelector('[data-dt-save]')?.addEventListener('click', () => saveDts(rid));
+  body.querySelector('[data-dt-send]')?.addEventListener('click', () => openBdtModal(rid));
+}
+async function saveDts(rid) {
+  const r = regs[rid]; if (!r) return;
+  const eid = currentEventId;
+  const saved = dtSaved(rid);
+  const ed = dtEdits[rid] || {};
+  const ids = new Set([...Object.keys(saved), ...Object.keys(ed)]);
+  const updates = {};
+  const next = { ...saved };
+  const now = new Date().toISOString();
+  const by = auth.currentUser?.email || '';
+  ids.forEach(id => {
+    const path = `boothEvents/${eid}/registrations/${rid}/diagnosticTests/${id}`;
+    if (ed[id] === null) { updates[path] = null; delete next[id]; return; }
+    const v = dtVals(rid, id);
+    const empty = !v.subject && !v.date && !v.test && !v.score && !v.time && !v.DTtimeslot && !v.suggestedStart && !v.actualStart;
+    if (empty) { updates[path] = null; delete next[id]; return; }
+    next[id] = { ...(saved[id] || {}), ...v, updatedAt:now, updatedBy:by };
+    updates[path] = next[id];
+  });
+  const kcNo = String(kcVal(rid)).trim();
+  const kcChanged = kcNo !== String(r.kcNo || '');
+  if (kcChanged) updates[`boothEvents/${eid}/registrations/${rid}/kcNo`] = kcNo;
+  if (!Object.keys(updates).length) return showToast('Nothing to save 沒有可儲存的變更', 'info');
+  const prevAll = r.diagnosticTests;
+  const prevEdits = dtEdits[rid];
+  const prevKc = r.kcNo;
+  const prevKcEdit = kcEdits[rid];
+  r.diagnosticTests = next;
+  if (kcChanged) r.kcNo = kcNo;
+  delete dtEdits[rid];
+  delete kcEdits[rid];
+  dtDirty.delete(rid);
+  const btn = $('drawerBody').querySelector('[data-dt-save]');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  try {
+    await update(ref(db), updates);
+    showToast(kcChanged ? '📝 DTs & KC No. saved 已儲存' : '📝 DTs saved 已儲存', 'success');
+    if (drawerRegId === rid) fillDrawer(rid);
+  } catch (err) {
+    r.diagnosticTests = prevAll;
+    r.kcNo = prevKc;
+    if (prevEdits) dtEdits[rid] = prevEdits;
+    if (prevKcEdit !== undefined) kcEdits[rid] = prevKcEdit;
+    dtDirty.add(rid);
+    showToast(`Error: ${err.message}`, 'error');
+    if (drawerRegId === rid) fillDrawer(rid);
+  }
+}
+function closeBdtModal() { $('bdtModal')?.classList.add('hidden'); bdt.rid = null; bdt.match = null; }
+async function openBdtModal(rid) {
+  const r = regs[rid]; if (!r) return;
+  if (dtDirty.has(rid) || recDirty.has(rid)) return showToast('Save your changes first 請先儲存變更', 'error');
+  const pend = dtPending(rid);
+  if (!pend.length) return showToast('No saved DTs to send 沒有可傳送的 DT', 'error');
+  if (pend.some(d => !d.subject || !d.date || !d.test || !d.score || !d.time)) {
+    return showToast('Each DT needs subject, date, test, score & time before sending 每項 DT 需填寫科目、日期、測試、分數及時間', 'error');
+  }
+  bdt = { rid, centerId:'', match:null, students:[], busy:false };
+  $('bdtSummary').innerHTML =
+    `<div class="bdt-stu"><strong>${escapeHtml(r.studentName || '')}</strong><span class="grade-chip band-${gradeBand(r.grade)}">${escapeHtml(r.grade || '')}</span><span>📞 ${escapeHtml(r.parentPhone || '—')}</span><span>${pend.length} DT(s)</span></div>` +
+    `<div class="bdt-kc-line"><span>KC No. 平板編號 → ${r.kcNo ? `<code>${escapeHtml(r.kcNo)}</code>` : '—'}</span><span>📝 Remarks stay in booth 備註只留攤位</span></div>`;
+  $('bdtList').innerHTML = pend.map(d =>
+    `<div class="bdt-dt-row">${escapeHtml(d.subject)} · ${escapeHtml(d.date)}${d.DTtimeslot ? ' ' + escapeHtml(d.DTtimeslot) : ''} · ${escapeHtml(d.test)} · ${escapeHtml(d.score)} · ${escapeHtml(d.time)}${d.suggestedStart ? ' → ' + escapeHtml(d.suggestedStart) : ''}</div>`).join('');
+  $('bdtModal').classList.remove('hidden');
+  const sel = $('bdtCenter');
+  sel.innerHTML = '<option value="">Loading centers 載入中…</option>';
+  try {
+    if (!bdtCentersCache) {
+      const snap = await get(ref(db, 'centers'));
+      bdtCentersCache = Object.entries(snap.val() || {}).map(([id, c]) => ({ id, name:c?.name || id })).sort((a, b) => a.name.localeCompare(b.name));
+    }
+    sel.innerHTML = bdtCentersCache.map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join('');
+    const pref = sessionStorage.getItem('selectedCenter') || '';
+    bdt.centerId = bdtCentersCache.some(c => c.id === pref) ? pref : (bdtCentersCache[0]?.id || '');
+    sel.value = bdt.centerId;
+    await bdtLoadStudents();
+  } catch (err) {
+    sel.innerHTML = '<option value="">Error loading centers</option>';
+    showToast(`Error: ${err.message}`, 'error');
+  }
+}
+async function bdtLoadStudents() {
+  const cid = bdt.centerId;
+  const r = regs[bdt.rid];
+  const box = $('bdtMatch');
+  if (!cid || !r) { box.innerHTML = ''; return; }
+  box.innerHTML = '<p class="hint">Checking phone match 正在比對電話…</p>';
+  try {
+    if (!bdtStudentsCache[cid]) {
+      const snap = await get(ref(db, `centers/${cid}/students`));
+      const list = [];
+      snap.forEach(ch => list.push({ id:ch.key, ...ch.val() }));
+      bdtStudentsCache[cid] = list;
+    }
+    bdt.students = bdtStudentsCache[cid];
+    bdt.match = bdt.students.find(s =>
+      dtPhoneMatch(s.phone?.mom, r.parentPhone) ||
+      dtPhoneMatch(s.phone?.dad, r.parentPhone) ||
+      dtPhoneMatch(s.phone?.own, r.parentPhone)) || null;
+    renderBdtMatch();
+  } catch (err) {
+    box.innerHTML = `<p class="hint">Error: ${escapeHtml(err.message)}</p>`;
+  }
+}
+function renderBdtMatch() {
+  const box = $('bdtMatch');
+  const add = $('bdtAddBtn');
+  const nw = $('bdtNewBtn');
+  if (bdt.match) {
+    const s = bdt.match;
+    box.innerHTML = `<div class="bdt-match">✅ Existing student found 找到現有學生<div class="bdt-match-name">${escapeHtml(s.nameCn || '')} ${escapeHtml(s.namePinyin || '')}</div><div class="bdt-match-meta">${escapeHtml(s.studentNumber || '—')} · ${escapeHtml(s.grade || '—')} · ${escapeHtml(s.overallStatus || '')}</div></div>`;
+    add.classList.remove('hidden');
+    add.disabled = false;
+    add.textContent = '＋ Add DTs to this student 加入此學生';
+    nw.className = 'btn ghost';
+    nw.textContent = '🆕 Open as new instead 仍作為新學生';
+  } else {
+    box.innerHTML = `<div class="bdt-none">🆕 No student with this phone in this center — the student form will open as a new inquiry. 此教室沒有此電話的學生 — 將以新查詢開啟學生表單。</div>`;
+    add.classList.add('hidden');
+    nw.className = 'btn primary';
+    nw.textContent = '📤 Open student form (new inquiry) 開啟學生表單';
+  }
+}
+async function bdtAddToExisting() {
+  const rid = bdt.rid, r = regs[rid], s = bdt.match, cid = bdt.centerId;
+  if (!r || !s || !cid || bdt.busy) return;
+  const eid = currentEventId;
+  bdt.busy = true;
+  const btn = $('bdtAddBtn');
+  btn.disabled = true; btn.textContent = '⏳ Adding…';
+  try {
+    const snap = await get(ref(db, `centers/${cid}/students/${s.id}`));
+    if (!snap.exists()) throw new Error('Student no longer exists 學生已不存在');
+    const cur = snap.val();
+    const arr = Array.isArray(cur.diagnosticTests) ? cur.diagnosticTests : Object.values(cur.diagnosticTests || {});
+    const pend = dtPending(rid);
+    const clean = pend.map(d => ({
+      subject:d.subject || '', date:d.date || '', DTtimeslot:d.DTtimeslot || '',
+      test:d.test || '', score:d.score || '', time:d.time || '',
+      suggestedStart:d.suggestedStart || '', actualStart:d.actualStart || '',
+      dtNote:'Booth DT 攤位診斷測試'
+    }));
+    const additions = clean.filter(d => !arr.some(x =>
+      x && x.subject === d.subject && x.date === d.date && x.test === d.test && x.score === d.score && x.time === d.time));
+    const boothKc = String(r.kcNo || '').trim();
+    const passKc = boothKc && !String(cur.kcNo || '').trim();
+    if (!additions.length && !passKc) {
+      showToast('These DTs are already on the student record 這些 DT 已在學生紀錄中', 'info');
+      closeBdtModal();
+      return;
+    }
+    const now = new Date().toISOString();
+    const updates = {};
+    if (additions.length) updates[`centers/${cid}/students/${s.id}/diagnosticTests`] = [...arr, ...additions];
+    if (passKc) updates[`centers/${cid}/students/${s.id}/kcNo`] = boothKc;
+    updates[`centers/${cid}/students/${s.id}/updatedAt`] = now;
+    const nextLocal = { ...(r.diagnosticTests || {}) };
+    const stampName = s.nameCn || s.namePinyin || '';
+    pend.forEach(d => {
+      const base = `boothEvents/${eid}/registrations/${rid}/diagnosticTests/${d.id}`;
+      updates[`${base}/transferredAt`] = now;
+      updates[`${base}/transferredStudentId`] = s.id;
+      updates[`${base}/transferredCenterId`] = cid;
+      updates[`${base}/transferredStudentName`] = stampName;
+      nextLocal[d.id] = { ...(nextLocal[d.id] || {}), transferredAt:now, transferredStudentId:s.id, transferredCenterId:cid, transferredStudentName:stampName };
+    });
+    await update(ref(db), updates);
+    r.diagnosticTests = nextLocal;
+    delete bdtStudentsCache[cid];
+    closeBdtModal();
+    if (drawerRegId === rid) fillDrawer(rid);
+    showToast(`✅ ${additions.length} DT(s) added to ${stampName || 'student'}${passKc ? ' · KC No. saved 已儲存平板編號' : ''} 已加入學生紀錄`, 'success', {
+      label:'Open 開啟',
+      fn: () => {
+        sessionStorage.setItem('selectedCenter', cid);
+        window.location.href = `student-form.html?id=${encodeURIComponent(s.id)}&returnUrl=booth-games.html`;
+      }
+    });
+  } catch (err) {
+    showToast(`Error: ${err.message}`, 'error');
+  } finally {
+    bdt.busy = false;
+    btn.disabled = false;
+    btn.textContent = '＋ Add DTs to this student 加入此學生';
+  }
+}
+function bdtOpenNew() {
+  const rid = bdt.rid, r = regs[rid], cid = bdt.centerId;
+  if (!r || !cid) return;
+  const pend = dtPending(rid);
+  const { nameCn, namePinyin } = splitBoothName(r.studentName);
+  const kcNo = String(kcEdits[rid] ?? r.kcNo ?? '').trim();
+  const payload = {
+    ts:Date.now(),
+    centerId:cid,
+    date:localDateStr(),
+    kcNo,
+    student:{
+      nameCn:nameCn || r.studentName || '', namePinyin,
+      grade:boothGradeToForm(r.grade), school:r.school || '',
+      birthday:r.birthday || '', phone:r.parentPhone || '',
+      kcNo
+    },
+    diagnosticTests:pend.map(d => ({
+      subject:d.subject, date:d.date, DTtimeslot:d.DTtimeslot || '',
+      test:d.test, score:d.score, time:d.time,
+      suggestedStart:d.suggestedStart || '', actualStart:d.actualStart || ''
+    }))
+  };
+  try {
+    sessionStorage.setItem('boothDtHandoff', JSON.stringify(payload));
+    sessionStorage.setItem('boothKcHandoff', JSON.stringify({ kcNo, ts:Date.now() }));
+    sessionStorage.setItem('selectedCenter', cid);
+  } catch {}
+  window.location.href = 'student-form.html?returnUrl=booth-games.html';
+}
+(function buildBdtModal() {
+  if (document.getElementById('bdtModal')) return;
+  const m = document.createElement('div');
+  m.id = 'bdtModal'; m.className = 'modal hidden';
+  m.innerHTML =
+    `<div class="modal-box mr-box">` +
+    `<div class="mr-head"><h3>📤 Send DTs to student record 傳送診斷測試</h3><button type="button" class="close-btn" id="bdtClose">✕</button></div>` +
+    `<div class="mr-body">` +
+    `<div id="bdtSummary"></div>` +
+    `<div class="mr-field"><label>Center 教室</label><select id="bdtCenter"></select></div>` +
+    `<div id="bdtMatch"></div>` +
+    `<div class="mr-sec">DTs to send 將傳送的診斷測試</div>` +
+    `<div id="bdtList"></div>` +
+    `</div>` +
+    `<div class="mr-foot"><button type="button" class="btn ghost" id="bdtCancel">✖ Cancel 取消</button><button type="button" class="btn ghost hidden" id="bdtAddBtn">＋ Add DTs to this student 加入此學生</button><button type="button" class="btn primary" id="bdtNewBtn">📤 Open student form 開啟學生表單</button></div>` +
+    `</div>`;
+  document.body.appendChild(m);
+  m.addEventListener('click', e => { if (e.target === m) closeBdtModal(); });
+  document.getElementById('bdtClose').addEventListener('click', closeBdtModal);
+  document.getElementById('bdtCancel').addEventListener('click', closeBdtModal);
+  document.getElementById('bdtCenter').addEventListener('change', e => { bdt.centerId = e.target.value; bdtLoadStudents(); });
+  document.getElementById('bdtAddBtn').addEventListener('click', bdtAddToExisting);
+  document.getElementById('bdtNewBtn').addEventListener('click', bdtOpenNew);
+})();
+
+// ============================================
+// RECORD INPUTS — booth-only Remarks
+// (KC No. lives at the top of the DT section)
+// ============================================
+const recEdits = {};
+const recDirty = new Set();
+
+function recDrop(rid) { delete recEdits[rid]; recDirty.delete(rid); }
+function recVals(rid) {
+  const r = regs[rid] || {};
+  const e = recEdits[rid] || {};
+  return { remarks: e.remarks ?? r.remarks ?? '' };
+}
+function recSetEdit(rid, field, value) {
+  recEdits[rid] = recEdits[rid] || { ...recVals(rid) };
+  recEdits[rid][field] = value;
+  recDirty.add(rid);
+  if (drawerRegId === rid) $('drawerBody').querySelector('[data-rec-dirty]')?.classList.remove('hidden');
+}
+function recSectionHtml(r, rid) {
+  const v = recVals(rid);
+  const status = r.recordUpdatedAt
+    ? '✓ ' + escapeHtml(new Date(r.recordUpdatedAt).toLocaleString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }))
+    : '—';
+  return `<div class="rec-grid">` +
+    `<label class="res-field"><span>Remarks 備註 <em class="rec-tag booth">booth only 只留攤位</em></span>` +
+    `<textarea data-rec="remarks" rows="2" maxlength="300" placeholder="Internal notes — not sent to the student form 內部備註 — 不會傳送至學生表單">${escapeHtml(v.remarks)}</textarea></label>` +
+    `</div>` +
+    `<div class="res-save-bar"><span class="res-status">${status}</span>` +
+    `<span class="draft-chip${recDirty.has(rid) ? '' : ' hidden'}" data-rec-dirty>● Unsaved 未儲存</span>` +
+    `<button type="button" class="btn primary small" data-rec-save>💾 Save 儲存</button></div>`;
+}
+function bindRec(rid) {
+  const body = $('drawerBody');
+  body.querySelectorAll('[data-rec]').forEach(inp =>
+    inp.addEventListener('input', () => recSetEdit(rid, inp.dataset.rec, inp.value)));
+  body.querySelector('[data-rec-save]')?.addEventListener('click', () => saveRec(rid));
+}
+async function saveRec(rid) {
+  const r = regs[rid]; if (!r) return;
+  const remarks = String(recVals(rid).remarks || '').trim();
+  if (remarks === String(r.remarks || '')) {
+    return showToast('Nothing to save 沒有可儲存的變更', 'info');
+  }
+  const eid = currentEventId;
+  const now = new Date().toISOString();
+  const by = auth.currentUser?.email || '';
+  const prev = { remarks:r.remarks, recordUpdatedAt:r.recordUpdatedAt, recordUpdatedBy:r.recordUpdatedBy };
+  const prevEdits = recEdits[rid];
+  r.remarks = remarks; r.recordUpdatedAt = now; r.recordUpdatedBy = by;
+  delete recEdits[rid]; recDirty.delete(rid);
+  const btn = $('drawerBody').querySelector('[data-rec-save]');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  try {
+    await update(ref(db, `boothEvents/${eid}/registrations/${rid}`), { remarks, recordUpdatedAt:now, recordUpdatedBy:by });
+    showToast('💾 Record saved 已儲存', 'success');
+    if (drawerRegId === rid) fillDrawer(rid);
+  } catch (err) {
+    Object.assign(r, prev);
+    if (prevEdits) recEdits[rid] = prevEdits;
+    recDirty.add(rid);
+    showToast(`Error: ${err.message}`, 'error');
+    if (drawerRegId === rid) fillDrawer(rid);
+  }
+}
+// ============================================
+// MANUAL REGISTRATION + ADD GAMES AFTER REGISTRATION
+// ============================================
+let agPick = { rid:null, sel:{}, override:false };
+let mrPick = { sel:{}, override:false };
+let mrState = { apps:{ wechat:false, whatsapp:false }, current:'no', interests:new Set() };
+
+async function claimSlotCount(eid, gid, sid, cap) {
+  const res = await runTransaction(
+    ref(db, `boothEvents/${eid}/counts/${gid}/${sid}`),
+    cur => {
+      const n = Number(cur) || 0;
+      if (cap && n >= cap) return;
+      return n + 1;
+    },
+    { applyLocally:false }
+  );
+  return res.committed;
+}
+async function releaseClaims(eid, done) {
+  for (const { gid, sid } of done) {
+    try { await bumpSlotCount(eid, gid, sid, -1); }
+    catch (e) { console.error('Seat release failed:', e); }
+  }
+}
+async function claimSeq(eid) {
+  const res = await runTransaction(
+    ref(db, `boothEvents/${eid}/seq`),
+    cur => { const n = Number(cur) || 0; if (n >= 999) return; return n + 1; },
+    { applyLocally:false }
+  );
+  return res.committed ? Number(res.snapshot.val()) : null;
+}
+function pickerConflicts(pick, existing) {
+  const items = [];
+  (existing || []).forEach(s => {
+    if (s && s.start) items.push({ label:(games[s.gameId]?.emoji || '🎮') + ' ' + (s.gameName || games[s.gameId]?.name || ''), s });
+  });
+  Object.entries(pick.sel).forEach(([gid, sid]) => {
+    const s = games[gid]?.slots?.[sid];
+    if (s) items.push({ label:(games[gid]?.emoji || '🎮') + ' ' + (games[gid]?.name || games[gid]?.nameCn || ''), s });
+  });
+  const out = [];
+  for (let i = 0; i < items.length; i++)
+    for (let j = i + 1; j < items.length; j++)
+      if (slotsOverlap(items[i].s, items[j].s)) out.push(items[i].label + ' ↔ ' + items[j].label);
+  return out;
+}
+function renderPicker(wrap, pick, grade, existing, mode) {
+  if (!wrap) return;
+  const bookedByGid = {};
+  (existing || []).forEach(s => { if (s) bookedByGid[s.gameId] = s; });
+  const entries = Object.entries(games);
+  let html = `<label class="pick-override"><input type="checkbox" data-pick-override ${pick.override ? 'checked' : ''}> ⚠️ Allow games outside the grade range 忽略年級限制</label>`;
+  if (!entries.length) html += '<p class="hint">No games in this event yet. 此活動尚未新增遊戲。</p>';
+  entries.forEach(([gid, g]) => {
+    const c = g.color || PALETTE[0];
+    const eligible = !grade || gradeInRange(grade, g.minGrade, g.maxGrade);
+    const booked = bookedByGid[gid];
+    const locked = (!eligible && !pick.override) || !!booked;
+    const slots = Object.entries(g.slots || {}).sort((a, b) =>
+      String(a[1].date || '').localeCompare(String(b[1].date || '')) || String(a[1].start).localeCompare(String(b[1].start)));
+    let note = '';
+    if (booked) note = `<span class="pick-booked">✅ Booked 已報名 · ${escapeHtml(slotFullLabel(booked))}</span>`;
+    else if (!eligible) note = `<span class="pick-lock">🔒 Only 只限 ${escapeHtml(rangeLabel(g.minGrade, g.maxGrade))} — tick override above to add 勾選上方忽略限制</span>`;
+    const rows = slots.map(([sid, s]) => {
+      const cap = Number(s.capacity) || 0;
+      const used = Number(counts[gid]?.[sid]) || 0;
+      const left = Math.max(0, cap - used);
+      const selected = pick.sel[gid] === sid;
+      const full = left <= 0 && !selected;
+      const dis = locked || full;
+      const seats = full ? '<span class="full-badge">FULL 額滿</span>'
+        : left <= 3 ? `<span class="ps-low">${left} left 尚餘 ${left}</span>`
+        : `<span>${left} left 尚餘 ${left}</span>`;
+      return `<button type="button" class="pick-slot${selected ? ' selected' : ''}" data-pick-slot="${escapeHtml(gid)}|${escapeHtml(sid)}" ${dis ? 'disabled' : ''}>` +
+        `<span class="ps-time">🎟 ${escapeHtml(fmtDateShort(s.date))} · ${escapeHtml(slotLabel(s))}</span>` +
+        `<span class="ps-seats">${seats}</span><span class="ps-radio">${selected ? '✓' : ''}</span></button>`;
+    }).join('');
+    html += `<div class="pick-game${locked ? ' locked' : ''}" style="--gc:${c}">` +
+      `<div class="pick-head"><span class="pick-emoji">${g.emoji || '🎮'}</span>` +
+      `<div class="pick-names"><div class="pick-en">${escapeHtml(g.name || '')}</div><div class="pick-cn">${escapeHtml(g.nameCn || '')}</div></div>` +
+      `<span class="range-chip">${escapeHtml(rangeLabel(g.minGrade, g.maxGrade))}</span></div>` +
+      (note ? `<div class="pick-note">${note}</div>` : '') +
+      `<div class="pick-slots">${rows || '<p class="hint">No slots. 尚未新增時段。</p>'}</div></div>`;
+  });
+  const conflicts = pickerConflicts(pick, mode === 'add' ? existing : []);
+  if (conflicts.length) html += `<div class="pick-warn">⚠️ Time conflict 時間衝突:<br>${conflicts.map(c => escapeHtml(c)).join('<br>')}<br>Adjust the picks before saving. 請調整所選時段。</div>`;
+  wrap.innerHTML = html;
+  wrap.querySelector('[data-pick-override]')?.addEventListener('change', e => {
+    pick.override = e.target.checked;
+    renderPicker(wrap, pick, grade, existing, mode);
+  });
+  wrap.querySelectorAll('[data-pick-slot]').forEach(btn => btn.addEventListener('click', () => {
+    const [gid, sid] = btn.dataset.pickSlot.split('|');
+    if (pick.sel[gid] === sid) delete pick.sel[gid]; else pick.sel[gid] = sid;
+    renderPicker(wrap, pick, grade, existing, mode);
+  }));
+}
+function refreshPickers() {
+  const ag = $('agModal'), mr = $('mrModal');
+  if (ag && !ag.classList.contains('hidden')) {
+    const r = regs[agPick.rid];
+    if (!r || creatingNew) { closeAgModal(); return; }
+    renderPicker($('agPicker'), agPick, r.grade, r.selections || [], 'add');
+  }
+  if (mr && !mr.classList.contains('hidden')) {
+    if (!currentEventId || creatingNew) { closeMrModal(); return; }
+    renderPicker($('mrPicker'), mrPick, $('mrGrade').value, [], 'manual');
+  }
+}
+function closeTopModal() {
+  const bdt = $('bdtModal'), ag = $('agModal'), mr = $('mrModal');
+  if (bdt && !bdt.classList.contains('hidden')) { closeBdtModal(); return true; }
+  if (ag && !ag.classList.contains('hidden')) { closeAgModal(); return true; }
+  if (mr && !mr.classList.contains('hidden')) { closeMrModal(); return true; }
+  return false;
+}
+function closeAgModal() { $('agModal')?.classList.add('hidden'); agPick = { rid:null, sel:{}, override:false }; }
+function closeMrModal() { $('mrModal')?.classList.add('hidden'); }
+
+function bindDrawerGames(rid) {
+  const body = $('drawerBody');
+  body.querySelectorAll('[data-rm-game]').forEach(btn =>
+    btn.addEventListener('click', () => removeStudentGame(rid, Number(btn.dataset.rmGame))));
+  const add = body.querySelector('#dwAddGameBtn');
+  if (add) add.addEventListener('click', () => openAddGameModal(rid));
+}
+function openAddGameModal(rid) {
+  const r = regs[rid]; if (!r) return;
+  agPick = { rid, sel:{}, override:false };
+  $('agTitle').innerHTML = `🎪 Add games 新增遊戲 — ${escapeHtml(r.studentName || '')} <span class="grade-chip band-${gradeBand(r.grade)}">${escapeHtml(r.grade || '')}</span>`;
+  renderPicker($('agPicker'), agPick, r.grade, r.selections || [], 'add');
+  const btn = $('agSave'); btn.disabled = false; btn.textContent = '＋ Add selected 新增所選';
+  $('agModal').classList.remove('hidden');
+}
+async function commitAddGames() {
+  const rid = agPick.rid;
+  const r = regs[rid];
+  if (!rid || !r) { closeAgModal(); return; }
+  const eid = currentEventId;
+  const list = Object.entries(agPick.sel)
+    .map(([gid, sid]) => ({ gid, sid, g:games[gid], s:games[gid]?.slots?.[sid] }))
+    .filter(x => x.g && x.s);
+  if (!list.length) return showToast('Pick at least one game & slot 請選擇遊戲及時段', 'error');
+  if (!agPick.override) {
+    const bad = list.find(x => !gradeInRange(r.grade, x.g.minGrade, x.g.maxGrade));
+    if (bad) return showToast(`"${bad.g.name || bad.g.nameCn}" is not open to ${r.grade} — tick override to add anyway 年級不符，如仍要新增請勾選忽略限制`, 'error');
+  }
+  if (pickerConflicts(agPick, r.selections || []).length) return showToast('Selected slots overlap in time 所選時段時間重疊', 'error');
+  const btn = $('agSave'); btn.disabled = true; btn.textContent = '⏳ Adding… 新增中';
+  const done = [];
+  const prevSels = JSON.parse(JSON.stringify(r.selections || []));
+  try {
+    for (const { gid, sid, g, s } of list) {
+      const ok = await claimSlotCount(eid, gid, sid, Number(s.capacity) || 0);
+      if (!ok) {
+        await releaseClaims(eid, done);
+        showToast(`"${g.name || g.nameCn}" ${slotFullLabel(s)} just filled up 剛已額滿 — pick another 請另選`, 'error');
+        refreshPickers();
+        return;
+      }
+      done.push({ gid, sid });
+    }
+    const newSels = list.map(({ gid, sid, g, s }) => ({
+      gameId:gid, slotId:sid, gameName:g.name || g.nameCn || '', date:s.date || '', start:s.start, end:s.end
+    }));
+    r.selections = [...prevSels, ...newSels];
+    done.forEach(({ gid, sid }) => applyLocalCount(gid, sid, +1));
+    renderAll();
+    if (drawerRegId === rid) fillDrawer(rid);
+    await runTransaction(
+      ref(db, `boothEvents/${eid}/registrations/${rid}/selections`),
+      cur => {
+        const arr = Array.isArray(cur) ? cur : [];
+        const have = new Set(arr.map(s => s && s.gameId));
+        newSels.forEach(s => { if (!have.has(s.gameId)) arr.push(s); });
+        return arr;
+      },
+      { applyLocally:false }
+    );
+    closeAgModal();
+    showToast(`🎪 Added ${done.length} game(s) to ${r.studentName || ''} 已新增遊戲`, 'success');
+  } catch (err) {
+    r.selections = prevSels;
+    done.forEach(({ gid, sid }) => applyLocalCount(gid, sid, -1));
+    await releaseClaims(eid, done);
+    renderAll();
+    if (drawerRegId === rid) fillDrawer(rid);
+    showToast(`Error: ${err.message}`, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '＋ Add selected 新增所選';
+  }
+}
+async function removeStudentGame(rid, idx) {
+  const r = regs[rid];
+  const sel = r?.selections?.[idx];
+  if (!r || !sel) return;
+  const eid = currentEventId;
+  const g = games[sel.gameId];
+  const label = `${g?.emoji || '🎮'} ${sel.gameName || g?.name || ''} · ${slotFullLabel(sel)}`;
+  if (!confirm(`Remove ${label} from ${r.studentName || ''}? The seat is released. 移除此遊戲並釋放名額？`)) return;
+  const prevSels = JSON.parse(JSON.stringify(r.selections || []));
+  const prevResult = r.results?.[sel.gameId] ? JSON.parse(JSON.stringify(r.results[sel.gameId])) : null;
+  const nextSels = prevSels.filter((_, i) => i !== idx);
+  r.selections = nextSels;
+  if (r.results) delete r.results[sel.gameId];
+  const tk = resKey(rid, sel.gameId);
+  if (resTimers[tk]) { delete resTimers[tk]; resEnsureTick(); }
+  if (resEdits[rid]) delete resEdits[rid][sel.gameId];
+  applyLocalCount(sel.gameId, sel.slotId, -1);
+  renderAll();
+  if (drawerRegId === rid) fillDrawer(rid);
+  const updates = {};
+  updates[`boothEvents/${eid}/registrations/${rid}/selections`] = nextSels.length ? nextSels : null;
+  updates[`boothEvents/${eid}/registrations/${rid}/results/${sel.gameId}`] = null;
+  try {
+    await update(ref(db), updates);
+    try { await bumpSlotCount(eid, sel.gameId, sel.slotId, -1); } catch (e) { console.error('Seat release failed:', e); }
+    showToast('🗑 Removed — seat released 已移除並釋放名額', 'info', {
+      label:'Undo 復原',
+      fn: async () => {
+        const cap = Number(games[sel.gameId]?.slots?.[sel.slotId]?.capacity) || 0;
+        let ok = false;
+        try { ok = await claimSlotCount(eid, sel.gameId, sel.slotId, cap); } catch {}
+        if (!ok) return showToast('That slot is full now — cannot restore 該場次已額滿，無法復原', 'error');
+        const cur = regs[rid];
+        if (!cur) {
+          try { await bumpSlotCount(eid, sel.gameId, sel.slotId, -1); } catch {}
+          return showToast('Registration no longer exists 報名已不存在', 'error');
+        }
+        const arr = [...(cur.selections || [])];
+        if (!arr.some(s => s && s.gameId === sel.gameId)) arr.splice(Math.min(idx, arr.length), 0, sel);
+        const up = {};
+        up[`boothEvents/${eid}/registrations/${rid}/selections`] = arr;
+        if (prevResult) up[`boothEvents/${eid}/registrations/${rid}/results/${sel.gameId}`] = prevResult;
+        try {
+          await update(ref(db), up);
+          cur.selections = arr;
+          if (prevResult) { cur.results = cur.results || {}; cur.results[sel.gameId] = prevResult; }
+          applyLocalCount(sel.gameId, sel.slotId, +1);
+          renderAll();
+          if (drawerRegId === rid) fillDrawer(rid);
+          showToast('↩ Game restored 已復原', 'success');
+        } catch (err) {
+          try { await bumpSlotCount(eid, sel.gameId, sel.slotId, -1); } catch {}
+          showToast(`Error: ${err.message}`, 'error');
+        }
+      }
+    });
+  } catch (err) {
+    r.selections = prevSels;
+    if (prevResult) { r.results = r.results || {}; r.results[sel.gameId] = prevResult; }
+    applyLocalCount(sel.gameId, sel.slotId, +1);
+    renderAll();
+    if (drawerRegId === rid) fillDrawer(rid);
+    showToast(`Error: ${err.message}`, 'error');
+  }
+}
+function openManualModal() {
+  if (!currentEventId || creatingNew) return showToast('Select an event first 請先選擇活動', 'error');
+  mrState = { apps:{ wechat:false, whatsapp:false }, current:'no', interests:new Set() };
+  mrPick = { sel:{}, override:false };
+  ['mrName','mrSchool','mrBirth','mrPhone','mrWeChatId','mrCenter','mrSubjects','mrRemarks'].forEach(id => { $(id).value = ''; $(id).classList.remove('invalid'); });
+  $('mrGrade').value = '';
+  $('mrGrade').classList.remove('invalid');
+  $('mrBirth').max = localDateStr();
+  $('mrAgeHint').textContent = 'Optional — age is calculated automatically 選填 — 自動計算年齡';
+  $('mrAgeHint').classList.remove('has-age');
+  syncMrToggles();
+  renderMrInterests();
+  renderPicker($('mrPicker'), mrPick, '', [], 'manual');
+  const btn = $('mrSave'); btn.disabled = false; btn.textContent = '💾 Register student 登記學生';
+  $('mrModal').classList.remove('hidden');
+  setTimeout(() => $('mrName').focus(), 60);
+}
+function syncMrToggles() {
+  $('mrAppWeChat').classList.toggle('selected', mrState.apps.wechat);
+  $('mrAppWhatsApp').classList.toggle('selected', mrState.apps.whatsapp);
+  $('mrWeChatWrap').classList.toggle('hidden', !mrState.apps.wechat);
+  $('mrCurYes').classList.toggle('selected', mrState.current === 'yes');
+  $('mrCurNo').classList.toggle('selected', mrState.current === 'no');
+  $('mrCurDetails').classList.toggle('hidden', mrState.current !== 'yes');
+}
+function renderMrInterests() {
+  const wrap = $('mrInterests');
+  wrap.innerHTML = INTERESTS.map(o =>
+    `<button type="button" class="mr-chip${mrState.interests.has(o.id) ? ' selected' : ''}" data-mr-int="${o.id}" title="${escapeHtml(o.en)}">${escapeHtml(o.cn)}</button>`).join('');
+  wrap.querySelectorAll('[data-mr-int]').forEach(b => b.addEventListener('click', () => {
+    const id = b.dataset.mrInt;
+    const o = INTERESTS.find(x => x.id === id);
+    if (o?.exclusive) {
+      if (mrState.interests.has(id)) mrState.interests.delete(id);
+      else { mrState.interests.clear(); mrState.interests.add(id); }
+    } else {
+      INTERESTS.filter(x => x.exclusive).forEach(x => mrState.interests.delete(x.id));
+      if (mrState.interests.has(id)) mrState.interests.delete(id); else mrState.interests.add(id);
+    }
+    renderMrInterests();
+  }));
+}
+async function commitManualReg() {
+  if (!currentEventId || creatingNew) return;
+  const eid = currentEventId;
+  const name = $('mrName').value.trim();
+  const grade = $('mrGrade').value;
+  const birth = $('mrBirth').value;
+  const phone = $('mrPhone').value.trim();
+  if (!name) { $('mrName').classList.add('invalid'); $('mrName').focus(); return showToast('Enter the student name 請填寫學生姓名', 'error'); }
+  if (!grade) { $('mrGrade').classList.add('invalid'); return showToast('Choose the grade 請選擇年級', 'error'); }
+  if (birth && !calcAge(birth)) { $('mrBirth').classList.add('invalid'); return showToast('Birthday is not valid 出生日期無效', 'error'); }
+  if (phone && !validPhone(phone)) { $('mrPhone').classList.add('invalid'); return showToast('Phone number is not valid 電話號碼無效', 'error'); }
+  if (mrState.current === 'yes') {
+    if (!$('mrCenter').value.trim()) { $('mrCenter').classList.add('invalid'); return showToast('Enter the current center 請填寫教室', 'error'); }
+    if (!$('mrSubjects').value.trim()) { $('mrSubjects').classList.add('invalid'); return showToast('Enter the current subject(s) 請填寫科目', 'error'); }
+  }
+  const list = Object.entries(mrPick.sel)
+    .map(([gid, sid]) => ({ gid, sid, g:games[gid], s:games[gid]?.slots?.[sid] }))
+    .filter(x => x.g && x.s);
+  if (!mrPick.override) {
+    const bad = list.find(x => !gradeInRange(grade, x.g.minGrade, x.g.maxGrade));
+    if (bad) return showToast(`"${bad.g.name || bad.g.nameCn}" is not open to ${grade} — tick override to add anyway 年級不符，如仍要新增請勾選忽略限制`, 'error');
+  }
+  if (pickerConflicts(mrPick, []).length) return showToast('Selected slots overlap in time 所選時段時間重疊', 'error');
+  const btn = $('mrSave'); btn.disabled = true; btn.textContent = '⏳ Registering… 登記中';
+  const done = [];
+  let newId = null;
+  try {
+    for (const { gid, sid, g, s } of list) {
+      const ok = await claimSlotCount(eid, gid, sid, Number(s.capacity) || 0);
+      if (!ok) {
+        await releaseClaims(eid, done);
+        showToast(`"${g.name || g.nameCn}" ${slotFullLabel(s)} just filled up 剛已額滿 — pick another 請另選`, 'error');
+        refreshPickers();
+        return;
+      }
+      done.push({ gid, sid });
+    }
+    const seq = await claimSeq(eid);
+    if (!seq) {
+      await releaseClaims(eid, done);
+      showToast('This event has reached its 999-registration limit 已達 999 個報名上限', 'error');
+      return;
+    }
+    const a = birth ? calcAge(birth) : null;
+    const reg = {
+      seq, code:'BG-' + randomCode(6),
+      studentName:name, grade,
+      school:$('mrSchool').value.trim(),
+      birthday:birth || '',
+      ageYears:a ? a.years : null, ageMonths:a ? a.months : null,
+      parentPhone:normalizePhone(phone),
+      contactApps:{ wechat:!!mrState.apps.wechat, whatsapp:!!mrState.apps.whatsapp },
+      wechatId:mrState.apps.wechat ? $('mrWeChatId').value.trim() : '',
+      isCurrentStudent:mrState.current,
+      currentCenter:mrState.current === 'yes' ? $('mrCenter').value.trim() : '',
+      currentSubjects:mrState.current === 'yes' ? $('mrSubjects').value.trim() : '',
+      interests:[...mrState.interests],
+      selections:list.map(({ gid, sid, g, s }) => ({
+        gameId:gid, slotId:sid, gameName:g.name || g.nameCn || '', date:s.date || '', start:s.start, end:s.end
+      })),
+      remarks:$('mrRemarks').value.trim(),
+      status:'registered', submittedAt:new Date().toISOString(),
+      source:'manual', createdBy:auth.currentUser?.email || ''
+    };
+    newId = uid('r');
+    regs[newId] = reg;
+    done.forEach(({ gid, sid }) => applyLocalCount(gid, sid, +1));
+    renderAll();
+    await update(ref(db), { [`boothEvents/${eid}/registrations/${newId}`]: reg });
+    closeMrModal();
+    showToast(`✅ ${name} registered · ID ${regIdLabel(seq)} 已手動登記`, 'success');
+    switchTab('regs');
+    openDrawer(newId);
+  } catch (err) {
+    if (newId) delete regs[newId];
+    done.forEach(({ gid, sid }) => applyLocalCount(gid, sid, -1));
+    await releaseClaims(eid, done);
+    renderAll();
+    showToast(`Error: ${err.message}`, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '💾 Register student 登記學生';
+  }
+}
+(function buildManualModals() {
+  if (document.getElementById('mrModal')) return;
+  const gradeOpts = '<option value="">Grade 年級…</option>' + GRADES.map(g => `<option value="${g}">${escapeHtml(gradeLabel(g))}</option>`).join('');
+  const mr = document.createElement('div');
+  mr.id = 'mrModal'; mr.className = 'modal hidden';
+  mr.innerHTML =
+    `<div class="modal-box mr-box">` +
+    `<div class="mr-head"><h3>＋ Register student 手動登記</h3><button type="button" class="close-btn" id="mrClose">✕</button></div>` +
+    `<div class="mr-body">` +
+    `<p class="hint">Walk-in or phone sign-up — bypasses the public form. Games are optional and can be added later. 現場或電話登記 — 無需公開表單；遊戲可稍後新增。</p>` +
+    `<div class="mr-grid">` +
+    `<div class="mr-field span2"><label>Student name 學生姓名 *</label><input id="mrName" type="text" maxlength="60" placeholder="Chan Tai Man 陳大文"></div>` +
+    `<div class="mr-field"><label>Grade 年級 *</label><select id="mrGrade">${gradeOpts}</select></div>` +
+    `<div class="mr-field"><label>Birthday 生日 <span class="mr-opt">(optional 選填)</span></label><input id="mrBirth" type="date"><span class="mr-sub" id="mrAgeHint">Optional — age is calculated automatically 選填 — 自動計算年齡</span></div>` +
+    `<div class="mr-field"><label>School 學校 <span class="mr-opt">(optional 選填)</span></label><input id="mrSchool" type="text" maxlength="80"></div>` +
+    `<div class="mr-field"><label>Parent phone 家長電話 <span class="mr-opt">(optional 選填)</span></label><input id="mrPhone" type="tel" maxlength="20" placeholder="6612 3456"></div>` +
+    `<div class="mr-field span2"><label>Contact apps 聯絡方式</label><div class="mr-chips"><button type="button" class="mr-chip" id="mrAppWeChat">💬 WeChat 微信</button><button type="button" class="mr-chip" id="mrAppWhatsApp">📱 WhatsApp</button></div></div>` +
+    `<div class="mr-field span2 hidden" id="mrWeChatWrap"><label>WeChat ID 微信號</label><input id="mrWeChatId" type="text" maxlength="60"></div>` +
+    `<div class="mr-field span2"><label>Current Kumon student? 目前在讀公文式？</label><div class="mr-chips"><button type="button" class="mr-chip" id="mrCurYes">✅ Yes 是</button><button type="button" class="mr-chip" id="mrCurNo">🌱 No 否</button></div></div>` +
+    `<div class="mr-field span2 hidden" id="mrCurDetails"><div class="mr-grid inner"><div class="mr-field"><label>Center 教室 *</label><input id="mrCenter" type="text" maxlength="60"></div><div class="mr-field"><label>Subject(s) 科目 *</label><input id="mrSubjects" type="text" maxlength="60"></div></div></div>` +
+    `<div class="mr-field span2"><label>Subjects of interest 想了解科目 <span class="mr-opt">(optional 選填)</span></label><div class="mr-chips" id="mrInterests"></div></div>` +
+    `<div class="mr-field span2"><label>Remarks 備註 <span class="mr-opt">(optional 選填)</span></label><textarea id="mrRemarks" rows="2" maxlength="300"></textarea></div>` +
+    `</div>` +
+    `<div class="mr-sec">🎪 Games & time slots 遊戲與時段 <span class="mr-opt">(optional — can be added later 可稍後新增)</span></div>` +
+    `<div id="mrPicker"></div>` +
+    `</div>` +
+    `<div class="mr-foot"><button type="button" class="btn ghost" id="mrCancel">✖ Cancel 取消</button><button type="button" class="btn primary" id="mrSave">💾 Register student 登記學生</button></div>` +
+    `</div>`;
+  document.body.appendChild(mr);
+  const ag = document.createElement('div');
+  ag.id = 'agModal'; ag.className = 'modal hidden';
+  ag.innerHTML =
+    `<div class="modal-box mr-box">` +
+    `<div class="mr-head"><h3 id="agTitle">🎪 Add games 新增遊戲</h3><button type="button" class="close-btn" id="agClose">✕</button></div>` +
+    `<div class="mr-body"><p class="hint">Pick one slot per game. Full slots are locked; seats update live. 每項遊戲選一個時段；額滿場次已鎖定，名額即時更新。</p><div id="agPicker"></div></div>` +
+    `<div class="mr-foot"><button type="button" class="btn ghost" id="agCancel">✖ Cancel 取消</button><button type="button" class="btn primary" id="agSave">＋ Add selected 新增所選</button></div>` +
+    `</div>`;
+  document.body.appendChild(ag);
+  mr.addEventListener('click', e => { if (e.target === mr) closeMrModal(); });
+  ag.addEventListener('click', e => { if (e.target === ag) closeAgModal(); });
+  $('mrClose').addEventListener('click', closeMrModal);
+  $('mrCancel').addEventListener('click', closeMrModal);
+  $('agClose').addEventListener('click', closeAgModal);
+  $('agCancel').addEventListener('click', closeAgModal);
+  $('mrSave').addEventListener('click', commitManualReg);
+  $('agSave').addEventListener('click', commitAddGames);
+  $('mrAppWeChat').addEventListener('click', () => { mrState.apps.wechat = !mrState.apps.wechat; syncMrToggles(); });
+  $('mrAppWhatsApp').addEventListener('click', () => { mrState.apps.whatsapp = !mrState.apps.whatsapp; syncMrToggles(); });
+  $('mrCurYes').addEventListener('click', () => { mrState.current = 'yes'; syncMrToggles(); });
+  $('mrCurNo').addEventListener('click', () => { mrState.current = 'no'; syncMrToggles(); });
+  $('mrGrade').addEventListener('change', () => {
+    $('mrGrade').classList.remove('invalid');
+    renderPicker($('mrPicker'), mrPick, $('mrGrade').value, [], 'manual');
+  });
+  $('mrBirth').addEventListener('input', () => {
+    $('mrBirth').classList.remove('invalid');
+    const a = calcAge($('mrBirth').value);
+    $('mrAgeHint').textContent = a ? `🎂 ${a.years}y ${a.months}m · ${a.years}歲${a.months}個月` : 'Optional — age is calculated automatically 選填 — 自動計算年齡';
+    $('mrAgeHint').classList.toggle('has-age', !!a);
+  });
+  ['mrName','mrPhone','mrCenter','mrSubjects'].forEach(id => $(id).addEventListener('input', () => $(id).classList.remove('invalid')));
+  const exportBtn = document.getElementById('exportRegsBtn');
+  if (exportBtn && !document.getElementById('addStudentBtn')) {
+    const b = document.createElement('button');
+    b.id = 'addStudentBtn'; b.type = 'button'; b.className = 'btn primary';
+    b.textContent = '＋ Add student 手動登記';
+    b.addEventListener('click', openManualModal);
+    exportBtn.insertAdjacentElement('beforebegin', b);
+  }
+})();
 
 // ============================================
 // EXCEL EXPORT

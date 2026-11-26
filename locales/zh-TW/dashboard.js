@@ -109,7 +109,7 @@ export default {
       progressChartsDesc: "分析、進度追蹤與圖表",
       attendance: "點名",
       attendanceDesc: "掃描 QR code、追蹤報到、檢視遲到學生與每日報告",
-      followUps: "跟進事項",
+      followUps: "家長說明會",
       followUpsDesc: "管理待處理的家長說明會與學生諮詢",
       manageCalendar: "管理日曆",
       manageCalendarDesc: "檢視並管理中心日曆活動",

@@ -1,33 +1,46 @@
-import { auth, db, logout } from './auth.js';
-import { ref, get, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { auth, db } from './auth.js';
+import { ref, get, update } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const REQUIRED_PERMISSION = 'followUps';
 const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const GRADE_ORDER = ['K0','K1','K2','K3','1','2','3','4','5','6','7','8','9','10','11','12','13','Over F6'];
+const CENTER_ABBREVIATIONS = [
+    { match: 'pac tat',  abbr: 'PT' },
+    { match: 'mei keng', abbr: 'MK' },
+    { match: 'tap siac', abbr: 'TS' },
+    { match: 'champs',   abbr: 'C'  }
+];
+// Single-value DT date fields checked on the student and on each subject
+const DT_DATE_KEYS = ['dtDate', 'diagnosticDate', 'diagnosticTestDate', 'testDate', 'dt', 'diagnostic'];
+// Lists that hold the Diagnostic Test entries from the DT & AT tab
+const DT_ARRAY_KEYS = ['diagnosticTests', 'dtTests', 'diagnostics', 'dts', 'dt', 'diagnostic'];
+// Date field names inside each Diagnostic Test entry
+const DT_ENTRY_DATE_KEYS = ['date', 'diagnosticDate', 'dtDate', 'testDate'];
 
-// 🔐 PERMISSION CHECK
+let poInitialized = false;
+
+// 🔐 PERMISSION CHECK (unchanged behaviour)
 onAuthStateChanged(auth, async (user) => {
     if (!user) { window.location.href = 'index.html'; return; }
     try {
         const userSnap = await get(ref(db, `users/${user.uid}`));
         if (!userSnap.exists()) { window.location.href = 'index.html'; return; }
-        
         const userData = userSnap.val();
         const isAdmin = user.email?.toLowerCase() === 'kumonchamps@gmail.com';
         const dashPerms = userData.permissions?.dashboardCards || {};
         const hasAccess = isAdmin || dashPerms[REQUIRED_PERMISSION] === true;
-        
         if (hasAccess) {
             document.getElementById('accessDenied')?.classList.add('hidden');
             document.getElementById('mainContent')?.classList.remove('hidden');
-            initializeFollowUps();
+            if (!poInitialized) {
+                poInitialized = true;
+                initializePOReport();
+            }
         } else {
             document.getElementById('accessDenied')?.classList.remove('hidden');
             document.getElementById('mainContent')?.classList.add('hidden');
             document.getElementById('page-loader')?.classList.add('hidden');
-            document.getElementById('backToDashboardBtn')?.addEventListener('click', () => {
-                window.location.href = 'dashboard.html';
-            });
         }
     } catch (err) {
         console.error("Permission check error:", err);
@@ -35,729 +48,824 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// ==========================================
-//  MAIN APP LOGIC
-// ==========================================
-function initializeFollowUps() {
-    const centerId = sessionStorage.getItem('selectedCenter');
-    const searchInput = document.getElementById('searchInput');
-    const refreshBtn = document.getElementById('refreshBtn');
-    
-    // Tab switching
-    const tabButtons = document.querySelectorAll('.tab-btn');
-    const tabContents = document.querySelectorAll('.tab-content');
-    tabButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
-            tabButtons.forEach(b => b.classList.remove('active'));
-            tabContents.forEach(c => c.classList.remove('active'));
-            btn.classList.add('active');
-            document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+function initializePOReport() {
+    const $ = (id) => document.getElementById(id);
+    const setText = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+    const sessionCenterId = sessionStorage.getItem('selectedCenter') || '';
+    const defaultCenter = sessionCenterId || 'all';
+
+    const centerSelect = $('centerSelect');
+    const searchInput = $('searchInput');
+    const exportBtn = $('exportBtn');
+    const loadStatus = $('loadStatus');
+    const thead = $('poTableHead');
+    const tbody = $('poTableBody');
+
+    let centers = [];
+    let allRows = [];
+    let currentView = [];
+    let currentScope = 'all';
+    let statusFilter = 'enrolledNoPo';   // default view: Enrolled · No PO
+    let sortKey = 'inquiryDate';
+    let sortDir = 1;
+    let isFetching = false;
+    let centerInitialized = false;
+    let searchTimeout = null;
+    let toastTimeout = null;
+
+    // ---------- inline editing state ----------
+    let pending = {};      // studentId -> { field: newValue }
+    let saving = false;
+
+    // ---------- PO confirm modal state ----------
+    let modalSid = null;
+    let modalPo = 'no';
+
+    function todayIso() {
+        const d = new Date();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${d.getFullYear()}-${m}-${day}`;
+    }
+    function savedVal(r, f) {
+        switch (f) {
+            case 'inquiryDate': return r.inquiryDate || '';
+            case 'school':      return r.school || '';
+            case 'grade':       return r.grade || '';
+            case 'po':          return r.po;
+            case 'poDate':      return r.poDate || '';
+            case 'comments':    return r.poComments || '';
+        }
+        return '';
+    }
+    function effVal(r, f) {
+        const p = pending[r.id];
+        return (p && f in p) ? p[f] : savedVal(r, f);
+    }
+    function isDirty(r, f) {
+        const p = pending[r.id];
+        return !!p && f in p && p[f] !== savedVal(r, f);
+    }
+    function pendingStats() {
+        let fields = 0, students = 0;
+        for (const sid in pending) {
+            const n = Object.keys(pending[sid]).length;
+            if (n) { students++; fields += n; }
+        }
+        return { fields, students };
+    }
+    function updateSaveBar() {
+        const bar = $('poSaveBar');
+        if (!bar) return;
+        const { fields, students } = pendingStats();
+        if (!fields) { bar.classList.add('hidden'); return; }
+        bar.classList.remove('hidden');
+        setText('poSaveText', `${fields} unsaved edit${fields === 1 ? '' : 's'} · ${students} student${students === 1 ? '' : 's'}`);
+        const sb = $('poSaveBtn'), db2 = $('poDiscardBtn');
+        if (sb) sb.disabled = saving;
+        if (db2) db2.disabled = saving;
+    }
+    function commitEdit(sid, field, rawValue) {
+        const r = allRows.find(x => x.id === sid);
+        if (!r) return;
+        let v = rawValue;
+        if (field === 'school' || field === 'comments') v = String(v).trim();
+        if (field === 'po') v = (v === 'yes') ? 'yes' : 'no';
+        const p = pending[sid] || (pending[sid] = {});
+        if (v === savedVal(r, field)) delete p[field];
+        else p[field] = v;
+        if (!Object.keys(p).length) delete pending[sid];
+        renderTable(currentView, currentScope);
+        updateSaveBar();
+    }
+
+    // ---------- PO modal ----------
+    function syncModalOpts() {
+        document.querySelectorAll('#poModalStatus .po-modal-opt').forEach(b => {
+            const on = b.dataset.po === modalPo;
+            b.classList.toggle('active', on);
+            b.setAttribute('aria-pressed', on ? 'true' : 'false');
         });
-    });
+        const d = $('poModalDate');
+        if (d) d.disabled = modalPo !== 'yes';
+    }
+    function openPoModal(r) {
+        modalSid = r.id;
+        modalPo = effVal(r, 'po');
+        setText('poModalName', r.nameCn || r.namePinyin || 'Unknown');
+        const d = $('poModalDate');
+        if (d) d.value = effVal(r, 'poDate') || (modalPo === 'yes' ? todayIso() : '');
+        syncModalOpts();
+        $('poModal')?.classList.remove('hidden');
+        if (d && !d.disabled) d.focus();
+    }
+    function closePoModal() {
+        modalSid = null;
+        $('poModal')?.classList.add('hidden');
+    }
+    function confirmPoModal() {
+        const r = allRows.find(x => x.id === modalSid);
+        if (!r) { closePoModal(); return; }
+        const d = $('poModalDate');
+        const dateVal = modalPo === 'yes' ? (d?.value || '') : '';
+        const p = pending[r.id] || (pending[r.id] = {});
+        if (modalPo === savedVal(r, 'po')) delete p.po; else p.po = modalPo;
+        if (dateVal === savedVal(r, 'poDate')) delete p.poDate; else p.poDate = dateVal;
+        if (!Object.keys(p).length) delete pending[r.id];
+        closePoModal();
+        renderTable(currentView, currentScope);
+        updateSaveBar();
+    }
 
-    // Shared data cache
-    let allStudents = [];
-    let pendingPOList = [];
-    let inquiryList = [];
-    let pauseFollowUpList = []; 
+    function startEdit(btn) {
+        const sid = btn.dataset.sid;
+        const field = btn.dataset.field;
+        const r = allRows.find(x => x.id === sid);
+        if (!r) return;
+        if (field === 'po') { openPoModal(r); return; }
+        const cur = effVal(r, field);
+        let input;
+        if (field === 'grade') {
+            input = document.createElement('select');
+            input.innerHTML = `<option value="">—</option>` + GRADE_ORDER.map(g => `<option value="${g}">${g}</option>`).join('');
+            input.value = cur;
+        } else if (field === 'inquiryDate') {
+            input = document.createElement('input');
+            input.type = 'date';
+            input.value = cur;
+        } else {
+            input = document.createElement('input');
+            input.type = 'text';
+            input.value = cur;
+        }
+        input.className = 'po-inline-input';
+        btn.replaceWith(input);
+        input.focus();
+        if (input.select) input.select();
+        let done = false;
+        const commit = () => { if (done) return; done = true; commitEdit(sid, field, input.value); };
+        const cancel = () => { if (done) return; done = true; renderTable(currentView, currentScope); updateSaveBar(); };
+        input.addEventListener('blur', commit);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); commit(); }
+            else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+        });
+        if (input.tagName === 'SELECT' || input.type === 'date') input.addEventListener('change', commit);
+    }
+    async function saveEdits() {
+        if (saving) return;
+        const { fields } = pendingStats();
+        if (!fields) return;
+        saving = true;
+        const sb = $('poSaveBtn'), db2 = $('poDiscardBtn');
+        if (sb) { sb.disabled = true; sb.textContent = 'Saving…'; }
+        if (db2) db2.disabled = true;
+        const updates = {};
+        const touched = [];
+        for (const sid in pending) {
+            const r = allRows.find(x => x.id === sid);
+            if (!r) continue;
+            const p = pending[sid];
+            const base = `centers/${r.centerId}/students/${sid}/`;
+            const effPo = ('po' in p) ? p.po : r.po;
+            if ('inquiryDate' in p) updates[base + 'inquiryDate'] = p.inquiryDate;
+            if ('school' in p)      updates[base + 'school'] = p.school;
+            if ('grade' in p)       updates[base + 'grade'] = p.grade;
+            if ('po' in p)          updates[base + 'parentOrientation'] = (p.po === 'yes' ? 'Yes' : 'No');
+            if ('poDate' in p)      updates[base + 'poDate'] = p.poDate;
+            if ('comments' in p)    updates[base + (effPo === 'yes' ? 'poNote' : 'poReason')] = p.comments;
+            touched.push({ r, p });
+        }
+        try {
+            await update(ref(db), updates);
+            touched.forEach(({ r, p }) => {
+                if ('inquiryDate' in p) { r.inquiryDate = p.inquiryDate; r.inquiryIsDt = false; }
+                if ('school' in p) r.school = p.school;
+                if ('grade' in p) r.grade = p.grade;
+                if ('po' in p) r.po = p.po;
+                if ('poDate' in p) r.poDate = p.poDate;
+                if ('comments' in p) {
+                    r.poComments = p.comments;
+                    r.comments = [r.studyState, p.comments].filter(Boolean).join(' — ');
+                }
+            });
+            pending = {};
+            buildView();
+            showToast(`💾 Saved ${fields} change${fields === 1 ? '' : 's'} to the database.`, 'ok');
+        } catch (err) {
+            console.error('PO save error:', err);
+            showToast('⚠ Save failed — ' + err.message, 'err', 5000);
+        } finally {
+            saving = false;
+            if (sb) { sb.disabled = false; sb.textContent = '💾 Save changes'; }
+            if (db2) db2.disabled = false;
+            updateSaveBar();
+        }
+    }
+    function discardEdits() {
+        pending = {};
+        renderTable(currentView, currentScope);
+        updateSaveBar();
+        showToast('Edits discarded.');
+    }
 
-    // ==========================================
-    // 🔧 HELPERS
-    // ==========================================
+    // ---------- helpers ----------
+    function esc(s) {
+        return String(s ?? '').replace(/[&<>"']/g, c => ({
+            '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+        }[c]));
+    }
     function safeArray(val) {
         if (Array.isArray(val)) return val;
         if (val && typeof val === 'object') return Object.values(val);
         return [];
     }
-
-    function formatSubjectLevel(sub) {
-        if (!sub.name || sub.status === 'drop') return null;
-        const level = sub.currentLevel || sub.startLevel || '-';
-        const cleanName = sub.name
-            .replace('English ', '')
-            .replace('Chinese (Trad)', 'Chinese')
-            .replace('Chinese (Simp)', 'Chinese');
-        return `${cleanName} ${level}`;
+    function fmtDate(iso) {
+        if (!iso) return '';
+        const p = String(iso).split('-');
+        if (p.length !== 3) return String(iso);
+        const m = parseInt(p[1], 10);
+        if (!m || m < 1 || m > 12) return String(iso);
+        return `${parseInt(p[2], 10)}-${MONTH_SHORT[m - 1]}-${p[0]}`;
     }
-
-    function getSubjectClass(subStr) {
-        if (subStr.includes('Math')) return 'pill-Math';
-        if (subStr.includes('Chinese')) return 'pill-Chinese';
-        if (subStr.includes('ERP')) return 'pill-ERP';
-        if (subStr.includes('EFL')) return 'pill-EFL';
-        return 'pill-Math';
+    function getCenterAbbr(name) {
+        if (!name) return '';
+        const lower = name.toLowerCase();
+        const rule = CENTER_ABBREVIATIONS.find(r => lower.includes(r.match));
+        if (rule) return rule.abbr;
+        const stripped = name.replace(/^kumon[\s.-]*/i, '').trim();
+        return (stripped || name).substring(0, 2).toUpperCase();
     }
-
-    function checkDTStatus(student) {
-        const subjects = safeArray(student.subjects).filter(s => s.status !== 'drop');
-        if (subjects.length === 0) return { status: 'no', done: 0, total: 0, details: 'No active subjects' };
-        
-        const dts = safeArray(student.diagnosticTests);
-        let doneCount = 0;
-        const doneSubjects = [];
-        const missingSubjects = [];
-        
-        subjects.forEach(sub => {
-            const subName = (sub.name || '').toLowerCase();
-            const hasDT = dts.some(dt => {
-                const dtSubject = (dt.subject || '').toLowerCase();
-                return dtSubject && (
-                    subName.includes(dtSubject) || dtSubject.includes(subName) ||
-                    (subName.includes('math') && dtSubject.includes('math')) ||
-                    (subName.includes('chinese') && dtSubject.includes('chinese')) ||
-                    (subName.includes('erp') && dtSubject.includes('erp')) ||
-                    (subName.includes('efl') && dtSubject.includes('efl'))
-                );
+    function letterFor(name) {
+        if (!name) return null;
+        if (name.includes('Math')) return 'M';
+        if (name.includes('ERP')) return 'R';
+        if (name.includes('EFL')) return 'L';
+        if (name.includes('Chinese')) return 'C';
+        return null;
+    }
+    function gradeIdx(g) {
+        const i = GRADE_ORDER.indexOf(g);
+        return i === -1 ? 999 : i;
+    }
+    function nameKey(r) {
+        return (r.namePinyin || r.nameCn || '').toLowerCase();
+    }
+    // Earliest Diagnostic Test date: reads single date fields AND every entry
+    // in the Diagnostic Tests list (DT & AT tab), on the student and each subject.
+    function pickDtDate(s, subs) {
+        const found = [];
+        const pushDate = (v) => {
+            if (typeof v === 'string' && v.trim()) found.push(v.trim());
+            else if (v && typeof v === 'object' && typeof v.date === 'string' && v.date.trim()) found.push(v.date.trim());
+        };
+        const collect = (obj) => {
+            if (!obj || typeof obj !== 'object') return;
+            DT_DATE_KEYS.forEach(k => pushDate(obj[k]));
+            DT_ARRAY_KEYS.forEach(k => {
+                const list = obj[k];
+                if (!list) return;
+                safeArray(list).forEach(entry => {
+                    if (typeof entry === 'string') { pushDate(entry); return; }
+                    if (entry && typeof entry === 'object') {
+                        DT_ENTRY_DATE_KEYS.forEach(dk => pushDate(entry[dk]));
+                    }
+                });
             });
-            if (hasDT) { doneCount++; doneSubjects.push(sub.name); }
-            else { missingSubjects.push(sub.name); }
+        };
+        collect(s);
+        subs.forEach(collect);
+        found.sort();
+        return found[0] || '';
+    }
+    function showToast(message, type = '', duration = 3500) {
+        const toast = $('toast');
+        if (!toast) return;
+        if (toastTimeout) clearTimeout(toastTimeout);
+        toast.className = 'toast';
+        if (type) toast.classList.add(type);
+        toast.textContent = message;
+        toast.classList.remove('hidden');
+        toastTimeout = setTimeout(() => toast.classList.add('hidden'), duration);
+    }
+
+    // ---------- data ----------
+    function deriveRow(id, centerId, centerName, s) {
+        const subs = safeArray(s.subjects).filter(sub => sub && sub.name);
+        // 🚫 Students with no subjects listed are excluded from the report entirely
+        if (!subs.length) return null;
+
+        const subjects = { M: false, R: false, L: false, C: false };
+        const subjInfo = { M: [], R: [], L: [], C: [] };
+        let hasEnrol = false;
+        // A manually saved inquiry date (student-level) wins over subject dates
+        const manualInquiry = (typeof s.inquiryDate === 'string' && s.inquiryDate.trim()) ? s.inquiryDate.trim() : '';
+        let inquiryDate = manualInquiry;
+        let activeCount = 0, pauseCount = 0, dropCount = 0, completerCount = 0;
+
+        subs.forEach(sub => {
+            const st = sub.status || 'current';
+            if (st === 'pause') pauseCount++;
+            else if (st === 'drop') dropCount++;
+            else if (st === 'completer') completerCount++;
+            else activeCount++;
+            if (sub.enrolDate || ['current', 'pause', 'completer'].includes(st)) hasEnrol = true;
+            if (!manualInquiry && sub.inquiryDate && (!inquiryDate || sub.inquiryDate < inquiryDate)) inquiryDate = sub.inquiryDate;
+            if (st === 'drop') return;
+            const k = letterFor(sub.name);
+            if (!k) return;
+            subjects[k] = true;
+            const lvl = sub.currentLevel || sub.startLevel || '-';
+            subjInfo[k].push(`${sub.name} ${lvl} (${st})`);
         });
 
-        let status;
-        if (doneCount === subjects.length) status = 'yes';
-        else if (doneCount === 0) status = 'no';
-        else status = 'partial';
+        // 🚫 Completers are excluded: at least one completed subject and nothing active or paused
+        if (completerCount > 0 && activeCount === 0 && pauseCount === 0) return null;
 
-        const details = `✅ Done: ${doneSubjects.join(', ') || 'none'}\n⏳ Missing: ${missingSubjects.join(', ') || 'none'}`;
-        return { status, done: doneCount, total: subjects.length, details };
-    }
+        // Paused / Dropped label: only when no subject is still active
+        const studyState = activeCount === 0
+            ? (pauseCount > 0 ? 'Paused' : 'Dropped')
+            : '';
 
-    function renderDTBadge(dtInfo) {
-        if (dtInfo.total === 0) return `<span class="dt-badge dt-no" title="No active subjects">—</span>`;
-        const cls = dtInfo.status === 'yes' ? 'dt-yes' : dtInfo.status === 'partial' ? 'dt-partial' : 'dt-no';
-        const icon = dtInfo.status === 'yes' ? '✅' : dtInfo.status === 'partial' ? '⚠️' : '❌';
-        const label = `${dtInfo.done}/${dtInfo.total}`;
-        return `<span class="dt-badge ${cls}" title="${dtInfo.details}">${icon} ${label}</span>`;
-    }
+        // Inquiry date fallback: use the DT date when no inquiry date exists
+        const dtDate = pickDtDate(s, subs);
+        const inquiryIsDt = !inquiryDate && !!dtDate;
+        if (inquiryIsDt) inquiryDate = dtDate;
 
-    // ==========================================
-    // ✅ PAUSE & RESUME FOLLOW-UP INFO
-    // ==========================================
-    function getPauseFollowUpInfo(sub) {
-        const isActivePause = sub.status === 'pause';
-        // ✅ UNIFIED: Check for the new resumeRequest object
-        const hasActiveResume = sub.resumeRequest && !sub.resumeRequest.processed && (sub.status === 'drop' || sub.status === 'pause');
-        
-        // Show in follow-ups if it's an active pause, OR if it has an active resume request
-        if (!isActivePause && !hasActiveResume) return null;
+        const po = s.parentOrientation === 'Yes' ? 'yes' : 'no';
+        const poDate = s.poDate || '';
+        const poComments = po === 'yes'
+            ? [poDate ? `PO ${fmtDate(poDate)}` : '', (s.poNote || '').trim()].filter(Boolean).join(' — ')
+            : (s.poReason || '').trim();
+        const comments = [studyState, poComments].filter(Boolean).join(' — ');
+        const phone = typeof s.phone === 'string'
+            ? s.phone.trim()
+            : [s.phone?.mom, s.phone?.dad, s.phone?.own]
+                .map(v => (v || '').trim()).filter(Boolean).join(' / ');
+        const nameCn = s.nameCn || '';
+        const namePinyin = s.namePinyin || s.name || '';
+        const school = s.school || '';
+        const grade = s.grade || '';
+        const abbr = getCenterAbbr(centerName);
 
-        const toMonth = parseInt(sub.pauseToMonth);
-        const toYear = parseInt(sub.pauseToYear);
-        const fromMonth = parseInt(sub.pauseFromMonth || '01');
-        const fromYear = parseInt(sub.pauseFromYear || toYear);
-        
-        let pauseEnd = null;
-        let isOverdue = false;
-        if (toMonth && toYear) {
-            pauseEnd = new Date(toYear, toMonth, 0); 
-            pauseEnd.setHours(23, 59, 59, 999);
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            isOverdue = today > pauseEnd;
-        }
-
-        // ✅ Check for resumeRequest (The unified "Resume" data structure)
-        let hasResumeRequest = false;
-        let resumeMonth = '';
-        let resumeYear = '';
-        
-        if (hasActiveResume) {
-            hasResumeRequest = true;
-            resumeMonth = sub.resumeRequest.returnMonth;
-            resumeYear = sub.resumeRequest.returnYear;
-        } 
-        // Fallback for legacy pendingReturn data
-        else if (sub.pendingReturn) {
-            hasResumeRequest = true;
-            resumeMonth = sub.pendingReturn.month;
-            resumeYear = sub.pendingReturn.year;
-        }
+        const searchBlob = [
+            nameCn, namePinyin, s.nickname || '', phone, school, grade,
+            centerName, abbr, studyState, s.poReason || '', s.poNote || '',
+            ...Object.values(subjInfo).flat()
+        ].join(' ').toLowerCase();
 
         return {
-            pauseFrom: `${MONTH_SHORT[fromMonth - 1]} ${fromYear}`,
-            pauseTo: toMonth ? `${MONTH_SHORT[toMonth - 1]} ${toYear}` : 'Open',
-            pauseEnd,
-            isOverdue,
-            hasResumeRequest,
-            resumeMonth,
-            resumeYear
+            id, centerId, centerName, abbr,
+            nameCn, namePinyin, phone, school, grade,
+            inquiryDate, inquiryIsDt, subjects, subjInfo, hasEnrol,
+            studyState, po, poDate, poComments, comments, searchBlob
         };
     }
 
-    // ==========================================
-    // 📥 FETCH ALL STUDENTS & AUTO-EXECUTE RETURNS
-    // ==========================================
-    async function fetchAllStudents() {
-        if (!centerId) {
-            document.getElementById('poTableBody').innerHTML = `<tr><td colspan="8" class="empty-state">⚠️ No center selected.</td></tr>`;
-            return;
-        }
-        document.getElementById('poLoader').classList.remove('hidden');
-        document.getElementById('inquiryLoader').classList.remove('hidden');
-        document.getElementById('pauseLoader').classList.remove('hidden');
-        
+    async function fetchAll() {
+        if (isFetching) return;
+        isFetching = true;
+        loadStatus.className = 'status-chip';
+        loadStatus.textContent = '⏳ Loading all centers…';
         try {
-            const snap = await get(ref(db, `centers/${centerId}/students`));
-            if (!snap.exists()) {
-                allStudents = [];
-                buildLists();
-                return;
-            }
-            
-            const students = snap.val();
-            const now = new Date();
-            const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
-            const currentYear = String(now.getFullYear());
-            const updates = [];
-            
-            allStudents = Object.entries(students).map(([id, s]) => {
-                let studentChanged = false;
-                
-                // 🆕 Auto-execute pending returns / resumes in background
-                if (s.subjects) {
-                    const subjects = safeArray(s.subjects);
-                    subjects.forEach(sub => {
-                        // ✅ UNIFIED: Auto-execute resumeRequest (matches student-form.js and dropbook.js)
-                        if (sub.resumeRequest && !sub.resumeRequest.processed) {
-                            const { returnMonth, returnYear } = sub.resumeRequest;
-                            if (returnYear && returnMonth) {
-                                if (parseInt(returnYear) < parseInt(currentYear) || 
-                                    (parseInt(returnYear) === parseInt(currentYear) && parseInt(returnMonth) <= parseInt(currentMonth))) {
-                                    
-                                    sub.status = 'current';
-                                    sub.resumed = true; // Mark as resumed, preserving drop/pause history
-                                    sub.resumedAt = new Date().toISOString();
-                                    delete sub.resumeRequest;
-                                    studentChanged = true;
-                                }
-                            }
-                        }
-                        // Legacy fallback: auto-execute pendingReturn just in case
-                        else if (sub.status === 'pause' && sub.pendingReturn) {
-                            const pr = sub.pendingReturn;
-                            if (pr.year < currentYear || (pr.year === currentYear && pr.month <= currentMonth)) {
-                                sub.status = 'current';
-                                sub.resumed = true;
-                                sub.resumedAt = new Date().toISOString();
-                                delete sub.pendingReturn;
-                                studentChanged = true;
-                            }
-                        }
-                    });
-                    
-                    if (studentChanged) {
-                        s.subjects = subjects;
-                        s.updatedAt = new Date().toISOString();
-                        updates.push({ id, data: s });
-                    }
-                }
-                
-                const subjectsList = safeArray(s.subjects);
-                const activeSubjects = [];
-                const allSubjectsDisplay = []; 
-                const inquirySubjects = [];
-                const pausedSubjects = [];
-                let earliestEnrol = null;
-                let earliestInquiry = null;
-                let pausedCount = 0;
-                let droppedCount = 0;
-                
-                subjectsList.forEach((sub, idx) => {
-                    if (!sub.name) return; 
-                    const level = sub.currentLevel || sub.startLevel || '-';
-                    const cleanName = sub.name
-                        .replace('English ', '')
-                        .replace('Chinese (Trad)', 'Chinese')
-                        .replace('Chinese (Simp)', 'Chinese');
-                    
-                    allSubjectsDisplay.push({
-                        name: cleanName,
-                        level: level,
-                        status: sub.status || 'current',
-                        displayText: `${cleanName} ${level}`
-                    });
-                    
-                    if (sub.status === 'drop') {
-                        droppedCount++;
-                        return;
-                    }
-                    if (sub.status === 'pause') {
-                        pausedCount++;
-                    }
-                    
-                    const formatted = formatSubjectLevel(sub);
-                    if (formatted) activeSubjects.push(formatted);
-                    
-                    if (sub.status !== 'inquiry' && sub.enrolDate) {
-                        if (!earliestEnrol || sub.enrolDate < earliestEnrol) earliestEnrol = sub.enrolDate;
-                    }
-                    if (sub.status === 'inquiry' && sub.inquiryDate) {
-                        inquirySubjects.push(sub);
-                        if (!earliestInquiry || sub.inquiryDate < earliestInquiry) earliestInquiry = sub.inquiryDate;
-                    }
-                    
-                    const pauseInfo = getPauseFollowUpInfo(sub);
-                    if (pauseInfo) {
-                        pausedSubjects.push({
-                            index: idx,
-                            name: sub.name || 'Unknown',
-                            currentLevel: sub.currentLevel || sub.startLevel || '-',
-                            ...pauseInfo
-                        });
-                    }
-                });
-                
-                return {
-                    id,
-                    name: s.namePinyin || s.nameCn || s.name || 'Unknown Student',
-                    nameCn: s.nameCn || '-',
-                    nickname: s.nickname || '-',
-                    grade: s.grade || '-',
-                    subjects: activeSubjects.length > 0 ? activeSubjects : ['No active subjects'],
-                    allSubjectsDisplay,
-                    enrolDate: earliestEnrol || '-',
-                    inquiryDate: earliestInquiry || '-',
-                    hasInquiry: inquirySubjects.length > 0,
-                    inquirySubjects,
-                    pausedSubjects,
-                    hasPausedSubjects: pausedSubjects.length > 0,
-                    poReason: s.poReason?.trim() || 'No reason provided.',
-                    parentOrientation: s.parentOrientation,
-                    rawData: s,
-                    pausedCount,
-                    droppedCount
-                };
-            });
-            
-            // Save auto-executed returns in background
-            if (updates.length > 0) {
-                console.log(`⏳ Auto-executing ${updates.length} pending return/resume(s)...`);
-                updates.forEach(u => {
-                    set(ref(db, `centers/${centerId}/students/${u.id}`), u.data).catch(err => {
-                        console.error(`Failed to auto-execute return for ${u.id}:`, err);
+            const snap = await get(ref(db, 'centers'));
+            centers = [];
+            allRows = [];
+            if (snap.exists()) {
+                snap.forEach(centerChild => {
+                    const cId = centerChild.key;
+                    const cVal = centerChild.val() || {};
+                    // 🚫 Disabled centers (same flag Center Management uses) are hidden entirely
+                    if (cVal.isDisabled === true) return;
+                    const cName = cVal.name || cId;
+                    centers.push({ id: cId, name: cName });
+                    Object.entries(cVal.students || {}).forEach(([sId, s]) => {
+                        const row = deriveRow(sId, cId, cName, s || {});
+                        if (row) allRows.push(row);
                     });
                 });
             }
-            
-            buildLists();
+            centers.sort((a, b) => a.name.localeCompare(b.name));
+            populateCenterSelect();
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            loadStatus.className = 'status-chip ok';
+            loadStatus.textContent = `✓ ${allRows.length} students · ${centers.length} centers · ${time}`;
+            buildView();
         } catch (err) {
-            document.getElementById('poTableBody').innerHTML = `<tr><td colspan="8" class="empty-state">❌ Error: ${err.message}</td></tr>`;
-            console.error(err);
+            console.error('PO report load error:', err);
+            loadStatus.className = 'status-chip err';
+            loadStatus.textContent = '⚠ Load failed — tap to retry';
+            tbody.innerHTML = `<tr><td colspan="14" class="empty-state">❌ ${esc(err.message)}</td></tr>`;
         } finally {
-            document.getElementById('poLoader').classList.add('hidden');
-            document.getElementById('inquiryLoader').classList.add('hidden');
-            document.getElementById('pauseLoader').classList.add('hidden');
+            isFetching = false;
+            $('page-loader')?.classList.add('hidden');
         }
     }
 
-    // ==========================================
-    // 🔀 SPLIT INTO LISTS
-    // ==========================================
-    function buildLists() {
-        pendingPOList = allStudents.filter(s => s.parentOrientation === 'No');
-        inquiryList = allStudents.filter(s => s.hasInquiry).sort((a, b) => {
-            return (b.inquiryDate || '').localeCompare(a.inquiryDate || '');
+    function populateCenterSelect() {
+        const prev = centerInitialized ? centerSelect.value : '';
+        let opts = `<option value="all">🌐 All Centers</option>`;
+        centers.forEach(c => {
+            opts += `<option value="${esc(c.id)}">${esc(c.name)}</option>`;
         });
-        
-        pauseFollowUpList = [];
-        allStudents.forEach(s => {
-            s.pausedSubjects.forEach(p => {
-                pauseFollowUpList.push({
-                    studentId: s.id,
-                    studentName: s.name,
-                    nameCn: s.nameCn,
-                    nickname: s.nickname,
-                    grade: s.grade,
-                    subjectIndex: p.index,
-                    subjectName: p.name,
-                    subjectLevel: p.currentLevel,
-                    ...p
-                });
-            });
+        centerSelect.innerHTML = opts;
+        const wanted = prev || defaultCenter;
+        const valid = wanted === 'all' || centers.some(c => c.id === wanted);
+        centerSelect.value = valid ? wanted : 'all';
+        centerInitialized = true;
+    }
+
+    // ---------- filtering / sorting ----------
+    function getSubjectSelection() {
+        return Array.from(document.querySelectorAll('.po-subj-cb:checked')).map(cb => cb.dataset.subj);
+    }
+    function statusMatch(r, filter) {
+        if (filter === 'enrolledNoPo') return r.hasEnrol && r.po !== 'yes';
+        if (filter === 'inquiryNoPo') return !r.hasEnrol && r.po !== 'yes';
+        if (filter === 'done') return r.po === 'yes';
+        return true;
+    }
+    function cmp(a, b) {
+        let r = 0;
+        switch (sortKey) {
+            case 'inquiryDate': {
+                const av = a.inquiryDate || '', bv = b.inquiryDate || '';
+                if (!av && !bv) r = 0;
+                else if (!av) return 1;   // missing dates always last
+                else if (!bv) return -1;
+                else r = av.localeCompare(bv) * sortDir;
+                break;
+            }
+            case 'name':   r = nameKey(a).localeCompare(nameKey(b)) * sortDir; break;
+            case 'school': r = (a.school || '').localeCompare(b.school || '') * sortDir; break;
+            case 'grade':  r = (gradeIdx(a.grade) - gradeIdx(b.grade)) * sortDir; break;
+            case 'po':     r = ((a.po === 'yes' ? 1 : 0) - (b.po === 'yes' ? 1 : 0)) * sortDir; break;
+            case 'center': r = a.centerName.localeCompare(b.centerName) * sortDir; break;
+        }
+        if (r === 0) r = nameKey(a).localeCompare(nameKey(b));
+        return r;
+    }
+    function buildView() {
+        const scope = centerSelect.value || 'all';
+        const term = searchInput.value.trim().toLowerCase();
+        const subjSel = getSubjectSelection();
+        const base = allRows.filter(r =>
+            (scope === 'all' || r.centerId === scope) &&
+            (!subjSel.length || subjSel.some(k => r.subjects[k])) &&
+            (!term || r.searchBlob.includes(term))
+        );
+        const counts = {
+            all: base.length,
+            enrolledNoPo: base.filter(r => statusMatch(r, 'enrolledNoPo')).length,
+            inquiryNoPo: base.filter(r => statusMatch(r, 'inquiryNoPo')).length,
+            done: base.filter(r => statusMatch(r, 'done')).length
+        };
+        currentView = base.filter(r => statusMatch(r, statusFilter)).sort(cmp);
+        currentScope = scope;
+        renderSummary(counts);
+        renderChips(counts);
+        renderTable(currentView, scope);
+        updateSaveBar();
+        const scopeLabel = scope === 'all'
+            ? 'All Centers'
+            : (centers.find(c => c.id === scope)?.name || scope);
+        setText('showingCount', `Showing ${currentView.length} of ${base.length} students · ${scopeLabel}`);
+        exportBtn.disabled = currentView.length === 0;
+    }
+
+    // ---------- rendering ----------
+    function renderSummary(counts) {
+        setText('sumTotalNum', counts.all);
+        setText('sumDoneNum', counts.done);
+        setText('sumEnrolledNum', counts.enrolledNoPo);
+        setText('sumInquiryNum', counts.inquiryNoPo);
+        const pct = counts.all ? Math.round((counts.done / counts.all) * 100) : 0;
+        setText('sumDonePct', `${pct}%`);
+        const bar = $('sumDoneBar');
+        if (bar) bar.style.width = `${pct}%`;
+    }
+    function renderChips(counts) {
+        setText('cntAll', counts.all);
+        setText('cntEnrolledNoPo', counts.enrolledNoPo);
+        setText('cntInquiryNoPo', counts.inquiryNoPo);
+        setText('cntDone', counts.done);
+        document.querySelectorAll('#poStatusChips .tab-btn').forEach(btn => {
+            const active = btn.dataset.filter === statusFilter;
+            btn.classList.toggle('active', active);
+            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
         });
-        
-        // Sort: Overdue first, then no pending return, then pending return (by date)
-        pauseFollowUpList.sort((a, b) => {
-            if (a.isOverdue && !b.isOverdue) return -1;
-            if (!a.isOverdue && b.isOverdue) return 1;
-            if (a.hasResumeRequest && b.hasResumeRequest) {
-                const dateA = new Date(a.resumeYear, a.resumeMonth - 1);
-                const dateB = new Date(b.resumeYear, b.resumeMonth - 1);
-                return dateA - dateB;
-            }
-            if (a.hasResumeRequest) return 1; 
-            if (b.hasResumeRequest) return -1;
-            return 0;
-        });
-        
-        renderPOTable();
-        renderInquiryTable();
-        renderPauseFollowUpTable();
-        updateBadges();
     }
-
-    // ==========================================
-    // ✅ UPDATE TAB BADGES
-    // ==========================================
-    function updateBadges() {
-        const poBadge = document.getElementById('poBadge');
-        const inquiryBadge = document.getElementById('inquiryBadge');
-        const pauseBadge = document.getElementById('pauseBadge');
-        
-        poBadge.textContent = pendingPOList.length;
-        inquiryBadge.textContent = inquiryList.length;
-        pauseBadge.textContent = pauseFollowUpList.length;
-        
-        poBadge.classList.toggle('zero', pendingPOList.length === 0);
-        inquiryBadge.classList.toggle('zero', inquiryList.length === 0);
-        pauseBadge.classList.toggle('zero', pauseFollowUpList.length === 0);
+    function sortInd(key) {
+        if (sortKey !== key) return '';
+        return `<span class="po-sort-ind">${sortDir === 1 ? '▲' : '▼'}</span>`;
     }
-
-    // ==========================================
-    // 📋 RENDER TAB 1 & 2
-    // ==========================================
-    function renderPOTable(filter = '') {
-        const tbody = document.getElementById('poTableBody');
-        const noResults = document.getElementById('noResults');
-        const poTable = document.getElementById('poTable');
-        tbody.innerHTML = '';
-        
-        const lf = filter.toLowerCase().trim();
-        const filtered = pendingPOList.filter(s =>
-            s.name.toLowerCase().includes(lf) || s.nameCn.toLowerCase().includes(lf) ||
-            s.nickname.toLowerCase().includes(lf) || s.grade.toLowerCase().includes(lf) ||
-            s.poReason.toLowerCase().includes(lf) || s.allSubjectsDisplay.some(sub => sub.displayText.toLowerCase().includes(lf))
-        );
-        
-        if (filtered.length === 0) {
-            noResults.classList.add('visible'); poTable.style.display = 'none';
-        } else {
-            noResults.classList.remove('visible'); poTable.style.display = 'table';
-            filtered.forEach(s => {
-                const pills = s.allSubjectsDisplay.map(sub => {
-                    let statusBadge = '';
-                    let extraClass = '';
-                    if (sub.status === 'drop') {
-                        statusBadge = '<span class="pill-status-badge drop">✖ Dropped</span>';
-                        extraClass = 'pill-dropped';
-                    } else if (sub.status === 'pause') {
-                        statusBadge = '<span class="pill-status-badge pause">⏸ Paused</span>';
-                        extraClass = 'pill-paused';
-                    }
-                    return `<span class="subj-pill ${getSubjectClass(sub.name)} ${extraClass}">${sub.displayText} ${statusBadge}</span>`;
-                }).join(' ');
-                
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td><strong>${s.name}</strong></td><td>${s.nameCn}</td><td>${s.nickname}</td>
-                    <td>${s.grade}</td><td>${pills}</td><td>${s.enrolDate}</td><td>${s.poReason}</td>
-                    <td><a href="student-form.html?id=${s.id}" class="action-btn" title="Edit">✏️ Edit</a></td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
+    function editBtn(r, field, inner) {
+        const dirty = isDirty(r, field) ? ' dirty' : '';
+        return `<button type="button" class="po-editcell${dirty}" data-sid="${esc(r.id)}" data-field="${field}" title="Click to edit">${inner}</button>`;
     }
+    function renderTable(rows, scope) {
+        const showCenter = scope === 'all';
+        const totalCols = showCenter ? 14 : 13;
+        thead.innerHTML = `
+            <tr>
+                <th rowspan="2" class="po-th-num">#</th>
+                ${showCenter ? `<th rowspan="2" data-sort="center" class="${sortKey === 'center' ? 'sorted' : ''}">Center${sortInd('center')}</th>` : ''}
+                <th rowspan="2" data-sort="inquiryDate" class="${sortKey === 'inquiryDate' ? 'sorted' : ''}">Inquiry Date${sortInd('inquiryDate')}</th>
+                <th rowspan="2" data-sort="name" class="${sortKey === 'name' ? 'sorted' : ''}">Name${sortInd('name')}</th>
+                <th rowspan="2">Phone Number</th>
+                <th rowspan="2" data-sort="school" class="${sortKey === 'school' ? 'sorted' : ''}">School${sortInd('school')}</th>
+                <th rowspan="2" data-sort="grade" class="${sortKey === 'grade' ? 'sorted' : ''}">Grade${sortInd('grade')}</th>
+                <th colspan="4" class="po-group">SUBJECT</th>
+                <th colspan="2" class="po-group">PO</th>
+            </tr>
+            <tr>
+                <th title="Math">M</th>
+                <th title="English ERP">R</th>
+                <th title="English EFL">L</th>
+                <th title="Chinese">C</th>
+                <th data-sort="po" class="${sortKey === 'po' ? 'sorted' : ''}">Y/N${sortInd('po')}</th>
+                <th>Comments</th>
+            </tr>`;
 
-    function renderInquiryTable(filter = '') {
-        const tbody = document.getElementById('inquiryTableBody');
-        const noResults = document.getElementById('noInquiryResults');
-        const table = document.getElementById('inquiryTable');
-        tbody.innerHTML = '';
-        
-        const lf = filter.toLowerCase().trim();
-        const filtered = inquiryList.filter(s =>
-            s.name.toLowerCase().includes(lf) || s.nameCn.toLowerCase().includes(lf) ||
-            s.nickname.toLowerCase().includes(lf) || s.grade.toLowerCase().includes(lf) ||
-            s.subjects.some(sub => sub.toLowerCase().includes(lf))
-        );
-        
-        if (filtered.length === 0) {
-            noResults.classList.add('visible'); table.style.display = 'none';
-        } else {
-            noResults.classList.remove('visible'); table.style.display = 'table';
-            filtered.forEach(s => {
-                const pills = s.subjects.map(sub => `<span class="subj-pill ${getSubjectClass(sub)}">${sub}</span>`).join(' ');
-                const dtInfo = checkDTStatus(s.rawData);
-                const dtBadge = renderDTBadge(dtInfo);
-                
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td><strong>${s.name}</strong></td><td>${s.nameCn}</td><td>${s.nickname}</td>
-                    <td>${s.grade}</td><td>${pills}</td><td>${s.inquiryDate}</td><td>${dtBadge}</td>
-                    <td><a href="student-form.html?id=${s.id}" class="action-btn" title="Edit">✏️ Edit</a></td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-    }
-
-    // ==========================================
-    // ✅ RENDER TAB 3: PAUSE & RESUME FOLLOW-UP
-    // ==========================================
-    function renderPauseFollowUpTable(filter = '') {
-        const tbody = document.getElementById('pauseTableBody');
-        const noResults = document.getElementById('noPauseResults');
-        const table = document.getElementById('pauseTable');
-        tbody.innerHTML = '';
-        
-        const lf = filter.toLowerCase().trim();
-        const filtered = pauseFollowUpList.filter(s =>
-            s.studentName.toLowerCase().includes(lf) || s.nameCn.toLowerCase().includes(lf) ||
-            s.nickname.toLowerCase().includes(lf) || s.grade.toLowerCase().includes(lf) ||
-            s.subjectName.toLowerCase().includes(lf)
-        );
-        
-        if (filtered.length === 0) {
-            noResults.classList.add('visible'); table.style.display = 'none';
-        } else {
-            noResults.classList.remove('visible'); table.style.display = 'table';
-            filtered.forEach(s => {
-                const pill = `<span class="subj-pill ${getSubjectClass(s.subjectName)}">${s.subjectName} ${s.subjectLevel}</span>`;
-                const overdueTag = s.isOverdue ? '<span class="overdue-tag">OVERDUE</span>' : '';
-                const pauseDuration = `${s.pauseFrom} → ${s.pauseTo}${overdueTag}`;
-                
-                let actionHtml = '';
-                // ✅ UNIFIED UI: Handle resumeRequest prominently
-                if (s.hasResumeRequest) {
-                    const retMonth = MONTH_SHORT[parseInt(s.resumeMonth) - 1];
-                    actionHtml = `
-                        <span class="return-confirmed-badge" style="background:#e8f5e9; color:#2e7d32; border:1px solid #a5d6a7;">🔄 Resume Pending (${retMonth} ${s.resumeYear})</span>
-                        <button class="pause-action-btn continue" data-student-id="${s.studentId}" data-subject-index="${s.subjectIndex}" data-action="confirm-resume">✔ Confirm Resume Now</button>
-                        <button class="pause-action-btn drop" data-student-id="${s.studentId}" data-subject-index="${s.subjectIndex}" data-action="cancel-resume">❌ Cancel Resume</button>
-                    `;
-                } else {
-                    actionHtml = `
-                        <button class="pause-action-btn drop" data-student-id="${s.studentId}" data-subject-index="${s.subjectIndex}" data-action="drop">✖ Confirm Drop</button>
-                        <button class="pause-action-btn continue" data-student-id="${s.studentId}" data-subject-index="${s.subjectIndex}" data-action="return">✔ Confirm Return</button>
-                    `;
-                }
-                
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td><strong>${s.studentName}</strong></td>
-                    <td>${s.nameCn}</td>
-                    <td>${s.nickname}</td>
-                    <td>${s.grade}</td>
-                    <td>${pill}</td>
-                    <td class="pause-duration-cell">${pauseDuration}</td>
-                    <td class="pause-actions-cell">${actionHtml}</td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-    }
-
-    // ==========================================
-    // ✅ PAUSE & RESUME ACTION HANDLERS
-    // ==========================================
-    let activeReturnStudentId = null;
-    let activeReturnSubjectIndex = null;
-    
-    document.getElementById('pauseTableBody').addEventListener('click', async (e) => {
-        const btn = e.target.closest('.pause-action-btn');
-        if (!btn) return;
-        
-        const studentId = btn.dataset.studentId;
-        const subjectIndex = parseInt(btn.dataset.subjectIndex);
-        const action = btn.dataset.action; 
-        
-        const student = allStudents.find(s => s.id === studentId);
-        if (!student) return;
-        
-        if (action === 'drop') {
-            const subName = student.pausedSubjects.find(p => p.index === subjectIndex)?.name || 'Subject';
-            if (!confirm(`⚠️ Confirm DROP for ${student.name}?\n\nSubject: ${subName}\n\nThis will change the status to "Drop".`)) return;
-            
-            btn.disabled = true;
-            btn.textContent = '⏳ Saving...';
-            try {
-                const studentRef = ref(db, `centers/${centerId}/students/${studentId}`);
-                const snap = await get(studentRef);
-                if (!snap.exists()) throw new Error("Student not found");
-                
-                const studentData = snap.val();
-                let subjects = safeArray(studentData.subjects);
-                const sub = subjects[subjectIndex];
-                if (!sub) throw new Error("Subject not found");
-                
-                sub.status = 'drop';
-                const now = new Date();
-                sub.dropMonth = String(now.getMonth() + 1).padStart(2, '0');
-                sub.dropYear = String(now.getFullYear());
-                sub.dropReason = sub.dropReason || 'Confirmed drop after pause follow-up';
-                delete sub.pendingReturn; 
-                delete sub.resumeRequest;
-                
-                studentData.subjects = subjects;
-                studentData.updatedAt = new Date().toISOString();
-                await set(studentRef, studentData);
-                
-                await fetchAllStudents();
-                alert(`✅ ${student.name} — Drop confirmed successfully!`);
-            } catch (err) {
-                console.error("Drop action error:", err);
-                alert('❌ Failed to save: ' + err.message);
-                btn.disabled = false;
-                btn.textContent = '✖ Confirm Drop';
-            }
-        } 
-        else if (action === 'confirm-resume') {
-            if (!confirm(`✅ Confirm RESUME for ${student.name} now?\n\nThis will change the status to "Current" and mark the drop/pause as historically resumed.`)) return;
-            
-            btn.disabled = true;
-            btn.textContent = '⏳ Saving...';
-            try {
-                const studentRef = ref(db, `centers/${centerId}/students/${studentId}`);
-                const snap = await get(studentRef);
-                if (!snap.exists()) throw new Error("Student not found");
-                
-                const studentData = snap.val();
-                let subjects = safeArray(studentData.subjects);
-                const sub = subjects[subjectIndex];
-                if (!sub) throw new Error("Subject not found");
-                
-                // ✅ Execute resume logic (matches student-form.js)
-                sub.status = 'current';
-                sub.resumed = true;
-                sub.resumedAt = new Date().toISOString();
-                delete sub.resumeRequest;
-                delete sub.pendingReturn; 
-                
-                studentData.subjects = subjects;
-                studentData.updatedAt = new Date().toISOString();
-                await set(studentRef, studentData);
-                
-                await fetchAllStudents();
-                alert(`✅ ${student.name} — Resume confirmed successfully!`);
-            } catch (err) {
-                console.error("Confirm resume error:", err);
-                alert('❌ Failed to save: ' + err.message);
-                btn.disabled = false;
-                btn.textContent = '✔ Confirm Resume Now';
-            }
-        }
-        else if (action === 'cancel-resume') {
-            if (!confirm(`❌ Cancel RESUME request for ${student.name}?\n\nThe student will remain dropped/paused.`)) return;
-            
-            btn.disabled = true;
-            btn.textContent = '⏳ Saving...';
-            try {
-                const studentRef = ref(db, `centers/${centerId}/students/${studentId}`);
-                const snap = await get(studentRef);
-                if (!snap.exists()) throw new Error("Student not found");
-                
-                const studentData = snap.val();
-                let subjects = safeArray(studentData.subjects);
-                const sub = subjects[subjectIndex];
-                if (!sub) throw new Error("Subject not found");
-                
-                delete sub.resumeRequest;
-                
-                studentData.subjects = subjects;
-                studentData.updatedAt = new Date().toISOString();
-                await set(studentRef, studentData);
-                
-                await fetchAllStudents();
-                alert(`✅ ${student.name} — Resume request cancelled.`);
-            } catch (err) {
-                console.error("Cancel resume error:", err);
-                alert('❌ Failed to save: ' + err.message);
-                btn.disabled = false;
-                btn.textContent = '❌ Cancel Resume';
-            }
-        }
-        else if (action === 'return') {
-            activeReturnStudentId = studentId;
-            activeReturnSubjectIndex = subjectIndex;
-            
-            const now = new Date();
-            let nextM = String(now.getMonth() + 2).padStart(2, '0');
-            let nextY = String(now.getFullYear());
-            if (nextM === '13') { nextM = '01'; nextY = String(now.getFullYear() + 1); }
-            
-            document.getElementById('returnMonth').value = nextM;
-            document.getElementById('returnYear').value = nextY;
-            document.getElementById('confirmReturnModal').classList.remove('hidden');
-        }
-    });
-
-    // Modal Handlers
-    document.getElementById('cancelReturnBtn')?.addEventListener('click', () => {
-        document.getElementById('confirmReturnModal').classList.add('hidden');
-    });
-    
-    document.getElementById('saveReturnBtn')?.addEventListener('click', async () => {
-        const month = document.getElementById('returnMonth').value;
-        const year = document.getElementById('returnYear').value;
-        if (!month || !year) {
-            alert('Please select a month and year.');
+        if (!rows.length) {
+            const msg = allRows.length === 0
+                ? 'No students with subjects listed in this center scope.'
+                : 'No students match the current filters.';
+            tbody.innerHTML = `
+                <tr><td colspan="${totalCols}">
+                    <div class="empty-state">
+                        <div class="empty-icon">🗂️</div>
+                        <div class="empty-title">${msg}</div>
+                        <div class="empty-sub">Try a different center, filter or search term.</div>
+                    </div>
+                </td></tr>`;
             return;
         }
-        document.getElementById('confirmReturnModal').classList.add('hidden');
-        
-        try {
-            const studentRef = ref(db, `centers/${centerId}/students/${activeReturnStudentId}`);
-            const snap = await get(studentRef);
-            if (!snap.exists()) throw new Error("Student not found");
-            
-            const studentData = snap.val();
-            let subjects = safeArray(studentData.subjects);
-            const sub = subjects[activeReturnSubjectIndex];
-            if (!sub) throw new Error("Subject not found");
-            
-            // ✅ UNIFIED: Save as resumeRequest to handshake with Drop Book & Student Form
-            sub.resumeRequest = {
-                returnMonth: month,
-                returnYear: year,
-                requestedAt: new Date().toISOString(),
-                processed: false
-            };
-            // Clean up legacy pendingReturn if it exists
-            delete sub.pendingReturn;
-            
-            studentData.subjects = subjects;
-            studentData.updatedAt = new Date().toISOString();
-            await set(studentRef, studentData);
-            
-            await fetchAllStudents();
-            alert(`✅ Return confirmed for ${MONTH_SHORT[parseInt(month)-1]} ${year}. Status will auto-update to Current when that month arrives.`);
-        } catch (err) {
-            console.error("Return action error:", err);
-            alert('❌ Failed to save: ' + err.message);
-        }
-    });
 
-    // Populate Modal Dropdowns
-    const returnMonthSelect = document.getElementById('returnMonth');
-    const returnYearSelect = document.getElementById('returnYear');
-    if (returnMonthSelect && returnYearSelect) {
-        const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-        let monthOpts = '';
-        months.forEach((m, i) => {
-            const val = String(i + 1).padStart(2, '0');
-            monthOpts += `<option value="${val}">${m}</option>`;
-        });
-        returnMonthSelect.innerHTML = monthOpts;
-        
-        const currentYear = new Date().getFullYear();
-        let yearOpts = '';
-        for (let y = currentYear; y <= currentYear + 5; y++) {
-            yearOpts += `<option value="${y}">${y}</option>`;
-        }
-        returnYearSelect.innerHTML = yearOpts;
+        const subCell = (r, k) => r.subjects[k]
+            ? `<span class="po-yes" title="${esc(r.subjInfo[k].join('\n'))}">Yes</span>`
+            : `<span class="po-no-sub">—</span>`;
+
+        const html = rows.map((r, i) => {
+            const displayName = r.nameCn || r.namePinyin || 'Unknown';
+            const subPinyin = r.nameCn && r.namePinyin ? r.namePinyin : '';
+            const editLink = r.centerId === sessionCenterId
+                ? ` <a class="po-edit" href="student-form.html?id=${encodeURIComponent(r.id)}" title="Edit student">✏️</a>`
+                : '';
+            const mobilePills = ['M', 'R', 'L', 'C']
+                .filter(k => r.subjects[k])
+                .map(k => `<span class="subj-chip ${k === 'M' ? 'math' : k === 'R' ? 'erp' : k === 'L' ? 'efl' : 'chi'}">${k} Yes</span>`)
+                .join('') || '<span class="po-no-sub">—</span>';
+
+            const effPo = effVal(r, 'po');
+            const effPoDate = effVal(r, 'poDate');
+            const poBadgeInner = effPo === 'yes'
+                ? `<span class="fu-badge b-ok">YES</span>`
+                : `<span class="fu-badge b-bad">NOT YET</span>`;
+            const poDirty = (isDirty(r, 'po') || isDirty(r, 'poDate')) ? ' dirty' : '';
+            const poBtn = `<button type="button" class="po-editcell${poDirty}" data-sid="${esc(r.id)}" data-field="po" title="Click to set status and confirm date">${poBadgeInner}</button>`;
+            const poDateLine = (effPo === 'yes' && effPoDate)
+                ? `<div class="sub">${esc(fmtDate(effPoDate))}</div>`
+                : '';
+
+            const manualPending = pending[r.id] && 'inquiryDate' in pending[r.id];
+            const dtTag = (!manualPending && r.inquiryIsDt && r.inquiryDate)
+                ? '<span class="po-dt-tag" title="No inquiry date on record — showing the Diagnostic Test date">DT</span>'
+                : '';
+            const inquiryInner = (esc(fmtDate(effVal(r, 'inquiryDate'))) || '<span class="po-no-sub">—</span>') + dtTag;
+
+            const stateBadge = r.studyState
+                ? `<span class="po-state ${r.studyState === 'Paused' ? 'paused' : 'dropped'}">${r.studyState}</span>`
+                : '';
+            const commentsInner = editBtn(r, 'comments', esc(effVal(r, 'comments')) || '<span class="po-no-sub">—</span>');
+
+            return `
+            <tr>
+                <td class="po-num" data-label="#">${i + 1}</td>
+                ${showCenter ? `<td data-label="Center"><span class="po-center-pill" title="${esc(r.centerName)}">${esc(r.abbr)}</span></td>` : ''}
+                <td class="po-date" data-label="Inquiry">${editBtn(r, 'inquiryDate', inquiryInner)}</td>
+                <td data-label="Name"><div class="po-name-wrap"><div class="po-name-cn">${esc(displayName)}${editLink}</div>${subPinyin ? `<div class="sub">${esc(subPinyin)}</div>` : ''}</div></td>
+                <td class="po-phone" data-label="Phone">${esc(r.phone) || '<span class="po-no-sub">—</span>'}</td>
+                <td data-label="School">${editBtn(r, 'school', esc(effVal(r, 'school')) || '<span class="po-no-sub">—</span>')}</td>
+                <td class="po-grade" data-label="Grade">${editBtn(r, 'grade', esc(effVal(r, 'grade')) || '<span class="po-no-sub">—</span>')}</td>
+                <td class="po-sub-cell" data-label="M">${subCell(r, 'M')}</td>
+                <td class="po-sub-cell" data-label="R">${subCell(r, 'R')}</td>
+                <td class="po-sub-cell" data-label="L">${subCell(r, 'L')}</td>
+                <td class="po-sub-cell" data-label="C">${subCell(r, 'C')}</td>
+                <td class="po-sub-mobile" data-label="Subjects"><div class="po-mobile-pills">${mobilePills}</div></td>
+                <td class="po-po" data-label="PO"><div class="po-po-inner">${poBtn}${poDateLine}</div></td>
+                <td class="po-comments" data-label="Comments">${stateBadge}${commentsInner}</td>
+            </tr>`;
+        }).join('');
+        tbody.innerHTML = html;
     }
 
-    // ==========================================
-    // 🔗 EVENT LISTENERS
-    // ==========================================
-    searchInput.addEventListener('input', (e) => {
-        const val = e.target.value;
-        renderPOTable(val);
-        renderInquiryTable(val);
-        renderPauseFollowUpTable(val);
+    // ---------- Excel export ----------
+    function exportRows() {
+        if (!currentView.length) return;
+        const showCenter = currentScope === 'all';
+        const off = showCenter ? 1 : 0;
+        const total = showCenter ? 13 : 12;
+        const scopeName = showCenter
+            ? 'All-Centers'
+            : (centers.find(c => c.id === currentScope)?.name || currentScope);
+
+        const head1 = new Array(total).fill('');
+        head1[0] = '#';
+        if (showCenter) head1[1] = 'CENTER';
+        head1[off + 1] = 'INQUIRY DATE';
+        head1[off + 2] = 'NAME';
+        head1[off + 3] = 'PHONE NUMBER';
+        head1[off + 4] = 'SCHOOL';
+        head1[off + 5] = 'GRADE';
+        head1[off + 6] = 'SUBJECT';
+        head1[off + 10] = 'PO';
+
+        const head2 = new Array(total).fill('');
+        head2[off + 6] = 'M';
+        head2[off + 7] = 'R';
+        head2[off + 8] = 'L';
+        head2[off + 9] = 'C';
+        head2[off + 10] = 'Y/N';
+        head2[off + 11] = 'Comments';
+
+        const dataRows = currentView.map((r, i) => {
+            const row = new Array(total).fill('');
+            row[0] = i + 1;
+            if (showCenter) row[1] = r.centerName;
+            row[off + 1] = fmtDate(r.inquiryDate);
+            row[off + 2] = r.nameCn || r.namePinyin || 'Unknown';
+            row[off + 3] = r.phone;
+            row[off + 4] = r.school;
+            row[off + 5] = r.grade;
+            row[off + 6] = r.subjects.M ? 'Yes' : '';
+            row[off + 7] = r.subjects.R ? 'Yes' : '';
+            row[off + 8] = r.subjects.L ? 'Yes' : '';
+            row[off + 9] = r.subjects.C ? 'Yes' : '';
+            row[off + 10] = r.po === 'yes' ? 'YES' : 'NOT YET';
+            row[off + 11] = r.comments;
+            return row;
+        });
+
+        const dateStamp = new Date().toISOString().slice(0, 10);
+        const safeName = scopeName.replace(/[^\w\u4e00-\u9fff-]+/g, '-');
+        const flatHeader = head1.map((h, c) => head2[c] || h);
+
+        if (typeof window.XLSX === 'undefined') {
+            exportCsvFallback([flatHeader, ...dataRows], `PO_Report_${safeName}_${dateStamp}.csv`);
+            return;
+        }
+        try {
+            const XLSX = window.XLSX;
+            const ws = XLSX.utils.aoa_to_sheet([head1, head2, ...dataRows]);
+            // Merged two-row header, exactly like the paper sheet
+            const merges = [];
+            for (let c = 0; c <= off + 5; c++) merges.push({ s: { r: 0, c }, e: { r: 1, c } });
+            merges.push({ s: { r: 0, c: off + 6 }, e: { r: 0, c: off + 9 } });   // SUBJECT
+            merges.push({ s: { r: 0, c: off + 10 }, e: { r: 0, c: off + 11 } }); // PO
+            ws['!merges'] = merges;
+            ws['!cols'] = [
+                { wch: 5 },
+                ...(showCenter ? [{ wch: 16 }] : []),
+                { wch: 14 }, { wch: 20 }, { wch: 18 }, { wch: 14 }, { wch: 8 },
+                { wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 6 },
+                { wch: 12 }, { wch: 44 }
+            ];
+            ws['!rows'] = [{ hpt: 26 }, { hpt: 20 }, ...dataRows.map(() => ({ hpt: 26 }))];
+
+            const border = { style: 'thin', color: { rgb: '000000' } };
+            const allBorders = { top: border, bottom: border, left: border, right: border };
+            const headerStyle = {
+                fill: { fgColor: { rgb: 'FFE699' } },
+                font: { bold: true, sz: 11, color: { rgb: '000000' } },
+                alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+                border: allBorders
+            };
+            const centerCols = new Set([0, off + 1, off + 5, off + 6, off + 7, off + 8, off + 9, off + 10]);
+            if (showCenter) centerCols.add(1);
+
+            const range = XLSX.utils.decode_range(ws['!ref']);
+            for (let R = range.s.r; R <= range.e.r; R++) {
+                for (let C = range.s.c; C <= range.e.c; C++) {
+                    const addr = XLSX.utils.encode_cell({ r: R, c: C });
+                    if (!ws[addr]) ws[addr] = { t: 's', v: '' };
+                    const cell = ws[addr];
+                    if (R < 2) { cell.s = headerStyle; continue; }
+                    const align = centerCols.has(C) ? 'center' : 'left';
+                    const style = {
+                        font: { sz: 11, color: { rgb: '000000' } },
+                        alignment: { horizontal: align, vertical: 'center', wrapText: true },
+                        border: allBorders
+                    };
+                    const val = String(cell.v ?? '');
+                    if (C >= off + 6 && C <= off + 9 && val === 'Yes') {
+                        style.fill = { fgColor: { rgb: 'C6EFCE' } };
+                        style.font = { sz: 11, bold: true, color: { rgb: '006100' } };
+                    }
+                    if (C === off + 10) {
+                        style.font = val === 'YES'
+                            ? { sz: 11, bold: true, color: { rgb: '006100' } }
+                            : { sz: 11, bold: true, color: { rgb: '9C0006' } };
+                    }
+                    cell.s = style;
+                }
+            }
+
+            const wb = XLSX.utils.book_new();
+            wb.Props = { Title: 'Parent Orientation Report', Author: 'Kumon DB' };
+            XLSX.utils.book_append_sheet(wb, ws, 'PO Report');
+            const filename = `PO_Report_${safeName}_${dateStamp}.xlsx`;
+            XLSX.writeFile(wb, filename, { compression: true });
+            showToast(`⬇ Exported ${currentView.length} students — ${filename}`);
+        } catch (err) {
+            console.error('Excel export error:', err);
+            exportCsvFallback([flatHeader, ...dataRows], `PO_Report_${safeName}_${dateStamp}.csv`);
+        }
+    }
+
+    function exportCsvFallback(rows, filename) {
+        const csvCell = (v) => {
+            const s = String(v ?? '');
+            return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+        };
+        const csv = '\uFEFF' + rows.map(r => r.map(csvCell).join(',')).join('\r\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+        showToast(`Excel library unavailable — exported CSV instead (${rows.length - 1} students).`);
+    }
+
+    // ---------- events ----------
+    loadStatus.addEventListener('click', () => {
+        if (loadStatus.classList.contains('err')) fetchAll();
     });
-    
-    refreshBtn.addEventListener('click', fetchAllStudents);
-    
-    fetchAllStudents();
+    centerSelect.addEventListener('change', buildView);
+    searchInput.addEventListener('input', () => {
+        if (searchTimeout) clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(buildView, 150);
+    });
+    document.querySelectorAll('.po-subj-cb').forEach(cb => cb.addEventListener('change', buildView));
+    exportBtn.addEventListener('click', exportRows);
+
+    const saveBtnEl = $('poSaveBtn');
+    if (saveBtnEl) saveBtnEl.addEventListener('click', saveEdits);
+    const discardBtnEl = $('poDiscardBtn');
+    if (discardBtnEl) discardBtnEl.addEventListener('click', discardEdits);
+    tbody.addEventListener('click', (e) => {
+        const btn = e.target.closest('.po-editcell');
+        if (btn) startEdit(btn);
+    });
+
+    // PO modal events
+    const modalEl = $('poModal');
+    if (modalEl) {
+        modalEl.addEventListener('click', (e) => { if (e.target === modalEl) closePoModal(); });
+    }
+    const modalStatus = $('poModalStatus');
+    if (modalStatus) {
+        modalStatus.addEventListener('click', (e) => {
+            const opt = e.target.closest('.po-modal-opt');
+            if (!opt) return;
+            modalPo = opt.dataset.po;
+            const d = $('poModalDate');
+            if (d && modalPo === 'yes' && !d.value) d.value = todayIso();
+            syncModalOpts();
+        });
+    }
+    const modalCancel = $('poModalCancel');
+    if (modalCancel) modalCancel.addEventListener('click', closePoModal);
+    const modalConfirm = $('poModalConfirm');
+    if (modalConfirm) modalConfirm.addEventListener('click', confirmPoModal);
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modalSid) closePoModal();
+    });
+
+    document.getElementById('poStatusChips').addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-filter]');
+        if (!btn) return;
+        statusFilter = btn.dataset.filter;
+        buildView();
+    });
+
+    document.querySelectorAll('#poSummary .balance-card.clickable').forEach(card => {
+        const activate = () => { statusFilter = card.dataset.filter; buildView(); };
+        card.addEventListener('click', activate);
+        card.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); }
+        });
+    });
+
+    thead.addEventListener('click', (e) => {
+        const th = e.target.closest('th[data-sort]');
+        if (!th) return;
+        const key = th.dataset.sort;
+        if (sortKey === key) sortDir = -sortDir;
+        else { sortKey = key; sortDir = 1; }
+        buildView();
+    });
+
+    fetchAll();
 }

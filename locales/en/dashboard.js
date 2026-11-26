@@ -129,7 +129,7 @@ export default {
       progressChartsDesc: "Analytics, progress tracking & charts",
       attendance: "Attendance",
       attendanceDesc: "Scan QR, track check-ins, view late students & daily reports",
-      followUps: "Follow Ups",
+      followUps: "Parent Orientations",
       followUpsDesc: "Manage pending parent orientations & student inquiries",
       manageCalendar: "Manage Calendar",
       manageCalendarDesc: "View and manage the center's calendar events",

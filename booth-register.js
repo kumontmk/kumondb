@@ -783,9 +783,8 @@ function showSuccess(reg) {
   $('pubHeader').classList.add('hidden');
   const qrWrap = $('successQr');
   qrWrap.innerHTML = '';
-    const c = renderQrCanvas(reg.code, 320);
+  const c = renderQrCanvas(reg.code, 320);
   if (c) qrWrap.appendChild(c);
-
   let html = '';
   html += '<div class="ss-row">🧒 ' + escapeHtml(reg.studentName) + ' · ' + escapeHtml(gradeLabel(reg.grade)) + '</div>';
   if (reg.school) html += '<div class="ss-row">🏫 ' + escapeHtml(reg.school) + '</div>';
@@ -797,6 +796,20 @@ function showSuccess(reg) {
   if (config.venueEn) html += '<div class="ss-row">📍 ' + escapeHtml(config.venueEn) + '</div>';
   if (config.venueCn) html += '<div class="ss-row">📍 ' + escapeHtml(config.venueCn) + '</div>';
   $('successSummary').innerHTML = html;
+
+  // Screenshot instruction on top (right under the heading), compact party emoji.
+  const card = document.querySelector('#screenSuccess .success-card') || $('screenSuccess');
+  if (card) {
+    const h2 = card.querySelector('h2');
+    const hint = Array.from(card.querySelectorAll('p, .state-hint, .hint')).find(el =>
+      /screen\s*shot|截圖/i.test(el.textContent || ''));
+    if (hint && h2) {
+      hint.classList.add('screenshot-top-hint');
+      h2.insertAdjacentElement('afterend', hint);
+    }
+    const emo = h2 && h2.previousElementSibling;
+    if (emo && (emo.textContent || '').includes('🎉')) emo.classList.add('success-emoji-small');
+  }
 
   showScreen('screenSuccess');
   burstConfetti();
