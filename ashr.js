@@ -2107,6 +2107,7 @@ function setupRSVPs() {
   $('rsvpFilter').addEventListener('change', renderRSVPs);
   $('rsvpCenterFilter').addEventListener('change', renderRSVPs);
   populateRsvpCenterFilter();
+  populateRsvpTypeFilter(); 
   const menuBtn = $('exportMenuBtn');
   const menu = $('exportMenu');
   if (menuBtn && menu) {
@@ -2143,6 +2144,27 @@ function populateRsvpCenterFilter() {
     opt.value = cid; opt.textContent = c.name;
     sel.appendChild(opt);
   });
+}
+function populateRsvpTypeFilter() {
+  if ($('rsvpTypeFilter')) return;
+  const anchor = $('rsvpCenterFilter') || $('rsvpFilter');
+  if (!anchor) return;
+  const sel = document.createElement('select');
+  sel.id = 'rsvpTypeFilter';
+  sel.className = anchor.className;          // inherit the exact same styling
+  sel.style.cssText = anchor.style.cssText;
+  [
+    ['all', t('filter.allTypes', 'All Types')],
+    ['award', t('hon.typeAward', 'ASHR Award')],
+    ['completer', t('hon.typeCompleter', 'Completer')],
+    ['both', t('hon.typeBoth', 'Both')]
+  ].forEach(([v, label]) => {
+    const opt = document.createElement('option');
+    opt.value = v; opt.textContent = label;
+    sel.appendChild(opt);
+  });
+  sel.addEventListener('change', renderRSVPs);
+  anchor.insertAdjacentElement('afterend', sel);
 }
 
 function countGuests(g) {
@@ -2253,6 +2275,7 @@ function buildRsvpRows() {
 function renderRSVPs() {
   const filter = $('rsvpFilter').value;
   const centerFilter = $('rsvpCenterFilter')?.value || '';
+  const typeFilter = $('rsvpTypeFilter')?.value || 'all';   // 🎓 new
   const tbody = $('rsvpTableBody');
   tbody.innerHTML = '';
   let attending = 0, declined = 0, pending = 0, totalGuests = 0;
@@ -2274,10 +2297,10 @@ function renderRSVPs() {
     const rsvp = row.rsvp || {};
     const status = rsvp.status || 'pending';
     if (filter !== 'all' && status !== filter) return;
-    const members = centerFilter
-      ? (row.members || []).filter(m => m.centerId === centerFilter)
-      : row.members;
-    if (centerFilter && !members.length) return;
+    let members = row.members || [];
+    if (centerFilter) members = members.filter(m => m.centerId === centerFilter);
+    if (typeFilter !== 'all') members = members.filter(m => getHonoreeType(m) === typeFilter);
+    if ((centerFilter || typeFilter !== 'all') && !members.length) return;
     rowNum++;
     const disp = groupMembersForDisplay(members);
     const memberNames = disp.map(m => m.nameCn || m.nameEn).join(', ') || row.famId;
@@ -2330,7 +2353,7 @@ function renderRSVPs() {
       reasonDisplay = rsvp.reason;
     }
     const statusClass = status === 'attending' ? 'st-attending' : status === 'declined' ? 'st-declined' : 'st-pending';
-    const studentCount = ps ? `${attCount}/${disp.length}` : (disp.length || row.rsvp?.memberHonoreeIds?.length || 1);
+    const studentCount = (ps && attCount !== disp.length) ? `${attCount}/${disp.length}` : (disp.length || row.rsvp?.memberHonoreeIds?.length || 1);
     const actionsHtml = row.rsvp
       ? `<button class="btn-small danger" data-reset-rsvp="${escapeHtml(row.famId)}">🔄 ${t('rsvp.reset', 'Reset')}</button>`
       : '';
