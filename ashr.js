@@ -191,6 +191,57 @@ function familyTimeText(fam) {
 // 🧬 SAME-STUDENT MERGE / UNIQUE-STUDENT HELPERS
 // ============================================
 function studentUid(h) { return String(h?.studentNumber || h?.studentId || '').trim(); }
+function currentKeyFor(key) {
+  if (honorees[key]) return key;
+  const sn = String(key).slice(String(key).lastIndexOf('_') + 1).trim();
+  if (!sn) return null;
+  const found = Object.entries(honorees).find(([, h]) =>
+    String(h.studentNumber || h.studentId || '').trim() === sn);
+  return found ? found[0] : null;
+}
+function liveStudentFor(h) {
+  if (!h) return null;
+  const num = String(h.studentNumber || '').trim();
+  const sid = String(h.studentId || '').trim();
+  const cn = String(h.nameCn || '').trim();
+  const en = String(h.nameEn || '').trim();
+  if (num) {
+    const byNum = allStudentsFlat.find(s => String(s.studentNumber || '').trim() === num);
+    if (byNum) return byNum;
+  }
+  if (sid) {
+    const byId = allStudentsFlat.find(s => String(s.id || '') === sid);
+    if (byId) return byId;
+  }
+  if (cn || en) {
+    return allStudentsFlat.find(s =>
+      (cn && String(s.nameCn || '').trim() === cn) ||
+      (en && String(s.namePinyin || '').trim() === en)) || null;
+  }
+  return null;
+}
+function resolveHonoreeEntry(key) {
+  const ck = currentKeyFor(key);
+  if (!ck) return null;
+  const rec = honorees[ck];
+  const live = liveStudentFor(rec);
+  if (!live) return [key, rec];
+  const moved = live.centerId !== rec.centerId || String(live.id || '') !== String(rec.studentId || '');
+  if (!moved) return [key, rec];
+  const newKey = `${live.centerId}_${live.studentNumber || live.id}`;
+  const nr = newKey !== ck ? honorees[newKey] : null;
+  return [key, {
+    ...rec,
+    ...(nr ? {
+      awards: [...(rec.awards || []), ...(nr.awards || [])],
+      completions: [...(rec.completions || []), ...(nr.completions || [])]
+    } : {}),
+    studentId: live.id,
+    studentNumber: live.studentNumber || rec.studentNumber || '',
+    centerId: live.centerId,
+    centerName: live.centerName || rec.centerName || ''
+  }];
+}
 function dedupeBy(arr, keyFn) {
   const seen = new Set();
   return (arr || []).filter(x => {
@@ -249,7 +300,7 @@ function countUniqueStudents(members) {
 }
 function countUniqueFromIds(memberIds) {
   const seen = new Set();
-  (memberIds || []).forEach(mid => { const h = honorees[mid]; seen.add(studentUid(h) || mid); });
+  (memberIds || []).forEach(mid => { const e = resolveHonoreeEntry(mid); seen.add(studentUid(e?.[1]) || mid); });
   return seen.size;
 }
 
@@ -260,7 +311,7 @@ function rsvpKeyStatus(rsvp, key) {
 function attendingIds(fam) {
   const rsvp = fam?.rsvp;
   if (!rsvp || rsvp.status !== 'attending') return [];
-  return (fam.memberHonoreeIds || []).filter(k => honorees[k] && rsvpKeyStatus(rsvp, k) === 'attending');
+  return (fam.memberHonoreeIds || []).filter(k => currentKeyFor(k) && rsvpKeyStatus(rsvp, k) === 'attending');
 }
 
 function siblingHonoreeKeys(h, key) {
@@ -278,6 +329,9 @@ onAuthStateChanged(auth, async (user) => {
   applyI18n();
   applyPlaceholders();
   await loadAllCenters();
+  onValue(ref(db, 'centers'), () => {
+    loadAllCenters().then(() => { refreshAllDynamic(); maybeRepairAfterDeletions(); });
+  });
   await loadEventList();
   setupTabs();
   setupControlPanel();
@@ -403,11 +457,25 @@ function subscribeToEvent(eventId) {
 function maybeRepairAfterDeletions() {
   if (!honoreesLoaded || repairRunning) return;
   const updates = {};
+    // 🏫 Heal stale honoree records: the student moved center in the live DB.
+  Object.entries(honorees).forEach(([k, h]) => {
+    const live = liveStudentFor(h);
+    if (!live) return;
+    const hBase = `ashrEvents/${currentEventId}/honorees/${k}`;
+    if (live.centerId && live.centerId !== h.centerId) {
+      updates[`${hBase}/centerId`] = live.centerId;
+      updates[`${hBase}/centerName`] = live.centerName || h.centerName || '';
+    }
+    if (String(live.id || '') !== String(h.studentId || '')) updates[`${hBase}/studentId`] = live.id;
+    if (live.studentNumber && !h.studentNumber) updates[`${hBase}/studentNumber`] = live.studentNumber;
+  });
+  // 🔁 Transfer-aware: a missing key that resolves by student number is
+  //    REMAPPED to the student's current record, never deleted.
   Object.entries(portalsCache).forEach(([token, p]) => {
     const orig = p.members || [];
     if (!orig.length) return;
-    const valid = orig.filter(k => honorees[k]);
-    if (valid.length === orig.length) return;
+    const valid = [...new Set(orig.map(k => currentKeyFor(k)).filter(Boolean))];
+    if (valid.length === orig.length && valid.every((k, i) => k === orig[i])) return;
     const base = `publicAshrLinks/${currentEventId}/${token}`;
     if (valid.length) {
       updates[`${base}/members`] = valid;
@@ -417,33 +485,48 @@ function maybeRepairAfterDeletions() {
       updates[`${base}/disabledReason`] = 'honoree-deleted';
     }
   });
-  // 👯 Map every student whose CURRENT family already responded
   const groups = buildAshrFamilies();
   const groupKeys = new Set(groups.map(g => g.key));
-  const coveredByResponded = new Map(); // uid -> covering familyId
+  const coveredByResponded = new Map();
   groups.forEach(g => {
     const pe = Object.entries(portalsCache).find(([_, p]) => p.familyKey === g.key);
     if (!pe) return;
     const fid = pe[1].familyId;
-    if (!families[fid]?.rsvp) return; // only retire AFTER the new family responded
+    if (!families[fid]?.rsvp) return;
     g.members.forEach(m => coveredByResponded.set(studentUid(m) || m.honoreeKey, fid));
   });
   const now = new Date().toISOString();
+  const migrateMap = (obj) => {
+    if (!obj) return null;
+    const out = {};
+    let touched = false;
+    Object.entries(obj).forEach(([k, v]) => {
+      const nk = currentKeyFor(k) || k;
+      if (nk !== k) touched = true;
+      out[nk] = v;
+    });
+    return touched ? out : null;
+  };
   Object.entries(families).forEach(([fid, f]) => {
-    if (f.mergedInto || f.supersededBy) return; // keep audit trails intact
+    if (f.mergedInto || f.supersededBy) return;
     const ids = f.memberHonoreeIds || [];
-    const kept = ids.filter(k => honorees[k]);
+    const kept = [...new Set(ids.map(k => currentKeyFor(k)).filter(Boolean))];
     const fBase = `ashrEvents/${currentEventId}/families/${fid}`;
     if (!kept.length) {
-      // 🧟 Orphan RSVP: every honoured student it referenced is gone.
-      // Names can never resolve again — remove the shell so it stops
-      // appearing as "fam_XXXXXXXX" and inflating guest totals.
+      // Truly gone (no record anywhere) — only then remove the shell.
       if (ids.length || f.rsvp) updates[fBase] = null;
       return;
     }
-    if (kept.length !== ids.length) updates[`${fBase}/memberHonoreeIds`] = kept;
-    // 👯 Superseded? Link no longer matches any current family AND
-    //    every remaining member is covered by a responded family.
+    if (kept.length !== ids.length || kept.some((k, i) => k !== ids[i])) {
+      updates[`${fBase}/memberHonoreeIds`] = kept;
+      // Carry per-student statuses / slots / reasons over to the new keys.
+      const ps = migrateMap(f.rsvp?.perStudentStatus);
+      const sl = migrateMap(f.rsvp?.perStudentSlots);
+      const pr = migrateMap(f.rsvp?.perStudentReasons);
+      if (ps) updates[`${fBase}/rsvp/perStudentStatus`] = ps;
+      if (sl) updates[`${fBase}/rsvp/perStudentSlots`] = sl;
+      if (pr) updates[`${fBase}/rsvp/perStudentReasons`] = pr;
+    }
     const ownPortals = Object.entries(portalsCache).filter(([_, p]) => p.familyId === fid);
     if (ownPortals.some(([_, p]) => groupKeys.has(p.familyKey))) return; // still current
     const covers = kept.map(k => coveredByResponded.get(studentUid(honorees[k]) || k));
@@ -2262,7 +2345,10 @@ function buildRsvpRows() {
     .sort((a, b) => String(b[1].rsvp?.submittedAt || '').localeCompare(String(a[1].rsvp?.submittedAt || '')));
   unmatched.forEach(([famId, famRec]) => {
     const members = (famRec.memberHonoreeIds || [])
-      .map(mid => honorees[mid] ? { honoreeKey: mid, ...honorees[mid] } : null)
+      .map(mid => {
+        const entry = resolveHonoreeEntry(mid);
+        return entry ? { honoreeKey: entry[0], ...entry[1] } : null;
+      })
       .filter(Boolean)
       .filter(m => !coveredUids.has(studentUid(m) || m.honoreeKey));
     if (!members.length) return;
@@ -2299,7 +2385,12 @@ function renderRSVPs() {
     if (filter !== 'all' && status !== filter) return;
     let members = row.members || [];
     if (centerFilter) members = members.filter(m => m.centerId === centerFilter);
-    if (typeFilter !== 'all') members = members.filter(m => getHonoreeType(m) === typeFilter);
+    if (typeFilter !== 'all') members = members.filter(m => {
+      const type = getHonoreeType(m);
+      if (typeFilter === 'completer') return type === 'completer' || type === 'both';
+      if (typeFilter === 'award') return type === 'award' || type === 'both';
+      return type === 'both';
+    });
     if ((centerFilter || typeFilter !== 'all') && !members.length) return;
     rowNum++;
     const disp = groupMembersForDisplay(members);
@@ -2402,6 +2493,7 @@ function dbStudentFor(m) {
   const cid = m.centerId || '';
   return allStudentsFlat.find(s => cid && s.centerId === cid && sid && String(s.id || '') === sid)
     || allStudentsFlat.find(s => cid && s.centerId === cid && num && String(s.studentNumber || '').trim() === num)
+    || allStudentsFlat.find(s => sid && String(s.id || '') === sid)
     || allStudentsFlat.find(s => num && String(s.studentNumber || '').trim() === num)
     || null;
 }
@@ -2525,13 +2617,30 @@ async function handleScanValue(value, groupKeys = null) {
   const result = $('scanResult');
   let keys, h;
   if (groupKeys) {
-    keys = groupKeys; h = honorees[keys[0]];
+    keys = groupKeys;
+    const e = resolveHonoreeEntry(keys[0]);
+    h = e ? e[1] : honorees[keys[0]];
   } else {
-    const entry = Object.entries(honorees).find(([key, hh]) => {
+    let entry = Object.entries(honorees).find(([key, hh]) => {
       const bv = hh.barcodeValue || `ASHR${currentEventId}_${key}`;
       return bv === value || key === value || hh.studentId === value ||
         String(hh.studentNumber || '') === value || shortScanCode(bv) === value;
     });
+    if (!entry) {
+      // 🏫 Old-center card: match the stored old key / old barcode hash,
+      //    then resolve to the student's current record.
+      outer:
+      for (const f of Object.values(families)) {
+        for (const mid of (f.memberHonoreeIds || [])) {
+          if (honorees[mid]) continue;
+          const oldBv = `ASHR${currentEventId}_${mid}`;
+          if (value === oldBv || value === mid || shortScanCode(oldBv) === value) {
+            const ck = currentKeyFor(mid);
+            if (ck) { entry = [ck, honorees[ck]]; break outer; }
+          }
+        }
+      }
+    }
     if (!entry) {
       result.className = 'error';
       result.textContent = `${t('toast.unknownCode', '❌ Unknown barcode')}: ${value}`;
@@ -2540,12 +2649,23 @@ async function handleScanValue(value, groupKeys = null) {
     const [key, hh] = entry; h = hh; keys = siblingHonoreeKeys(hh, key);
   }
   if (!h) return;
-  const famId = Object.keys(families).find(fid => (families[fid].memberHonoreeIds || []).some(mid => keys.includes(mid)));
+  const famId = Object.keys(families).find(fid => (families[fid].memberHonoreeIds || []).some(mid => {
+    if (keys.includes(mid)) return true;
+    const ck = currentKeyFor(mid);
+    return ck && keys.includes(ck);
+  }));
   const rsvp = famId ? families[famId]?.rsvp : null;
   if (!rsvp || rsvp.status !== 'attending') {
     result.className = 'error';
     result.textContent = `⚠️ ${h.nameCn || h.nameEn} ${t('toast.notConfirmed', 'has not confirmed attendance.')}`;
     return;
+  }
+  // 🔁 Align keys with the family's stored member keys (old-center keys
+  //    before the remap runs) so per-student status and check-in records
+  //    stay consistent with the check-in list.
+  if (famId) {
+    const stored = families[famId].memberHonoreeIds || [];
+    keys = keys.map(k => stored.find(mid => currentKeyFor(mid) === k) || k);
   }
   const activeKeys = keys.filter(k => rsvpKeyStatus(rsvp, k) !== 'declined');
   if (!activeKeys.length) {
@@ -2580,16 +2700,18 @@ function getConfirmedAttendeesBySlot() {
       const rsvp = fam.rsvp;
       if (!rsvp || rsvp.status !== 'attending') return;
       const memberIds = attendingIds(fam);
+      const uidOf = mid => { const e = resolveHonoreeEntry(mid); return studentUid(e?.[1]) || mid; };
       const slotForUid = {};
       if (rsvp.sameTimeslot && rsvp.sharedSlotId) {
-        memberIds.forEach(mid => { const uid = studentUid(honorees[mid]) || mid; if (!slotForUid[uid]) slotForUid[uid] = rsvp.sharedSlotId; });
+        memberIds.forEach(mid => { const uid = uidOf(mid); if (!slotForUid[uid]) slotForUid[uid] = rsvp.sharedSlotId; });
       } else if (rsvp.perStudentSlots) {
-        memberIds.forEach(mid => { const uid = studentUid(honorees[mid]) || mid; if (!(uid in slotForUid)) slotForUid[uid] = rsvp.perStudentSlots[mid]; });
+        memberIds.forEach(mid => { const uid = uidOf(mid); if (!(uid in slotForUid)) slotForUid[uid] = rsvp.perStudentSlots[mid]; });
       }
       Object.entries(slotForUid).forEach(([uid, sid]) => {
         if (sid !== slotId) return;
-        const keys = memberIds.filter(mid => (studentUid(honorees[mid]) || mid) === uid);
-        const first = honorees[keys[0]];
+        const keys = memberIds.filter(mid => uidOf(mid) === uid);
+        const e = resolveHonoreeEntry(keys[0]);
+        const first = e?.[1];
         if (!first) return;
         const existing = attendees.find(a => a.uid === uid);
         if (existing) existing.honoreeKeys.push(...keys);
