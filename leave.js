@@ -1284,7 +1284,7 @@ async function notifyLeaveEvent(leave, eventType) {
       to_email: uniqueTos.join(','), subject: subjects[eventType] || subjects.new, action: actionLabel,
       acted_by: eventType === 'new' ? (leave.appliedByName || '-') : (currentUser?.email || '-'),
       employee_name: leave.empName || '-', leave_type: leave.typeLabel || leave.type || '-',
-      dates: `${dateWithWeekday(leave.dateFrom)} → ${dateWithWeekday(leave.dateTo)}`,
+      dates: dateRangeWithWeekday(leave.dateFrom, leave.dateTo),
       applied_at: appliedStamp(leave.appliedAt),
       duration: leave.durationType === 'hours' ? `${leave.amount} hr(s) (${leave.timeFrom}–${leave.timeTo})` : `${leave.amount} day(s)`,
       reason: leave.reason || '-', applied_by: leave.appliedByName || '-'
@@ -2050,6 +2050,14 @@ function dateWithWeekday(dateStr) {
   return iso + ' (' + WEEKDAY_NAMES[d.getDay()] + ')';
 }
 
+// Single-day leave -> one date only; multi-day -> "from → to"
+function dateRangeWithWeekday(dateFrom, dateTo) {
+  const from = String(dateFrom || '').slice(0, 10);
+  const to = String(dateTo || from).slice(0, 10);
+  if (!to || to === from) return dateWithWeekday(from);
+  return dateWithWeekday(from) + ' → ' + dateWithWeekday(to);
+}
+
 // Submission timestamp -> "2026-11-23 (Monday) 14:32"
 function appliedStamp(when) {
   const d = when ? new Date(when) : new Date();
@@ -2066,7 +2074,7 @@ function cxNotify(leave, req, eventType) {
     const uniqueTos = [...tos]; if (!uniqueTos.length) return;
     const subjects = { new: `🚫 Cancellation REQUEST — ${leave.empName} (${leave.typeLabel || leave.type})`, approved: `✅ Leave cancellation APPROVED — ${leave.empName}`, rejected: `❌ Cancellation request REJECTED — ${leave.empName}`, withdrawn: `↩️ Cancellation request withdrawn — ${leave.empName}` };
     const actions = { new: 'Cancellation requested (PENDING)', approved: 'Cancellation APPROVED', rejected: 'Cancellation request REJECTED', withdrawn: 'Cancellation request WITHDRAWN' };
-    emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, { to_email: uniqueTos.join(','), subject: subjects[eventType] || subjects.new, action: actions[eventType] || eventType, acted_by: cxCurrentUserName(), employee_name: leave.empName || '-', leave_type: leave.typeLabel || leave.type || '-', dates: `${dateWithWeekday(leave.dateFrom)} → ${dateWithWeekday(leave.dateTo)}`,
+    emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, { to_email: uniqueTos.join(','), subject: subjects[eventType] || subjects.new, action: actions[eventType] || eventType, acted_by: cxCurrentUserName(), employee_name: leave.empName || '-', leave_type: leave.typeLabel || leave.type || '-', dates: dateRangeWithWeekday(leave.dateFrom, leave.dateTo),
     applied_at: appliedStamp(req.requestedAt || leave.appliedAt), duration: cxScopeText(leave, req), reason: req.reason || leave.reason || '-', applied_by: req.requestedByName || '-' }, { publicKey: EMAILJS_PUBLIC_KEY }).catch(err => console.warn('CX notification failed:', err?.text || err));
   } catch (err) { console.warn('CX notification failed:', err); }
 }
