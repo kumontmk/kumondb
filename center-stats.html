@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light">
+<title>Center Statistics - Kumon DB</title>
+<link rel="stylesheet" href="center-stats.css">
+<script id="chartjsLib" defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script type="module" src="center-stats.js"></script>
+</head>
+<body>
+
+<div class="bg-orbs" aria-hidden="true"><span></span><span></span><span></span></div>
+
+<div id="page-loader"><div class="spinner"></div></div>
+
+<div id="accessDenied" class="access-denied hidden">
+  <div class="access-denied-content">
+    <h2>🔐 Access Restricted</h2>
+    <p>You do not have permission to view Center Statistics.</p>
+    <a class="back-chip" href="dashboard.html">← Back to Dashboard</a>
+  </div>
+</div>
+
+<header id="csHeader">
+  <a class="back-link" href="dashboard.html">← Dashboard</a>
+  <div class="title-wrap">
+    <h1>📊 Center Statistics</h1>
+    <span id="csCenterName" class="center-pill">Center</span>
+  </div>
+  <div class="header-actions">
+    <button id="demoToggle" class="chip-btn demo-chip" aria-pressed="false" title="Preview the page with generated sample data">🧪 Sample data</button>
+    <button id="refreshBtn" class="chip-btn" title="Reload data">⟳</button>
+    <button id="printBtn" class="chip-btn" title="Print report">🖨</button>
+  </div>
+</header>
+
+<div id="demoBanner" class="demo-banner hidden">🧪 Viewing sample data — generated records, not your center's students. Toggle “Sample data” off to return to live data.</div>
+
+<nav id="csToolbar" class="hidden">
+  <div class="nav-pills" id="navPills">
+    <button class="pill active" data-target="overview">Overview</button>
+    <button class="pill" data-target="growth">Growth</button>
+    <button class="pill" data-target="dt">DT → Enrollment</button>
+    <button class="pill" data-target="drops">Drop &amp; Pause</button>
+    <button class="pill" data-target="demographics">Demographics</button>
+    <button class="pill" data-target="schools">Schools &amp; Grades</button>
+    <button class="pill" data-target="actions">Action List</button>
+  </div>
+  <div class="toolbar-controls">
+    <label>Range
+      <select id="rangeSelect">
+        <option value="6">6 months</option>
+        <option value="12" selected>12 months</option>
+        <option value="24">24 months</option>
+        <option value="36">36 months</option>
+      </select>
+    </label>
+    <label>Subject
+      <select id="subjectSelect">
+        <option value="all">All subjects</option>
+        <option>Math</option>
+        <option>English EFL</option>
+        <option>English ERP</option>
+        <option>Chinese (Trad)</option>
+        <option>Chinese (Simp)</option>
+      </select>
+    </label>
+    <span id="lastUpdated" class="updated-note"></span>
+  </div>
+</nav>
+
+<main id="csMain" class="hidden">
+
+  <!-- ================= OVERVIEW ================= -->
+  <section id="overview" class="reveal">
+    <h2>Overview</h2>
+    <p class="section-sub">Current students first — drop, pause and completer history is included wherever a subject record exists. Records with no subjects are disregarded.</p>
+
+    <div class="kpi-grid">
+      <article class="kpi kpi-blue">
+        <span class="kpi-label">Active students</span>
+        <span class="kpi-value" id="kActive">0</span>
+        <span class="kpi-delta" id="kActiveD"></span>
+        <div class="spark-box"><canvas id="kActiveSpark"></canvas></div>
+      </article>
+      <article class="kpi kpi-teal">
+        <span class="kpi-label">Active subjects</span>
+        <span class="kpi-value" id="kSubjects">0</span>
+        <span class="kpi-delta" id="kSubjectsD"></span>
+      </article>
+      <article class="kpi kpi-green">
+        <span class="kpi-label">New this month</span>
+        <span class="kpi-value" id="kNew">0</span>
+        <span class="kpi-delta" id="kNewD"></span>
+        <div class="spark-box"><canvas id="kNewSpark"></canvas></div>
+      </article>
+      <article class="kpi kpi-red">
+        <span class="kpi-label">Drops this month</span>
+        <span class="kpi-value" id="kDrops">0</span>
+        <span class="kpi-delta" id="kDropsD"></span>
+        <div class="spark-box"><canvas id="kDropsSpark"></canvas></div>
+      </article>
+      <article class="kpi kpi-amber">
+        <span class="kpi-label">Paused subjects</span>
+        <span class="kpi-value" id="kPaused">0</span>
+        <span class="kpi-delta" id="kPausedD"></span>
+      </article>
+      <article class="kpi kpi-violet">
+        <span class="kpi-label">DT → enrol rate</span>
+        <span class="kpi-value" id="kConv">0%</span>
+        <div class="conv-month-row">
+          <button id="convPrevBtn" class="conv-step" type="button" title="Previous month" aria-label="Previous month">‹</button>
+          <select id="convMonthSelect" class="conv-month-select" aria-label="Filter DT to enrol rate by month">
+            <option value="all">All time</option>
+          </select>
+          <button id="convNextBtn" class="conv-step" type="button" title="Next month" aria-label="Next month">›</button>
+        </div>
+        <span class="kpi-sub" id="kConvSub">all time</span>
+        <div class="spark-box"><canvas id="kConvSpark"></canvas></div>
+      </article>
+    </div>
+
+    <div class="grid-3">
+      <div class="card">
+        <h3>Progress health <span class="h-note">active subjects</span></h3>
+        <div class="chart-box"><canvas id="statusChart"></canvas></div>
+        <p class="fine-print" id="progressNote"></p>
+      </div>
+      <div class="card chart-card">
+        <h3>Current subject mix <span class="h-note">active</span></h3>
+        <div class="chart-box md"><canvas id="subjectChart"></canvas></div>
+      </div>
+      <div class="card chart-card">
+        <h3>Worksheet mode <span class="h-note">active subjects</span></h3>
+        <div class="chart-box md"><canvas id="modeChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card insights-card">
+      <h3>💡 Auto insights</h3>
+      <ul id="insightsList" class="insights-list"></ul>
+    </div>
+  </section>
+
+  <!-- ================= GROWTH ================= -->
+  <section id="growth" class="reveal">
+    <div class="section-head">
+      <div><h2>Growth &amp; headcount</h2><p class="section-sub">Monthly active students per subject, reconstructed from enrol / drop / pause / completer dates and resume history.</p></div>
+      <div class="head-tools">
+        <div class="seg" id="trendModeSeg">
+          <button class="active" data-mode="lines">Lines</button>
+          <button data-mode="stacked">Stacked</button>
+        </div>
+        <button class="mini-btn" id="growthCsv">⬇ CSV</button>
+      </div>
+    </div>
+    <div class="card chart-card">
+      <h3>Active students &amp; subjects per month</h3>
+      <div class="chart-box lg"><canvas id="headcountChart"></canvas></div>
+      <p class="fine-print">Total = unique students with at least one active subject. Paused months and completed subjects are excluded; completers without a completion month count as active. Resumed subjects are inactive only between their drop/pause month and their resume month.</p>
+    </div>
+    <div class="grid-2">
+      <div class="card chart-card">
+        <h3>Monthly intake vs exits</h3>
+        <div class="chart-box"><canvas id="intakeChart"></canvas></div>
+      </div>
+      <div class="card chart-card">
+        <h3>Level-ups &amp; ATs per month <span class="h-note">from monthly reports</span></h3>
+        <div class="chart-box"><canvas id="levelUpChart"></canvas></div>
+      </div>
+    </div>
+    <details class="card table-details">
+      <summary>📅 Monthly breakdown table</summary>
+      <div class="table-scroll"><table id="monthlyTable" class="data-table"></table></div>
+    </details>
+  </section>
+
+  <!-- ================= DT → ENROLLMENT ================= -->
+  <section id="dt" class="reveal">
+    <h2>DT → Enrollment</h2>
+    <p class="section-sub">Diagnostic tests from the center calendar, matched to each student's subject enrollment. A DT counts as conducted once results (test / score / time) are recorded.</p>
+
+    <div class="card funnel-card">
+      <div id="dtFunnel" class="funnel"></div>
+      <div class="mini-kpis">
+        <div><span id="dtTotal">0</span><label>DTs conducted</label></div>
+        <div><span id="dtUpcoming">0</span><label>Upcoming DTs</label></div>
+        <div><span id="dtNoResults">0</span><label>Past, no results</label></div>
+        <div><span id="dtConverted">0</span><label>Enrolled after DT</label></div>
+        <div><span id="dtConvRate">0%</span><label>Conversion</label></div>
+        <div><span id="dtMedianDays">—</span><label>Median days to enrol</label></div>
+        <div><span id="dtSuggest">—</span><label>Suggested = actual start</label></div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card chart-card">
+        <h3>Conversion by subject</h3>
+        <div class="chart-box"><canvas id="dtSubjectChart"></canvas></div>
+      </div>
+      <div class="card chart-card">
+        <h3>Past DTs vs new enrollments per month</h3>
+        <div class="chart-box"><canvas id="dtMonthlyChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>⏳ Needs a follow-up <span class="h-note">tested 14+ days ago, or past DT with no results (3+ days)</span></h3>
+      <div class="table-scroll">
+        <table class="data-table"><thead><tr><th>Student</th><th>Subject</th><th>Last DT</th><th>Type</th><th>Waiting</th><th></th></tr></thead>
+        <tbody id="dtPendingBody"></tbody></table>
+      </div>
+      <p id="dtPendingEmpty" class="empty-note hidden">🎉 No stalled DTs — every tested inquiry has enrolled or is still fresh.</p>
+      <p id="dtPendingMore" class="fine-print"></p>
+    </div>
+  </section>
+
+  <!-- ================= DROP & PAUSE ================= -->
+  <section id="drops" class="reveal">
+    <div class="section-head">
+      <div><h2>Drop &amp; Pause analytics</h2><p class="section-sub">Where, when and why students leave — subjects, levels, tenure, reasons, demographics and the Drop Book exit process.</p></div>
+      <div class="seg" id="dropModeSeg">
+        <button class="active" data-mode="drop">📉 Drops</button>
+        <button data-mode="pause">⏸ Pauses</button>
+      </div>
+    </div>
+
+    <div class="mini-kpis card">
+      <div><span id="dTotal">0</span><label id="dTotalLbl">Dropped subjects</label></div>
+      <div><span id="dRate">0%</span><label>of enrolled subjects</label></div>
+      <div><span id="dTenure">—</span><label>Median months before event</label></div>
+      <div><span id="dTopLevel">—</span><label>Most common level</label></div>
+      <div><span id="dCalled">—</span><label>Parents called (Drop Book)</label></div>
+      <div><span id="dContact">—</span><label>Contact ≤90d before event</label></div>
+    </div>
+
+    <div id="dropInsight" class="callout"></div>
+
+    <div class="grid-2">
+      <div class="card chart-card"><h3>By subject</h3><div class="chart-box sm"><canvas id="dropSubjectChart"></canvas></div></div>
+      <div class="card chart-card"><h3>By level at event</h3><div class="chart-box sm"><canvas id="dropLevelChart"></canvas></div></div>
+    </div>
+    <div class="grid-2">
+      <div class="card chart-card"><h3>Events per month</h3><div class="chart-box sm"><canvas id="dropTrendChart"></canvas></div></div>
+      <div class="card chart-card">
+        <h3>Reasons <span class="h-note">top 8</span></h3>
+        <div class="chart-box sm"><canvas id="dropReasonChart"></canvas></div>
+        <details class="inline-details"><summary>All reasons</summary>
+          <ul id="reasonList" class="reason-list"></ul>
+          <button class="mini-btn" id="reasonCsv">⬇ CSV</button>
+        </details>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="card chart-card"><h3>Months enrolled before event</h3><div class="chart-box sm"><canvas id="dropTenureChart"></canvas></div></div>
+      <div class="card">
+        <h3>🗂 Exit process <span class="h-note">Drop Book records on these events</span></h3>
+        <div id="exitBars" class="exit-bars"></div>
+        <p id="retentionWins" class="wins-line"></p>
+        <p class="fine-print">Called / confirmed / autopay come from each subject's dropBook record. Contact ≤90d checks follow-ups logged for the same student and subject before the event month.</p>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="card chart-card"><h3>Event rate by gender</h3><div class="chart-box sm"><canvas id="dropGenderChart"></canvas></div>
+        <p class="fine-print">Rate = students with an event ÷ ever-enrolled students in that group.</p></div>
+      <div class="card chart-card"><h3>Event rate by grade</h3><div class="chart-box sm"><canvas id="dropGradeChart"></canvas></div>
+        <p class="fine-print">Grades with fewer than 2 ever-enrolled students are hidden. Grade is the student's recorded grade.</p></div>
+    </div>
+    <div class="grid-2">
+      <div class="card chart-card"><h3>Event rate by age band</h3><div class="chart-box sm"><canvas id="dropAgeChart"></canvas></div>
+        <p class="fine-print">Age bands use each student's age today.</p></div>
+      <div class="card chart-card"><h3>Reading the drop curve</h3>
+        <p class="fine-print" style="font-size:.82rem;line-height:1.7">
+          Levels use each subject's currentLevel (or startLevel) at the time of the event, ordered across Math, EFL, ERP and Chinese ladders (A → AI/AII → B … O).
+          Resumed subjects keep their original drop or pause dates, so they appear here as historical events and are counted as win-backs in the exit-process panel.
+          Cancelled pending requests are counted as saves — a family that changed its mind.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= DEMOGRAPHICS ================= -->
+  <section id="demographics" class="reveal">
+    <div class="section-head">
+      <div><h2>Demographics</h2><p class="section-sub" id="demoNote">Averages across current students.</p></div>
+      <div class="seg" id="scopeSeg">
+        <button class="active" data-scope="current">Current</button>
+        <button data-scope="all">All enrolled</button>
+        <button data-scope="dropped">Dropped</button>
+      </div>
+    </div>
+    <div class="mini-kpis card">
+      <div><span id="gAvgAge">—</span><label>Average age</label></div>
+      <div><span id="gMedAge">—</span><label>Median age</label></div>
+      <div><span id="gAvgGrade">—</span><label>Average grade</label></div>
+      <div><span id="gSplit">—</span><label>Gender split</label></div>
+    </div>
+    <div class="grid-2">
+      <div class="card chart-card"><h3>Gender</h3><div class="chart-box md"><canvas id="genderChart"></canvas></div></div>
+      <div class="card chart-card"><h3>Age distribution</h3><div class="chart-box md"><canvas id="ageChart"></canvas></div></div>
+    </div>
+    <div class="card chart-card"><h3>Grade distribution</h3><div class="chart-box"><canvas id="gradeChart"></canvas></div></div>
+  </section>
+
+  <!-- ================= SCHOOLS & GRADES ================= -->
+  <section id="schools" class="reveal">
+    <div class="section-head">
+      <div><h2>Schools &amp; grades</h2><p class="section-sub">Feeder schools, subject heat-map and drop rate by grade.</p></div>
+      <div class="head-tools">
+        <input id="schoolSearch" type="search" placeholder="Search school…">
+        <button class="mini-btn" id="schoolCsv">⬇ CSV</button>
+      </div>
+    </div>
+    <div class="card chart-card"><h3>Top schools by current students</h3><div class="chart-box lg"><canvas id="schoolChart"></canvas></div></div>
+    <div class="card"><h3>School × subject heat-map <span class="h-note">current enrollments, top 12 schools</span></h3>
+      <div class="table-scroll" id="schoolHeatmap"></div>
+    </div>
+    <div class="card">
+      <h3>School table <span class="h-note">click a column to sort</span></h3>
+      <div class="table-scroll">
+        <table class="data-table" id="schoolTable">
+          <thead><tr>
+            <th data-key="school">School</th><th data-key="current" class="num">Current</th>
+            <th data-key="ever" class="num">Ever</th><th data-key="dropped" class="num">Dropped</th>
+            <th data-key="rate" class="num">Drop rate</th><th data-key="math" class="num">Math</th>
+            <th data-key="efl" class="num">EFL</th><th data-key="erp" class="num">ERP</th>
+            <th data-key="cht" class="num">Chi(T)</th><th data-key="chis" class="num">Chi(S)</th>
+          </tr></thead>
+          <tbody id="schoolTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card chart-card">
+      <div class="section-head slim"><h3>Students per grade &amp; drop rate</h3><button class="mini-btn" id="gradeCsv">⬇ CSV</button></div>
+      <div class="chart-box"><canvas id="gradeRateChart"></canvas></div>
+    </div>
+  </section>
+
+  <!-- ================= ACTION LIST ================= -->
+  <section id="actions" class="reveal">
+    <h2>Action list</h2>
+    <p class="section-sub">Touch points generated from pause windows, Drop Book call status and pending requests.</p>
+    <div class="grid-2">
+      <div class="card"><h3>🔜 Returning within 2 months</h3>
+        <ul id="returningList" class="action-list"></ul>
+        <p id="returningEmpty" class="empty-note hidden">No scheduled returns in the next two months.</p>
+      </div>
+      <div class="card"><h3>🕰 Paused 3+ months, no return date</h3>
+        <ul id="stalledList" class="action-list"></ul>
+        <p id="stalledEmpty" class="empty-note hidden">No open-ended long pauses. 👍</p>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="card"><h3>📞 Exits not called yet <span class="h-note">Drop Book call status ✖</span></h3>
+        <ul id="uncalledList" class="action-list"></ul>
+        <p id="uncalledEmpty" class="empty-note hidden">Every current drop / pause has a parent call logged. 🎉</p>
+      </div>
+      <div class="card"><h3>🗓 Upcoming pending requests <span class="h-note">scheduled drops &amp; pauses</span></h3>
+        <ul id="upcomingList" class="action-list"></ul>
+        <p id="upcomingEmpty" class="empty-note hidden">No pending drop or pause requests on the books.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="cs-footer">
+    <span id="dataNote"></span><span id="genTime"></span>
+  </footer>
+</main>
+
+<section id="emptyState" class="hidden">
+  <div class="card empty-card">
+    <div class="empty-emoji">📊</div>
+    <h2 id="emptyTitle">No student records yet</h2>
+    <p id="emptyText">Add or import students on the Students page, or preview this dashboard with sample data.</p>
+    <div class="empty-actions">
+      <a class="btn-primary" href="students.html">👥 Go to Students</a>
+      <button class="btn-ghost" id="emptyDemoBtn">🧪 Preview with sample data</button>
+    </div>
+  </div>
+</section>
+
+<div id="csToast" class="cs-toast hidden"></div>
+
+</body>
+</html>

@@ -476,7 +476,8 @@ async function applyDashboardPermissions(user) {
       labeleditor: 'labelEditor',
 
       changeclasses: 'changeClasses',
-      changeclass: 'changeClasses'
+      changeclass: 'changeClasses',
+      stats: 'centerStatistics'
     };
 
     const normalizeDashboardPermissions = (perms = {}) => {
@@ -570,7 +571,8 @@ async function applyDashboardPermissions(user) {
       'card-dropBook': ['dropBook'],
       'card-bulletin': ['bulletin', 'centreBulletin', 'centerBulletin'],
       'card-labelEditor': ['labelEditor'],
-      'card-changeClasses': ['changeClasses']
+      'card-changeClasses': ['changeClasses'],
+      'card-centerStatistics': ['centerStatistics', 'centerStats', 'statistics', 'stats']
     };
 
     for (const [cardId, aliases] of Object.entries(cardRules)) {

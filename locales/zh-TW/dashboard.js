@@ -124,7 +124,9 @@ export default {
       changeClasses: "調整班級",
       changeClassesDesc: "管理 CC/MC 請求、替代與報告",
       followUpReports: "跟進報告",
-      followUpReportsDesc: "追蹤家長訊息與電話 — 看看誰已經跟進了，誰還沒有"
+      followUpReportsDesc: "追蹤家長訊息與電話 — 看看誰已經跟進了，誰還沒有",
+      centerStatistics: "中心統計",
+      centerStatisticsDesc: "入學趨勢、DT 轉換、退學與暫停分析",
     },
 
     links: {
