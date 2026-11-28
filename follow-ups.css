@@ -691,3 +691,11 @@ select.po-inline-input { min-width: 110px; }
     .ex-modal-card { max-width: 100%; }
     .ex-center-list { max-height: 150px; }
 }
+/* ============================================================
+📊 ALL SUBJECTS SUMMARY ROW — Monthly Report coverage table
+============================================================ */
+#subjectCoverageBody tr.subj-all-row td { background: #e8f4fb; border-bottom: 2px solid var(--primary-dark); font-weight: 700; color: var(--primary-dark); }
+#subjectCoverageBody tr.subj-all-row:hover td { background: #dbeafe; }
+#subjectCoverageBody tr.subj-all-row td:first-child { box-shadow: inset 4px 0 0 var(--primary-dark); }
+#subjectCoverageBody tr.subj-all-row .sub { color: var(--primary-dark); font-weight: 700; }
+.subj-chip.all { background: var(--primary-dark); color: #fff; }

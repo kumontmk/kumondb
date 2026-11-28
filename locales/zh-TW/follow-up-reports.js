@@ -133,5 +133,8 @@ export default {
   pshExport: "📤 匯出歷史（Excel）", pshLogFor: "📝 記錄跟進",
   pshCopy: "📋 複製訊息", pshOpenTab: "👤 在個別歷史分頁開啟",
   pshLoading: "⏳ 學生資料載入中…",
-  pshOnlyWithFu: "僅顯示有跟進記錄"
+  pshOnlyWithFu: "僅顯示有跟進記錄",
+  sentAll: "全部",
+  sentNotYet: "❌ 尚未發送",
+  sentYes: "✅ 已發送"
 };

@@ -59,7 +59,7 @@ dataLoaded: false, loadError: '',
 viewYear: new Date().getFullYear(), viewMonth: new Date().getMonth() + 1,
 currentPage: 1, filteredRoster: [], selectedIds: new Set(),
 logStudents: [], rosterCache: {}, trendCache: {},
-logSearch: '', logSubject: '',
+logSearch: '', logSubject: '', logSent: '',
 psh: { search: '', status: '', sort: 'recent', selectedId: null, onlyFu: false },
 shm: { studentId: null, expandedId: null },
 _fuByStudent: null
@@ -446,9 +446,12 @@ let all = centerFollowUps().filter(f => logMonth(f)===key).sort((a,b) => (b.date
 const monthTotal = all.length;
 const term = (state.logSearch||'').trim().toLowerCase();
 const subj = state.logSubject||'';
+const sentF = state.logSent||'';
 if(subj) all = all.filter(f => (f.subject||'')===subj);
+if(sentF==='notsent') all = all.filter(f => f.type==='message' && !isSent(f));
+else if(sentF==='sent') all = all.filter(f => f.type==='message' && isSent(f));
 if(term) all = all.filter(f => logHay(f).includes(term));
-const isFiltered = !!(term || subj);
+const isFiltered = !!(term || subj || sentF);
 const ci = $('logsCountInfo');
 if(ci) { ci.textContent = isFiltered ? `🔎 ${all.length} / ${monthTotal}` : `🗂️ ${monthTotal}`; }
 const rows = all.slice(0, RECENT_LOGS_LIMIT);
@@ -705,7 +708,12 @@ const total = roster.length; const fids = new Set(mf.map(f => f.studentId)); con
 const msgs = mf.filter(f => f.type==='message').length, calls = mf.filter(f => f.type==='call').length; const pct = total ? Math.round(followed/total*100) : 0;
 const sc = $('summaryCards'); if(sc) sc.innerHTML = [sumCard('Current Students',total,esc(state.centerName||'—'),''),sumCard('Followed Up',followed,pct+'% coverage','bc-good'),sumCard('Not Followed',not,'need attention',not?'bc-warn':'bc-good'),sumCard('Messages Sent',msgs,'',''),sumCard('Calls Made',calls,'',''),sumCard('Follow-Ups / Student',total?(mf.length/total).toFixed(2):'0','ratio','')].join('');
 const bySubject = SUBJECTS.map(name => { const st = roster.filter(r => r.subjects.some(s => s.name===name)); const sf = mf.filter(f => f.subject===name); const fi = new Set(sf.map(f => f.studentId)); const fol = st.filter(r => fi.has(r.id)).length; return {name, students:st.length, followed:fol, notFollowed:st.length-fol, coverage:st.length?Math.round(fol/st.length*100):0, messages:sf.filter(f => f.type==='message').length, calls:sf.filter(f => f.type==='call').length}; }).filter(s => s.students >0||s.messages >0||s.calls >0);
-const scb = $('subjectCoverageBody'); if(scb) scb.innerHTML = bySubject.length ? bySubject.map(s => { const tone = s.coverage >=70?'g':s.coverage >=40?'y':'r'; return `<tr><td data-label="Subject"><span class="subj-chip ${subjClass(s.name)}">${s.name}</span></td><td data-label="Students">${s.students}</td><td data-label="Followed">${s.followed}</td><td data-label="Not Followed">${s.notFollowed?`<span class="txt-bad">${s.notFollowed}</span>`:0}</td><td data-label="Coverage"><div class="cov-bar wide"><div class="cov-fill ${tone}" style="width:${s.coverage}%"></div></div> <span class="sub">${s.coverage}%</span></td><td data-label="Msgs">${s.messages}</td><td data-label="Calls">${s.calls}</td></tr>`; }).join('') : '<tr><td colspan="7" class="hint-cell">No data.</td></tr>';
+const scb = $('subjectCoverageBody');
+if(scb) {
+  const allTone = pct>=70?'g':pct>=40?'y':'r';
+  const allRow = `<tr class="subj-all-row"><td data-label="Subject"><span class="subj-chip all">📚 ${esc(t('allSubjects'))}</span></td><td data-label="Students"><b>${total}</b></td><td data-label="Followed"><b>${followed}</b></td><td data-label="Not Followed">${not?`<span class="txt-bad">${not}</span>`:0}</td><td data-label="Coverage"><div class="cov-bar wide"><div class="cov-fill ${allTone}" style="width:${pct}%"></div></div> <span class="sub">${pct}%</span></td><td data-label="Msgs"><b>${msgs}</b></td><td data-label="Calls"><b>${calls}</b></td></tr>`;
+  scb.innerHTML = allRow + (bySubject.length ? bySubject.map(s => { const tone = s.coverage>=70?'g':s.coverage>=40?'y':'r'; return `<tr><td data-label="Subject"><span class="subj-chip ${subjClass(s.name)}">${s.name}</span></td><td data-label="Students">${s.students}</td><td data-label="Followed">${s.followed}</td><td data-label="Not Followed">${s.notFollowed?`<span class="txt-bad">${s.notFollowed}</span>`:0}</td><td data-label="Coverage"><div class="cov-bar wide"><div class="cov-fill ${tone}" style="width:${s.coverage}%"></div></div> <span class="sub">${s.coverage}%</span></td><td data-label="Msgs">${s.messages}</td><td data-label="Calls">${s.calls}</td></tr>`; }).join('') : '');
+}
 const mx = Math.max(1, ...bySubject.flatMap(s => [s.students,s.messages,s.calls]));
 const sca = $('subjectChartArea'); if(sca) sca.innerHTML = bySubject.length ? bySubject.map(s => `<div class="bar-group"><div class="bar-group-title">${esc(s.name)}</div>${barRow('Students',s.students,mx,'c-stu')}${barRow('Messages',s.messages,mx,'c-msg')}${barRow('Calls',s.calls,mx,'c-call')}</div>`).join('') : '<p class="hint-cell">No data.</p>';
 const trendKey = `${state.centerId}|${key}`;
@@ -829,11 +837,13 @@ lsi.addEventListener('compositionend', () => { logComp = false; state.logSearch 
 lsi.addEventListener('input', () => { if(!logComp) { state.logSearch = lsi.value; debouncedLogSearch(); } });
 }
 on('logFilterSubject','change', () => { state.logSubject = $('logFilterSubject')?.value||''; renderRecentLogs(); });
+on('logFilterSent','change', () => { state.logSent = $('logFilterSent')?.value||''; renderRecentLogs(); });
 set('clearLogFiltersBtn', () => {
-state.logSearch = ''; state.logSubject = '';
-const i = $('logSearchInput'); if(i) i.value = '';
-const s = $('logFilterSubject'); if(s) s.value = '';
-renderRecentLogs(); showToast('Filters cleared');
+  state.logSearch = ''; state.logSubject = ''; state.logSent = '';
+  const i = $('logSearchInput'); if(i) i.value = '';
+  const s = $('logFilterSubject'); if(s) s.value = '';
+  const st = $('logFilterSent'); if(st) st.value = '';
+  renderRecentLogs(); showToast('Filters cleared');
 });
 // 👤 Per-student history tab
 const debouncedPsh = debounce(() => renderStudentHistory(), 250);

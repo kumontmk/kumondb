@@ -133,5 +133,8 @@ export default {
   pshExport: "📤 Export History (Excel)", pshLogFor: "📝 Log Follow-Up",
   pshCopy: "📋 Copy message", pshOpenTab: "👤 Open in Per-Student tab",
   pshLoading: "⏳ Loading students…",
-  pshOnlyWithFu: "Has follow-ups only"
+  pshOnlyWithFu: "Has follow-ups only",
+  sentAll: "All",
+  sentNotYet: "❌ Not sent yet",
+  sentYes: "✅ Sent",
 };

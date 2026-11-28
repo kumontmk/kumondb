@@ -251,6 +251,14 @@
                 <option value="Chinese (Simp)" data-i18n="chiSimp">Chinese (Simp)</option>
               </select>
             </div>
+            <div class="filter-group">
+              <label for="logFilterSent" data-i18n="thSent">Sent</label>
+              <select id="logFilterSent">
+                <option value="" data-i18n="sentAll">All</option>
+                <option value="notsent" data-i18n="sentNotYet">❌ Not sent yet</option>
+                <option value="sent" data-i18n="sentYes">✅ Sent</option>
+              </select>
+            </div>
             <button id="clearLogFiltersBtn" class="secondary" data-i18n="clear">Clear</button>
             <span id="logsCountInfo" class="logs-count" title="Records shown this month"></span>
           </div>
